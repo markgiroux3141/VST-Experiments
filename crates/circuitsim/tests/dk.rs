@@ -225,3 +225,73 @@ fn dk_agrees_with_full_mna_on_the_670() {
         }
     }
 }
+
+/// `Options::hard_step_iterations` (a full step whose Newton needed that many iterations redone
+/// as halves): off (0) the run is as before; on, at a threshold every sample's solve reaches,
+/// every step is halved (counted in `Stats::hard_steps`, down to the error halvings' depth) and
+/// the result is the same solution, closer to the finer steps' (TR-BDF2, the 670 at its fastest
+/// attack with a hot tone: the bridge switching).
+#[test]
+fn hard_steps_are_halved_and_land_on_the_same_solution() {
+    let ir = fixture("tc1.json");
+    let input = tone(6.0, 0.004, 1);
+    let h = 1.0 / FS;
+    let base = Options {
+        reltol: 1e-5,
+        vntol: 1e-5,
+        ..Options::with_method(Method::TrBdf2)
+    };
+    let (plain, st) = run(&ir, base, &input, h);
+    assert_eq!(st.hard_steps, 0);
+    let (off, _) = run(
+        &ir,
+        Options {
+            hard_step_iterations: 0,
+            ..base
+        },
+        &input,
+        h,
+    );
+    assert_eq!(plain, off);
+    let (hard, st_hard) = run(
+        &ir,
+        Options {
+            hard_step_iterations: 1,
+            ..base
+        },
+        &input,
+        h,
+    );
+    assert!(
+        st_hard.hard_steps >= input.len() as u64 - 1,
+        "{}",
+        st_hard.hard_steps
+    );
+    // The same circuit at a quarter of the step, against both.
+    let fine_in: Vec<f64> = (0..(input.len() - 1) * 4 + 1)
+        .map(|i| {
+            let (j, f) = (i / 4, (i % 4) as f64 / 4.0);
+            let b = input.get(j + 1).copied().unwrap_or(input[j]);
+            input[j] + (b - input[j]) * f
+        })
+        .collect();
+    let (fine, _) = run(&ir, base, &fine_in, h / 4.0);
+    let out = Mna::from_ir(&ir, 1e-12)
+        .unwrap()
+        .unknowns
+        .iter()
+        .position(|u| u.describe() == "node out")
+        .expect("out");
+    let err = |xs: &[Vec<f64>]| -> f64 {
+        xs.iter()
+            .enumerate()
+            .map(|(i, x)| (x[out] - fine[i * 4][out]).abs())
+            .fold(0.0, f64::max)
+    };
+    assert!(
+        err(&hard) <= err(&plain) * 1.01,
+        "{} {}",
+        err(&hard),
+        err(&plain)
+    );
+}

@@ -5,6 +5,7 @@
 //!     cargo run --release -p varimu-app --example voice_bench -- [--device minimoog_voice]
 //!         [--for S] [--note 57] [--block 512] [--restrike S] [--set KEY=VALUE ...]
 //!         [--partition "TITLE,TITLE|TITLE"] [--newton REL,VN] [--out out.f32]
+//!         [--quality draft-1x|draft-2x|draft|production] (the device's by default)
 //!
 //! The key goes down 0.2 s in and stays (the gate on its key-down volts, every key string
 //! on `--note`); the first 0.5 s isn't timed. Prints the factor over the whole run and its
@@ -21,7 +22,7 @@ use circuitsim::ir::Probe;
 use circuitsim::stream::Stream;
 use varimu_app::live::{Circuit, Live, Values};
 use varimu_app::panel::{DEVICES, Feed, key_feeds, knobs, values};
-use varimu_app::settings::Settings;
+use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::yaml::Value;
 
 fn value(s: &str) -> Value {
@@ -43,6 +44,7 @@ fn main() -> Result<(), String> {
     let mut partition: Option<String> = None;
     let mut newton: Option<(f64, f64)> = None;
     let mut out: Option<String> = None;
+    let mut quality: Option<Quality> = None;
     let mut probes: Vec<String> = Vec::new();
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
@@ -67,6 +69,10 @@ fn main() -> Result<(), String> {
                 ));
             }
             "--out" => out = Some(next()?),
+            "--quality" => {
+                let q = next()?;
+                quality = Some(Quality::from_name(&q).ok_or(format!("unknown quality {q}"))?);
+            }
             "--probe" => probes.push(next()?),
             _ => return Err(format!("unknown argument {a}")),
         }
@@ -76,7 +82,7 @@ fn main() -> Result<(), String> {
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
-    let mut s = dev.play_settings(&Settings::load(config, dev.quality)?);
+    let mut s = dev.play_settings(&Settings::load(config, quality.unwrap_or(dev.quality))?);
     if let Some(p) = &partition {
         s.partition = p
             .split('|')

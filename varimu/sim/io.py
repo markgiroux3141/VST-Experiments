@@ -115,6 +115,10 @@ class TransientSettings:
     input_order: int = 1  # circuitsim only: input interpolation at stage times
     error_abstol: float = 0.0  # circuitsim only: local error control (0 = off), V
     error_reltol: float = 0.0  # circuitsim only: ... plus this times |v|
+    # circuitsim only: a full step whose Newton needed this many iterations is redone as halves
+    # (a regenerative flip inside a step; 0 = off). Only for runs that set it (the Minimoog
+    # voice's checks, as the app plays it).
+    hard_step_iterations: int = 0
     solver: str = "dk"  # circuitsim only: dk | mna
     newton_reltol: float = 1e-6  # circuitsim only: Newton's update tolerance, relative
     newton_vntol: float = 1e-6  # circuitsim only: ... plus this, V
@@ -232,6 +236,8 @@ class TransientSettings:
         d = asdict(self)
         if not d["tape_gpu"]:
             del d["tape_gpu"]
+        if not d["hard_step_iterations"]:
+            del d["hard_step_iterations"]
         return d
 
 

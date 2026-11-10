@@ -504,7 +504,75 @@ impl Device {
         if let Some(m) = self.method {
             s.method = m.to_string();
         }
+        if let Some(n) = self.numerics() {
+            if let Some((rel, vn)) = n.fast_newton
+                && !precise(self.id)
+            {
+                s.newton_reltol = rel;
+                s.newton_vntol = vn;
+            }
+            s.hard_step_iterations = n.hard_step_iterations;
+        }
         s
+    }
+
+    /// Its live numerics beyond `newton` ([`LIVE_NUMERICS`]), if it has any.
+    pub fn numerics(&self) -> Option<&'static LiveNumerics> {
+        LIVE_NUMERICS.iter().find(|n| n.id == self.id)
+    }
+
+    /// Whether the user can pick between its precise (`newton`) and fast Newton tolerance.
+    pub fn offers_fast_solver(&self) -> bool {
+        self.numerics().is_some_and(|n| n.fast_newton.is_some())
+    }
+}
+
+/// A device's live numerics beyond its `newton` (for its play qualities, [`Device::play_settings`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveNumerics {
+    pub id: &'static str,
+    /// A looser Newton tolerance (reltol, vntol) played unless the user asks for the precise
+    /// one (the device's `newton`: Play's "Precise solver", [`set_precise`], saved in
+    /// `app.json`).
+    pub fast_newton: Option<(f64, f64)>,
+    /// `Settings::hard_step_iterations` (circuitsim's: a full step whose Newton needed this
+    /// many iterations is redone as halves; 0: off).
+    pub hard_step_iterations: usize,
+}
+
+pub const LIVE_NUMERICS: [LiveNumerics; 1] = [
+    // The Minimoog voice (docs/MINIMOOG_PLAN.md "Real time"): 1e-4 by default (the user's OK,
+    // 2026-11-09: ~15-20 % faster; the ladder's resonance ~1 cent flat, harmonics within
+    // 0.12 dB, the noise's colour unchanged below 15 kHz, the solver's floor ~90 dB under
+    // the signal above), 1e-5 on asking. Hard steps at 12 iterations: a contour flip-flop's
+    // flip inside a 20.8 us step has two end points, and halved down to h / 16 it follows
+    // the one the 192 kHz reference does (the loudness attack ending with the filter's was
+    // that: MINIMOOG_BACKLOG.md 2b).
+    LiveNumerics {
+        id: "minimoog_voice",
+        fast_newton: Some((1e-4, 1e-4)),
+        hard_step_iterations: 12,
+    },
+];
+
+/// The devices the user asked to play with their precise solver (`app.json`'s
+/// `precise_solver`; the Play view loads and sets them).
+static PRECISE: std::sync::RwLock<std::collections::BTreeSet<String>> =
+    std::sync::RwLock::new(std::collections::BTreeSet::new());
+
+/// Whether device `id` plays with its precise solver ([`LiveNumerics::fast_newton`] not used).
+pub fn precise(id: &str) -> bool {
+    PRECISE.read().map(|p| p.contains(id)).unwrap_or(false)
+}
+
+/// Play device `id` with its precise solver, or its fast one: from the next stream built.
+pub fn set_precise(id: &str, on: bool) {
+    if let Ok(mut p) = PRECISE.write() {
+        if on {
+            p.insert(id.to_string());
+        } else {
+            p.remove(id);
+        }
     }
 }
 
@@ -1539,9 +1607,9 @@ pub const DEVICES: [Device; 30] = [
         // gets no thread: five at the default panel (one oscillator; docs/MINIMOOG_PLAN.md
         // "Real time"). Against the rest as one solve: scripts/minimoog_gate_check.py --voice
         // (docs/MINIMOOG_PLAN.md MM5). With the keyboard on a thread of its own the loudness
-        // contour's attack ended early (MM4, not understood); beside the VCA it matches one
-        // solve, mostly: a contour flip-flop's flip within one step can still land either way
-        // (MINIMOOG_BACKLOG.md).
+        // contour's attack ended early (MM4); beside the VCA it matches one solve. A contour
+        // flip-flop's flip inside one step has two end points (which made the loudness attack
+        // end with the filter's at some settings): LIVE_NUMERICS' hard steps halve it.
         partition: Some(&[
             "ladder",
             "output amplifier",

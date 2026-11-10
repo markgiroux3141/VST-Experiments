@@ -309,7 +309,7 @@ impl PlayView {
         let mut v = PlayView {
             config_dir,
             clips_dir,
-            prefs: Prefs::load(),
+            prefs: Prefs::load().with_solvers_set(),
             sources: Vec::new(),
             settings,
             by_quality,
@@ -1672,6 +1672,29 @@ impl PlayView {
         let Some(cores) = self.play_settings().ok().and_then(|s| s.cores().ok()) else {
             return;
         };
+        // Its precise or fast Newton tolerance (panel::LIVE_NUMERICS): a restart.
+        if let Some(d) = DEVICES.get(self.device).filter(|d| d.offers_fast_solver()) {
+            let mut on = panel::precise(d.id);
+            let r = ui.checkbox(&mut on, "Precise solver").on_hover_text(
+                "The circuit's Newton tolerance at its precise setting (1e-5 V) instead of its \
+                 fast one (1e-4 V): ~15-20 % more CPU. The fast one plays the Minimoog's \
+                 filter resonance ~1 cent flat with a solver floor ~90 dB under the signal \
+                 above 15 kHz (docs/MINIMOOG_PLAN.md \"Real time\"). Prints and takes follow \
+                 it; a change restarts the sound.",
+            );
+            if r.changed() {
+                panel::set_precise(d.id, on);
+                if on {
+                    self.prefs.precise_solver.insert(d.id.to_string());
+                } else {
+                    self.prefs.precise_solver.remove(d.id);
+                }
+                self.save_prefs();
+                if self.player.is_some() {
+                    self.start();
+                }
+            }
+        }
         if self.has_heaters
             && self.player.is_some()
             && ui

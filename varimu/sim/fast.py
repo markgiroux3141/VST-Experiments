@@ -290,6 +290,7 @@ def run_transient(
             notes=note_steps(notes, n0, s) or None,
             **({"origin_samples": round(origin_s * s.sim_rate)} if origin_s else {}),
             **({"tape_gpu": True} if s.tape_gpu else {}),
+            **({"hard_step_iterations": s.hard_step_iterations} if s.hard_step_iterations else {}),
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e

@@ -406,7 +406,8 @@ kernel scales with the step); at 48 kHz that is 0.31 ms, longer than the top C's
 resets overlap and the crossing prediction breaks (the top C ran at ~8 kHz, 1760 Hz jittered 2.4 c rms, 110 Hz +2 c).
 A shorter kernel (more aliasing) or overlapping events would be needed.
 
-**Options that change the sound (the user's call; MINIMOOG_BACKLOG.md):** Newton 1e-4 instead of 1e-5. The default
+**Options that change the sound (decided: the user's OK to 1e-4, 2026-11-09; "Second pass" below):** Newton 1e-4
+instead of 1e-5. The default
 panel 0.64-0.65x offline (from 0.75-0.79), the full patch 1.06x (from 1.25), three oscillators 0.88x (from 1.02). Its
 cost: the ladder's resonance ~1 cent flat (self-oscillation -0.98 c against the one solve, the partition at 1e-5 -0.07
 c; EMPHASIS 0.9 -0.87 c), harmonics within 0.12 dB, oscillator pitch +0.01 c. Holding only the ladder's transistors
@@ -421,7 +422,37 @@ depends on Newton's path: in some partitioned runs the loudness attack ends with
 the default panel on A3 at 1e-5 (`voice_bench --note 57 --probe k_envl`), at ATTACK = LOUDNESS ATTACK 0.15 at 1e-4, in
 the old eight-part layout too (at 1e-4 with both attacks at 0.15), and in the gate check with all three sources and OSC
 MOD on (-22.3 dB, 1.88 dB envelopes; deterministic). Fourteen other notes and five other attack settings were fine.
-This is MM4's "attack ends early", not understood: options in the backlog.
+This is MM4's "attack ends early" (fixed in the second pass, below).
+
+**Second pass (2026-11-09, the user: try 1e-4 if the texture holds, fix the envelope; a switch for the two):**
+- **The envelope's cause:** at the flip sample the filter flip-flop's own transition lands on one of two end points of
+  the implicit 20.8 us step (Q1's base at 0.20 V or 0.35 V); the larger kick through k_ta / C4 turns the loudness
+  flip-flop's Q25 off. Even the right 48 kHz runs sat near the edge (Q15's base half on). The 96 kHz and 192 kHz
+  (production, error control) runs, one solve and partitioned, never flip it: a step too coarse for a regenerative
+  flip, its outcome left to Newton's path.
+- **The fix: hard steps** (circuitsim `Options::hard_step_iterations`; Python `TransientSettings.hard_step_iterations`,
+  `simulate` / `Stream` kwargs; varimu-app `Settings::hard_step_iterations`): a step (down to the error halvings'
+  depth, h / 16) whose Newton needed that many iterations or more in a stage is redone as two halves, as a Newton
+  failure would be; never on a multi-rate island (its kernels and fine step resolve its events). Halving only the full
+  step once wasn't enough (thresholds 4-8 and 12 still failed one case at 1e-4). TR-BDF2 also has an embedded error
+  estimate now (Hosea & Shampine's 3rd-order companion), used only with error control: error control on the contour
+  part alone also fixed it but cost ~15 % on every step and doubled the spikes. The voice: 12 iterations
+  (`panel::LIVE_NUMERICS`). All 42 cases right at both tolerances (12 notes, 9 attack pairs; `voice_bench --probe
+  k_envl`, 6.867 V each); the gate check against one solve: default -53.8 dB / envelopes within 0.05 dB (was -46.7 /
+  0.14), ATTACK / DECAY 0 -50.5 / 0.11 (was -36.1 / 0.56, the peak now the one solve's), all sources with OSC MOD
+  -52.8 / 0.05 (was -22.3 / 1.88), EMPHASIS 0.9 0.63 dB. Cost: the mean unchanged, the events' spikes ~12-15 ms
+  (were ~8).
+- **1e-4's texture** (besides the resonance's ~1 cent): white and pink noise alone within 0.1 dB in every band to 15
+  kHz; above it the solver's floor rises to ~87-92 dB under the signal (from 100-115), ~-110 to -120 dBFS; a saw's
+  harmonics within 0.12 dB.
+- **The switch:** the voice plays at 1e-4 by default; Play's **Precise solver** checkbox (devices in
+  `panel::LIVE_NUMERICS` with a `fast_newton`) plays 1e-5 instead, saved per device in `app.json`
+  (`precise_solver`), followed by prints and takes (`Device::play_settings`); a flip restarts the sound. `Settings`'
+  `Debug` (the print / take-render cache keys) is the derived text unless hard steps are set: no other device's
+  prints re-render.
+- **Now** (offline): default 0.68-0.69x, two oscillators 0.77x, three 0.92x, the full patch 1.14x. Live (`play.rs`,
+  60 s, a note every 4 s): default 60-70 % load, 1-2 dropouts a minute at Play's 20 ms buffer, **none at 50 ms**; two
+  oscillators 66-76 % with 4 dropouts in 30 s at 20 ms, **none in 60 s at 50 ms** (79 %).
 
 ## CPU while another session runs
 

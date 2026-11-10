@@ -58,7 +58,7 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
     newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
     partition = None, partition_coupling = None, stats = false, progress = None, controls = None,
-    notes = None, origin_samples = None, tape_gpu = None
+    notes = None, origin_samples = None, tape_gpu = None, hard_step_iterations = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -91,6 +91,7 @@ fn simulate<'py>(
     notes: Option<Vec<(usize, String, u8, u8)>>,
     origin_samples: Option<u64>,
     tape_gpu: Option<bool>,
+    hard_step_iterations: Option<usize>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
     let notes = note_events(notes.unwrap_or_default())?;
@@ -125,6 +126,7 @@ fn simulate<'py>(
         tube_tables: tube_tables.unwrap_or(d.tube_tables),
         origin_samples: origin_samples.unwrap_or(d.origin_samples),
         tape_gpu: tape_gpu.unwrap_or(d.tape_gpu),
+        hard_step_iterations: hard_step_iterations.unwrap_or(d.hard_step_iterations),
         // Python gets the probes only.
         all_unknowns: false,
         ..d
@@ -324,7 +326,7 @@ impl PyStream {
         ir_json, dt, u0, method = "trap", *, solver = None, reltol = None, vntol = None,
         input_order = None, newton_reuse = None, tube_tables = None, partition = None,
         partition_coupling = None, c0 = None, error_abstol = None, error_reltol = None,
-        step_selection = None, error_norm = None
+        step_selection = None, error_norm = None, hard_step_iterations = None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -346,6 +348,7 @@ impl PyStream {
         error_reltol: Option<f64>,
         step_selection: Option<bool>,
         error_norm: Option<&str>,
+        hard_step_iterations: Option<usize>,
     ) -> PyResult<PyStream> {
         let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
         let d = Options::default();
@@ -365,6 +368,7 @@ impl PyStream {
             error_norm: error_norm
                 .map_or(Ok(d.error_norm), ErrorNorm::parse)
                 .map_err(invalid)?,
+            hard_step_iterations: hard_step_iterations.unwrap_or(d.hard_step_iterations),
             all_unknowns: false,
             ..d
         };

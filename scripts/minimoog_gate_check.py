@@ -15,7 +15,8 @@ oscillator
 1 joined, MM4 / MM5): the keys' gate on the keyboard's trigger contact (the circuit file's
 gate_off_v / gate_on_v), the key on its pitch bar (key_*: an octave over the low A while held), the
 app's partition (VOICE_PARTITION, as crates/varimu-app/src/panel.rs has it), with knobs given by
-`--set k=v`. The oscillator's island runs in both (a multi-rate part never runs in the one solve):
+`--set k=v`, at the app's numerics (Newton 1e-4, hard steps; `--precise`: 1e-5). The oscillator's
+island runs in both (a multi-rate part never runs in the one solve):
 the reference is the rest as one solve.
 
 Exit 1 if the partitioned run fails."""
@@ -107,13 +108,20 @@ VOICE_PARTITION = [
 ]
 
 
-def play(ir, x, gate, key, partition, coupling, gate_name="contour"):
+# The voice's live numerics as the app plays it (varimu-app panel::LIVE_NUMERICS): Newton 1e-4
+# (`--precise`: the device's 1e-5) and hard steps at 12 iterations (a contour flip-flop's flip
+# inside a step redone as halves, MINIMOOG_PLAN.md "Real time").
+VOICE_NEWTON, VOICE_NEWTON_PRECISE, VOICE_HARD_STEP = 1e-4, 1e-5, 12
+
+
+def play(ir, x, gate, key, partition, coupling, gate_name="contour", newton=1e-5, hard=0):
     s = dataclasses.replace(
         st.settings("draft-1x"),
-        newton_reltol=1e-5,
-        newton_vntol=1e-5,
+        newton_reltol=newton,
+        newton_vntol=newton,
         partition=partition,
         partition_coupling=coupling,
+        hard_step_iterations=hard,
     )
     r = fast.run_transient(ir, x, settings=s, controls={"key": key, gate_name: gate})
     return np.asarray(r.vectors["v(out)"])
@@ -148,6 +156,7 @@ def main() -> int:
     p.add_argument("--amp", type=float, default=0.25)
     p.add_argument("--voice", action="store_true")
     p.add_argument("--set", nargs="*", default=[])
+    p.add_argument("--precise", action="store_true", help="the voice at its precise 1e-5")
     a = p.parse_args()
 
     over = {"emphasis": a.emphasis}
@@ -178,9 +187,15 @@ def main() -> int:
         gate[int(t0 * FS) : int(t1 * FS)] = g_on
     key = np.full(n, key_v)  # the key held from the start: the bar keeps the last key
 
-    ref = play(ir, x, gate, key, one_solve, a.coupling, gate_name)
+    num = {}
+    if a.voice:
+        num = {
+            "newton": VOICE_NEWTON_PRECISE if a.precise else VOICE_NEWTON,
+            "hard": VOICE_HARD_STEP,
+        }
+    ref = play(ir, x, gate, key, one_solve, a.coupling, gate_name, **num)
     try:
-        out = play(ir, x, gate, key, partition, a.coupling, gate_name)
+        out = play(ir, x, gate, key, partition, a.coupling, gate_name, **num)
     except fast.SimulationFailed as e:
         print(f"FAILED ({a.coupling}): {e}")
         return 1

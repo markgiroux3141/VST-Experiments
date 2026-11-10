@@ -58,7 +58,8 @@ impl Quality {
 }
 
 /// circuitsim's settings at one quality (the fields of `TransientSettings` it uses).
-#[derive(Debug, Clone, PartialEq)]
+/// Its `Debug` text is part of the print and take-render cache keys (see the impl).
+#[derive(Clone, PartialEq)]
 pub struct Settings {
     pub quality: Quality,
     /// The project's rate: files, renders and their outputs (Hz).
@@ -94,6 +95,45 @@ pub struct Settings {
     /// reference); the live qualities play a reduced tape, which has no kernel. In the
     /// print cache's key with the rest of the settings.
     pub tape_gpu: bool,
+    /// A full step whose Newton needed this many iterations is redone as halves (circuitsim's
+    /// `Options::hard_step_iterations`: a flip-flop's flip inside a step; 0: off). A device
+    /// sets it (`panel::LIVE_NUMERICS`).
+    pub hard_step_iterations: usize,
+}
+
+/// The derived format, field for field, with `hard_step_iterations` only when it is set: the
+/// text is in the print and take-render cache keys, which the field's addition leaves alone
+/// for every device that doesn't use it.
+impl std::fmt::Debug for Settings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("Settings");
+        d.field("quality", &self.quality)
+            .field("sample_rate", &self.sample_rate)
+            .field("full_scale_volts_peak", &self.full_scale_volts_peak)
+            .field("settle_s", &self.settle_s)
+            .field("oversample", &self.oversample)
+            .field("method", &self.method)
+            .field("input_order", &self.input_order)
+            .field("error_abstol", &self.error_abstol)
+            .field("error_reltol", &self.error_reltol)
+            .field("solver", &self.solver)
+            .field("newton_reltol", &self.newton_reltol)
+            .field("newton_vntol", &self.newton_vntol)
+            .field("newton_reuse", &self.newton_reuse)
+            .field("step_selection", &self.step_selection)
+            .field("error_norm", &self.error_norm)
+            .field("cores", &self.cores)
+            .field("tube_tables", &self.tube_tables)
+            .field("partition", &self.partition)
+            .field("partition_coupling", &self.partition_coupling)
+            .field("host_rate", &self.host_rate)
+            .field("events", &self.events)
+            .field("tape_gpu", &self.tape_gpu);
+        if self.hard_step_iterations > 0 {
+            d.field("hard_step_iterations", &self.hard_step_iterations);
+        }
+        d.finish()
+    }
 }
 
 /// Whether a literal tape's recording kernel can run on the GPU here (`tape_gpu`): the app
@@ -213,6 +253,7 @@ impl Settings {
             host_rate: 0,
             events: false,
             tape_gpu: false,
+            hard_step_iterations: 0,
         };
         for name in quality.blocks() {
             let d = block(name)?;
@@ -304,6 +345,7 @@ impl Settings {
             tube_tables: self.tube_tables,
             all_unknowns: false,
             tape_gpu: self.tape_gpu,
+            hard_step_iterations: self.hard_step_iterations,
             ..d
         })
     }
@@ -321,6 +363,7 @@ impl Settings {
             tube_tables: self.tube_tables,
             all_unknowns: false,
             tape_gpu: self.tape_gpu,
+            hard_step_iterations: self.hard_step_iterations,
             ..d
         })
     }
@@ -384,6 +427,70 @@ mod tests {
         let doc = yaml::load(&config().join("sim_settings.yaml")).unwrap();
         let m = Settings::from_map(doc.as_map().unwrap(), Quality::Production).unwrap();
         assert!(!m.tape_gpu);
+    }
+
+    /// The settings' `Debug` text keys prints and take renders: off, the hard-step field leaves
+    /// it as the derived format had it (a mirror with the derive, field for field).
+    #[test]
+    fn the_cache_key_text_is_the_derived_one_without_hard_steps() {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct Settings {
+            quality: Quality,
+            sample_rate: u32,
+            full_scale_volts_peak: f64,
+            settle_s: f64,
+            oversample: u32,
+            method: String,
+            input_order: usize,
+            error_abstol: f64,
+            error_reltol: f64,
+            solver: String,
+            newton_reltol: f64,
+            newton_vntol: f64,
+            newton_reuse: bool,
+            step_selection: bool,
+            error_norm: String,
+            cores: String,
+            tube_tables: bool,
+            partition: Vec<String>,
+            partition_coupling: String,
+            host_rate: u32,
+            events: bool,
+            tape_gpu: bool,
+        }
+        let s = super::Settings::load(&config(), Quality::Draft1x).unwrap();
+        let mirror = Settings {
+            quality: s.quality,
+            sample_rate: s.sample_rate,
+            full_scale_volts_peak: s.full_scale_volts_peak,
+            settle_s: s.settle_s,
+            oversample: s.oversample,
+            method: s.method.clone(),
+            input_order: s.input_order,
+            error_abstol: s.error_abstol,
+            error_reltol: s.error_reltol,
+            solver: s.solver.clone(),
+            newton_reltol: s.newton_reltol,
+            newton_vntol: s.newton_vntol,
+            newton_reuse: s.newton_reuse,
+            step_selection: s.step_selection,
+            error_norm: s.error_norm.clone(),
+            cores: s.cores.clone(),
+            tube_tables: s.tube_tables,
+            partition: s.partition.clone(),
+            partition_coupling: s.partition_coupling.clone(),
+            host_rate: s.host_rate,
+            events: s.events,
+            tape_gpu: s.tape_gpu,
+        };
+        assert_eq!(format!("{s:?}"), format!("{mirror:?}"));
+        let hard = super::Settings {
+            hard_step_iterations: 12,
+            ..s
+        };
+        assert!(format!("{hard:?}").ends_with("tape_gpu: false, hard_step_iterations: 12 }"));
+        assert_eq!(hard.stream_options().unwrap().hard_step_iterations, 12);
     }
 
     #[test]

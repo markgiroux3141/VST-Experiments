@@ -452,9 +452,14 @@ the modulation mix while OSC MOD / FILTER MOD is on, the pre-amp while EXT is ON
 is built; crossing a gate restarts a live stream. The default panel plays on five threads at ~70 % (about a dropout a
 minute: 5-9 ms Newton spikes at key-down and each contour's flip); more sources: two oscillators 85-94 %, the full patch
 1.25x offline. Live streams keep only the probes they read; `CIRCUITSIM_PART_TIMING` prints each part's solver counters;
-`examples/voice_bench.rs` (a keyed device as fast as it runs, `--probe`, `--restrike`). Open (the user's): Newton 1e-4
-(~15-20 % faster, the ladder's resonance ~1 cent flat), a contour flip-flop's flip landing either way in the partition
-(MINIMOOG_BACKLOG.md 2b). Next: the user listens.
+`examples/voice_bench.rs` (a keyed device as fast as it runs, `--probe`, `--restrike`, `--quality`). Second pass (the
+user's OK): the voice plays Newton 1e-4 (the ladder's resonance ~1 cent flat, texture otherwise unchanged; Play's
+**Precise solver** checkbox plays 1e-5, saved in `app.json`, `panel::LIVE_NUMERICS`) and **hard steps** (circuitsim
+`Options::hard_step_iterations`, Python `TransientSettings.hard_step_iterations`: a step whose Newton needs 12+
+iterations redone as halves to h / 16, never on a multi-rate island), which fixed the loudness attack ending with the
+filter's (a contour flip-flop's flip inside a step had two end points); TR-BDF2 has an embedded error estimate now (used
+only with error control). Live: default 60-70 %, two oscillators ~75 %, no dropouts at a 50 ms buffer. Next: the user
+listens.
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

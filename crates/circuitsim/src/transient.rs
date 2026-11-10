@@ -224,6 +224,8 @@ impl Method {
                 let g = 1.0 - std::f64::consts::FRAC_1_SQRT_2;
                 let w = std::f64::consts::SQRT_2 / 4.0;
                 Tableau::dirk(g, &[&[], &[g], &[w, w]])
+                    // Hosea & Shampine's embedded 3rd-order companion (error control)
+                    .with_embedded(&[(1.0 - w) / 3.0, (3.0 * w + 1.0) / 3.0, g / 3.0])
             }
             Method::Sdirk3 => {
                 // Alexander (1977), 3 stages, order 3, L-stable.
@@ -505,6 +507,11 @@ pub struct Options {
     /// sample grid. `error_abstol = 0` turns it off (the default).
     pub error_abstol: f64,
     pub error_reltol: f64,
+    /// A full step (DK) whose Newton needed this many iterations in a stage or more is redone
+    /// as two half steps (and those as theirs, as a Newton failure would be): a regenerative
+    /// flip inside one step (a flip-flop's) has more than one end point, and which the solve
+    /// lands on depends on its path; halved, it follows the flip. 0: off (the default).
+    pub hard_step_iterations: usize,
     pub max_error_halvings: u32,
     /// With error control: choose each substep's size from the error
     /// estimate (see [`Transient::advance_selected`]) instead of halving a
@@ -557,6 +564,7 @@ impl Default for Options {
             predictor: 2,
             error_abstol: 0.0,
             error_reltol: 0.0,
+            hard_step_iterations: 0,
             max_error_halvings: 4,
             step_selection: true,
             error_norm: ErrorNorm::Nodes,
@@ -609,6 +617,9 @@ pub struct Stats {
     pub halved_steps: u64,
     /// Steps (or substeps) redone because of the error estimate.
     pub error_rejections: u64,
+    /// Full steps redone as halves for their Newton iterations
+    /// (`Options::hard_step_iterations`).
+    pub hard_steps: u64,
     /// Accepted steps and error rejections by halving level (0 = the full
     /// step; the last entry counts that level and deeper ones).
     pub accepted_by_level: [u64; LEVEL_STATS],
@@ -1949,6 +1960,15 @@ impl Transient {
         }
         timing::add(Part::Step, t0);
 
+        let hard = self.opts.hard_step_iterations;
+        if hard > 0
+            && (level as u32) < self.opts.max_error_halvings.min(self.opts.max_halvings)
+            && iterations[..solves].iter().any(|&it| it >= hard)
+        {
+            // A hard full step: redone as two halves (`Options::hard_step_iterations`).
+            self.stats.hard_steps += 1;
+            return Err(StepFail::Inaccurate(f64::INFINITY));
+        }
         dk.xs.copy_from_slice(&dk.out[m..m + r]);
         dk.f.copy_from_slice(&dk.stage_f[(s - 1) * r..s * r]);
         dk.v_prev.copy_from_slice(&self.ports);

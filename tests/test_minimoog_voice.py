@@ -103,10 +103,11 @@ def _voice_run(note: int, seconds: float = 0.8, overrides=None):
 
     st = dataclasses.replace(
         vs.settings("draft-1x"),
-        newton_reltol=1e-5,
-        newton_vntol=1e-5,
+        newton_reltol=gc.VOICE_NEWTON,
+        newton_vntol=gc.VOICE_NEWTON,
         partition=gc.VOICE_PARTITION,
         partition_coupling="hold",
+        hard_step_iterations=gc.VOICE_HARD_STEP,
     )
     fs = st.sample_rate
     n = int(seconds * fs)

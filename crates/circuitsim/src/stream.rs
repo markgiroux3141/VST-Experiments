@@ -100,7 +100,7 @@ fn part_timing() -> bool {
 fn stats_line(st: &crate::transient::Stats) -> String {
     let n = st.steps.max(1) as f64;
     format!(
-        "{} states, {} ports, {} unknowns: {:.2} solves, {:.2} its a solve (max {}), {:.2} facts, {:.1} evals a sample, {} halved, by level {:?}",
+        "{} states, {} ports, {} unknowns: {:.2} solves, {:.2} its a solve (max {}), {:.2} facts, {:.1} evals a sample, {} halved ({} hard steps), by level {:?}",
         st.states,
         st.nonlinear_unknowns,
         st.linear_unknowns,
@@ -110,6 +110,7 @@ fn stats_line(st: &crate::transient::Stats) -> String {
         st.factorizations as f64 / n,
         st.device_evaluations as f64 / n,
         st.halved_steps,
+        st.hard_steps,
         st.accepted_by_level
     )
 }
@@ -803,6 +804,9 @@ impl Stream {
                 let mut o = *opts;
                 if sp.substeps[p] > 1 {
                     o.error_abstol = 0.0;
+                    // Nor halvings for a hard step: its event kernels and fixed fine step
+                    // are what resolves its fast events.
+                    o.hard_step_iterations = 0;
                     // Its sections' own method and tube tables (TAPE_SPEED_PLAN.md P4).
                     if let Some(m) = sp.method[p] {
                         o.method = m;
