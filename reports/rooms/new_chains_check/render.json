@@ -24,8 +24,8 @@
    "set": {},
    "pan": -0.5,
    "entries": "body {'radius_m': 0.0155, 'rim_radius_m': 0.017, 'rim_thickness_m': 0.0015, 'spacing_m': 0.0041, 'ring_proud_m': 0.0}",
-   "rms_dbfs": -10.55,
-   "peak_dbfs": -2.24,
+   "rms_dbfs": -10.74,
+   "peak_dbfs": -2.54,
    "hears": [
     "A"
    ],
@@ -90,6 +90,6 @@
   8000,
   16000
  ],
- "wall_s": 140.4,
+ "wall_s": 13.7,
  "seconds": 8.999
 }

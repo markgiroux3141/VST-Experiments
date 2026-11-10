@@ -50,8 +50,7 @@ runs**.
   curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes. WP24 (2026-11-10):
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
   Notes.
-- **Next:** `K87@2` (WP22's Notes: the K87's capacitance is per side, 103.5 pF against the
-  catalog's 50; refit and repin the U 87); then WP23 (C414); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP23 (AKG C414: the JFET exists; opens C414 -> SSL and -> clean); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1195,6 +1194,12 @@ pattern switch contact by contact, the TCR503 / zener supply's dynamics, the bat
 `tests/test_neumann_u87.py` (6). The list's entry (pattern, pad); `u87_n1073`, `u87_ssl`
 composed; `config/scenes/new_chains_check.yaml` renders U87 -> 1073, SM57 -> API 312 and 44-BX
 -> 1073 once at draft (room_print.py): 28 of 51.
+**K87@2 (2026-11-10, same day):** the dual form's c0 is one side's capacitance, so K87@1 (the
+CK12's 12.2 mm backplate at 40 um) was 103.5 pF a side against the catalog's 2 x 50: the
+backplate radius is now derived from the catalog (8.48 mm), Ue1 refitted to 200 ohm (0.214), the
+gain (3.503) and load (131 pF) remeasured and the capsule refitted (feedback -5.6 dB): on axis
+rms 0.79 / 0.70 dB omni / cardioid (max 2.6 / 2.7 dB above 8 kHz), the tension interior (17.7
+N/m), 7.7 mV/Pa; the U 87 pins K87@2.
 
 ### WP24. The Neumann KM 84
 
@@ -1467,3 +1472,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   (the dual form at cardioid) fitted through its C2 feedback to the KM 84 i's curve and the
   catalog's 5 mV/Pa; KM84 -> 1073 composed: 29 of 51 available. Found: the dual form's c0 is one
   side's, so K87@1 is twice the catalog's 50 pF a side (K87@2 next).
+- 2026-11-10: K87@2: the backplate derived from the catalog's 50 pF a side (c0 is per side),
+  the U 87 refitted and repinned (7.7 mV/Pa, 200 ohm, on axis rms 0.7-0.8 dB).

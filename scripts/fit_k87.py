@@ -29,12 +29,12 @@ from varimu.devices.library import _plain
 
 # The backplate's load in the U 87 (config/circuits/neumann_u87.yaml): R6 || R7 (1 GOhm each, R7
 # through C4) and C4 470p in series with the gate's input (the FET's Cgs and Miller Cgd: the
-# gate 0.613 of the backplate in the circuit at 1 kHz, so ~297 pF): ~182 pF.
-LOAD = {"r_load_ohm": 0.5e9, "c_load_f": 182e-12}
+# gate 0.722 of the backplate in the circuit at 1 kHz, so ~181 pF): ~131 pF.
+LOAD = {"r_load_ohm": 0.5e9, "c_load_f": 131e-12}
 # The backplate-to-output gain into 1000 ohm, measured in the circuit (2026-11-10, Ue1 at
-# 0.177): 3.377 at 1 kHz (cardioid, a plane wave on axis; 3.339 with the feedback on: it acts
-# at the backplate, not in this gain).
-AMP_GAIN = 3.377
+# 0.214, K87 at 50 pF a side): 3.503 at 1 kHz (cardioid, a plane wave on axis; 3.469 with the
+# feedback on: it acts at the backplate, not in this gain).
+AMP_GAIN = 3.503
 # fit_ck12 scales these by e0 / 60: the rear at +e0 (omni), 0, -e0 (figure-8)
 REAR_V = {"omni": 60.0, "cardioid": 0.0, "figure8": -60.0}
 NETWORK = [

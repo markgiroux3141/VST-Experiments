@@ -73,7 +73,7 @@ controls:
       the drawn position isn''t legible'
 values:
   capsule_model_u87:
-    value: K87@1
+    value: K87@2
     source: 'config/components/k87/1.yaml (its network fitted to the U 87 i''s curves by scripts/fit_k87.py
       on the capsule''s body: reports/mics/k87_fit.png)'
   pol_front_v_u87:
@@ -173,7 +173,7 @@ values:
     value: 33.0
     source: 'sch: Gr1 33V (the zener''s rail)'
   t_ratio_u87:
-    value: 0.177
+    value: 0.214
     source: 'fit: Ue1 90415''s secondary : primary, to cat''s 200 ohm source impedance'
   t_r_p_ohm_u87:
     value: 800.0

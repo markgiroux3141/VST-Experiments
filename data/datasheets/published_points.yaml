@@ -631,10 +631,10 @@
       radius_m: {value: 13.0e-3}      # web (RecordingHacks: 26 mm diaphragms)
       thickness_m: {value: 6.0e-6}    # provisional: model knowledge (the K87's PET film, ~6 um)
       density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
-      tension_n_m: {value: 7.152}      # provisional: fitted (bounds 5-150 N/m)
+      tension_n_m: {value: 17.74}      # provisional: fitted (bounds 5-150 N/m)
     gap_m: {value: 4.0e-05}           # web (RecordingHacks: a 40 um plastic spacer)
     backplate:
-      radius_m: {value: 12.2e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping, as the CK12's)
+      radius_m: {value: 8.48e-3}      # derived: cat's 2 x ~50 pF as each side's capacitance (c0) at the published 40 um gap (K87@1 had the CK12's 12.2 mm: 103.5 pF a side)
       thickness_m: {value: 4.0e-3}    # provisional: model knowledge (a 34 mm dual-backplate capsule's ~4 mm backplates, as the CK12's)
       through:
         holes: {value: 24}            # provisional: model knowledge (as the CK12's)
@@ -643,8 +643,8 @@
         holes: {value: 250.0}            # provisional: fitted (bounds 10-250 per side)
         radius_m: {value: 0.5e-3}     # provisional: model knowledge (~1 mm drilled holes)
         depth_m: {value: 0.0019}      # provisional: fitted (bounds 0.3-1.9 mm)
-    film_resistance_pa_s_m3: {value: 3.347e+06}       # provisional: fitted (bounds 1e4-3e7)
-    through_resistance_pa_s_m3: {value: 1.674e+07}    # provisional: fitted (bounds 1e6-3e9)
+    film_resistance_pa_s_m3: {value: 4.044e+06}       # provisional: fitted (bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 1.607e+07}    # provisional: fitted (bounds 1e6-3e9)
     leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
     stray_capacitance_f: {value: 2.0e-12}   # provisional: fitted (bounds 2-40 pF)
     body:

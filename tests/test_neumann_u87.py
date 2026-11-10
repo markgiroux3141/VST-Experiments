@@ -1,6 +1,6 @@
 """The Neumann U 87 (docs/CHAINS_PLAN.md WP22): config/circuits/neumann_u87.yaml (Neumann's 1980
-drawing) with K87@1, the K87 fitted to the U 87 i's curves through the circuit's feedback
-(scripts/fit_k87.py; the feedback as drawn costs 4.9 dB). The sensitivity, the patterns' equal
+drawing) with K87@2, the K87 fitted to the U 87 i's curves through the circuit's feedback
+(scripts/fit_k87.py; the feedback as drawn costs 5.6 dB). The sensitivity, the patterns' equal
 sensitivity, the cardioid's rear rejection and the source impedance against Neumann's figures."""
 
 from __future__ import annotations
@@ -30,12 +30,13 @@ def test_preflight_passes(u87):
     assert preflight.check_circuit(u87) == []
 
 
-def test_the_capsule_is_two_50_pf_halves():
-    """cat: 2 x ~50 pF (not fitted: the gap and the diaphragms are published)."""
+def test_the_capsule_is_two_50_pf_halves(u87):
+    """cat: 2 x ~50 pF (c0 is one side's: the backplate's radius derived from it at the
+    published 40 um gap; K87@1 had 103.5 pF a side)."""
     from varimu.devices.library import component_data
 
-    lp = component_data("K87@1")["lumped"]
-    assert 1e12 * lp["c0_f"] == pytest.approx(100.0, rel=0.1)
+    lp = component_data(spec.resolve(u87)["capsule_model"])["lumped"]
+    assert 1e12 * lp["c0_f"] == pytest.approx(50.0, rel=0.05)
 
 
 def _level(u87, pattern, f0, angle_deg, over=None):

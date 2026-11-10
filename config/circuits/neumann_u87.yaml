@@ -33,7 +33,7 @@ controls:
   pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: the -10 dB switch (C15 560p)", notes: "0 off, 1 -10 dB"}
 
 values:
-  capsule_model: {value: K87@1, source: "config/components/k87/1.yaml (its network fitted to the U 87 i's curves by scripts/fit_k87.py on the capsule's body: reports/mics/k87_fit.png)"}
+  capsule_model: {value: K87@2, source: "config/components/k87/1.yaml (its network fitted to the U 87 i's curves by scripts/fit_k87.py on the capsule's body: reports/mics/k87_fit.png)"}
   pol_front_v: {value: 47.0, source: "sch: 47V (the polarization line; RecordingHacks: the K87 run at ~46 V in the U 87)"}
   pol_rear_omni_v: {value: 47.0, source: "derived: omni, the rear at the front's polarization"}
   pol_rear_card_v: {value: 0.0, source: "derived: cardioid, the rear unpolarized"}
@@ -65,7 +65,7 @@ values:
   c7_f: {value: 1.0e-6, source: "sch: C7 1u"}
   phantom_v: {value: 47.5, source: "derived: sch: 48 V phantom at 0.45 mA through R18 || R19 (2 x 2k2): 47.5 V ('47V' on the drawing)"}
   rail_v: {value: 33.0, source: "sch: Gr1 33V (the zener's rail)"}
-  t_ratio: {value: 0.177, source: "fit: Ue1 90415's secondary : primary, to cat's 200 ohm source impedance"}
+  t_ratio: {value: 0.214, source: "fit: Ue1 90415's secondary : primary, to cat's 200 ohm source impedance"}
   t_r_p_ohm: {value: 800.0, source: "provisional: model knowledge (a FET microphone transformer's primary)"}
   t_r_s_ohm: {value: 25.0, source: "provisional: model knowledge (its 200 ohm secondary)"}
   t_core_material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer's nickel core)"}

@@ -40,5 +40,6 @@ C1 470p at AC, which is the dual capsule model's one backplate node (not a load 
 the feedback; C3 10p feeds the bootstrapped polarization line (the drain's signal through C9)
 into the backplates. With R8 / C6 / C3 that feedback costs 4.9 dB, pattern-independent.
 
-Built (2026-11-10): `config/circuits/neumann_u87.yaml`, the capsule `K87@1` (fitted by
+Built (2026-11-10): `config/circuits/neumann_u87.yaml`, the capsule `K87@2` (its backplate
+from the catalog's 50 pF a side; fitted by
 `scripts/fit_k87.py` through the circuit's feedback); numbers in CHAINS_PLAN.md WP22's Notes.
