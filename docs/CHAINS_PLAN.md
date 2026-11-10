@@ -51,25 +51,30 @@ runs**.
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
   Notes. WP15 (2026-11-10): the Shure SM7 (`config/circuits/shure_sm7.yaml`, `R_SM7@1` fitted to
   the SM7B sheet; the switches not modelled); WP15's Notes.
-- **Next:** WP25 (U47 fet: Neumann's drawing and manual in `data/schematics/neumann_u47_fet/`, the
-  input network and the output side read, the amplifier loop T2-T6 still to trace: its README;
-  `K47@3` exists); WP17 (Beyer M160: its sheets in `data/schematics/beyer_m160/`, raster charts;
-  a double ribbon at hypercardioid on the 77-DX's labyrinth machinery); WP16 (Royer R-121); WP19
-  (Helios: the user's IA-H9 files in `data/schematics/helios_ia_h9/`); WP15's switches and WP14's
-  bass switch (their curves digitized); WP13 (RE20) waits on the N-entry room generalization (its
-  Decision); WP20 (TG) waits on drawings BE232 / AE.203 (`data/schematics/emi_tg12345/README.md`);
-  WP23 (C414) and WP18 (ELA M 251) wait on files (below).
+- **Next:** WP19 (Helios: the user's IA-H9 files in `data/schematics/helios_ia_h9/`, cleared for
+  use 2026-11-10; the parts list was read last session, the topology not yet traced); WP25 (U47
+  fet: Neumann's drawing and manual in `data/schematics/neumann_u47_fet/`, the input network and
+  the output side read, the amplifier loop T2-T6 still to trace: its README; `K47@3` exists);
+  WP18 (ELA M 251), WP23 (C414) and WP20 (TG) built by inference (the user's decision below);
+  WP17 (Beyer M160: its sheets in `data/schematics/beyer_m160/`, raster charts; a double ribbon at
+  hypercardioid on the 77-DX's labyrinth machinery); WP16 (Royer R-121); WP28 (U67 / REDD.47:
+  an EF86 fit), WP29 (M49: an AC701 fit), WP27, WP26 (a surface-mounted mic in scenes), WP30 (a
+  crystal transducer kind), WP31 (a carbon kind); WP15's switches and WP14's bass switch (their
+  curves digitized); WP13 (RE20) waits on the N-entry room generalization (its Decision).
   The user fetches login-walled files on request: each URL alone in a code block.
-- **Waiting on the user (files, 2026-11-10):** the AKG C414's schematic (no open copy found:
-  the C414 B-ULS's is an attachment in this GroupDIY thread, or radiomuseum.org by request):
-
-  ```
-  https://groupdiy.com/threads/akg-414b-uls-help.30533/
-  ```
-
-  and a legible ELA M 250 / 251 drawing (coutant.org's `elam250_2.jpg`, AKG Z.Nr. 1524 Sch 2f,
-  is 368 x 550 px: `data/schematics/telefunken_ela_m251/`; its amplifier is the C12's 6072 /
-  T14/1, the values unreadable).
+- **The user's decisions (2026-11-10):** the IA-H9 files (Iron Age Audioworks) are OK to use for
+  WP19. The C414 GroupDIY thread and a legible ELA M 251 drawing can't be had (the links are
+  dead): don't ask for them again. Build those by inference, every value sourced as provisional
+  or derived and fitted to published figures, the call recorded under the WP's Decisions:
+  - WP18 ELA M 251: the C12's amplifier (the 6072 / T14/1 the low-res drawing shows, values
+    `derived:` from `akg_c12.yaml`) with the 251's three-pattern switch; CK12@1.
+  - WP23 C414: AKG's curves and specs (the capsule a CK12-family refit; a JFET impedance
+    converter into a transformer, values provisional, fitted to sensitivity, output impedance and
+    max SPL).
+  - WP20 TG12345: the handbook's topology and targets (`data/schematics/emi_tg12345/README.md`:
+    1:3.16 input, Amplifier D's three d.c.-coupled transistors with overall feedback, 25 dB
+    nominal, >= 1.4 V rms into 3k), the forum figures there as provisional values, the rest
+    fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
