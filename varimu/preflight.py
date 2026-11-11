@@ -40,6 +40,7 @@ from varimu.circuit.ir import (
     NickelKeys,
     NovaKeys,
     Plate,
+    ReedKeys,
     Resistor,
     SineSource,
     Spring,
@@ -188,7 +189,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     driven += [
         (o, f"<keys {el.name}>")
         for el in ir.elements()
-        if isinstance(el, NovaKeys)
+        if isinstance(el, NovaKeys | ReedKeys)
         for o in el.outs
     ]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:

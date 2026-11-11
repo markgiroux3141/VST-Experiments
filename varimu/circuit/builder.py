@@ -117,6 +117,13 @@ Macro parts (connection; params, * = required):
                 at once): the keys' summed line outs on out (to ground), played by
                 note events (docs/NICKEL_ORGAN_DEVICE_PLAN.md;
                 varimu.circuit.parts.nickel_keys)
+    reed_keys   [loc, line, out_loc, out_line]; component* (a reed keyboard component version,
+                NAME@N, or a parameter naming one: kind reed_keys,
+                varimu.victorian.compile), step_hz* (numerics: the keys' internal
+                rate's floor), v_per_a* (the outputs' volts per ampere): the Victorian
+                synth's reeds as circuitsim's medium, sensing the local battery loc and the
+                line, driving the keys' summed local and line currents (to ground), played
+                by note events (docs/VICTORIAN_SYNTH_PLAN.md; varimu.circuit.parts.reed_keys)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -1008,6 +1015,18 @@ def _nickel_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Elem
     )
 
 
+def _reed_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.victorian import compile as reeds_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data, sha = reeds_compile.ir_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.reed_keys(name, *conn, data, sha, a["step_hz"], a["v_per_a"])
+
+
 def _nova_keys(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     from varimu.novachord import compile as nova_compile
 
@@ -1309,6 +1328,11 @@ for _name, _macro in {
             "small_vibrato": Param("number"),
             "v_per_a": _P,
         },
+    ),
+    "reed_keys": Macro(
+        _reed_keys,
+        4,
+        {"component": Param("raw"), "step_hz": _P, "v_per_a": _P},
     ),
     "nickel_keys": Macro(
         _nickel_keys,

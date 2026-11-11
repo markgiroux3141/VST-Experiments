@@ -349,6 +349,15 @@ pub fn structure(ir: &CircuitIr) -> Structure {
                         .collect(),
                 )
             }
+            // The reeds have no knobs: other data or a rate is another keyboard.
+            Element::ReedKeys(k) => {
+                worn = format!("{} {} {}", k.name, k.sha256, k.step_hz);
+                (
+                    "ReedKeys",
+                    &worn,
+                    vec![&k.loc, &k.line, &k.out_loc, &k.out_line],
+                )
+            }
         };
         elements.insert((kind, name.to_string()));
         nodes.extend(ns.into_iter().cloned());

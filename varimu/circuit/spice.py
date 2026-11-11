@@ -69,6 +69,7 @@ from varimu.circuit.ir import (
     NoiseSpec,
     NovaKeys,
     Plate,
+    ReedKeys,
     ResetEvents,
     Resistor,
     SineSource,
@@ -373,6 +374,9 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
         return f"{el.name} {el.out} 0 dc 0"
     if isinstance(el, ClavStrings):
         # The strings cut out: their three pickup nodes held at 0 V.
+        return "\n".join(f"{el.name}_{i} {o} 0 dc 0" for i, o in enumerate(el.outs))
+    if isinstance(el, ReedKeys):
+        # The reeds cut out: their current outputs held at 0 V.
         return "\n".join(f"{el.name}_{i} {o} 0 dc 0" for i, o in enumerate(el.outs))
     if isinstance(el, NovaKeys):
         # The keys cut out: their plate leads' current outputs held at 0 V.

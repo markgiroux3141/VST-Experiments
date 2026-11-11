@@ -48,6 +48,7 @@ from varimu.circuit.ir import (
     NickelKeys,
     NovaKeys,
     Plate,
+    ReedKeys,
     Resistor,
     SineSource,
     Spring,
@@ -1221,6 +1222,25 @@ def nickel_keys(
             polarize,
             max_keys,
         )
+    ]
+
+
+def reed_keys(
+    name: str,
+    loc: str,
+    line: str,
+    out_loc: str,
+    out_line: str,
+    data: str,
+    sha256: str,
+    step_hz: float,
+    v_per_a: float,
+) -> list[Element]:
+    """The Victorian synth's reeds (docs/VICTORIAN_SYNTH_PLAN.md) as circuitsim's medium
+    V<NAME>: it senses loc and line, and drives out_loc and out_line to the keys' local and
+    line currents times v_per_a (to ground)."""
+    return [
+        ReedKeys(f"V{name.upper()}", data, sha256, step_hz, v_per_a, loc, line, out_loc, out_line)
     ]
 
 

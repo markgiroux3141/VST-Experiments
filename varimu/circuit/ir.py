@@ -524,6 +524,40 @@ class NickelKeys:
 
 
 @dataclass(frozen=True)
+class ReedKeys:
+    """The Victorian synth's keyboard of self-interrupting reeds (docs/VICTORIAN_SYNTH_PLAN.md;
+    varimu/victorian/reed.py is the reference, circuitsim's reeds.rs the port): per key a steel
+    reed kept going by its electromagnet in a local circuit, its second contact chopping the
+    line through the carbon under the key, played by note events. It senses the local
+    battery's node `loc` and the line's node `line` a sample late (both circuits return to
+    ground) and drives `out_loc` and `out_line` to the keys' summed local and line currents
+    times `v_per_a` at the next sample (the circuit's G parts draw them from `loc` and
+    `line`). Each key steps at the least whole multiple of the step rate at or above
+    `step_hz`. `data` is the compiled keyboard (a
+    component version of kind reed_keys: varimu.victorian.compile), a path relative to the
+    repository's root, `sha256` its hash. SPICE has no keys: ngspice sees the outputs held at
+    0 V."""
+
+    name: str
+    data: str
+    sha256: str
+    step_hz: float
+    v_per_a: float
+    loc: str
+    line: str
+    out_loc: str
+    out_line: str
+
+    @property
+    def senses(self) -> tuple[str, ...]:
+        return (self.loc, self.line)
+
+    @property
+    def outs(self) -> tuple[str, ...]:
+        return (self.out_loc, self.out_line)
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -724,6 +758,7 @@ Element = (
     | ClavStrings
     | NovaKeys
     | NickelKeys
+    | ReedKeys
     | ThyratronEvents
     | ResetEvents
     | EdgeEvents
@@ -782,6 +817,7 @@ _PREFIX = {
     ClavStrings: "V",
     NovaKeys: "V",
     NickelKeys: "V",
+    ReedKeys: "V",
     ThyratronEvents: "X",
     ResetEvents: "X",
     EdgeEvents: "X",
@@ -824,6 +860,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (*el.senses, *el.outs)
     if isinstance(el, NickelKeys):
         return (el.out,)
+    if isinstance(el, ReedKeys):
+        return (el.loc, el.line, el.out_loc, el.out_line)
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
     if isinstance(el, ResetEvents):
@@ -1076,6 +1114,8 @@ class CircuitIR:
                 _validate_nova_keys(el, self.input_node)
             elif isinstance(el, NickelKeys):
                 _validate_nickel_keys(el, self.input_node)
+            elif isinstance(el, ReedKeys):
+                _validate_reed_keys(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
             elif isinstance(el, ResetEvents):
@@ -1431,6 +1471,7 @@ _ELEMENT_KINDS = {
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
     "nickel_keys": NickelKeys,
+    "reed_keys": ReedKeys,
     "thyratron_events": ThyratronEvents,
     "reset_events": ResetEvents,
     "edge_events": EdgeEvents,
@@ -1570,6 +1611,8 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
     if cls is NickelKeys:
         return _fields(cls, d, tagged=True, max_keys=_count)
+    if cls is ReedKeys:
+        return _fields(cls, d, tagged=True)
     if cls is ThyratronEvents:
 
         def grid(v):
@@ -1717,6 +1760,22 @@ def _validate_nickel_keys(el: NickelKeys, input_node: str) -> None:
         raise IRError(f"{el.name}: data names the compiled organ, sha256 its hash")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its keys drive {el.out} (ground or the input)")
+
+
+def _validate_reed_keys(el: ReedKeys, input_node: str) -> None:
+    """The Rust IR's checks for the reeds (their data is checked on loading)."""
+    _positive(f"{el.name}.step_hz", el.step_hz)
+    _positive(f"{el.name}.v_per_a", el.v_per_a)
+    hexdigits = set("0123456789abcdefABCDEF")
+    if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
+        raise IRError(f"{el.name}: data names the compiled keyboard, sha256 its hash")
+    for o in el.outs:
+        if o in (GROUND, input_node):
+            raise IRError(f"{el.name}: it drives {o} (ground or the input)")
+        if o in el.senses:
+            raise IRError(f"{el.name}: it drives {o}, which it senses")
+    if el.out_loc == el.out_line:
+        raise IRError(f"{el.name}: it drives {el.out_loc} twice")
 
 
 def _validate_thyratron_events(el: ThyratronEvents) -> None:

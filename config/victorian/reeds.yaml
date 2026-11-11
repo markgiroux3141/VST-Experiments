@@ -1,0 +1,73 @@
+# The Victorian synth's keyboard of contact-breaker reeds (docs/VICTORIAN_SYNTH_PLAN.md, V1-V3):
+# one steel reed per key interrupting its own electromagnet, as in Elisha Gray's Musical
+# Telegraph (1874), with granular carbon under each key as its volume (Hughes's microphone
+# principle, 1878) pressed through an oil dashpot. varimu/victorian/spec.py reads this file
+# (every value `{value, source}`); varimu/victorian/compile.py turns it into each key's values.
+# "design:" marks a choice of the instrument's builder (a value an 1881 instrument maker
+# would have picked, not a measurement); "provisional:" is model knowledge.
+
+tuning:
+  a4_hz: {value: 440.0, source: "design: equal temperament from A4 = 440 Hz (anachronistic as a standard; the knowledge is ours)"}
+  lowest_note: {value: 36, source: "design: 49 keys, C2 (MIDI 36) to C6 (MIDI 84), four octaves: a cabinet organ's compass, twice Gray's (his 1874 instrument's keyboard was about two octaves)"}
+  highest_note: {value: 84, source: "design: see lowest_note"}
+
+# The reed: a spring-steel cantilever clamped at its root, tuned by its length.
+reed:
+  youngs_pa: {value: 2.0e+11, source: "provisional: model knowledge (carbon spring steel, 200-210 GPa)"}
+  density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (steel)"}
+  width_m: {value: 5.0e-3, source: "design: a harmonium reed's width class (4-8 mm)"}
+  thickness_low_m: {value: 0.9e-3, source: "design: the bass reed's thickness (keeps C2's reed ~106 mm long)"}
+  thickness_high_m: {value: 0.45e-3, source: "design: the treble reed's (C6's ~19 mm long); linear in the note between"}
+  q1: {value: 800.0, source: "provisional: model knowledge (a clamped steel reed's fundamental in air: loss factor ~1e-3 with the clamp's loss; the contact's own loss is modelled apart)"}
+  q_exponent: {value: 0.5, source: "provisional: model knowledge (Q falling as (f1 / f)^0.5 to the second mode: air and clamp losses rising with frequency)"}
+  amplitude_low_m: {value: 0.6e-3, source: "design: the bass reed's swing at the tip, peak (sets its magnet's gap)"}
+  amplitude_high_m: {value: 0.12e-3, source: "design: the treble reed's; log-interpolated over the notes between"}
+
+# The electromagnet: a horseshoe of soft iron facing the reed's tip, a coil on each limb.
+magnet:
+  drive_point: {value: 0.7834, source: "design: the poles and the contact at the second mode's node, 0.7834 of the reed's length from the root (ours, not the period's: a reed driven at its tip by a fast coil locks onto its second mode, 6.27 f1, the first experiment)"}
+  pole_depth_m: {value: 4.0e-3, source: "design: the pole face's length along the reed (its width is the reed's)"}
+  gap_ratio: {value: 2.0, source: "design: the rest gap, twice the reed's design swing"}
+  stop_m: {value: 0.05e-3, source: "design: a brass stop pin keeping the reed 0.05 mm off the poles (period practice against residual magnetism's sticking: provisional)"}
+  core_gap_m: {value: 0.12e-3, source: "provisional: model knowledge (60 mm of soft iron path at a relative permeability ~500, as an equivalent air gap)"}
+  tau_fraction: {value: 0.25, source: "design: the local circuit's L / R a quarter of the reed's period, so the pull lags the contact by about 90 degrees and maintains the reed instead of stiffening it (a fast coil, 1/50 of a period, held the first experiment's reed 200-600 cents sharp)"}
+  drive_fraction: {value: 0.2, source: "design: the steady pull, reed at the screws, 20% of the force that deflects the reed by its design swing (voiced: the reed then settles at about its design swing, the first experiment; 5% built up a third slower to a third less swing)"}
+  local_v: {value: 2.8, source: "design: the local battery, two Leclanche cells (Carhart 1891: 1.4-1.7 V each open; Gray's local-circuit magnets, US 165,728)"}
+  line_v: {value: 6.0, source: "design: the line battery, four Leclanche cells, nominal (the tuning and the studies drive the line at it)"}
+  local_ohm: {value: 1.0, source: "design: the local battery's share of one key's circuit resistance in the design (two cells of ~0.5 Ohm; Carhart's cells 0.4-2 Ohm)"}
+
+# The break contact: a platinum point on the reed against a platinum-tipped screw on a light
+# spring, set x_c past the reed's free position.
+contact:
+  preload_fraction: {value: 0.015, source: "design: the screw set so the points lift 1.5% of the swing toward the magnet past the reed's free position (a deep setting rings the reed against its screws: hundreds of cents sharp and velocity-dependent in the first experiment)"}
+  preload_force_fraction: {value: 0.95, source: "design: the follow spring's preload, 0.95 of the reed's force at x_c (so a pull of 0.05 k x_c starts the reed)"}
+  spring_ratio: {value: 0.05, source: "design: the follow spring's stiffness, 5% of the reed's at the drive point"}
+  spring_zeta: {value: 0.1, source: "provisional: model knowledge (a riveted contact spring's damping on the reed)"}
+  r0_ohm: {value: 0.019, source: "web: Ney Contact Manual eq. 1.11 (Holm's plastic constriction, Rc = 1.4e2 (rho1 + rho2) sqrt(H / P)) with platinum's 10.6 uOhm cm and an annealed hardness ~40 (provisional): ~19 mOhm at 1 g"}
+  f0_n: {value: 0.0098, source: "web: see r0_ohm (1 g)"}
+  film_ohm: {value: 0.005, source: "provisional: model knowledge (a clean platinum contact's film)"}
+  condenser_f: {value: 1.0e-6, source: "design: a one-microfarad paper-and-foil condenser across each drive break, Fizeau's (1853) quencher of induction-coil breakers (web: EB1911 'Induction coil'); the line's break has only the stray"}
+  stray_f: {value: 100.0e-12, source: "provisional: model knowledge (the coil's self-capacitance and the leads' across the open contact)"}
+  arc_v: {value: 17.5, source: "web: https://deringerney.com/wp-content/uploads/2022/04/Ney-Contact-Manual-Revised-1st-Edition.pdf Table 1-3 after Holm (platinum: minimum arc voltage 15-17.5 V)"}
+  arc_min_a: {value: 0.9, source: "web: Ney Contact Manual Table 1-3 after Holm (platinum: minimum arc current 0.67-1.1 A)"}
+  arc_ohm: {value: 2.0, source: "provisional: model knowledge (a short spark's resistance, ohms)"}
+  field_emission_v_m: {value: 1.0e+8, source: "provisional: model knowledge (micro-gaps in air break down at ~100 V/um below Paschen's minimum: the modified Paschen curve)"}
+  paschen_v: {value: 327.0, source: "web: https://en.wikipedia.org/wiki/Paschen%27s_law (air's minimum, 327 V at p d = 0.567 Torr cm: ~7.5 um at 1 atm)"}
+  paschen_gap_m: {value: 7.5e-6, source: "provisional: model knowledge (see paschen_v)"}
+  air_v_m: {value: 3.0e+6, source: "provisional: model knowledge (air's breakdown field at mm gaps, ~3 kV/mm)"}
+
+# The carbon under the key: granular carbon in a box, pressed by the key through an oil dashpot.
+carbon:
+  g0_s: {value: 0.033, source: "design: ~30 Ohm at 1 N (a long column of fine granules: the key's carbon sized to the line, so a key pressed hardest draws ~0.25 A)"}
+  f0_n: {value: 1.0, source: "provisional: model knowledge (see g0_s)"}
+  exponent: {value: 1.0, source: "web: https://archive.org/details/telephonemicroph00dumorich (Du Moncel 1879, p. ~73: Edison's lamp-black button changes its resistance almost in the same proportion as the pressure); Holm's constriction law gives 1/3-1/2 for one contact spot, ~1 as spots multiply (Ney Contact Manual p. 9)"}
+  open_s: {value: 1.0e-6, source: "provisional: model knowledge (loose granules, ~1 MOhm)"}
+  force_max_n: {value: 2.0, source: "design: the force on the carbon of a key struck hardest (a finger's ~10 N through a 5:1 lever)"}
+  velocity_exponent: {value: 1.0, source: "design: the force proportional to MIDI velocity"}
+  touch_gain: {value: 0.5, source: "design: aftertouch presses up to 1.5 times the struck force"}
+  tau_on_s: {value: 0.008, source: "design: the oil dashpot's time constant pressing (attack)"}
+  tau_off_s: {value: 0.06, source: "design: its time constant releasing"}
+
+numerics:
+  oversample: {value: 8, source: "design: internal steps per 96 kHz sample (768 kHz; the reference runs 64)"}
+  reference_oversample: {value: 64, source: "design: the breaker's reference rate, 6.144 MHz"}

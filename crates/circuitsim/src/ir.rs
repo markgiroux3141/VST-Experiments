@@ -224,6 +224,7 @@ pub enum Element {
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
+    ReedKeys(ReedKeys),
     ThyratronEvents(ThyratronEvents),
     ResetEvents(ResetEvents),
     EdgeEvents(EdgeEvents),
@@ -617,6 +618,65 @@ pub struct NickelKeys {
     pub sustain: f64,
     pub polarize: f64,
     pub max_keys: f64,
+}
+
+/// The Victorian synth's keyboard of self-interrupting reeds (docs/VICTORIAN_SYNTH_PLAN.md;
+/// [`crate::reeds`]; `varimu/victorian/reed.py` is the reference): per key a steel reed kept
+/// going by its electromagnet in a local circuit, its second contact chopping the line
+/// through the carbon under the key, played by note events. It senses the local battery's
+/// node `loc` and the line's node `line` a sample late (both circuits return to ground) and
+/// drives `out_loc` and `out_line` to the keys' summed local and line currents times
+/// `v_per_a` at the next sample (the circuit's `G` parts draw them from `loc` and `line`).
+/// Each key steps at the least whole multiple of the step rate at or above `step_hz`. `data` is the compiled
+/// keyboard (a component version of kind `reed_keys`: `varimu.victorian.compile`), a path
+/// relative to the repository's root or absolute, its sha256 `sha256`. SPICE has no keys:
+/// ngspice sees the outputs held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReedKeys {
+    pub name: String,
+    pub data: String,
+    pub sha256: String,
+    pub step_hz: f64,
+    pub v_per_a: f64,
+    pub loc: String,
+    pub line: String,
+    pub out_loc: String,
+    pub out_line: String,
+}
+
+impl ReedKeys {
+    /// The nodes it senses, in the medium's order.
+    pub fn senses(&self) -> Vec<&str> {
+        vec![&self.loc, &self.line]
+    }
+
+    fn check(&self, input: &str) -> Result<(), String> {
+        if !(self.step_hz.is_finite() && self.step_hz > 0.0) {
+            return Err(format!("step_hz = {} must be finite and > 0", self.step_hz));
+        }
+        if !(self.v_per_a.is_finite() && self.v_per_a > 0.0) {
+            return Err("v_per_a must be positive".into());
+        }
+        if self.data.is_empty()
+            || self.sha256.len() != 64
+            || !self.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("data names the compiled keyboard, sha256 its hash".into());
+        }
+        for o in [&self.out_loc, &self.out_line] {
+            if o == GROUND || o == input {
+                return Err(format!("it drives {o} (ground or the input)"));
+            }
+            if self.senses().contains(&o.as_str()) {
+                return Err(format!("it drives {o}, which it senses"));
+            }
+        }
+        if self.out_loc == self.out_line {
+            return Err(format!("it drives {} twice", self.out_loc));
+        }
+        Ok(())
+    }
 }
 
 impl NickelKeys {
@@ -1184,6 +1244,7 @@ impl Element {
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
             Element::NickelKeys(e) => &e.name,
+            Element::ReedKeys(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
             Element::ResetEvents(e) => &e.name,
             Element::EdgeEvents(e) => &e.name,
@@ -1220,6 +1281,7 @@ impl Element {
                 v
             }
             Element::NickelKeys(e) => vec![&e.out],
+            Element::ReedKeys(e) => vec![&e.loc, &e.line, &e.out_loc, &e.out_line],
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
             Element::ResetEvents(e) => vec![&e.sense, &e.src, &e.dst],
             Element::EdgeEvents(e) => vec![&e.plus, &e.minus, &e.src, &e.dst],
@@ -1798,6 +1860,12 @@ impl CircuitIr {
                     'V'
                 }
                 Element::NickelKeys(e) => {
+                    if let Err(m) = e.check(&self.input_node) {
+                        return err(format!("{name}: {m}"));
+                    }
+                    'V'
+                }
+                Element::ReedKeys(e) => {
                     if let Err(m) = e.check(&self.input_node) {
                         return err(format!("{name}: {m}"));
                     }
