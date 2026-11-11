@@ -70,8 +70,7 @@ runs**.
 - **Next:** WP30 waits on a response curve of the Shure 520 (bot-blocked: the URLs in
   `data/schematics/shure_green_bullet/README.md`, for the user); the Green Bullet is controlled
   magnetic by Shure's 1959 catalog, so it needs no crystal kind (WP30's Decision). WP13 (RE20) waits on the N-entry room
-  generalization (its Decision). Open options inside done WPs: a `surface` control in the app's Room view
-  (WP26), the Helios EQ (the IA-H9's EQUALIZER,
+  generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
   67's bass cut's shape (WP28's Notes), supercardioid halves for the dual capsules (the M 49's and U
@@ -1848,8 +1847,10 @@ starves into the transformer's reflected load, ~10 V peak at the gate; neither t
 nor the supply divider fixes it without moving the DC point: time-boxed). Tests
 `tests/test_crown_pzm.py` (6, with the boundary's doubling on image sources: the floor mic 3.1 dB
 over the comb's mean power at 0.5 m, no comb). Rendered: the floor PZM at 1.6 m -26.7 dBFS rms, the
-wall PZM into SSL at 3 m -22.6. **Open:** the app's Room view has no control for `surface` (scene
-files only); the plate on a stand (the PZM in free space) needs the plate as a body.
+wall PZM into SSL at 3 m -22.6. The app's Room view: the mic panel's "On a surface" (no / floor /
+ceiling when flat / wall N; `room::RoomMic::surface`, kept in the app's state, written to the scene
+only when set; varimu-app's `room::tests::a_mic_on_a_surface`), the plan still draws the mic where
+it was put (scene.py snaps it). **Open:** the plate on a stand (the PZM in free space) needs the plate as a body.
 
 ### WP10-WP31
 
@@ -1875,7 +1876,9 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1`, `build_pzm_capsule` in `varimu/devices/library.py`, every existing IR
 unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
-fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
+fixture and golden unmoved, so `--verify` isn't due). Note: `cargo clippy -p varimu-app --all-targets -- -D warnings` fails on two findings in the
+multitrack deck's code (`deck.rs` type_complexity, `session_view.rs` collapsible_if; not the chains'),
+seen 2026-11-11. Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
 
 ## Decisions (the user's)
@@ -2011,3 +2014,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   README); still 48 of 51.
 - 2026-11-11: WP25's S2: the U 47 fet's bass cut read on the drawing (R4 + R5 as resistive feedback; S1's
   second pole), its default and padded builds unchanged; still 48 of 51.
+- 2026-11-11: the Room view's "On a surface" for a mic (WP26), saved and passed to scene.py; varimu-app's
+  stale `chain_list_reads` assertion fixed (`r121_api312` is built); still 48 of 51.

@@ -1113,6 +1113,8 @@ impl RoomView {
             None => sources[k].name.clone(),
         };
         let room_free = self.scene.is_free_field();
+        let n_walls = self.scene.plan.len();
+        let flat_roof = self.scene.roof.kind == "flat";
         let mut delete = false;
         let m = &mut self.scene.mics[i];
         ui.label(
@@ -1282,6 +1284,27 @@ impl RoomView {
                 });
             }
         }
+        ui.horizontal(|ui| {
+            ui.label("On a surface");
+            let shown = m.surface.clone().unwrap_or_else(|| "no".into());
+            egui::ComboBox::from_id_salt(("mic_surface", i))
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut m.surface, None, "no");
+                    ui.selectable_value(&mut m.surface, Some("floor".into()), "floor");
+                    if flat_roof {
+                        ui.selectable_value(&mut m.surface, Some("ceiling".into()), "ceiling");
+                    }
+                    for k in 0..n_walls {
+                        let w = format!("wall {k}");
+                        ui.selectable_value(&mut m.surface, Some(w.clone()), w);
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "A boundary mic (a PZM): placed on that surface, 1 mm inside, aimed into                      the room when it renders; the surface's reflection arrives with the                      direct sound (+6 dB, no comb). Wall N starts at the plan's corner N.",
+                );
+        });
         ui.add_enabled_ui(!room_free, |ui| {
             ui.checkbox(&mut m.free_field, "Free field (no room for this mic)")
                 .on_hover_text(

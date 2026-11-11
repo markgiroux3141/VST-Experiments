@@ -782,6 +782,10 @@ pub struct RoomMic {
     pub separate_passes: bool,
     /// No room for this mic: the direct sound only (scene.py's `free_field`).
     pub free_field: bool,
+    /// A boundary mic (scene.py's `surface`: "floor", "ceiling" or "wall N", N the plan's
+    /// corner the wall starts at): scene.py moves it onto that surface, 1 mm inside, aimed
+    /// into the room (the PZM, CHAINS_PLAN.md WP26). None: where `pos` puts it.
+    pub surface: Option<String>,
 }
 
 impl RoomMic {
@@ -805,6 +809,7 @@ impl RoomMic {
             hears: None,
             separate_passes: false,
             free_field: false,
+            surface: None,
         }
     }
 
@@ -1214,7 +1219,7 @@ impl Scene {
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
                 "azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg, "pan": m.pan,
                 "hears": m.hears, "separate_passes": m.separate_passes,
-                "free_field": m.free_field,
+                "free_field": m.free_field, "surface": m.surface,
             })).collect::<Vec<_>>(),
         })
     }
@@ -1318,6 +1323,7 @@ impl Scene {
                             }),
                             separate_passes: m["separate_passes"].as_bool().unwrap_or(false),
                             free_field: m["free_field"].as_bool().unwrap_or(false),
+                            surface: m["surface"].as_str().map(str::to_string),
                         })
                         .collect()
                 })
@@ -1404,6 +1410,9 @@ impl Scene {
                 }
                 if m.free_field {
                     v["free_field"] = json!(true);
+                }
+                if let Some(sf) = &m.surface {
+                    v["surface"] = json!(sf);
                 }
                 v
             }).collect::<Vec<_>>(),
@@ -2001,6 +2010,23 @@ mod tests {
         assert_ne!(s.mics[l2].name, "A L");
     }
 
+    /// A boundary mic (CHAINS_PLAN.md WP26): `surface` in the render's scene only when set, kept
+    /// by the app's state.
+    #[test]
+    fn a_mic_on_a_surface() {
+        let mut s = scene();
+        assert!(
+            s.render_json(&BTreeMap::new())["mics"][0]
+                .get("surface")
+                .is_none()
+        );
+        s.mics[0].surface = Some("wall 2".into());
+        let m = &s.render_json(&BTreeMap::new())["mics"][0];
+        assert_eq!(m["surface"].as_str(), Some("wall 2"));
+        let back = Scene::from_state(&s.state());
+        assert_eq!(back.mics[0].surface.as_deref(), Some("wall 2"));
+    }
+
     /// A mic's hears / passes / free field (2026-11-09): in the render's scene only when on,
     /// following renames and deletes, a mic hearing nothing a problem.
     #[test]
@@ -2073,7 +2099,8 @@ mod tests {
         ] {
             assert!(ids.contains(&id), "{id}");
         }
-        assert!(!ids.contains(&"r121_api312")); // not built: not offered
+        assert!(!ids.contains(&"re20_api312")); // not built (WP13): not offered
+        assert!(ids.contains(&"r121_api312") && ids.contains(&"pzm_clean")); // WP16, WP26
         assert!(ids.contains(&"c4038_v72")); // the 4038 (WP8)
         let r = list.iter().find(|c| c.id == "r44_v76").unwrap(); // a ribbon (WP6)
         assert_eq!(r.pattern(&BTreeMap::new()), Pattern::FIGURE8);
