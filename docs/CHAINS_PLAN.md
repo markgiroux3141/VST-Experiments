@@ -59,8 +59,7 @@ runs**.
   `scripts/fit_r121.py`); each WP's Notes. WP28 (2026-11-11): the EF86 and E88CC fits (`EF86@1`,
   `E88CC@1`), the Neumann U 67 from Neumann's drawing (`K67@1` by `scripts/fit_k67.py`) and the EMI
   REDD.47 from EMI's REDD.47/C1/1 and REDD.M47; WP28's Notes.
-- **Next:** WP29: the AC701 fit (`AC701@1`; its sheet is open) is this WP's first step; **the M 49
-  waits on its drawing** (not on the open web; the user fetches, `data/schematics/neumann_m49/README.md`):
+- **Next:** WP29: the AC701 fit is done (`AC701@1`, WP29's Notes); **the M 49 waits on its drawing** (not on the open web; the user fetches, `data/schematics/neumann_m49/README.md`):
 
   ```
   https://groupdiy.com/threads/m49c-circuit-details-questions.80237
@@ -82,6 +81,8 @@ runs**.
   https://groupdiy.com/threads/cloudlifter-cl-1repair.78404/page-2
   ```
 
+  WP31 next while those wait (the carbon kind exists; Jones's BSTJ 1938 paper on the F1
+  transmitter found, `data/schematics/carbon_transmitter/README.md` has its figures and a plan).
   WP26 (the PZM): no schematic is open (Crown's service archive doesn't list the PZM-30D); the
   surface placement in scenes can be built first. Then WP30 (a crystal transducer kind), WP31 (a
   carbon kind); WP15's switches and WP14's bass switch (their curves digitized; WP14's network
@@ -208,7 +209,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
-| 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | |
+| 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | the AC701 fit done 2026-11-11; the M 49 waits on its drawing |
 | 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | |
 | 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | |
 
@@ -1644,6 +1645,19 @@ kHz, the loading REDD.M47 describes), output 16 ohm, THD 0.08% at 0 dBu, 0.49% a
 +17 dBu, 6.5% at 20 Hz near overload. `tests/test_emi_redd47.py` (5). `u67_redd47`, `u67_n1073`
 composed; `u67_redd47` rendered in `new_chains_check.yaml` (-16.7 dBFS rms).
 
+### WP29. The AC701 fit; the Neumann M 49
+
+Sources: the AC701 (`data/datasheets/sources/telefunken_ac701.pdf`, frank.pocnet.net),
+`data/schematics/neumann_m49/README.md` (Neumann's M 49 b / M 50 b instructions and product
+description via RecordingHacks; the drawing missing: the URLs in Status).
+
+Notes (2026-11-11): `AC701@1` (`build_ac701`, a Koren triode on Telefunken's plate and transfer
+families jointly, `telefunken_ac701.provenance.yaml`; ex >= 1): 0.9 sigma rms; 4.08 / 2.65 mA at the
+printed 4.2 / 2.6 mA points, S 2.35 / 2.28 mA/V and mu 19 / 21 where the sheet prints 3.2 / 2.8 and
+23 (the families' own slopes are 10-25% under the printed figures: the digitizer's notes; the
+curves win). In the SPICE agreement test, the device fixtures and `table.py`'s grids. Next: the M
+49 once its drawing is had (its spec sheets give the curves and the N 49 b supply).
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1773,3 +1787,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   the circuit) and the EMI REDD.47 from EMI's REDD.M47 and REDD.47/C1/1 (via Sowter); U67 ->
   REDD.47 and -> 1073 composed: 42 of 51. WP29's M 49 and WP27's Cloudlifter wait on login-walled
   drawings (the URLs in Status).
+- 2026-11-11: WP29's AC701 fit (`AC701@1`; Telefunken's curves digitized by a subagent); the M 49
+  and WP27's Cloudlifter wait on login-walled drawings; WP31's source found (Jones, BSTJ 1938, the
+  F1 transmitter) and its plan written; still 42 of 51.

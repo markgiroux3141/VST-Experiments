@@ -146,6 +146,7 @@ def _models() -> list:
         load_device("E83F@1"),
         load_device("EF86@1"),  # CHAINS_PLAN.md WP28
         load_device("E88CC@1"),
+        load_device("AC701@1"),  # WP29
         load_device("BC550C@1"),
         load_device("BC560C@1"),  # PNP
         # At temperature (bjt.py's "Temperature"): XTB set on the hot one.

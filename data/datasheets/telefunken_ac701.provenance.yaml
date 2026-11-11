@@ -1,0 +1,102 @@
+device: "AC701 (subminiature AF triode, the Neumann M 49's tube)"
+document: "Telefunken AC 701, NF-Triode / AF-Triode, data sheets 59-64 (6 pages)"
+publisher: Telefunken
+date: "1961-09/10 (page codes 010961 on p.1, 021061 on p.3, 031061 on p.5; pp.2, 4, 6 carry none)"
+local_copy: sources/telefunken_ac701.pdf
+local_copy_sha256: 161057c603538621d74c87f32f9cfabac46ee743ba85ee01030994323d6396b1
+scan_source: "web: https://frank.pocnet.net/sheets/128/a/AC701.pdf"
+digitized_with: >-
+  the PDF's native 1-bit page images of p.3 and p.4 (1888 x 2688 px, ~225 dpi) extracted with PyMuPDF
+  extract_image; each grid line fitted along its length (straight line through the thin-run centres of
+  every row / column, outliers rejected; residuals 0.2-0.65 px; the lines lean ~0.3-0.5 deg and vary in
+  slope, so each is fitted on its own), values interpolated between the neighbouring fitted lines;
+  strokes traced as run centres (rows, and columns at the transfer curves' feet) with the grid-line bands
+  masked and runs whose edge touches a grid line or the frame dropped, linked into one chain per stroke
+  by extrapolation across gaps and dashes, assigned to curves by eye on an overlay, outliers rejected
+  against a 5th / 6th-order polynomial; read at round values by local fits (plate: linear, +-2.5 V, up
+  to +-6 V across the -1.6 V curve's dash gaps; transfer: quadratic, +-0.15 V); overlay of every read
+  point on the page checked by eye (Claude Code subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  telefunken_ac701_plate.csv:
+    figure: >-
+      PDF p.4 (sheet 62, Ro V-B 1329 R): Ia = f(Ua), Ug as parameter, 0-140 V x 0-9 mA. Printed turned
+      90 degrees: Ua runs up the page, Ia increases to the left.
+    columns: "vg_v, vp_v, ip_a"
+    curves: >-
+      Ug = 0, -0.5, -1.0, -1.5, -1.6, -2.0, -2.5, -3.0, -3.5, -4, -5 V (11 curves, 147 points): 13, 13,
+      12, 11, 11, 11, 10, 19, 18, 17, 12 points. Every 5 V; every 2.5 V on the -3.0 to -5 V curves,
+      which are short within the rating.
+    coverage: >-
+      Ia 0.15-7.25 mA, Ua 5-127.5 V. Ug 0 V 5-65 V (0.36-7.25 mA), -0.5 V 10-70 V, -1.0 V 20-75 V,
+      -1.5 V 30-80 V, -1.6 V 35-85 V, -2.0 V 40-90 V, -2.5 V 50-95 V, -3.0 V 60-105 V, -3.5 V 70-112.5 V,
+      -4 V 80-120 V, -5 V 100-127.5 V. The curves are drawn dashed beyond the figure's own Na = 0.5 W
+      hyperbola (p.2: Na max 0.5 W); points beyond 0.5 W are left out. Below ~0.15 mA the strokes run
+      into the Ia = 0 frame: not read. The -5 V curve is drawn solid to 130 V, past the Ua 120 V rating
+      (p.2); its points above 120 V are kept as drawn. The -1.6 V curve (the measuring values' bias) is
+      drawn long-dashed over its whole length; it is read across its dash gaps. The M 49's region
+      (tens of volts, 1-3 mA, Ug -1 to -2 V) is covered by the -1.0 to -2.0 V curves at 20-70 V.
+  telefunken_ac701_transfer.csv:
+    figure: "PDF p.3 (sheet 61, Ro V-B 1328 R): Ia = f(Ug), Ua as parameter, -7 to 0 V x 0-9 mA"
+    columns: "vp_v, vg_v, ip_a"
+    curves: >-
+      Ua = 120, 100, 80, 60, 40 V (5 curves, 69 points): 12, 14, 16, 16, 11 points, every 0.2 V of Ug.
+    coverage: >-
+      Ia 0.11-6.6 mA. 120 V: -6.2 to -4.0 V; 100 V: -5.2 to -2.6 V; 80 V: -4.2 to -1.2 V; 60 V: -3.0 to
+      0 V; 40 V: -2.0 to 0 V. The curves are drawn on to 7.2-8.0 mA at 80-120 V (0.6-1.0 W); points beyond
+      Na = 0.5 W are left out as on the plate family. The 60 V and 40 V points at Ug = 0 are extrapolated
+      0.11-0.12 V where the strokes meet the Ug = 0 frame. Below ~0.1 mA (the long feet) not read.
+  not digitized: >-
+    p.5 and p.6 (sheets 63-64, Ro V-B 1330 R / 1331 R): S, mu and Ug vs Ia at Ua 40 V (0-5 mA) and 60 V
+    (0-7 mA); a few values read off their fitted grids for the checks (published_points.yaml's
+    "AC701" entry has them).
+axis_calibration: >-
+  p.4: 10 vertical lines Ia 0-9 mA every 1 mA (117-122 px per mA), 15 horizontal lines Ua 0-140 V every
+  10 V (98-103 px per 10 V); the Ia = 0 and Ua = 0 frame lines fitted on their thick runs. p.3: 8
+  vertical lines Ug -7 to 0 V every 1 V (116-123 px per V), 10 horizontal lines Ia 0-9 mA every 1 mA
+  (115-120 px per mA).
+estimated_error: >-
+  About +-0.02 mA or +-1%, whichever is larger, in reading the drawn curves (stroke-centre scatter about
+  each curve's polynomial 0.003-0.006 mA rms on p.4, 0.005-0.016 mA on p.3; 1 px = 0.0085 mA / 0.1 V on
+  p.4, 0.0085 mA / 0.0085 V on p.3; grid-fit residuals <= 0.65 px); near the feet (< 0.5 mA) about
+  +-0.05 mA. The figures disagree with each other by more than that (checks).
+checks:
+  - >-
+    p.1 Messwerte, column 1: Ua 40 V, Ug 0 V -> Ia 4.2 mA, S 3.2 mA/V, mu 23. Plate family: 4.18 mA;
+    transfer family: 4.18 mA (extrapolated 0.12 V to the frame). The transfer curve's slope there is
+    2.53 mA/V (a quadratic through the read points), the plate family's chord 0 to -0.5 V 2.34 mA/V; the
+    Ug = 0 curve's slope gives rp 8.3 kOhm (mu / S printed: 7.2 kOhm). p.5 at 4.2 mA: Ug -0.03 V, S 3.18
+    mA/V, mu 23.6 (agrees with the printed values).
+  - >-
+    p.1 Messwerte, column 2: Ua 60 V, Ug -1.6 V -> Ia 2.6 mA, S 2.8 mA/V, mu 23, Ig <= -1e-10 A. Plate
+    family: 2.56 mA; transfer family: 2.51 mA. Transfer slope 2.12 mA/V; plate chord -1.5 to -2.0 V
+    2.58 mA/V, -1.0 to -2.0 V 2.53 mA/V; the -1.6 V curve's slope gives rp 9.2 kOhm (printed mu / S:
+    8.2 kOhm). p.6 at 2.6 mA: Ug -1.62 V, S 2.73 mA/V, mu 23.0. So the S / mu pages match the printed
+    values, while the two families' slopes are 10-25% lower in S.
+  - >-
+    mu from the families: plate, at constant Ia 2.6 mA, Ug -1.0 / -2.0 / -2.5 V at 46.6 / 68.6 / 79.1 V
+    (mu 22.0-22.5); at 4.2 mA, Ug 0 / -1.0 V at 40.2 / 59.6 V (mu 19.4). Transfer, Ug for 1-2.6 mA moves
+    0.9-1.0 V per 20 V of Ua (mu 20-22). Below the printed 23 and p.5-6's 22.4-23.9.
+  - >-
+    Plate vs transfer family at common points (23 points above 0.5 mA): 0.13 mA rms, mean +0.05 mA. The
+    worst are at Ua 60 V, where the plate family's -0.5, -1.0 and -1.5 V curves sit 0.25, 0.38 and 0.27
+    mA above the transfer family; the plate family's -1.6 V curve agrees with it (+0.06 mA). On the plate
+    family, -1.6 V lies 0.44 mA below -1.5 V at 60 V but only 0.85 mA above -2.0 V (0.1 V vs 0.4 V of
+    grid): the -1.6 V curve looks drawn through the measuring value, the -1.5 V curve (with -0.5 and
+    -1.0 V) high there.
+  - >-
+    p.1 Betriebswerte (Ub 120 V, Ug -1.6 V, Rg 150 MOhm): Ra 50 kOhm -> Ia 1.35 mA (Ua 52.5 V); the
+    load line meets the -1.6 V plate curve at 1.43 mA, 48.7 V. Ra 200 kOhm -> Ia 0.39 mA (Ua 42 V); the
+    curves give ~0.42 mA at ~36 V (at the curve's lowest read point). The printed gain V = 9 (Ra with RL
+    100 kOhm, note 1) is about half what mu 23 and the curve's rp (11 kOhm at 48.7 V) give for Ra || RL
+    (~17): not reconciled (the sheet doesn't say how V is measured beyond note 1).
+  - >-
+    p.5 / p.6 Ug(Ia) against the transfer family: at 40 V within 0.02 V at 2.5-4 mA, 0.06 V at 2 mA,
+    0.12 V at 1 mA (p.5 more negative); at 60 V p.6 is 0.01-0.1 V more negative at 1-5 mA.
+notes: >-
+  Heater 4 V / 100 mA, indirectly heated, for d.c. heating, parallel supply. Max. ratings (p.2): Ua0 250
+  V, Ua 120 V, Na 0.5 W, Ik 5 mA, Rg 180 MOhm, Uf/k +-100 V, Rf/k 20 kOhm. The figures are internally
+  inconsistent at the 10-25% level in slope (S from the families vs p.5-6 and the printed values) and by
+  up to 0.38 mA between the plate and transfer families around 60 V; a fit should weigh the printed
+  measuring values and p.5-6 against the families (published_points.yaml "AC701").

@@ -1459,3 +1459,63 @@
     mu: 33
     circuit_b: {ub_v: 150, ra_ohm: 2500, rg_ohm: 0.3e6, vg_for_0p1ma_v: [-8.5, -5.0], ip_at_vg0_a: 33.0e-3, ip_at_vg0_tol_a: 5.0e-3, ip_at_vg_m15_max_a: 5.0e-6, ip_at_ub60_vg0_min_a: 9.0e-3}
     end_of_life: {ip_min_a: 13.5e-3, gm_min_s: 9.0e-3, ig_max_a: 1.0e-6}
+
+# --- AC701, the Neumann M 49's tube (CHAINS_PLAN.md WP29) ---
+"AC701":
+  source: "Telefunken AC 701 (NF-Triode), data sheets 59-64, page codes 010961 / 021061 / 031061; local copy sources/telefunken_ac701.pdf (web: https://frank.pocnet.net/sheets/128/a/AC701.pdf)"
+  class_a1:           # p.1 Messwerte (measuring values), both columns as printed; no rp printed
+    - vp_v: 40
+      vg_v: 0
+      ip_a: 4.2e-3
+      gm_s: 3.2e-3
+      mu: 23
+      rp_ohm: null    # not printed; mu / S = 7.2 kOhm. Plate family (p.4): 8.3 kOhm (the 0 V curve's slope at 40 V)
+    - vp_v: 60
+      vg_v: -1.6
+      ip_a: 2.6e-3
+      gm_s: 2.8e-3
+      mu: 23
+      rp_ohm: null    # not printed; mu / S = 8.2 kOhm. Plate family: 9.2 kOhm
+      ig_max_a: -1.0e-10   # "Ig <= -10^-10 A", printed in this column only
+  typical_operation:  # p.1 Betriebswerte: grid leak bias circuit drawn (Cg into the grid, Rg to -Ug, Ra= to +Ub, output coupled to RL)
+    - {ub_v: 120, ra_ohm: 50.0e3, vg_v: -1.6, rg_ohm: 150.0e6, cg_f: 50.0e-12, ip_a: 1.35e-3, vg_eff_v: 0.6, gain: 9, thd_pct: 0.4}
+    - {ub_v: 120, ra_ohm: 200.0e3, vg_v: -1.6, rg_ohm: 150.0e6, cg_f: 50.0e-12, ip_a: 0.39e-3, vg_eff_v: 0.6, gain: 9, thd_pct: 1.0,
+       noise_weighted_max_v: 6.0e-6, noise_unweighted_max_v: 14.0e-6}
+    # Notes as printed: 1) V and k with the tube loaded, besides the d.c. resistance Ra=, by a termination RL = 100 kOhm.
+    # 2) U_Grsp (noise voltage) referred to the grid, measured with a noise peak voltmeter with the weighting filter after
+    #    CCIR 1949. 3) U_Frsp (external voltage, "Fremdspannung") referred to the grid, same meter, weighting filter off.
+    # The noise figures are printed in the second (200 kOhm) column only.
+  va40_curves:        # p.5 (Ro V-B 1330 R, Ua = 40 V), read off its fitted grid by Claude; a figure, not a table.
+                      # S and mu cross at ~1.5 mA (read as one value there); mu not drawn below ~0.7 mA
+    - {ip_a: 0.5e-3, vg_v: -1.89, gm_s: 1.49e-3, mu: null}
+    - {ip_a: 1.0e-3, vg_v: -1.57, gm_s: 1.95e-3, mu: 22.4}
+    - {ip_a: 1.5e-3, vg_v: -1.28, gm_s: 2.26e-3, mu: 22.6}
+    - {ip_a: 2.0e-3, vg_v: -1.00, gm_s: 2.51e-3, mu: 22.8}
+    - {ip_a: 3.0e-3, vg_v: -0.47, gm_s: 2.87e-3, mu: 23.1}
+    - {ip_a: 4.0e-3, vg_v: -0.07, gm_s: 3.13e-3, mu: 23.5}
+    - {ip_a: 4.2e-3, vg_v: -0.03, gm_s: 3.18e-3, mu: 23.6}
+    - {ip_a: 5.0e-3, vg_v: null, gm_s: 3.35e-3, mu: 23.9}   # Ug curve ends at ~4.25 mA (Ug 0)
+  va60_curves:        # p.6 (Ro V-B 1331 R, Ua = 60 V), read the same way; S and Ug start together at ~0.55 mA, S ends at ~5.5 mA
+    - {ip_a: 0.6e-3, vg_v: -2.79, gm_s: 1.39e-3, mu: 22.9}
+    - {ip_a: 1.0e-3, vg_v: -2.50, gm_s: 1.87e-3, mu: 22.9}
+    - {ip_a: 2.0e-3, vg_v: -1.95, gm_s: 2.47e-3, mu: 23.0}
+    - {ip_a: 2.6e-3, vg_v: -1.62, gm_s: 2.73e-3, mu: 23.0}
+    - {ip_a: 3.0e-3, vg_v: -1.43, gm_s: 2.87e-3, mu: 23.1}
+    - {ip_a: 4.0e-3, vg_v: -0.98, gm_s: 3.16e-3, mu: 23.2}
+    - {ip_a: 5.0e-3, vg_v: -0.57, gm_s: 3.37e-3, mu: 23.2}
+    - {ip_a: 6.0e-3, vg_v: -0.19, gm_s: null, mu: 23.3}
+  capacitances_f:     # p.2, without external screening
+    gk: 2.0e-12       # Cg/k+f
+    pk: 1.5e-12       # Ca/k+f
+    gp: 2.2e-12       # Cg/a
+  max_ratings:        # p.2 Grenzwerte
+    vp_cold_v: 250    # Ua0
+    vp_v: 120
+    pd_w: 0.5
+    ik_a: 5.0e-3
+    rg_max_ohm: 180.0e6
+    vhk_v: 100        # Uf/k +-100 V
+    rhk_max_ohm: 20.0e3
+  heater: {v: 4.0, a: 0.100, note: "indirectly heated, for d.c. heating (G-Heizung), parallel supply"}
+  pins: "subminiature, flying leads: 1 heater -f, 2 cathode, 3 heater +f, 4 anode (red point); grid on a separate lead out of the bulb's top"
+  dimensions: "max. 10.1 mm diameter, bulb 38.1 mm, leads 38.1 mm; weight max. 5 g"

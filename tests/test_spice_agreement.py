@@ -30,7 +30,9 @@ def _op(netlist_lines, vectors):
     return {v: float(r[v][0]) for v in vectors}
 
 
-@pytest.mark.parametrize("name", ["6386", "12AX7", "12BH7", "12AY7", "VF14T@1", "E88CC@1"])
+@pytest.mark.parametrize(
+    "name", ["6386", "12AX7", "12BH7", "12AY7", "VF14T@1", "E88CC@1", "AC701@1"]
+)
 def test_triode_plate_and_grid_current_agree(name):
     t = load_device(name)
     pts = [(vg, vp) for vg in (-70, -40, -20, -10, -4, -1, 0, 0.5) for vp in range(0, 401, 25)]

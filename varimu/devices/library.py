@@ -1434,6 +1434,8 @@ V6_SCREEN_SIGMA = {"rel": 0.03, "abs_": 0.03e-3, "sigma_x": 0.15}
 AY7_STARTS = ([40.0, 1.35, 1000.0, 300.0, 300.0], [40.0, 1.4, 500.0, 100.0, 30.0])
 # The E88CC from a 6DJ8-like start (mu ~33, a steep tube: small Kg1) and the 12AY7's.
 E88CC_STARTS = ([33.0, 1.35, 300.0, 300.0, 30.0], *AY7_STARTS)
+# The AC701 (mu ~25 at a few mA and tens of volts).
+AC701_STARTS = ([25.0, 1.35, 300.0, 300.0, 10.0], [25.0, 1.4, 1000.0, 100.0, 5.0], *AY7_STARTS)
 
 
 def load_12ay7() -> tuple[np.ndarray, np.ndarray]:
@@ -1510,6 +1512,39 @@ def build_e88cc() -> dict[str, Any]:
             "sigma": "2% of Ip + 30 uA, with the curve's slope times 1 V of Vp",
             "telefunken_plate_rms_a": float(np.sqrt(np.mean(tf_err**2))),
             "telefunken_plate_max_a": float(np.max(np.abs(tf_err))),
+        },
+    }
+
+
+def build_ac701() -> dict[str, Any]:
+    """The AC701, the Neumann M 49's tube (docs/CHAINS_PLAN.md WP29): a Koren triode fit to
+    Telefunken's plate and transfer curves (data/datasheets/telefunken_ac701.provenance.yaml),
+    jointly (the transfer points as plate points at their Ua)."""
+    pub = _published()["AC701"]
+    pl = load_csv("telefunken_ac701_plate.csv")  # vg, vp, ip
+    tr = load_csv("telefunken_ac701_transfer.csv")  # vp, vg, ip
+    d = np.r_[pl, np.c_[tr[:, 1], tr[:, 0], tr[:, 2]]]
+    vg, vp, ip = d.T
+    m, rep = fit_koren_triode(
+        vg, vp, ip, effective_sigma(vp, ip, vg, 4.0, **AY7_SIGMA), starts=AC701_STARTS, ex_min=1.0
+    )
+    caps = pub["capacitances_f"]
+    return {
+        "name": "AC701",
+        "kind": "triode",
+        "source": "fit: Koren triode, least squares (effective variance) on the Telefunken AC701 "
+        "plate and transfer curves, digitized: data/datasheets/telefunken_ac701.provenance.yaml",
+        "plate": {"model": "koren", "mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["gk"],
+            "gp": caps["gp"],
+            "pk": caps["pk"],
+            "source": f"{pub['source']} (without external screening)",
+        },
+        "fit_report": {
+            "plate": rep.as_dict(),
+            "sigma": "2% of Ip + 30 uA, with the curve's slope times 1 V of Vp",
         },
     }
 
@@ -3602,6 +3637,7 @@ BUILDERS = {
     "K67": build_k67,
     "E88CC": build_e88cc,
     "EF86": build_ef86,
+    "AC701": build_ac701,
     "KK84": build_kk84,
     "R57": build_r57,
     "R59": build_r59,
