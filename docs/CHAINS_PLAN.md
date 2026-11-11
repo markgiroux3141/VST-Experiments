@@ -67,9 +67,9 @@ runs**.
   `scripts/fit_f1.py`); WP31's Notes. WP26 (2026-11-11): the Crown PZM-30D by inference on its
   schematic (`config/circuits/crown_pzm.yaml`, `PZM_CAPSULE@1` by `scripts/fit_pzm.py`) and a scene
   mic's `surface`; WP26's Notes.
-- **Next:** WP30 waits on a response curve of the Shure 520 (bot-blocked: the URLs in
-  `data/schematics/shure_green_bullet/README.md`, for the user); the Green Bullet is controlled
-  magnetic by Shure's 1959 catalog, so it needs no crystal kind (WP30's Decision). WP13 (RE20) waits on the N-entry room
+- **Next:** WP30, its sources now in (the user supplied Shure's 1980 520D data sheet with its
+  response curve, and the 520DX's): digitize the 520D's Figure 1, then WP30's Notes' next steps. The
+  Green Bullet is controlled magnetic, so it needs no crystal kind (WP30's Decision). WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
@@ -89,7 +89,7 @@ runs**.
     1:3.16 input, Amplifier D's three d.c.-coupled transistors with overall feedback, 25 dB
     nominal, >= 1.4 V rms into 3k), the forum figures there as provisional values, the rest
     fitted to the handbook.
-- **Waiting on the user:** a Shure 520 response curve (WP30: the URLs in its README); listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
+- **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
   and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean, PZM -> clean / SSL added to
   `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
@@ -1804,8 +1804,10 @@ is dropped when it is built. The chain is an instrument: the mic into the 5E3's 
 leak), its output the speaker's pressure (`fender_5e3`'s `out`); a print of it is then a source in a
 scene.
 
-Notes (2026-11-11, started): no response curve is open (Shure's 520 / 520D / 520DX sheets are
-bot-blocked: the README lists the URLs for the user). Next: with a curve, `R_520@1` on
+Notes (2026-11-11, started): the user supplied Shure's 1980 520D data sheet (Figure 1, the typical
+response; -56.0 dB re 1 V/ubar high impedance, 16 mV/Pa; 100 k recommended load; a 39k across the
+cartridge; the R44D cartridge) and the 1997 520DX sheet (a reference): the README. Next: digitize the
+520D's Figure 1, then `R_520@1` on
 `fit_md421.py`'s method (the coil's inductance and resistance from the high impedance: provisional,
 bounded), `config/circuits/shure_green_bullet.yaml` (its 7 ft cable's capacitance), the 5E3's port in
 the list (its input node behind its generator), `bullet_f5e3` composed.
@@ -2016,3 +2018,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   second pole), its default and padded builds unchanged; still 48 of 51.
 - 2026-11-11: the Room view's "On a surface" for a mic (WP26), saved and passed to scene.py; varimu-app's
   stale `chain_list_reads` assertion fixed (`r121_api312` is built); still 48 of 51.
+- 2026-11-11: the user supplied Shure's 520D (1980) and 520DX (1997) sheets; filed in
+  `data/schematics/shure_green_bullet/`; WP30 unblocked.
