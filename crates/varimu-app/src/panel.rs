@@ -576,7 +576,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 32] = [
+pub const DEVICES: [Device; 33] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1331,6 +1331,37 @@ pub const DEVICES: [Device; 32] = [
         pitch2: None,
         coupling: None,
         partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+    },
+    Device {
+        id: "victorian_voice",
+        label: "Victorian Synth (1881)",
+        short: "Victorian",
+        about: "An invented synthesizer from parts made by 1881: Gray's self-interrupting             reeds chopping a line of Leclanche cells through carbon under the keys, an             induction coil, a saturable reactor on Ewing's soft iron, a carbon relay and             Bell's receiver",
+        group: Group::Instruments,
+        // The reeds are circuitsim's medium (docs/VICTORIAN_SYNTH_PLAN.md): each key's reed,
+        // magnet, contacts and carbon at 768 kHz; the cells, iron and relay are the circuit.
+        circuit: "victorian_voice",
+        panel: Some(&["cutoff"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        // The reactor's sound is its iron (CUTOFF saturates it): JA cores live.
+        cores: Some("ja"),
+        mod_wheel: Some("cutoff"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys press the carbon and set the reeds going (note events,
+        // `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        // Two threads: the keys, batteries, induction coil and reactor | the relay and the
+        // loud-speaking end, cut at the filter's condenser (f1, held in the relay's part).
+        partition: Some(&["relay", "relay battery"]),
         live_speaker_v: None,
         newton: None,
         method: None,
@@ -2586,6 +2617,7 @@ mod tests {
                         "clavinet_d6",
                         "novachord",
                         "nickel_organ",
+                        "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",
                         "minimoog_voice"

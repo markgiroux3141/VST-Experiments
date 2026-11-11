@@ -11,7 +11,7 @@ probes: [ol, ok]
 values:
   local_v: {value: 2.8, source: "design: as config/victorian/reeds.yaml's magnet.local_v (the tuning's nominal local battery)"}
   line_v: {value: 6.0, source: "design: as config/victorian/reeds.yaml's magnet.line_v"}
-  reeds_model: {value: GRAY_REEDS@1, source: "the compiled keyboard (scripts/compile_victorian_reeds.py)"}
+  reeds_model: {value: GRAY_REEDS@2, source: "the compiled keyboard (scripts/compile_victorian_reeds.py)"}
   reeds_step_hz: {value: 768000.0, source: "design: the keys' internal rate, 8 x 96 kHz (config/victorian/reeds.yaml numerics.oversample)"}
   reeds_v_per_a: {value: 1.0, source: "design: the outputs' scale, 1 V per A"}
   g_sense_s: {value: 1.0, source: "design: the G parts' gain, the outputs' inverse scale"}

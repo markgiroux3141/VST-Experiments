@@ -81,3 +81,79 @@ def test_medium_matches_the_reference():
         want = np.asarray(ref[key])[: len(got)] + add
         err = np.max(np.abs(got - want)) / np.max(np.abs(want))
         assert err < 1e-9, (probe, err)
+
+
+def test_carbon_button_law():
+    """The carbon's conductance follows the force's power law above its softened corner, is
+    its loose grains' at no force, and is smooth (its derivative matches a difference)."""
+    from varimu.devices.library import load_device
+
+    c = load_device("CARBON_BUTTON@1")
+    g, _ = c.g(np.array([0.25, 0.5, 1.0]))
+    assert g[2] / g[1] == pytest.approx(2.0, rel=1e-3)  # exponent 1
+    assert g[1] == pytest.approx(c.g_open_s + c.g0_s, rel=1e-6)
+    g0, _ = c.g(-1.0)
+    assert float(g0) == pytest.approx(c.g_open_s, rel=1e-6)
+    for f in (-0.02, 0.0, 0.01, 0.3):
+        (gp, _), (gm, _), (_, dg) = c.g(f + 1e-7), c.g(f - 1e-7), c.g(f)
+        assert float(dg) == pytest.approx(float(gp - gm) / 2e-7, rel=1e-4, abs=1e-9)
+
+
+def test_voice_is_generated():
+    """config/circuits/victorian_voice.yaml is what scripts/make_victorian_voice.py writes."""
+    import subprocess
+    import sys
+
+    r = subprocess.run(
+        [sys.executable, "scripts/make_victorian_voice.py", "--check"],
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.fixture(scope="module")
+def voice_runs():
+    """The voice at draft quality (JA cores): idle, and one key at CUTOFF 0 and 1."""
+    pytest.importorskip("circuitsim")
+    from varimu.circuit import builder
+    from varimu.circuit.spec import circuit_path, load_circuit
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    spec = load_circuit(circuit_path("victorian_voice"))
+    s = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    s = dataclasses.replace(s, cores="ja")
+    out = {}
+    for name, cutoff, notes in (
+        ("idle", None, []),
+        ("cut0", 0.0, [(0.05, "on", 57, 100)]),
+        ("cut1", 1.0, [(0.05, "on", 57, 100)]),
+    ):
+        ov = None if cutoff is None else {"cutoff": cutoff}
+        ir = builder.build(spec, ov, cores="ja").ir
+        r = fast.run_transient(ir, np.zeros(int(0.6 * 96000)), settings=s, notes=notes)
+        out[name] = {k: np.asarray(v) for k, v in r.vectors.items()}
+    return out
+
+
+def test_voice_idles_on_its_cells(voice_runs):
+    """With no key down nothing draws: the line sits at four cells' EMF, the local battery at
+    two's (Carhart's cell, 1.58 V), the output silent."""
+    r = voice_runs["idle"]
+    assert np.mean(r["v(line)"]) == pytest.approx(4 * 1.5772, abs=0.01)
+    assert np.mean(r["v(loc)"]) == pytest.approx(2 * 1.5772, abs=0.01)
+    assert np.max(np.abs(r["v(out)"])) < 1e-7
+
+
+def test_voice_sounds_and_cutoff_acts(voice_runs):
+    """A key sounds through the relay (the button's force swings, the receiver speaks), the
+    line sags under it, and CUTOFF raises the output (scripts/victorian_voice_study.py:
+    ~7 dB from 0 to 1)."""
+    seg = slice(int(0.3 * 96000), None)
+    a, b = voice_runs["cut0"], voice_runs["cut1"]
+    assert np.std(a["v(fx)"][seg]) > 1e-4  # the button's force moves
+    assert np.mean(a["v(line)"][seg]) < 4 * 1.5772 - 0.1  # the line sags
+    ra, rb = np.std(a["v(out)"][seg]), np.std(b["v(out)"][seg])
+    assert ra > 1e-5
+    assert 20 * np.log10(rb / ra) > 3.0

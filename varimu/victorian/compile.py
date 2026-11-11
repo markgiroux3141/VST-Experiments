@@ -143,6 +143,7 @@ def key_params(cfg: dict[str, Any], note: int, tune: float = 1.0, **override: An
         touch_gain=v("carbon.touch_gain"),
         tau_on_s=v("carbon.tau_on_s"),
         tau_off_s=v("carbon.tau_off_s"),
+        q_damper=v("damper.q"),
     )
     vals.update(override)
     return KeyParams(**vals)

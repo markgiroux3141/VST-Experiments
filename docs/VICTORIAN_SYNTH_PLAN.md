@@ -2,9 +2,9 @@
 
 Drafted 2026-11-01 from a brainstorm with the user ("do a Doc Brown": take today's synth
 knowledge back to the 1800s, see what parts exist, walk forward until a synth is just
-possible, and MacGyver one that sounds disgusting but has a lot of character). Nothing in
-it is built. The user picks it up later. The order below is a recommendation; the open
-decisions are the user's.
+possible, and MacGyver one that sounds disgusting but has a lot of character). **Picked up
+2026-11-11 (the user: "let's build the victorian synth"): V0-V3 built in one session;
+"Status (2026-11-11)" at the end has what is built, the numbers and what is open.**
 
 ## The frame
 
@@ -184,6 +184,8 @@ This is the period's "tube".
 
 ## Open decisions (the user's)
 
+Taken 2026-11-11: the first three ("Status (2026-11-11)"); where the track goes stays open.
+
 - **How strict the period is:** parts made and sold by 1881 only, or anything that
   existed (zincite as an oscillator, the 1898 telegraphone, the 1900 arc)?
 - **Paraphonic or polyphonic:** one reed per key (Gray's way, CPU per held key) or a few
@@ -192,3 +194,119 @@ This is the period's "tube".
   arc, electromotograph) print first, as with tape?
 - **Where the track goes** relative to the tube synth's ideas, hybrid physics (the gas tube
   is shared: H1 serves both), tape, reverbs, drums and the session work.
+
+## Status (2026-11-11): V0-V3 built
+
+**The user's decisions (2026-11-11):** the 1881 core strictly, anachronisms (zincite, the arc,
+the telegraphone) later as marked V4 / V5 extras; one reed per key (Gray's way, paraphonic);
+the voice must play live, the costly extras may print first; this session V0-V3.
+
+**V0, sources.** A research pass found and read:
+- Carhart, *Primary Batteries* (1891), p. 122's table of a Leclanche cell closed on 5 ohm for
+  an hour and opened for an hour (`data/datasheets/victorian/carhart_1891_leclanche.csv`, its
+  provenance beside it); Niaudet (1880);
+- Gray's patents US 165,728 (local-circuit magnets of 16 and 4 ohm working a steel reed),
+  166,095 / 166,096 (the Musical Telegraph's self-vibrating "electrotomes", an induction coil
+  "of the usual construction");
+- Du Moncel (1879: Edison's carbon button changes its resistance almost in proportion to the
+  pressure);
+- Preece & Maier, *The Telephone* (1889: Bell's receiver, 40 ohm, a 2 in ferrotype diaphragm
+  0.13-0.25 mm; Ader's 200 ohm receiver with a 0.5 / 250 ohm induction coil); Miller,
+  *American Telephone Practice* (1905: Blake's induction coil, its core of No. 24 Swedish iron
+  wire);
+- Ewing, *Magnetic Induction in Iron and Other Metals* (Hc 1.9 Oe, mu_max ~1,740, Table V's
+  hysteresis losses); Holm's contact tables via the Ney Contact Manual (platinum's minimum arc
+  15-17.5 V, 0.67-1.1 A); Ram (1894) on carbon filaments (hot / cold ~1:2).
+
+Dates checked: Wagner's hammer 1836, Page 1837, Fizeau's condenser 1853, Leclanche 1866
+(agglomerate 1871, not 1876), Gray 1874, Hughes May 1878, Ewing's "hysteresis" 1881. Found
+nowhere: a period telegraph magnet's inductance, a Bell receiver's resonance, a carbon relay's
+gain, a measured granular-carbon exponent.
+
+**V1, the reed** (`varimu/victorian/reed.py` the reference, circuitsim's `reeds.rs` the port;
+`config/victorian/reeds.yaml`; compiled by `scripts/compile_victorian_reeds.py` into
+`GRAY_REEDS@2`, kind `reed_keys`). Per key, 49 keys C2-C6:
+- a steel cantilever's two modes, driven where the magnet's poles and the contacts are: at the
+  second mode's node, 0.78 of the length (ours: tip-driven by a fast coil, the reed locked onto
+  its second mode, 6.27 f1, in the first experiment);
+- a horseshoe magnet in flux-linkage form (the pull and the motional EMF from one inductance
+  law) in a **local circuit** whose L / R is a quarter of the reed's period, and a **second
+  platinum point on the same follow spring chopping the line** through the carbon under the
+  key (the two circuits of Gray's and the period's tuning-fork interrupters; with the carbon in
+  the drive circuit the reed ran 200-600 cents sharp and moved with velocity);
+- contacts that snap open (a preloaded follow spring: a contact whose force faded to nothing
+  held the reed hovering at its edge), Fizeau's condenser across the drive break, and a spark
+  (micro-gap breakdown, held at platinum's arc voltage until its current falls below the arc's
+  minimum); the line's break never sparks at its few volts;
+- an oil dashpot pressing the carbon (8 ms pressing, 60 ms releasing; the force proportional
+  to velocity, aftertouch up to 1.5x); a felt damper on the reed with its key up (Q 5);
+- each reed filed to pitch in place by the reference (`compile.tuning`, two passes: a
+  maintained reed runs ~45 cents above its free frequency), within 1.4 cents.
+
+Measured (`scripts/victorian_voice_study.py` -> `reports/victorian/voice/summary.json`):
+- **the breaker against its reference** (V1's done-when): the live rate, 768 kHz, against
+  6.144 MHz on C2, C3, C4, C5 and C6: pitch within 0.41 cents, the line current's harmonics to
+  20 kHz within 0.44 dB rms and 2.1 dB at worst. At 384 kHz the error doubles, so the keys
+  stay at 8x;
+- **pitch with the cells' sag:** small. The local battery sits at 3.16 V with one key held and
+  falls to 2.62-2.92 V with eight; A3 moves +0.7 to -2.1 cents against the nominal 2.8 V (the
+  reed is maintained, not forced). The line sags far more: 5.8 V with one key, 4.6 V with
+  four, 3.6 V with eight (chords compress);
+- circuitsim's medium matches the reference to 1e-9 on ideal batteries
+  (`tests/test_victorian.py`; a note at t = 0 lands a sample late, at the first push).
+
+**V2, carbon and the receiver.**
+- A new device kind **`carbon`** (`varimu/devices/carbon.py`, circuitsim `devices/carbon.rs`,
+  IR `Carbon` in both builders, a SPICE B-source with its agreement test; pins (a, b, f, ref),
+  the force on f in newtons): G = G_open + G0 (F / F0)^n, softened through zero force.
+  `CARBON_BUTTON@1`: 20 ohm at 0.5 N, exponent 1 after Du Moncel.
+- The receivers are `speaker`-kind components: `BELL_RX@1` (40 ohm) and `ADER_RX@1` (200 ohm,
+  the same window wound finer), the diaphragm at 700 Hz, Q 10 (provisional: no period figure).
+- The relay: the 200 ohm receiver's diaphragm velocity integrated into the button's force (its
+  stiffness also loads the diaphragm), the button in its own battery's circuit with the 40 ohm
+  receiver.
+- Velocity to level (A3, `velocity`): 10 -> -17.7 dB, 20 -> -12.1, 40 -> -7.0, 64 -> -3.9,
+  90 -> -1.9, 110 -> -0.7, 127 -> 0.
+- **Not done:** the relay's gain against a period figure (none found), two relays in a loop
+  howling (V2's draft done-when), the carbon's noise (its 1/f and burst noise grow with the
+  current: the plan's character; next).
+
+**V3, the 1881 voice**, `config/circuits/victorian_voice.yaml` (GENERATED by
+`scripts/make_victorian_voice.py`):
+- the reeds medium on a local battery (2 cells) and a line battery (4) behind Blake's induction
+  coil (coupled inductors: its open core's air return dilutes the iron ~20x) and a 10 uF line
+  condenser;
+- a two-core saturable reactor on **`soft_iron_ewing`** (new in config/magnetics.yaml: JA
+  fitted to Ewing's figures, Hc -7.9%, loss +10.1%, under a datasheet block's
+  `fit_tolerance`), CUTOFF a graded 500 ohm rheostat from a 6-cell battery on 1575-turn control
+  windings;
+- the carbon relay (3 cells) into Bell's receiver; `out` its pressure 0.3 m in front (full
+  scale 0.003 Pa);
+- the cells are **Carhart's cell** (`scripts/fit_leclanche.py` ->
+  `config/victorian/leclanche.yaml`: 1.58 V behind 1.0 ohm, a 1.55 ohm / 84 s and a 4.6 ohm /
+  3.2 h polarization state; the EMF within 24 mV rms over the two hours; a middle state went to
+  zero), each battery one equivalent cell (identical cells in series exactly; per-cell
+  tolerance would split them again).
+
+The app's **`victorian_voice`** (Instruments; draft-2x, JA cores live, two threads cut at the
+filter's condenser, -44.6 dB rms from the one solve; the mod wheel turns CUTOFF): at a 50 ms
+buffer a 4-key chord with a run over it plays without dropouts (worst block 121%); an 8-key
+chord drops out (~8 in 10 s). The offline bench (`cargo run --release -p varimu-app --example
+victorian -- --bench`): 0.63x real time with the 4-key chord, each sounding key ~0.03x
+(`reeds_bench`: 41 ns a key-step). The sound: nasal and telephone-like, the receivers' 700 Hz
+diaphragms over the fundamental (on A3 the fundamental sits 37 dB under the 3rd and 4th
+harmonics).
+
+**Open:**
+- **CUTOFF reads mostly as level.** It lifts the filter's output above ~2 kHz by 20-30 dB and
+  the output by ~7 dB, but the band below ~2 kHz barely moves and the receivers pass little
+  above ~1.5 kHz. Doubling the reactor's turns (aiming at ~180 Hz unbiased) changed nothing
+  below 1 kHz either: the filter isn't the LC the design assumed (the reversible permeability
+  at signal levels, the source and load impedances). Timeboxed. Options: an AC look at the
+  biased reactor (`varimu/measure/ac.py` at an operating point); a damped (lower-Q) receiver or
+  a horn, either of which broadens the band the filter acts in; the filter moved after the
+  relay.
+- The user listens: `reports/victorian/voice/demo*.wav` (a 4-key chord and a run; CUTOFF 0 and
+  1) and plays `victorian_voice` live.
+- Not built from V1-V3's list: the carbon lamp (the runaway expander), per-cell tolerance, the
+  carbon's noise, the relay's howl, contact wear, a horn on the receiver.

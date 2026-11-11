@@ -77,6 +77,7 @@ pub struct KeyParams {
     pub touch_gain: f64,
     pub tau_on_s: f64,
     pub tau_off_s: f64,
+    pub q_damper: f64,
 }
 
 /// The compiled keyboard (a component version of kind `reed_keys`).
@@ -176,8 +177,11 @@ pub struct Key {
     p: KeyParams,
     h: f64,
     steps: Vec<ModeStep>,
+    steps_up: Vec<ModeStep>,
     xs: Vec<f64>,
     vs: Vec<f64>,
+    /// The modes at rest on the screws.
+    x_rest: Vec<f64>,
     lam: f64,
     qd: f64,
     ql: f64,
@@ -198,11 +202,25 @@ impl Key {
     pub fn new(p: &KeyParams, fs_int: f64) -> Key {
         let h = 1.0 / fs_int;
         let steps: Vec<ModeStep> = p.modes.iter().map(|m| mode_step(m, h)).collect();
+        // The key up: the felt damper's loss on every mode (`reed.Key`).
+        let steps_up: Vec<ModeStep> = p
+            .modes
+            .iter()
+            .map(|m| {
+                let damped = ModeData {
+                    zeta: m.zeta + 0.5 / p.q_damper,
+                    ..m.clone()
+                };
+                mode_step(&damped, h)
+            })
+            .collect();
         let mut k = Key {
             p: p.clone(),
             h,
+            steps_up,
             xs: vec![0.0; steps.len()],
             vs: vec![0.0; steps.len()],
+            x_rest: vec![0.0; steps.len()],
             steps,
             lam: 0.0,
             qd: 0.0,
@@ -235,6 +253,7 @@ impl Key {
             self.xs[j] = p.modes[j].b * f0 * st.inv_k;
             self.vs[j] = 0.0;
         }
+        self.x_rest.clone_from(&self.xs);
         self.lam = 0.0;
         self.qd = 0.0;
         self.ql = 0.0;
@@ -303,16 +322,12 @@ impl Key {
         (p.f_pre_n + p.k_s_n_m * (p.x_c_m - x) - p.c_s_ns_m * v).max(0.0)
     }
 
+    /// The reed's swing's energy (J): its modes' about their rest on the screws.
     pub fn energy(&self) -> f64 {
         let mut e = 0.0;
-        for ((m, st), (q, u)) in self
-            .p
-            .modes
-            .iter()
-            .zip(&self.steps)
-            .zip(self.xs.iter().zip(&self.vs))
-        {
-            e += 0.5 * m.mass_kg * u * u + 0.5 * q * q / st.inv_k;
+        for (j, (m, st)) in self.p.modes.iter().zip(&self.steps).enumerate() {
+            let (u, d) = (self.vs[j], self.xs[j] - self.x_rest[j]);
+            e += 0.5 * m.mass_kg * u * u + 0.5 * d * d / st.inv_k;
         }
         e
     }
@@ -371,7 +386,12 @@ impl Key {
         if x > p.stop_m {
             f -= p.k_stop_n_m * (x - p.stop_m) + p.c_stop_ns_m * v;
         }
-        for (jm, st) in self.steps.iter().enumerate() {
+        let steps = if self.held {
+            &self.steps
+        } else {
+            &self.steps_up
+        };
+        for (jm, st) in steps.iter().enumerate() {
             let xs = p.modes[jm].b * f * st.inv_k;
             let dx = self.xs[jm] - xs;
             let vm = self.vs[jm];

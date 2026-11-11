@@ -47,150 +47,193 @@ def v(value, source: str, **extra) -> dict:
     return {"value": value, "source": source, **extra}
 
 
-def cells(prefix: str, n: int, top: str, values: dict, parts: dict) -> None:
-    """n Leclanche cells in series from ground to `top`, each an EMF behind r0 and two R || C
-    polarization states."""
-    lo = "0"
-    for k in range(1, n + 1):
-        hi = top if k == n else f"{prefix}{k}"
-        e, a, b = f"{prefix}{k}e", f"{prefix}{k}a", f"{prefix}{k}b"
-        u = f"{prefix.upper()}{k}"
-        parts[f"V{u}"] = {"V": [e, lo], "v": "cell_e0_v"}
-        parts[f"R{u}0"] = {"R": [e, a], "r": "cell_r0_ohm"}
-        parts[f"R{u}1"] = {"R": [a, b], "r": "cell_r1_ohm"}
-        parts[f"C{u}1"] = {"C": [a, b], "c": "cell_c1_f"}
-        parts[f"R{u}2"] = {"R": [b, hi], "r": "cell_r2_ohm"}
-        parts[f"C{u}2"] = {"C": [b, hi], "c": "cell_c2_f"}
-        lo = hi
+def cells(prefix: str, n: int, top: str, parts: dict) -> None:
+    """A battery of n identical Leclanche cells in series from ground to `top`: exactly one
+    cell with n times the EMF and the resistances and 1/n the capacitances (an EMF behind r0
+    and two R || C polarization states). One cell's states, not n: the live circuit's cost
+    grows with its states (per-cell tolerance would split it again)."""
+    e, a, b = f"{prefix}e", f"{prefix}a", f"{prefix}b"
+    u = prefix.upper()
+    parts[f"V{u}"] = {"V": [e, "0"], "v": f"{prefix}_e0_v"}
+    parts[f"R{u}0"] = {"R": [e, a], "r": f"{prefix}_r0_ohm"}
+    parts[f"R{u}1"] = {"R": [a, b], "r": f"{prefix}_r1_ohm"}
+    parts[f"C{u}1"] = {"C": [a, b], "c": f"{prefix}_c1_f"}
+    parts[f"R{u}2"] = {"R": [b, top], "r": f"{prefix}_r2_ohm"}
+    parts[f"C{u}2"] = {"C": [b, top], "c": f"{prefix}_c2_f"}
+
+
+def battery_values(prefix: str, n: int, what: str, cv: dict) -> dict:
+    src = f"derived: {n} cells in series ({what}), each {CARHART}"
+    return {
+        f"{prefix}_e0_v": v(n * cv["e0_v"], src),
+        f"{prefix}_r0_ohm": v(n * cv["r0_ohm"], src),
+        f"{prefix}_r1_ohm": v(n * cv["r1_ohm"], src),
+        f"{prefix}_c1_f": v(cv["tau1_s"] / cv["r1_ohm"] / n, f"{src}; C = tau / r"),
+        f"{prefix}_r2_ohm": v(n * cv["r2_ohm"], src),
+        f"{prefix}_c2_f": v(cv["tau2_s"] / cv["r2_ohm"] / n, f"{src}; C = tau / r"),
+    }
+
+
+BATTERIES = (
+    (
+        "bl",
+        4,
+        "bline",
+        "line battery",
+        "design: the line battery, four Leclanche cells (the keys chop it)",
+    ),
+    (
+        "bk",
+        2,
+        "loc",
+        "local battery",
+        "design: the local battery, two cells, as Gray's local circuits (US 165,728)",
+    ),
+    ("br", 3, "brel", "relay battery", "design: the relay's battery, three cells"),
+    (
+        "bc",
+        6,
+        "bctl",
+        "cutoff battery",
+        "design: the CUTOFF battery, six cells (the bias's ampere-turns)",
+    ),
+)
 
 
 def build() -> dict:
     cell = yaml.safe_load(CELL.read_text(encoding="utf-8"))["cell"]
     cv = {k: x["value"] for k, x in cell.items()}
-    values = {
-        # The cell (one Leclanche, Carhart 1891).
-        "cell_e0_v": v(cv["e0_v"], CARHART),
-        "cell_r0_ohm": v(cv["r0_ohm"], CARHART),
-        "cell_r1_ohm": v(cv["r1_ohm"], CARHART),
-        "cell_c1_f": v(cv["tau1_s"] / cv["r1_ohm"], f"derived: tau1 / r1, {CARHART}"),
-        "cell_r2_ohm": v(cv["r2_ohm"], CARHART),
-        "cell_c2_f": v(cv["tau2_s"] / cv["r2_ohm"], f"derived: tau2 / r2, {CARHART}"),
-        # The reeds.
-        "reeds_model": v(
-            "GRAY_REEDS@1", "the compiled keyboard (scripts/compile_victorian_reeds.py)"
-        ),
-        "reeds_step_hz": v(
-            768000.0,
-            "design: the keys' internal rate, 8 x 96 kHz (config/victorian/reeds.yaml numerics.oversample)",
-        ),
-        "reeds_v_per_a": v(1.0, "design: the medium's outputs, 1 V per A"),
-        "g_sense_s": v(
-            1.0, "design: the G parts drawing the medium's currents, its outputs' inverse scale"
-        ),
-        "c_line_f": v(
-            10.0e-6,
-            "design: the line's condenser, a box of paraffined paper-and-foil condensers across the line at the keys (holds the line while the keys chop it; with the induction coil's primary a ~1-2 kHz resonance)",
-        ),
-        # The induction coil.
-        "ic_primary_turns": v(
-            150.0, f"design: Blake's proportions ({BLAKE}): 150 primary turns of heavy wire"
-        ),
-        "ic_ratio": v(
-            15.0, f"design: 1:15 for Blake's 0.5 / 250 ohm windings ({BLAKE}) in one window"
-        ),
-        "ic_r_primary_ohm": v(0.5, BLAKE),
-        "ic_r_secondary_ohm": v(250.0, BLAKE),
-        "ic_area_m2": v(1.2e-4, f"derived: Miller's 9/16 in bundle ({BLAKE}) at 3/4 iron"),
-        "ic_path_m": v(0.1016, f"{BLAKE}: 4 in long"),
-        "ic_gap_m": v(
-            0.01,
-            "provisional: model knowledge (an open core: the flux returns through the air, as a 10 mm equivalent gap)",
-        ),
-        "ic_leakage_h": v(
-            20.0e-6, "provisional: model knowledge (the primary's leakage, ~5% of its ~0.3 mH)"
-        ),
-        # The filter.
-        "rf_turns": v(
-            233.0,
-            "design: 13 mH per core at Ewing's initial permeability (190): with 0.42 uF and the ~250 ohm load a ~1.5 kHz low-pass",
-        ),
-        "rf_r_signal_ohm": v(
-            2.0, "provisional: model knowledge (233 turns of 0.4 mm wire on a 10 cm ring)"
-        ),
-        "rf_r_control_ohm": v(4.0, "provisional: model knowledge (466 turns of 0.4 mm wire)"),
-        "rf_area_m2": v(1.0e-4, "design: a ring of soft iron wire, 1 cm^2"),
-        "rf_path_m": v(0.1, "design: 10 cm round"),
-        "rf_gap_m": v(0.0, "design: a wound ring, no joint"),
-        "rf_leakage_h": v(0.0, "provisional: model knowledge (windings on a ring couple closely)"),
-        "rf_c_f": v(0.42e-6, "design: a paper condenser for the ~1.5 kHz low-pass"),
-        "cutoff_r_max_ohm": v(
-            50.0,
-            "design: the CUTOFF rheostat, 50 ohm of German silver wire (Wheatstone's rheostat, 1843)",
-        ),
-        "cutoff_r_min_ohm": v(
-            2.0, "design: a fixed resistance in the control circuit (the rheostat's leads and stop)"
-        ),
-        # The relay.
-        "relay_rx": v(
-            "ADER_RX@1",
-            "the relay's receiver: a 200 ohm magneto receiver (Preece & Maier 1889, the Ader system)",
-        ),
-        "button": v("CARBON_BUTTON@1", "the relay's carbon button (varimu.devices.carbon)"),
-        "button_k_n_m": v(
-            1.0e4,
-            "provisional: model knowledge (the button's stiffness against the diaphragm, the grains' bed and its cup's spring)",
-        ),
-        "button_preload_n": v(
-            0.3, "design: the button's working pressure, set by its adjusting screw"
-        ),
-        "relay_l_button_h": v(
-            12.97**2 / 1.0e4,
-            "derived: the button's stiffness on the diaphragm in the receiver's mechanical network, BL^2 / k (ADER_RX's BL 12.97 N/A)",
-        ),
-        "relay_r_button_ohm": v(
-            0.01,
-            "numerics: a DC path in series with the button's stiffness (it parallels the diaphragm's compliance, two inductors in a loop); its corner R / 2 pi L ~0.1 Hz",
-        ),
-        "relay_gm_s": v(
-            1.0e4 / 12.97,
-            "derived: k / BL: the diaphragm's velocity voltage (BL v) integrated on 1 F is the button's force in newtons (1 V = 1 N)",
-        ),
-        "relay_c_f": v(1.0, "design: the force integrator's 1 F (numerics: volts as newtons)"),
-        "relay_r_ohm": v(
-            1.0, "design: its leak, 1 s (numerics: the force's AC part; its rest is the preload)"
-        ),
-        # The loud-speaking end.
-        "out_rx": v("BELL_RX@1", "Bell's 40 ohm hand telephone (Preece & Maier 1889, p. 27)"),
-        "listen_distance_m": v(0.3, "design: the listener 0.3 m in front of the receiver"),
-        "rx_baffle_m": v(
-            0.07,
-            "provisional: model knowledge (the receiver's case and mouthpiece as a 7 cm flat baffle)",
-        ),
-        "rx_depth_m": v(0.0, "design: a flat baffle (the receiver's closed case)"),
-        "r_in_ohm": v(1.0e3, "design: a load on the unused input"),
-    }
+    values = {}
+    for prefix, n, _, _title, src in BATTERIES:
+        values.update(battery_values(prefix, n, src, cv))
+    values.update(
+        {
+            # The reeds.
+            "reeds_model": v(
+                "GRAY_REEDS@2", "the compiled keyboard (scripts/compile_victorian_reeds.py)"
+            ),
+            "reeds_step_hz": v(
+                768000.0,
+                "design: the keys' internal rate, 8 x 96 kHz (config/victorian/reeds.yaml numerics.oversample)",
+            ),
+            "reeds_v_per_a": v(1.0, "design: the medium's outputs, 1 V per A"),
+            "g_sense_s": v(
+                1.0, "design: the G parts drawing the medium's currents, its outputs' inverse scale"
+            ),
+            "c_line_f": v(
+                10.0e-6,
+                "design: the line's condenser, a box of paraffined paper-and-foil condensers across the line at the keys (holds the line while the keys chop it; with the induction coil's primary a ~1-2 kHz resonance)",
+            ),
+            # The induction coil.
+            "ic_primary_turns": v(
+                150.0, f"design: Blake's proportions ({BLAKE}): 150 primary turns of heavy wire"
+            ),
+            "ic_ratio": v(
+                15.0, f"design: 1:15 for Blake's 0.5 / 250 ohm windings ({BLAKE}) in one window"
+            ),
+            "ic_r_primary_ohm": v(0.5, BLAKE),
+            "ic_r_secondary_ohm": v(250.0, BLAKE),
+            "ic_l_primary_h": v(
+                0.00032206975045794646,
+                f"derived: mu0 N^2 A / (gap + l / mu_i): 150 turns on Miller's 9/16 in bundle at 3/4 iron (1.2 cm^2, {BLAKE}), its 4 in of soft iron (Ewing's initial permeability 190, config/magnetics.yaml soft_iron_ewing) and the open core's air return as a 10 mm gap (provisional: model knowledge)",
+            ),
+            "ic_l_secondary_h": v(
+                0.07246569385303796, "derived: the primary's times the turns ratio squared (15^2)"
+            ),
+            "ic_k": v(
+                0.968,
+                "derived: sqrt(1 - L_leak / L_p) with a ~20 uH leakage, ~6% of the primary's (provisional: model knowledge, the windings on one bundle)",
+            ),
+            # The filter.
+            "rf_turns": v(
+                525.0,
+                "design: ~66 mH per core at the iron's reversible permeability unbiased (~185: JA's c dMan/dH, soft_iron_ewing): with 2.1 uF and the ~250 ohm load aimed at a ~300 Hz low-pass, rising toward ~4 kHz biased. Measured (scripts/victorian_voice_study.py, cutoff): CUTOFF lifts the filter's output above ~2 kHz by 20-30 dB and the output's level by ~7 dB, the band below ~2 kHz barely moves, and the receivers' band (~0.3-1.5 kHz) hides most of it at the output: an open item (VICTORIAN_SYNTH_PLAN.md, V3 status)",
+            ),
+            "rf_r_signal_ohm": v(
+                5.0, "provisional: model knowledge (525 turns of 0.4 mm wire on a 10 cm ring)"
+            ),
+            "rf_control_ratio": v(
+                3.0,
+                "design: the control windings, three times the signal's turns (1575): a few kA/m of bias from the CUTOFF battery takes the iron past its knee",
+            ),
+            "rf_r_control_ohm": v(
+                12.0,
+                "provisional: model knowledge (1575 turns of 0.6 mm wire, a thick outer winding)",
+            ),
+            "rf_area_m2": v(1.0e-4, "design: a ring of soft iron wire, 1 cm^2"),
+            "rf_path_m": v(0.1, "design: 10 cm round"),
+            "rf_gap_m": v(0.0, "design: a wound ring, no joint"),
+            "rf_leakage_h": v(
+                0.0, "provisional: model knowledge (windings on a ring couple closely)"
+            ),
+            "rf_c_f": v(2.1e-6, "design: a paper condenser for the ~300 Hz low-pass"),
+            "cutoff_r_max_ohm": v(
+                500.0,
+                "design: the CUTOFF rheostat, 500 ohm of German silver wire (Wheatstone's rheostat, 1843), wound evenly in the log of its resistance",
+            ),
+            "cutoff_taper_mid": v(
+                0.1,
+                "design: the rheostat's resistance at half its turn, a tenth of its whole (graded: CUTOFF moves evenly in octaves)",
+            ),
+            "cutoff_r_min_ohm": v(
+                2.0,
+                "design: a fixed resistance in the control circuit (the rheostat's leads and stop)",
+            ),
+            # The relay.
+            "relay_rx": v(
+                "ADER_RX@1",
+                "the relay's receiver: a 200 ohm magneto receiver (Preece & Maier 1889, the Ader system)",
+            ),
+            "button": v("CARBON_BUTTON@1", "the relay's carbon button (varimu.devices.carbon)"),
+            "button_k_n_m": v(
+                1.0e4,
+                "provisional: model knowledge (the button's stiffness against the diaphragm, the grains' bed and its cup's spring)",
+            ),
+            "button_preload_n": v(
+                0.3, "design: the button's working pressure, set by its adjusting screw"
+            ),
+            "relay_l_button_h": v(
+                12.97**2 / 1.0e4,
+                "derived: the button's stiffness on the diaphragm in the receiver's mechanical network, BL^2 / k (ADER_RX's BL 12.97 N/A)",
+            ),
+            "relay_r_button_ohm": v(
+                0.01,
+                "numerics: a DC path in series with the button's stiffness (it parallels the diaphragm's compliance, two inductors in a loop); its corner R / 2 pi L ~0.1 Hz",
+            ),
+            "relay_gm_s": v(
+                1.0e4 / 12.97,
+                "derived: k / BL: the diaphragm's velocity voltage (BL v) integrated on 1 F is the button's force in newtons (1 V = 1 N)",
+            ),
+            "relay_c_f": v(1.0, "design: the force integrator's 1 F (numerics: volts as newtons)"),
+            "relay_r_ohm": v(
+                1.0,
+                "design: its leak, 1 s (numerics: the force's AC part; its rest is the preload)",
+            ),
+            # The loud-speaking end.
+            "out_rx": v("BELL_RX@1", "Bell's 40 ohm hand telephone (Preece & Maier 1889, p. 27)"),
+            "listen_distance_m": v(0.3, "design: the listener 0.3 m in front of the receiver"),
+            "rx_baffle_m": v(
+                0.07,
+                "provisional: model knowledge (the receiver's case and mouthpiece as a 7 cm flat baffle)",
+            ),
+            "rx_depth_m": v(0.0, "design: a flat baffle (the receiver's closed case)"),
+            "r_in_ohm": v(1.0e3, "design: a load on the unused input"),
+        }
+    )
     controls = {
         "cutoff": v(
             0.3,
-            "design: the CUTOFF rheostat's rotation (0: all 50 ohm in, the cores barely biased; 1: out, the control windings on their battery through 2 ohm)",
+            "design: the CUTOFF rheostat's rotation (0: all 500 ohm in, the cores barely biased, a dark ~300 Hz; 1: out, the control windings on their battery through 2 ohm, the iron past its knee)",
             min=0.0,
             max=1.0,
             unit="rotation",
         ),
     }
     sections = []
-    p: dict = {}
-    cells("bl", 4, "bline", values, p)
-    sections.append({"title": "line battery", "parts": p})
-    p = {}
-    cells("bk", 2, "loc", values, p)
-    sections.append({"title": "local battery", "parts": p})
-    p = {}
-    cells("br", 3, "brel", values, p)
-    sections.append({"title": "relay battery", "parts": p})
-    p = {}
-    cells("bc", 2, "bctl", values, p)
-    sections.append({"title": "cutoff battery", "parts": p})
+    for prefix, n, top, title, _ in BATTERIES:
+        p: dict = {}
+        cells(prefix, n, top, p)
+        sections.append({"title": title, "parts": p})
     sections.append(
         {
             "title": "keys",
@@ -205,20 +248,14 @@ def build() -> dict:
                 "GLOC": {"G": ["loc", "0", "ol", "0"], "gm": "g_sense_s"},
                 "GLINE": {"G": ["line", "0", "ok", "0"], "gm": "g_sense_s"},
                 "CLINE": {"C": ["line", "0"], "c": "c_line_f"},
-                "TIC": {
-                    "transformer": {
-                        "p": {"nodes": ["bline", "line"], "r": "ic_r_primary_ohm"},
-                        "s": {"nodes": ["s1", "0"], "ratio": "ic_ratio", "r": "ic_r_secondary_ohm"},
-                    },
-                    "core": {
-                        "material": "soft_iron_ewing",
-                        "area_m2": "ic_area_m2",
-                        "path_m": "ic_path_m",
-                        "gap_m": "ic_gap_m",
-                    },
-                    "turns": "ic_primary_turns",
-                    "leakage_h": "ic_leakage_h",
-                },
+                # The induction coil: its open core's flux returns through the air (a 10 mm
+                # equivalent gap against the iron's ~0.5 mm), so the iron's hysteresis is
+                # diluted ~20x: coupled inductors (the circuit's iron is the reactor's).
+                "RICP": {"R": ["bline", "icp"], "r": "ic_r_primary_ohm"},
+                "LICP": {"L": ["icp", "line"], "l": "ic_l_primary_h"},
+                "LICS": {"L": ["s1", "ics"], "l": "ic_l_secondary_h"},
+                "RICS": {"R": ["ics", "0"], "r": "ic_r_secondary_ohm"},
+                "KIC": {"K": ["LICP", "LICS"], "k": "ic_k"},
             },
         }
     )
@@ -229,7 +266,11 @@ def build() -> dict:
                 "TRA": {
                     "transformer": {
                         "sig": {"nodes": ["s1", "fm"], "r": "rf_r_signal_ohm"},
-                        "ctl": {"nodes": ["c1", "c2"], "ratio": 2.0, "r": "rf_r_control_ohm"},
+                        "ctl": {
+                            "nodes": ["c1", "c2"],
+                            "ratio": "rf_control_ratio",
+                            "r": "rf_r_control_ohm",
+                        },
                     },
                     "core": {
                         "material": "soft_iron_ewing",
@@ -243,7 +284,11 @@ def build() -> dict:
                 "TRB": {
                     "transformer": {
                         "sig": {"nodes": ["fm", "f1"], "r": "rf_r_signal_ohm"},
-                        "ctl": {"nodes": ["0", "c2"], "ratio": 2.0, "r": "rf_r_control_ohm"},
+                        "ctl": {
+                            "nodes": ["0", "c2"],
+                            "ratio": "rf_control_ratio",
+                            "r": "rf_r_control_ohm",
+                        },
                     },
                     "core": {
                         "material": "soft_iron_ewing",
@@ -254,12 +299,12 @@ def build() -> dict:
                     "turns": "rf_turns",
                     "leakage_h": "rf_leakage_h",
                 },
-                "CF": {"C": ["f1", "0"], "c": "rf_c_f"},
                 "RCMIN": {"R": ["bctl", "cr"], "r": "cutoff_r_min_ohm"},
                 "RCUT": {
                     "rheostat": ["cr", "c1"],
                     "r": "cutoff_r_max_ohm",
                     "at": "cutoff",
+                    "taper_mid": "cutoff_taper_mid",
                     "reverse": 1,
                 },
             },
@@ -269,6 +314,9 @@ def build() -> dict:
         {
             "title": "relay",
             "parts": {
+                # The filter's condenser, drawn here: the live partition's cut at f1, held by
+                # it in this part (the reactor's winding sees f1 a sample late).
+                "CF": {"C": ["f1", "0"], "c": "rf_c_f"},
                 "RLY": {
                     "speaker": ["f1", "0", "rly_out"],
                     "component": "relay_rx",
@@ -303,7 +351,8 @@ def build() -> dict:
         "full_scale": {
             "input_volts_peak": v(1.0, "design: the voice has no audio input (a load on `in`)"),
             "output_pascals_peak": v(
-                1.0, "provisional: set from the first renders (scripts/victorian_voice_study.py)"
+                0.003,
+                "derived: a 4-key chord at velocity 90 with a run over it peaks at ~0.0014-0.002 Pa 0.3 m in front of the receiver (scripts/victorian_voice_study.py demo, 2026-11-11), with ~4-6 dB of headroom",
             ),
         },
         "controls": controls,

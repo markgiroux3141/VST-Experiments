@@ -56,6 +56,10 @@ contact:
   paschen_gap_m: {value: 7.5e-6, source: "provisional: model knowledge (see paschen_v)"}
   air_v_m: {value: 3.0e+6, source: "provisional: model knowledge (air's breakdown field at mm gaps, ~3 kV/mm)"}
 
+# The damper: a felt pad lowered onto the reed with its key up.
+damper:
+  q: {value: 5.0, source: "design: a felt damper on each reed while its key is up, adding a loss of Q ~5 to every mode (a piano's damper action, period practice; ours on a reed): a released reed stops in a few periods (without it a released reed rang for seconds, Q ~800, inaudible once the carbon let go)"}
+
 # The carbon under the key: granular carbon in a box, pressed by the key through an oil dashpot.
 carbon:
   g0_s: {value: 0.033, source: "design: ~30 Ohm at 1 N (a long column of fine granules: the key's carbon sized to the line, so a key pressed hardest draws ~0.25 A)"}

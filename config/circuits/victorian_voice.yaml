@@ -25,37 +25,122 @@ full_scale:
     value: 1.0
     source: 'design: the voice has no audio input (a load on `in`)'
   output_pascals_peak:
-    value: 1.0
-    source: 'provisional: set from the first renders (scripts/victorian_voice_study.py)'
+    value: 0.003
+    source: 'derived: a 4-key chord at velocity 90 with a run over it peaks at ~0.0014-0.002 Pa 0.3 m
+      in front of the receiver (scripts/victorian_voice_study.py demo, 2026-11-11), with ~4-6 dB of headroom'
 controls:
   cutoff:
     value: 0.3
-    source: 'design: the CUTOFF rheostat''s rotation (0: all 50 ohm in, the cores barely biased; 1: out,
-      the control windings on their battery through 2 ohm)'
+    source: 'design: the CUTOFF rheostat''s rotation (0: all 500 ohm in, the cores barely biased, a dark
+      ~300 Hz; 1: out, the control windings on their battery through 2 ohm, the iron past its knee)'
     min: 0.0
     max: 1.0
     unit: rotation
 values:
-  cell_e0_v:
-    value: 1.57717
-    source: config/victorian/leclanche.yaml (Carhart 1891's cell, scripts/fit_leclanche.py)
-  cell_r0_ohm:
-    value: 1.005
-    source: config/victorian/leclanche.yaml (Carhart 1891's cell, scripts/fit_leclanche.py)
-  cell_r1_ohm:
-    value: 1.54813
-    source: config/victorian/leclanche.yaml (Carhart 1891's cell, scripts/fit_leclanche.py)
-  cell_c1_f:
-    value: 54.256554682100344
-    source: 'derived: tau1 / r1, config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
-  cell_r2_ohm:
-    value: 4.63075
-    source: config/victorian/leclanche.yaml (Carhart 1891's cell, scripts/fit_leclanche.py)
-  cell_c2_f:
-    value: 2475.884036063273
-    source: 'derived: tau2 / r2, config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bl_e0_v:
+    value: 6.30868
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bl_r0_ohm:
+    value: 4.02
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bl_r1_ohm:
+    value: 6.19252
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bl_c1_f:
+    value: 13.564138670525086
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py); C =
+      tau / r'
+  bl_r2_ohm:
+    value: 18.523
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bl_c2_f:
+    value: 618.9710090158183
+    source: 'derived: 4 cells in series (design: the line battery, four Leclanche cells (the keys chop
+      it)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py); C =
+      tau / r'
+  bk_e0_v:
+    value: 3.15434
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bk_r0_ohm:
+    value: 2.01
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bk_r1_ohm:
+    value: 3.09626
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bk_c1_f:
+    value: 27.128277341050172
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py);
+      C = tau / r'
+  bk_r2_ohm:
+    value: 9.2615
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bk_c2_f:
+    value: 1237.9420180316365
+    source: 'derived: 2 cells in series (design: the local battery, two cells, as Gray''s local circuits
+      (US 165,728)), each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py);
+      C = tau / r'
+  br_e0_v:
+    value: 4.73151
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  br_r0_ohm:
+    value: 3.0149999999999997
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  br_r1_ohm:
+    value: 4.64439
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  br_c1_f:
+    value: 18.08551822736678
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py); C = tau / r'
+  br_r2_ohm:
+    value: 13.89225
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  br_c2_f:
+    value: 825.2946786877577
+    source: 'derived: 3 cells in series (design: the relay''s battery, three cells), each config/victorian/leclanche.yaml
+      (Carhart 1891''s cell, scripts/fit_leclanche.py); C = tau / r'
+  bc_e0_v:
+    value: 9.46302
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bc_r0_ohm:
+    value: 6.029999999999999
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bc_r1_ohm:
+    value: 9.28878
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bc_c1_f:
+    value: 9.04275911368339
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py); C = tau /
+      r'
+  bc_r2_ohm:
+    value: 27.7845
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py)'
+  bc_c2_f:
+    value: 412.64733934387885
+    source: 'derived: 6 cells in series (design: the CUTOFF battery, six cells (the bias''s ampere-turns)),
+      each config/victorian/leclanche.yaml (Carhart 1891''s cell, scripts/fit_leclanche.py); C = tau /
+      r'
   reeds_model:
-    value: GRAY_REEDS@1
+    value: GRAY_REEDS@2
     source: the compiled keyboard (scripts/compile_victorian_reeds.py)
   reeds_step_hz:
     value: 768000.0
@@ -93,35 +178,39 @@ values:
     source: 'web: https://archive.org/details/americantelephone00mill (Miller, American Telephone Practice,
       1905: the Blake transmitter''s induction coil, a 0.5 ohm primary and a 250 ohm secondary, p. 79;
       its core ~500 strands of No. 24 B&S Swedish iron wire, 4 in long and 9/16 in across, p. 74)'
-  ic_area_m2:
-    value: 0.00012
-    source: 'derived: Miller''s 9/16 in bundle (web: https://archive.org/details/americantelephone00mill
-      (Miller, American Telephone Practice, 1905: the Blake transmitter''s induction coil, a 0.5 ohm primary
-      and a 250 ohm secondary, p. 79; its core ~500 strands of No. 24 B&S Swedish iron wire, 4 in long
-      and 9/16 in across, p. 74)) at 3/4 iron'
-  ic_path_m:
-    value: 0.1016
-    source: 'web: https://archive.org/details/americantelephone00mill (Miller, American Telephone Practice,
-      1905: the Blake transmitter''s induction coil, a 0.5 ohm primary and a 250 ohm secondary, p. 79;
-      its core ~500 strands of No. 24 B&S Swedish iron wire, 4 in long and 9/16 in across, p. 74): 4 in
-      long'
-  ic_gap_m:
-    value: 0.01
-    source: 'provisional: model knowledge (an open core: the flux returns through the air, as a 10 mm
-      equivalent gap)'
-  ic_leakage_h:
-    value: 2.0e-05
-    source: 'provisional: model knowledge (the primary''s leakage, ~5% of its ~0.3 mH)'
+  ic_l_primary_h:
+    value: 0.00032206975045794646
+    source: 'derived: mu0 N^2 A / (gap + l / mu_i): 150 turns on Miller''s 9/16 in bundle at 3/4 iron
+      (1.2 cm^2, web: https://archive.org/details/americantelephone00mill (Miller, American Telephone
+      Practice, 1905: the Blake transmitter''s induction coil, a 0.5 ohm primary and a 250 ohm secondary,
+      p. 79; its core ~500 strands of No. 24 B&S Swedish iron wire, 4 in long and 9/16 in across, p. 74)),
+      its 4 in of soft iron (Ewing''s initial permeability 190, config/magnetics.yaml soft_iron_ewing)
+      and the open core''s air return as a 10 mm gap (provisional: model knowledge)'
+  ic_l_secondary_h:
+    value: 0.07246569385303796
+    source: 'derived: the primary''s times the turns ratio squared (15^2)'
+  ic_k:
+    value: 0.968
+    source: 'derived: sqrt(1 - L_leak / L_p) with a ~20 uH leakage, ~6% of the primary''s (provisional:
+      model knowledge, the windings on one bundle)'
   rf_turns:
-    value: 233.0
-    source: 'design: 13 mH per core at Ewing''s initial permeability (190): with 0.42 uF and the ~250
-      ohm load a ~1.5 kHz low-pass'
+    value: 525.0
+    source: 'design: ~66 mH per core at the iron''s reversible permeability unbiased (~185: JA''s c dMan/dH,
+      soft_iron_ewing): with 2.1 uF and the ~250 ohm load aimed at a ~300 Hz low-pass, rising toward ~4
+      kHz biased. Measured (scripts/victorian_voice_study.py, cutoff): CUTOFF lifts the filter''s output
+      above ~2 kHz by 20-30 dB and the output''s level by ~7 dB, the band below ~2 kHz barely moves, and
+      the receivers'' band (~0.3-1.5 kHz) hides most of it at the output: an open item (VICTORIAN_SYNTH_PLAN.md,
+      V3 status)'
   rf_r_signal_ohm:
-    value: 2.0
-    source: 'provisional: model knowledge (233 turns of 0.4 mm wire on a 10 cm ring)'
+    value: 5.0
+    source: 'provisional: model knowledge (525 turns of 0.4 mm wire on a 10 cm ring)'
+  rf_control_ratio:
+    value: 3.0
+    source: 'design: the control windings, three times the signal''s turns (1575): a few kA/m of bias
+      from the CUTOFF battery takes the iron past its knee'
   rf_r_control_ohm:
-    value: 4.0
-    source: 'provisional: model knowledge (466 turns of 0.4 mm wire)'
+    value: 12.0
+    source: 'provisional: model knowledge (1575 turns of 0.6 mm wire, a thick outer winding)'
   rf_area_m2:
     value: 0.0001
     source: 'design: a ring of soft iron wire, 1 cm^2'
@@ -135,11 +224,16 @@ values:
     value: 0.0
     source: 'provisional: model knowledge (windings on a ring couple closely)'
   rf_c_f:
-    value: 4.2e-07
-    source: 'design: a paper condenser for the ~1.5 kHz low-pass'
+    value: 2.1e-06
+    source: 'design: a paper condenser for the ~300 Hz low-pass'
   cutoff_r_max_ohm:
-    value: 50.0
-    source: 'design: the CUTOFF rheostat, 50 ohm of German silver wire (Wheatstone''s rheostat, 1843)'
+    value: 500.0
+    source: 'design: the CUTOFF rheostat, 500 ohm of German silver wire (Wheatstone''s rheostat, 1843),
+      wound evenly in the log of its resistance'
+  cutoff_taper_mid:
+    value: 0.1
+    source: 'design: the rheostat''s resistance at half its turn, a tenth of its whole (graded: CUTOFF
+      moves evenly in octaves)'
   cutoff_r_min_ohm:
     value: 2.0
     source: 'design: a fixed resistance in the control circuit (the rheostat''s leads and stop)'
@@ -195,342 +289,132 @@ devices:
 sections:
 - title: line battery
   parts:
-    VBL1:
+    VBL:
       V:
-      - bl1e
+      - ble
       - '0'
-      v: cell_e0_v
-    RBL10:
+      v: bl_e0_v
+    RBL0:
       R:
-      - bl1e
-      - bl1a
-      r: cell_r0_ohm
-    RBL11:
+      - ble
+      - bla
+      r: bl_r0_ohm
+    RBL1:
       R:
-      - bl1a
-      - bl1b
-      r: cell_r1_ohm
-    CBL11:
+      - bla
+      - blb
+      r: bl_r1_ohm
+    CBL1:
       C:
-      - bl1a
-      - bl1b
-      c: cell_c1_f
-    RBL12:
+      - bla
+      - blb
+      c: bl_c1_f
+    RBL2:
       R:
-      - bl1b
-      - bl1
-      r: cell_r2_ohm
-    CBL12:
-      C:
-      - bl1b
-      - bl1
-      c: cell_c2_f
-    VBL2:
-      V:
-      - bl2e
-      - bl1
-      v: cell_e0_v
-    RBL20:
-      R:
-      - bl2e
-      - bl2a
-      r: cell_r0_ohm
-    RBL21:
-      R:
-      - bl2a
-      - bl2b
-      r: cell_r1_ohm
-    CBL21:
-      C:
-      - bl2a
-      - bl2b
-      c: cell_c1_f
-    RBL22:
-      R:
-      - bl2b
-      - bl2
-      r: cell_r2_ohm
-    CBL22:
-      C:
-      - bl2b
-      - bl2
-      c: cell_c2_f
-    VBL3:
-      V:
-      - bl3e
-      - bl2
-      v: cell_e0_v
-    RBL30:
-      R:
-      - bl3e
-      - bl3a
-      r: cell_r0_ohm
-    RBL31:
-      R:
-      - bl3a
-      - bl3b
-      r: cell_r1_ohm
-    CBL31:
-      C:
-      - bl3a
-      - bl3b
-      c: cell_c1_f
-    RBL32:
-      R:
-      - bl3b
-      - bl3
-      r: cell_r2_ohm
-    CBL32:
-      C:
-      - bl3b
-      - bl3
-      c: cell_c2_f
-    VBL4:
-      V:
-      - bl4e
-      - bl3
-      v: cell_e0_v
-    RBL40:
-      R:
-      - bl4e
-      - bl4a
-      r: cell_r0_ohm
-    RBL41:
-      R:
-      - bl4a
-      - bl4b
-      r: cell_r1_ohm
-    CBL41:
-      C:
-      - bl4a
-      - bl4b
-      c: cell_c1_f
-    RBL42:
-      R:
-      - bl4b
+      - blb
       - bline
-      r: cell_r2_ohm
-    CBL42:
+      r: bl_r2_ohm
+    CBL2:
       C:
-      - bl4b
+      - blb
       - bline
-      c: cell_c2_f
+      c: bl_c2_f
 - title: local battery
   parts:
-    VBK1:
+    VBK:
       V:
-      - bk1e
+      - bke
       - '0'
-      v: cell_e0_v
-    RBK10:
+      v: bk_e0_v
+    RBK0:
       R:
-      - bk1e
-      - bk1a
-      r: cell_r0_ohm
-    RBK11:
+      - bke
+      - bka
+      r: bk_r0_ohm
+    RBK1:
       R:
-      - bk1a
-      - bk1b
-      r: cell_r1_ohm
-    CBK11:
+      - bka
+      - bkb
+      r: bk_r1_ohm
+    CBK1:
       C:
-      - bk1a
-      - bk1b
-      c: cell_c1_f
-    RBK12:
+      - bka
+      - bkb
+      c: bk_c1_f
+    RBK2:
       R:
-      - bk1b
-      - bk1
-      r: cell_r2_ohm
-    CBK12:
-      C:
-      - bk1b
-      - bk1
-      c: cell_c2_f
-    VBK2:
-      V:
-      - bk2e
-      - bk1
-      v: cell_e0_v
-    RBK20:
-      R:
-      - bk2e
-      - bk2a
-      r: cell_r0_ohm
-    RBK21:
-      R:
-      - bk2a
-      - bk2b
-      r: cell_r1_ohm
-    CBK21:
-      C:
-      - bk2a
-      - bk2b
-      c: cell_c1_f
-    RBK22:
-      R:
-      - bk2b
+      - bkb
       - loc
-      r: cell_r2_ohm
-    CBK22:
+      r: bk_r2_ohm
+    CBK2:
       C:
-      - bk2b
+      - bkb
       - loc
-      c: cell_c2_f
+      c: bk_c2_f
 - title: relay battery
   parts:
-    VBR1:
+    VBR:
       V:
-      - br1e
+      - bre
       - '0'
-      v: cell_e0_v
-    RBR10:
+      v: br_e0_v
+    RBR0:
       R:
-      - br1e
-      - br1a
-      r: cell_r0_ohm
-    RBR11:
+      - bre
+      - bra
+      r: br_r0_ohm
+    RBR1:
       R:
-      - br1a
-      - br1b
-      r: cell_r1_ohm
-    CBR11:
+      - bra
+      - brb
+      r: br_r1_ohm
+    CBR1:
       C:
-      - br1a
-      - br1b
-      c: cell_c1_f
-    RBR12:
+      - bra
+      - brb
+      c: br_c1_f
+    RBR2:
       R:
-      - br1b
-      - br1
-      r: cell_r2_ohm
-    CBR12:
-      C:
-      - br1b
-      - br1
-      c: cell_c2_f
-    VBR2:
-      V:
-      - br2e
-      - br1
-      v: cell_e0_v
-    RBR20:
-      R:
-      - br2e
-      - br2a
-      r: cell_r0_ohm
-    RBR21:
-      R:
-      - br2a
-      - br2b
-      r: cell_r1_ohm
-    CBR21:
-      C:
-      - br2a
-      - br2b
-      c: cell_c1_f
-    RBR22:
-      R:
-      - br2b
-      - br2
-      r: cell_r2_ohm
-    CBR22:
-      C:
-      - br2b
-      - br2
-      c: cell_c2_f
-    VBR3:
-      V:
-      - br3e
-      - br2
-      v: cell_e0_v
-    RBR30:
-      R:
-      - br3e
-      - br3a
-      r: cell_r0_ohm
-    RBR31:
-      R:
-      - br3a
-      - br3b
-      r: cell_r1_ohm
-    CBR31:
-      C:
-      - br3a
-      - br3b
-      c: cell_c1_f
-    RBR32:
-      R:
-      - br3b
+      - brb
       - brel
-      r: cell_r2_ohm
-    CBR32:
+      r: br_r2_ohm
+    CBR2:
       C:
-      - br3b
+      - brb
       - brel
-      c: cell_c2_f
+      c: br_c2_f
 - title: cutoff battery
   parts:
-    VBC1:
+    VBC:
       V:
-      - bc1e
+      - bce
       - '0'
-      v: cell_e0_v
-    RBC10:
+      v: bc_e0_v
+    RBC0:
       R:
-      - bc1e
-      - bc1a
-      r: cell_r0_ohm
-    RBC11:
+      - bce
+      - bca
+      r: bc_r0_ohm
+    RBC1:
       R:
-      - bc1a
-      - bc1b
-      r: cell_r1_ohm
-    CBC11:
+      - bca
+      - bcb
+      r: bc_r1_ohm
+    CBC1:
       C:
-      - bc1a
-      - bc1b
-      c: cell_c1_f
-    RBC12:
+      - bca
+      - bcb
+      c: bc_c1_f
+    RBC2:
       R:
-      - bc1b
-      - bc1
-      r: cell_r2_ohm
-    CBC12:
-      C:
-      - bc1b
-      - bc1
-      c: cell_c2_f
-    VBC2:
-      V:
-      - bc2e
-      - bc1
-      v: cell_e0_v
-    RBC20:
-      R:
-      - bc2e
-      - bc2a
-      r: cell_r0_ohm
-    RBC21:
-      R:
-      - bc2a
-      - bc2b
-      r: cell_r1_ohm
-    CBC21:
-      C:
-      - bc2a
-      - bc2b
-      c: cell_c1_f
-    RBC22:
-      R:
-      - bc2b
+      - bcb
       - bctl
-      r: cell_r2_ohm
-    CBC22:
+      r: bc_r2_ohm
+    CBC2:
       C:
-      - bc2b
+      - bcb
       - bctl
-      c: cell_c2_f
+      c: bc_c2_f
 - title: keys
   parts:
     RIN:
@@ -566,26 +450,31 @@ sections:
       - line
       - '0'
       c: c_line_f
-    TIC:
-      transformer:
-        p:
-          nodes:
-          - bline
-          - line
-          r: ic_r_primary_ohm
-        s:
-          nodes:
-          - s1
-          - '0'
-          ratio: ic_ratio
-          r: ic_r_secondary_ohm
-      core:
-        material: soft_iron_ewing
-        area_m2: ic_area_m2
-        path_m: ic_path_m
-        gap_m: ic_gap_m
-      turns: ic_primary_turns
-      leakage_h: ic_leakage_h
+    RICP:
+      R:
+      - bline
+      - icp
+      r: ic_r_primary_ohm
+    LICP:
+      L:
+      - icp
+      - line
+      l: ic_l_primary_h
+    LICS:
+      L:
+      - s1
+      - ics
+      l: ic_l_secondary_h
+    RICS:
+      R:
+      - ics
+      - '0'
+      r: ic_r_secondary_ohm
+    KIC:
+      K:
+      - LICP
+      - LICS
+      k: ic_k
 - title: filter
   parts:
     TRA:
@@ -599,7 +488,7 @@ sections:
           nodes:
           - c1
           - c2
-          ratio: 2.0
+          ratio: rf_control_ratio
           r: rf_r_control_ohm
       core:
         material: soft_iron_ewing
@@ -619,7 +508,7 @@ sections:
           nodes:
           - '0'
           - c2
-          ratio: 2.0
+          ratio: rf_control_ratio
           r: rf_r_control_ohm
       core:
         material: soft_iron_ewing
@@ -628,11 +517,6 @@ sections:
         gap_m: rf_gap_m
       turns: rf_turns
       leakage_h: rf_leakage_h
-    CF:
-      C:
-      - f1
-      - '0'
-      c: rf_c_f
     RCMIN:
       R:
       - bctl
@@ -644,9 +528,15 @@ sections:
       - c1
       r: cutoff_r_max_ohm
       at: cutoff
+      taper_mid: cutoff_taper_mid
       reverse: 1
 - title: relay
   parts:
+    CF:
+      C:
+      - f1
+      - '0'
+      c: rf_c_f
     RLY:
       speaker:
       - f1

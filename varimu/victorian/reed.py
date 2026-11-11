@@ -41,6 +41,10 @@ curve: field emission below d_p, Paschen's plateau and beyond); the spark then h
 minimum voltage through R_arc until its current falls below the metal's minimum arc current.
 The line contact breaks a resistive circuit at the line's few volts, below any arc: no spark.
 
+**The damper.** With its key up a felt damper rests on the reed (a piano's damper, fitted
+by the instrument's builder), adding its loss to every mode: a released reed stops in a few of
+its periods instead of ringing on for seconds.
+
 **The carbon under the key.** Granular carbon between the key and the frame:
 G_k(F) = G_open + G0 (F / F0)^n. The key presses it through an oil dashpot: the force relaxes
 toward its target (velocity's law times aftertouch) with tau_on while held, toward zero with
@@ -115,6 +119,7 @@ class KeyParams:
     touch_gain: float
     tau_on_s: float
     tau_off_s: float
+    q_damper: float  # each mode's Q with the key up (the felt damper on the reed)
 
 
 def inductance(p: KeyParams, x: float) -> float:
@@ -169,9 +174,11 @@ class Key:
     p: KeyParams
     fs_int: float
     steps: list[ModeStep] = field(init=False)
+    steps_up: list[ModeStep] = field(init=False)
     h: float = field(init=False)
     xs: list[float] = field(init=False)
     vs: list[float] = field(init=False)
+    x_rest: list[float] = field(init=False)
     lam: float = 0.0
     qd: float = 0.0
     ql: float = 0.0
@@ -188,6 +195,11 @@ class Key:
         p = self.p
         self.h = 1.0 / self.fs_int
         self.steps = [mode_step(m, self.h) for m in p.modes]
+        # The key up: the felt damper on the reed adds its loss to every mode's.
+        self.steps_up = [
+            mode_step(Mode(m.omega, m.zeta + 0.5 / p.q_damper, m.mass_kg, m.b), self.h)
+            for m in p.modes
+        ]
         self.xs = [0.0] * len(p.modes)
         self.vs = [0.0] * len(p.modes)
         # At rest on the screws: the follow spring's push against the reed's stiffness.
@@ -196,6 +208,7 @@ class Key:
         f0 = k_reed * x0
         for j, st in enumerate(self.steps):
             self.xs[j] = p.modes[j].b * f0 * st.inv_k
+        self.x_rest = list(self.xs)
         self.on_k = math.exp(-self.h / p.tau_on_s)
         self.off_k = math.exp(-self.h / p.tau_off_s)
 
@@ -250,10 +263,13 @@ class Key:
         return max(p.f_pre_n + p.k_s_n_m * (p.x_c_m - x) - p.c_s_ns_m * v, 0.0)
 
     def energy(self) -> float:
-        """The reed's mechanical energy (J), its modes'."""
+        """The reed's swing's energy (J): its modes' about their rest on the screws."""
         e = 0.0
-        for m, st, q, u in zip(self.p.modes, self.steps, self.xs, self.vs, strict=True):
-            e += 0.5 * m.mass_kg * u * u + 0.5 * q * q / st.inv_k
+        for m, st, q, q0, u in zip(
+            self.p.modes, self.steps, self.xs, self.x_rest, self.vs, strict=True
+        ):
+            d = q - q0
+            e += 0.5 * m.mass_kg * u * u + 0.5 * d * d / st.inv_k
         return e
 
     # --- the step ---------------------------------------------------------------------------
@@ -307,7 +323,7 @@ class Key:
         f = lam * lam / (MU0 * p.turns * p.turns * p.area_m2) + fc
         if x > p.stop_m:
             f -= p.k_stop_n_m * (x - p.stop_m) + p.c_stop_ns_m * v
-        for jm, st in enumerate(self.steps):
+        for jm, st in enumerate(self.steps if self.held else self.steps_up):
             xs = p.modes[jm].b * f * st.inv_k
             dx = self.xs[jm] - xs
             vm = self.vs[jm]
