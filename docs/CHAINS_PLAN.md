@@ -67,8 +67,9 @@ runs**.
   `scripts/fit_f1.py`); WP31's Notes. WP26 (2026-11-11): the Crown PZM-30D by inference on its
   schematic (`config/circuits/crown_pzm.yaml`, `PZM_CAPSULE@1` by `scripts/fit_pzm.py`) and a scene
   mic's `surface`; WP26's Notes.
-- **Next:** WP30 (a crystal transducer kind: a device model, so Python, SPICE, circuitsim and both
-  builders; the Green Bullet into the 5E3, an instrument). WP13 (RE20) waits on the N-entry room
+- **Next:** WP30 waits on a response curve of the Shure 520 (bot-blocked: the URLs in
+  `data/schematics/shure_green_bullet/README.md`, for the user); the Green Bullet is controlled
+  magnetic by Shure's 1959 catalog, so it needs no crystal kind (WP30's Decision). WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: a `surface` control in the app's Room view
   (WP26), the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
@@ -89,7 +90,7 @@ runs**.
     1:3.16 input, Amplifier D's three d.c.-coupled transistors with overall feedback, 25 dB
     nominal, >= 1.4 V rms into 3k), the forum figures there as provisional values, the rest
     fitted to the handbook.
-- **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
+- **Waiting on the user:** a Shure 520 response curve (WP30: the URLs in its README); listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
   and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean, PZM -> clean / SSL added to
   `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
@@ -195,7 +196,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | done 2026-11-11 (LSK389A) |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
 | 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | done 2026-11-11 (the M 49 c) |
-| 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | |
+| 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | started 2026-11-11 (controlled magnetic, not crystal: waits on a response curve) |
 | 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | done 2026-11-11 (the WE F1) |
 
 ### WP0. The list as data
@@ -1782,6 +1783,25 @@ rendered in `new_chains_check.yaml` at 0.3 m from the 90 dB source: -16.7 dBFS r
 Left out: the carbon's noise, packing drift and aging; the difference / sum asymmetry (a slow
 granular state would make it).
 
+### WP30. The Shure Green Bullet into the 5E3
+
+Sources: `data/schematics/shure_green_bullet/README.md` (Shure's 1959 catalog).
+
+Decision (2026-11-11, Claude's, the user away): Shure's own 1959 catalog lists the 520 "Green Bullet"
+as **Controlled Magnetic** (the R5 element: 100-9,000 cps, -52.5 dB re 1 V/ubar = 23.7 mV/Pa, high
+impedance, a 100 k load), not crystal. A controlled-magnetic element is a balanced armature:
+electrically a gyrator onto a large coil inductance, so it goes on the `moving_coil` kind (its network
+and gyrator, the coil's inductance and resistance) with no new device kind; the list's `crystal` need
+is dropped when it is built. The chain is an instrument: the mic into the 5E3's input (its 1 M grid
+leak), its output the speaker's pressure (`fender_5e3`'s `out`); a print of it is then a source in a
+scene.
+
+Notes (2026-11-11, started): no response curve is open (Shure's 520 / 520D / 520DX sheets are
+bot-blocked: the README lists the URLs for the user). Next: with a curve, `R_520@1` on
+`fit_md421.py`'s method (the coil's inductance and resistance from the high impedance: provisional,
+bounded), `config/circuits/shure_green_bullet.yaml` (its 7 ft cable's capacitance), the 5E3's port in
+the list (its input node behind its generator), `bullet_f5e3` composed.
+
 ### WP26. The Crown PZM; a mic placed on a surface
 
 Sources: `data/schematics/crown_pzm/README.md` (AKG / Crown's PZM30 D manual, 2015: the
@@ -1977,3 +1997,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   (no values; `PZM_CAPSULE@1` and the circuit fitted to Fig. 1, 7 mV/Pa, 240 ohm, 1.1 mA; 3% THD at
   ~141.5 dB SPL a known miss) and a scene mic's `surface` (floor / ceiling / wall N: the boundary's
   doubling from the room as it is); PZM -> clean / SSL composed and rendered: 48 of 51.
+- 2026-11-11: WP30 started: Shure's 1959 catalog has the 520 "Green Bullet" as controlled magnetic (the R5),
+  not crystal, so it goes on `moving_coil`; its response curve is bot-blocked (URLs for the user in its
+  README); still 48 of 51.
