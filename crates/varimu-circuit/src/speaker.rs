@@ -5,7 +5,9 @@
 
 use std::f64::consts::PI;
 
-use circuitsim::ir::{Capacitor, Element, GROUND, Inductor, Resistor, Vccs};
+use circuitsim::ir::{
+    Capacitor, Device, DeviceModel, Element, GROUND, Gyrator, Inductor, Resistor, Vccs,
+};
 
 use crate::Error;
 use crate::yaml::{Map, Value};
@@ -19,6 +21,8 @@ pub const PISTON_KA_3DB: f64 = 1.616;
 /// the readout's impedance level.
 pub const LADDER_SECTION_S: f64 = 62.5e-6;
 pub const READOUT_OHM: f64 = 1000.0;
+/// The fixed gyrator of a field coil's transformer (numerics).
+pub const GYRATOR_S: f64 = 1.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mode {
@@ -26,6 +30,14 @@ pub struct Mode {
     pub f_hz: f64,
     pub q: f64,
     pub area_m2: f64,
+}
+
+/// An electromagnet's field winding (speaker.py's `Field`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Field {
+    pub re_ohm: f64,
+    pub l_h: f64,
+    pub i_nominal_a: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +53,7 @@ pub struct Speaker {
     pub bl_tm: f64,
     pub sd_m2: f64,
     pub modes: Vec<Mode>,
+    pub field: Option<Field>,
 }
 
 /// The baffle around the driver (speaker.py's `Cabinet`).
@@ -93,6 +106,19 @@ pub fn from_data(data: &Value, what: &str) -> Result<Speaker, Error> {
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
+    let field = match d.get("field") {
+        None => None,
+        Some(v) => {
+            let f = v
+                .as_map()
+                .ok_or_else(|| Error(format!("{what}: field is a mapping")))?;
+            Some(Field {
+                re_ohm: num(f, "re_ohm", what)?,
+                l_h: num(f, "l_h", what)?,
+                i_nominal_a: num(f, "i_nominal_a", what)?,
+            })
+        }
+    };
     Ok(Speaker {
         name: d.get("name").map(Value::py_str).unwrap_or_default(),
         re_ohm: num(vc, "re_ohm", what)?,
@@ -105,6 +131,7 @@ pub fn from_data(data: &Value, what: &str) -> Result<Speaker, Error> {
         bl_tm: num(m, "bl_tm", what)?,
         sd_m2: num(m, "sd_m2", what)?,
         modes,
+        field,
     })
 }
 
@@ -135,6 +162,25 @@ pub fn edge_taps(cab: &Cabinet, distance_m: f64) -> Vec<(usize, f64)> {
             (tap, span / (2.0 * PI) * r / (r + path))
         })
         .collect()
+}
+
+/// A closed box's air as a spring on the cone: V / (rho c^2 Sd^2).
+pub fn box_compliance_m_per_n(volume_m3: f64, sd_m2: f64) -> f64 {
+    volume_m3 / (RHO_AIR_KG_M3 * C_AIR_M_S * C_AIR_M_S * sd_m2 * sd_m2)
+}
+
+/// The closed box's baffle step: c / (pi W), W the front's mean side.
+pub fn baffle_step_hz(cab: &Cabinet) -> f64 {
+    C_AIR_M_S / (PI * (cab.width_m + cab.height_m) / 2.0)
+}
+
+/// The gyrator of speaker `name`'s field winding (`parts.speaker_field_model`).
+pub fn field_model(name: &str, s: &Speaker) -> Option<DeviceModel> {
+    let f = s.field.as_ref()?;
+    Some(DeviceModel::Gyrator(Gyrator {
+        name: format!("{}_FIELD", name.to_uppercase()),
+        g_per_v: GYRATOR_S / (f.re_ohm * f.i_nominal_a),
+    }))
 }
 
 pub fn directivity_pole_hz(sd_m2: f64) -> f64 {
@@ -183,13 +229,17 @@ fn g(name: String, pos: &str, neg: &str, cp: &str, cn: &str, gm_s: f64) -> Eleme
 
 /// The driver's electrical equivalent, and each radiating node with its area. `series` n:
 /// n identical drivers in series, exactly (`parts.speaker_driver`): resistances and
-/// inductances times n, capacitances over n (n = 1: bit for bit one driver's).
+/// inductances times n, capacitances over n (n = 1: bit for bit one driver's). A closed
+/// box (`box_m3` > 0) and a field winding (`field`, the caller has checked the
+/// component has one and `series` is 1) as `parts.speaker_driver`.
 pub fn driver(
     name: &str,
     plus: &str,
     minus: &str,
     s: &Speaker,
     series: f64,
+    field: Option<&str>,
+    box_m3: f64,
 ) -> (Vec<Element>, Vec<(String, f64)>) {
     let (n, up) = (name.to_lowercase(), name.to_uppercase());
     let bl2 = s.bl_tm * s.bl_tm;
@@ -197,18 +247,23 @@ pub fn driver(
     let s0 = s.sd_m2 - s.modes.iter().fold(0.0, |acc, m| acc + m.area_m2);
     let coil = format!("{n}_m");
     let (nl, ne) = (format!("{n}_l"), format!("{n}_e"));
+    let mut cms = s.cms_m_per_n;
+    if box_m3 > 0.0 {
+        let cab = box_compliance_m_per_n(box_m3, s.sd_m2);
+        cms = cms * cab / (cms + cab);
+    }
+    let ve = if field.is_some() {
+        format!("{n}_v")
+    } else {
+        coil.clone()
+    };
     let mut els = vec![
         r(format!("R{up}_re"), plus, &nl, s.re_ohm * series),
         l(format!("L{up}_le"), &nl, &ne, s.le_h * series),
-        l(format!("L{up}_l2"), &ne, &coil, s.l2_h * series),
-        r(format!("R{up}_r2"), &ne, &coil, s.r2_ohm * series),
+        l(format!("L{up}_l2"), &ne, &ve, s.l2_h * series),
+        r(format!("R{up}_r2"), &ne, &ve, s.r2_ohm * series),
         c(format!("C{up}_m"), &coil, minus, m0 / bl2 / series),
-        l(
-            format!("L{up}_cms"),
-            &coil,
-            minus,
-            s.cms_m_per_n * bl2 * series,
-        ),
+        l(format!("L{up}_cms"), &coil, minus, cms * bl2 * series),
         r(
             format!("R{up}_rms"),
             &coil,
@@ -216,6 +271,18 @@ pub fn driver(
             bl2 / s.rms_ns_per_m * series,
         ),
     ];
+    if let (Some(fnode), Some(f), Some(model)) = (field, s.field.as_ref(), field_model(name, s)) {
+        let (x, fs) = (format!("{n}_x"), format!("{n}_fs"));
+        els.push(g(format!("G{up}_g1"), &ve, minus, &x, minus, GYRATOR_S));
+        els.push(g(format!("G{up}_g2"), &x, minus, &ve, minus, -GYRATOR_S));
+        els.push(Element::Device(Device {
+            name: format!("X{up}_g"),
+            model: model.name().to_string(),
+            nodes: vec![x.clone(), coil.clone(), fs.clone(), minus.to_string()],
+        }));
+        els.push(l(format!("L{up}_f"), fnode, &fs, f.l_h));
+        els.push(r(format!("R{up}_f"), &fs, minus, f.re_ohm));
+    }
     let mut radiating = vec![(coil.clone(), s0)];
     for (i, m) in s.modes.iter().enumerate() {
         let k = i + 1;
@@ -258,6 +325,7 @@ pub fn readout(
     cab: &Cabinet,
     distance_m: f64,
     series: f64,
+    closed: bool,
 ) -> Vec<Element> {
     let (n, up) = (name.to_lowercase(), name.to_uppercase());
     let r0 = READOUT_OHM;
@@ -270,6 +338,21 @@ pub fn readout(
         }
     }
     els.push(l(format!("L{up}_pf"), &pf, GROUND, 1.0));
+    if closed {
+        let fb = baffle_step_hz(cab);
+        els.push(g(format!("G{up}_b"), GROUND, &lp, &pf, GROUND, 1.0 / r0));
+        els.push(r(format!("R{up}_b"), &lp, GROUND, r0));
+        els.push(c(
+            format!("C{up}_b"),
+            &lp,
+            GROUND,
+            1.0 / (2.0 * PI * fb * r0),
+        ));
+        els.push(g(format!("G{up}_o"), GROUND, out, &pf, GROUND, 1.0 / r0));
+        els.push(g(format!("G{up}_o0"), GROUND, out, &lp, GROUND, -0.5 / r0));
+        els.push(r(format!("R{up}_o"), out, GROUND, r0));
+        return els;
+    }
     let fb = directivity_pole_hz(s.sd_m2);
     els.push(g(format!("G{up}_b"), GROUND, &lp, &pf, GROUND, 1.0 / r0));
     els.push(r(format!("R{up}_b"), &lp, GROUND, r0));
@@ -321,10 +404,20 @@ pub fn speaker(
     cab: &Cabinet,
     distance_m: f64,
     series: f64,
+    field: Option<&str>,
+    box_m3: f64,
 ) -> Vec<Element> {
-    let (mut els, radiating) = driver(name, plus, minus, s, series);
+    let (mut els, radiating) = driver(name, plus, minus, s, series, field, box_m3);
     els.extend(readout(
-        name, minus, out, s, &radiating, cab, distance_m, series,
+        name,
+        minus,
+        out,
+        s,
+        &radiating,
+        cab,
+        distance_m,
+        series,
+        box_m3 > 0.0,
     ));
     els
 }
@@ -332,6 +425,7 @@ pub fn speaker(
 /// Speaker `name` without its readout (a live build's; `parts.speaker_terminal`): the driver
 /// between plus and minus, its terminal voltage on `out` (G<NAME>_t into R<NAME>_t, 1 ohm
 /// to ground); with `series` drivers, one driver's (the pair's voltage over n).
+#[allow(clippy::too_many_arguments)]
 pub fn terminal(
     name: &str,
     plus: &str,
@@ -339,8 +433,10 @@ pub fn terminal(
     out: &str,
     s: &Speaker,
     series: f64,
+    field: Option<&str>,
+    box_m3: f64,
 ) -> Vec<Element> {
-    let (mut els, _) = driver(name, plus, minus, s, series);
+    let (mut els, _) = driver(name, plus, minus, s, series, field, box_m3);
     let upper = name.to_uppercase();
     els.push(Element::Vccs(circuitsim::ir::Vccs {
         name: format!("G{upper}_t"),

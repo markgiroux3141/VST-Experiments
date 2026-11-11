@@ -146,14 +146,33 @@ def test_voice_idles_on_its_cells(voice_runs):
     assert np.max(np.abs(r["v(out)"])) < 1e-7
 
 
+def _harmonics_db(x, f0, n=6):
+    sp = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    fr = np.fft.rfftfreq(len(x), 1 / 96000)
+    lv = [
+        20 * np.log10(sp[np.argmin(np.abs(fr - k * f0)) - 3 :][:7].max()) for k in range(1, n + 1)
+    ]
+    return np.array(lv) - lv[0]
+
+
 def test_voice_sounds_and_cutoff_acts(voice_runs):
-    """A key sounds through the relay (the button's force swings, the receiver speaks), the
-    line sags under it, and CUTOFF raises the output (scripts/victorian_voice_study.py:
-    ~7 dB from 0 to 1)."""
+    """A key sounds through the relay (the button's force swings, the cone speaks), the line
+    sags under it, the fundamental is the strongest partial (the closed coil and the cone:
+    the bass the receivers lost), and CUTOFF opens the filter: A3's 4th-6th harmonics rise
+    (scripts/victorian_voice_study.py: 4-10 dB from 0 to 1)."""
     seg = slice(int(0.3 * 96000), None)
     a, b = voice_runs["cut0"], voice_runs["cut1"]
     assert np.std(a["v(fx)"][seg]) > 1e-4  # the button's force moves
     assert np.mean(a["v(line)"][seg]) < 4 * 1.5772 - 0.1  # the line sags
-    ra, rb = np.std(a["v(out)"][seg]), np.std(b["v(out)"][seg])
-    assert ra > 1e-5
-    assert 20 * np.log10(rb / ra) > 3.0
+    assert np.std(a["v(out)"][seg]) > 1e-4
+    ha, hb = _harmonics_db(a["v(out)"][seg], 220.0), _harmonics_db(b["v(out)"][seg], 220.0)
+    assert np.all(ha[1:] < 0) and np.all(hb[1:] < 0)
+    assert np.all(hb[3:6] - ha[3:6] > 3.0)
+
+
+def test_field_starts_fresh(voice_runs):
+    """The cone's field winding starts on its rested battery: ~0.41 A, the force factor's
+    nominal (PARCHMENT_CONE's 0.4 A); 16 cells behind 16 ohm into 44.4 ohm."""
+    r = voice_runs["idle"]
+    i_f = np.mean(r["v(out_fs)"]) / 44.39293225373085
+    assert i_f == pytest.approx(16 * 1.5772 / (16 * 1.0 + 44.39293225373085), rel=0.02)

@@ -498,7 +498,8 @@ impl Mna {
                         | DeviceModel::Optocoupler(_)
                         | DeviceModel::Photocell(_)
                         | DeviceModel::Contact(_)
-                        | DeviceModel::Carbon(_) => vec![],
+                        | DeviceModel::Carbon(_)
+                        | DeviceModel::Gyrator(_) => vec![],
                     };
                     for (a, b, cf) in caps {
                         if cf > 0.0 {

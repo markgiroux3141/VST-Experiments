@@ -19,6 +19,7 @@ pub mod carbon;
 pub mod contact;
 pub mod core;
 pub mod diode;
+pub mod gyrator;
 pub mod jfet;
 pub mod lamp;
 pub mod opto;
@@ -33,6 +34,7 @@ pub use bjt::Bjt;
 pub use carbon::Carbon;
 pub use contact::Contact;
 pub use diode::{JunctionDiode, VacuumDiode};
+pub use gyrator::Gyrator;
 pub use jfet::Jfet;
 pub use lamp::Lamp;
 pub use opto::Optocoupler;
@@ -199,6 +201,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::Photocell(m) => Box::new(Photocell::new(m)),
         DeviceModel::Contact(m) => Box::new(Contact::new(m)),
         DeviceModel::Carbon(m) => Box::new(Carbon::new(m)),
+        DeviceModel::Gyrator(m) => Box::new(Gyrator::new(m)),
         DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
         DeviceModel::Bjt(m) => Box::new(Bjt::new(m)),
         DeviceModel::Jfet(m) => Box::new(Jfet::new(m)),

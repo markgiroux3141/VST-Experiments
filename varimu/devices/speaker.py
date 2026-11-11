@@ -39,6 +39,24 @@ The model, in the circuit as plain elements (no new physics in the engines):
   taps on one lumped delay line (`LADDER_SECTION_S` per section, doubly terminated);
   heard: p = p_f - sum(w_e p_back(t - path_e / c)), in pascals as volts.
 
+A closed box (the part's `box_m3` > 0): the air in it a spring on the cone, Cab = V /
+(rho c^2 Sd^2), combined with the suspension's (two springs on the cone, their stiffnesses
+add: Cms Cab / (Cms + Cab) in L_cms); no back wave reaches the listener, and the
+front wave steps down 6 dB below the baffle step at c / (pi W) (the front's width and
+height averaged: `baffle_step_hz`), a first-order shelf: a finite
+baffle radiates into the half space only above it (H. F. Olson, Acoustical Engineering,
+1957, the baffle's diffraction; the shelf a textbook approximation).
+
+A field coil (a component's `field` block, the part's fourth node): the driver's
+magnet is an electromagnet, its winding (re_ohm, l_h) from the part's `field` node to
+minus, and the force factor follows the field current, BL = bl_tm i_field /
+i_nominal_a (an air gap that dominates the magnetic circuit, iron far from
+saturation). The motional network is built for bl_tm and reached through an ideal
+transformer of ratio BL / bl_tm: a fixed gyrator (two Vccs of GYRATOR_S) in cascade
+with a gyrator device whose conductance follows the field winding's resistive drop
+(varimu.devices.gyrator). Not modelled there: the voice coil's flux in the field
+winding (the armature reaction), the iron's saturation.
+
 Not modelled: excursion nonlinearity (BL and Cms vs excursion: a later option), the
 radiation resistance's rise with frequency beyond what the modes absorb, the cabinet's
 internal resonances and its partial back panels, the front wave's own diffraction at the
@@ -69,6 +87,9 @@ PISTON_KA_3DB = 1.616
 # by its directivity pole long before), and the readout's impedance level.
 LADDER_SECTION_S = 62.5e-6
 READOUT_OHM = 1000.0
+# The fixed gyrator of a field coil's transformer (numerics: its inner node's volts are
+# the voice coil's amperes).
+GYRATOR_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -80,6 +101,16 @@ class Mode:
     f_hz: float
     q: float
     area_m2: float
+
+
+@dataclass(frozen=True)
+class Field:
+    """An electromagnet's field winding: its resistance and inductance, and the field
+    current at which the driver's bl_tm holds (BL proportional to the current)."""
+
+    re_ohm: float
+    l_h: float
+    i_nominal_a: float
 
 
 @dataclass(frozen=True)
@@ -95,6 +126,7 @@ class Speaker:
     bl_tm: float
     sd_m2: float
     modes: tuple[Mode, ...]
+    field: Field | None = None
 
     @property
     def fs_hz(self) -> float:
@@ -160,6 +192,16 @@ def edge_taps(cab: Cabinet, distance_m: float) -> list[tuple[int, float]]:
     return out
 
 
+def box_compliance_m_per_n(volume_m3: float, sd_m2: float) -> float:
+    """A closed box's air as a spring on the cone: V / (rho c^2 Sd^2)."""
+    return volume_m3 / (RHO_AIR_KG_M3 * C_AIR_M_S * C_AIR_M_S * sd_m2 * sd_m2)
+
+
+def baffle_step_hz(cab: Cabinet) -> float:
+    """The closed box's baffle step: c / (pi W), W the front's mean side."""
+    return C_AIR_M_S / (math.pi * (cab.width_m + cab.height_m) / 2)
+
+
 def directivity_pole_hz(sd_m2: float) -> float:
     """The back wave's low-pass: ka = PISTON_KA_3DB for the cone's equivalent radius."""
     a = math.sqrt(sd_m2 / math.pi)
@@ -172,6 +214,7 @@ def speaker_from_data(d: Mapping[str, Any], what: str = "speaker") -> Speaker:
         raise ValueError(f"{what}: kind {d.get('kind')!r}, not a speaker")
     vc, mech = d["voice_coil"], d["moving_system"]
     modes: Sequence[Mapping[str, Any]] = d["modes"]["list"]
+    fld = d.get("field")
     return Speaker(
         name=d["name"],
         re_ohm=vc["re_ohm"],
@@ -184,4 +227,5 @@ def speaker_from_data(d: Mapping[str, Any], what: str = "speaker") -> Speaker:
         bl_tm=mech["bl_tm"],
         sd_m2=mech["sd_m2"],
         modes=tuple(Mode(m["mass_kg"], m["f_hz"], m["q"], m["area_m2"]) for m in modes),
+        field=None if fld is None else Field(fld["re_ohm"], fld["l_h"], fld["i_nominal_a"]),
     )

@@ -4,7 +4,8 @@ Drafted 2026-11-01 from a brainstorm with the user ("do a Doc Brown": take today
 knowledge back to the 1800s, see what parts exist, walk forward until a synth is just
 possible, and MacGyver one that sounds disgusting but has a lot of character). **Picked up
 2026-11-11 (the user: "let's build the victorian synth"): V0-V3 built in one session;
-"Status (2026-11-11)" at the end has what is built, the numbers and what is open.**
+"Status (2026-11-11)" at the end has what is built, the numbers and what is open. The second session (same day) widened the frame ("The mad scientist of 1881") and gave the
+voice its bass: "Status (2026-11-11, second session)".**
 
 ## The frame
 
@@ -25,6 +26,30 @@ The project's rules apply as everywhere:
 The period literature is rich, and often the first measurements of exactly the physics we
 need (Ewing on iron, Ayrton on the arc, Du Moncel on carbon contacts). Old sources are
 good sources here: they count as data, with their own `source`.
+
+## The mad scientist of 1881 (the user's rule, 2026-11-11)
+
+After the first listen ("definitely sounds old school, very cool", but very honky, little low
+end, no real low notes) the user widened the frame. The instrument is what a mad scientist of
+1881 could build with today's knowledge:
+- **materials and workshop processes that existed by 1881**: iron, steel, copper, brass,
+  carbon, wood, paper and parchment, wax, shellac, glass, mercury, acids; costly-but-possible
+  ones too (platinum, some aluminium);
+- **any size or quantity a rich patron could fund** (sixteen cells for one field winding, an
+  oak cabinet of 0.3 m^3);
+- **today's physics and design knowledge** (a gapped core against DC, a terminated filter, a
+  closed box);
+- **nothing invented later**: no tubes, plastics, rare-earth magnets, transistors.
+
+Be conservative. Every part's source says its tier:
+- **"tier period"**: as built then (Gray's reeds, Leclanche cells, Edison's carbon button,
+  Fizeau's condenser, Wheatstone's rheostat);
+- **"tier mad scientist"**: period materials and processes, our design (the induction coil on
+  a ring, the saturable reactor, the carbon relay, the moving-coil cone);
+- **"tier anachronism"**: period materials doing what was found later (zincite's negative
+  resistance, the singing arc). These stay V4 / V5 extras, marked.
+
+Material data stays sourced. Geometry is "design:".
 
 ## The walk forward
 
@@ -184,7 +209,9 @@ This is the period's "tube".
 
 ## Open decisions (the user's)
 
-Taken 2026-11-11: the first three ("Status (2026-11-11)"); where the track goes stays open.
+Taken 2026-11-11: the first three ("Status (2026-11-11)"); the first, how strict the period
+is, widened the same day into the mad-scientist rule above (period materials, our design,
+each part tagged by tier; anachronisms stay marked extras). Where the track goes stays open.
 
 - **How strict the period is:** parts made and sold by 1881 only, or anything that
   existed (zincite as an oscillator, the 1898 telegraphone, the 1900 arc)?
@@ -310,3 +337,116 @@ harmonics).
   1) and plays `victorian_voice` live.
 - Not built from V1-V3's list: the carbon lamp (the runaway expander), per-cell tolerance, the
   carbon's noise, the relay's howl, contact wear, a horn on the receiver.
+
+## Status (2026-11-11, second session): the bass, the cone, the mad-scientist rule
+
+The user's verdict on V3 was "definitely sounds old school, very cool", but very honky, with
+little low end and no real low notes. What was behind it, measured on the voice at its
+small-signal operating point (`varimu/measure/ac.py` on the linear cores, the carbon
+linearized at its preload):
+- **The output did most of it.** From 900 Hz down to 92 Hz the pressure fell 49 dB, and only
+  ~4 dB of that happened before the relay's force. Bell's receiver radiates almost nothing
+  below its diaphragm's 700 Hz from a 7 cm baffle.
+- **The two receivers' peaks stacked.** Bell's 700 Hz, Q 10, sat on the relay's own diaphragm
+  stiffened by the button (~960 Hz, Q ~10).
+- **The open induction coil: the plan's 1-2 kHz corner was wrong.** Its secondary current is
+  flat from ~250 Hz to 2.5 kHz and falls below. That corner (~200-250 Hz) is the whole
+  secondary loop's resistance over its inductance (the filter's series reactor and the
+  relay's ~0.4 H), with the coil's 72 mH dividing ~16 dB away against that load.
+- **The keyboard stopped at C2.**
+
+**Built** (the user's tasks in order; every part's source carries its tier):
+1. **The induction coil on a ring** (tier mad scientist: Faraday's ring of 1831, our 1 mm
+   paper-shimmed joint against the line's DC).
+   - Wire: 250 turns of No. 18 B&S copper (0.39 ohm), and 3750 turns of No. 32 B&S over it
+     (197 ohm), on 3 cm^2 of soft iron wire 0.25 m round.
+   - Inductance: 10.2 mH primary at Ewing's initial permeability 190. These are coupled
+     inductors, not a JA core: the gap carries half the reluctance and the line's DC stays
+     ~0.14 T per ampere, so the iron sits in its reversible region (Rayleigh: L may be up to
+     ~1/3 higher). A third JA core would cost CPU live, and the load is near its limit.
+   - Coupling: k 0.998, toroidal windings over each other (provisional).
+   - Effect: the secondary current is flat from 33 Hz to 3.5 kHz, and the relay's force
+     gains 20+ dB in the bass.
+   - Its catch: the 2.3 H secondary is a current source, and a series reactor in a
+     current-driven loop can't filter (CUTOFF did nothing at all). A 250 ohm German-silver
+     resistance across the secondary (`ic_r_term_ohm`, ~the filter's sqrt(L / C)) makes it a
+     Thevenin source again. The filter's condenser went from 2.1 uF to 1 uF: ~450 Hz at
+     Q ~1.4 unbiased. A 120 ohm termination is brighter but brings back a resonant 445 Hz
+     peak at CUTOFF 0; 600 ohm is ~5 dB darker.
+2. **The output: Siemens' moving coil on a parchment cone** (`PARCHMENT_CONE@1`, tier mad
+   scientist; `library.build_parchment_cone`).
+   - **The patent, checked:** Siemens & Halske's DRP No. 2355, patented from 14 Dec 1877:
+     Fig. 5 is a light coil wound with covered aluminium wire, moving in an annular magnetic
+     field; Fig. 6 puts the coil on a membrane "aus Pergament oder anderem Stoffe" shaped like
+     the eardrum. US 149,797 (1874) has the coil between the poles of "a permanent or
+     electro-magnet". Not in it: a cone (the word is never used), any size, a trumpet (only
+     secondary blogs say so).
+   - **Ours, the cone:** 10 in, 9 in of it moving (Sd 0.038 m^2), 60 degrees from its axis.
+     Parchment from Krzemien et al. 2020: 180 g/m^2 at 0.23 mm, 783 kg/m^3; 1200 MPa at
+     30% RH to 400 MPa at 85%.
+   - **The coil:** 262 turns of No. 32 B&S aluminium, 1.75 in across: 32.3 ohm, BL 16.2 T m at
+     0.4 A of field. Aluminium is 2.83e-8 ohm m and 2700 kg/m^3.
+   - **The moving system:** Mms 22.7 g; Fs 35 Hz on a chamois-leather surround and a
+     parchment spider; Qms 4 (provisional).
+   - **The field:** a wrought-iron pot. 3300 turns of No. 22 B&S copper make 44.4 ohm and
+     6.1 H. At 0.4 A the 2.5 mm gap holds 0.44 T and the pole 0.56 T, far below iron's
+     1.6-2.2 T, so BL follows the field current.
+   - **The cabinet:** a closed oak box of 0.3 m^3; the box resonance ~45 Hz.
+   - **Breakup:** two modes at 1.0 and 2.2 kHz (provisional).
+   - **The circuit's new pieces:**
+     - a **closed box** in the `speaker` part (`box_m3`): the air's compliance combined with
+       the suspension's, no back wave, a 6 dB baffle-step shelf at c / (pi W). The readout
+       needs no delay line, so it has fewer states than Bell's;
+     - a **field winding** (a speaker component's `field` block, the part's fourth node):
+       BL follows the field current, through an ideal transformer made of a fixed gyrator and
+       the new device kind **`gyrator`** (`varimu/devices/gyrator.py`, circuitsim
+       `devices/gyrator.rs`, a SPICE B-source with its agreement test, both builders;
+       bilinear, its conductance following the winding's resistive drop);
+     - the field on its own **16-cell battery**, started rested (`cell_rested_v`: a
+       capacitor's `v0` at zero). The other batteries keep their DC point; with every battery
+       rested, CUTOFF's battery saturated the iron by a quarter turn.
+3. **The relay tamed:** `ADER_RX@2`, a 0.3 mm diaphragm (~1050 Hz before the button, ~1.2 kHz
+   with it) with felt behind it, Q 2.5 (tier mad scientist, provisional). It costs ~7 dB of
+   relay gain in the bass and loses the ~900 Hz peak. `BELL_RX@1` is unchanged and unused.
+4. **C1 to C6:** 61 keys (`GRAY_REEDS@3`: C1's reed 1.0 mm thick and ~158 mm long, its swing
+   0.8 mm; C2 as before). Every reed is filed to within 1.2 cents. The breaker matches its
+   reference on C1 to 0.003 cents (harmonics 0.19 dB rms).
+5. A bank of carbon buttons: not needed. The cone is ~20 dB louder than Bell's receiver was,
+   and it is 1 m away instead of 0.3.
+
+**Measured** (`scripts/victorian_voice_study.py` -> reports/victorian/voice/: `lows`, `field`,
+`cutoff`, `velocity`, `demo`, `breaker`; `lows.wav` C1, C2, A2, A3 in turn):
+- **The fundamental is now the strongest partial from C1 up**, at velocity 90 and CUTOFF 0.3.
+  The harmonics below are in dB re the fundamental; the excursion is the cone's peak.
+
+  | Note | H2 | H3 | H4 | Excursion | Level at 1 m |
+  |---|---|---|---|---|---|
+  | C1 | -5.5 | -4.6 | -7.3 | 0.016 mm | 2.0 mPa rms |
+  | C2 | -13.5 | -12.8 | -16.2 | | 3.4 mPa |
+  | A3 | -17.7 | -18.0 | -21.0 | | 2.8 mPa |
+
+  Before, A3's fundamental was 37 dB under its 3rd and 4th.
+- **The field sags:** a 4-key chord held from switch-on takes the field from 0.414 A to
+  0.338 A in 60 s (BL 84% of nominal), and the output loses 4.0 dB. Carhart's 84 s state is
+  most of it.
+- **CUTOFF:** from 0 to 1, A3's 4th-6th harmonics rise 4-10 dB, almost all of it in the
+  rheostat's first quarter. The chord's centroid stays ~210 Hz (its energy is in the
+  fundamentals).
+- **Velocity:** 10 -> -19.4 dB, 40 -> -8.2, 90 -> -2.3, 127 -> 0.
+- **Full scale:** 0.02 Pa at 1 m; the demo peaks at 0.011 Pa.
+- **Live** (`examples/victorian.rs`): 0.66x real time offline with a 4-key chord and a run
+  (was 0.63x). The live player at a 50 ms buffer: worst block 99%, no dropouts (was 121%).
+
+**Open:**
+- **The voice is now mellow rather than honky.** The relay coil's inductance (~0.4 H against
+  its 200 ohm: a corner near 80 Hz) is the voice's top. The old open coil's +6 dB/oct had
+  hidden it. Options for the user: a lower-inductance relay coil (fewer turns on a wider
+  gap), a resistance in series with the relay (brighter, quieter), or CUTOFF's rheostat
+  re-graded so its reach spreads over the turn.
+- CUTOFF's range bunches into the first quarter (the rheostat's grading, from V3).
+- Excursion nonlinearity isn't modelled (the coil is as tall as the top plate, so BL would fall
+  past ~1.5 mm); the peak excursion is 0.016 mm, so it doesn't matter yet.
+- The cone's humidity (parchment's modulus moves 3x between 30% and 85% RH) is a V6 bend
+  candidate: the breakup modes would move with the weather.
+- The user listens: `reports/victorian/voice/{demo,demo_cutoff_0,demo_cutoff_1,lows}.wav`, and
+  `victorian_voice` live.

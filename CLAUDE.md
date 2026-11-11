@@ -513,8 +513,29 @@ marked; a reed per key; the voice live):
   threads; a 4-key chord and a run without dropouts at 50 ms);
   `scripts/victorian_voice_study.py` -> reports/victorian/voice/; `tests/test_victorian.py`;
   `examples/victorian.rs` (`--bench`), circuitsim's `examples/reeds_bench.rs`.
-Open: CUTOFF reads mostly as level (the receivers' band hides the filter: options in the
-plan); the carbon's noise, the relay's howl, the carbon lamp; the user listens.
+**The mad scientist of 1881** (2026-11-11, the user's rule after "very honky, no low end";
+the plan's section of that name): materials and processes of 1881 (costly ones too), any
+size a rich patron funds, today's design knowledge, nothing invented later; every value's
+source says its tier ("tier period" / "tier mad scientist" / "tier anachronism", the last
+only as V4 / V5 extras). **Second session (same day, the plan's "Status (2026-11-11, second
+session)"):**
+- the induction coil on a gapped ring of iron wire (10.2 mH, coupled inductors), its
+  secondary terminated by 250 ohm so the reactor can filter;
+- the output is Siemens' 1877 moving coil on a parchment cone (DRP 2355, checked),
+  `PARCHMENT_CONE@1` (`library.build_parchment_cone`), in a closed 0.3 m^3 oak cabinet; `out`
+  is the pressure 1 m in front;
+- the `speaker` part's **`box_m3`** (a closed box: the air's compliance, no back wave, a
+  baffle-step shelf) and a component's **`field`** block (the part's fourth node: an
+  electromagnet's winding; BL follows its current through a new device kind **`gyrator`**,
+  `varimu/devices/gyrator.py`, circuitsim `devices/gyrator.rs`, both builders, SPICE);
+- the field on a 16-cell battery started rested (it sags: BL 84%, -4 dB in 60 s);
+- `ADER_RX@2` (a thicker, felt-damped relay diaphragm); C1-C6, `GRAY_REEDS@3`.
+
+The fundamental is now the strongest partial from C1 up, and the live load is the same
+(worst block 99%, no dropouts at 50 ms).
+Open: the voice is mellow now (the relay coil's ~0.4 H is its top; options in the plan);
+CUTOFF's reach bunches into the rheostat's first quarter; the carbon's noise, the relay's
+howl, the carbon lamp; the user listens (`reports/victorian/voice/*.wav`, `lows.wav`).
 
 Real instruments ([docs/INSTRUMENT_PLAN.md](docs/INSTRUMENT_PLAN.md), 2026-11-01, parked
 until the user picks it up; nothing built): exciter -> resonator -> radiator -> room, the

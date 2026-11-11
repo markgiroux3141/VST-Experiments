@@ -127,6 +127,8 @@ struct Context<'a> {
     tolerance: Option<Tolerance>,
     models: Vec<(String, DeviceModel)>,
     core_models: Vec<MagneticCore>,
+    /// A speaker's field gyrator (the speaker part's).
+    macro_models: Vec<DeviceModel>,
     used_devices: HashSet<String>,
     designators: HashSet<String>,
     missing_class: BTreeSet<String>,
@@ -554,7 +556,7 @@ const MACROS: [&str; 34] = [
 
 /// The macros that take one more, optional node (builder.py's `optional_nodes`): a stereo
 /// medium's `out_r`, an open-collector op-amp's `v_minus`.
-const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank", "opamp", "tape"];
+const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank", "opamp", "tape", "speaker"];
 
 fn macro_of(kind: &str) -> Macro {
     use Kind::*;
@@ -790,6 +792,7 @@ fn macro_of(kind: &str) -> Macro {
                 Param("offset_y_m", Physical, Some(Value::Float(0.0))),
                 Param("readout", Number, Some(Value::Float(1.0))),
                 Param("series", Number, Some(Value::Float(1.0))),
+                Param("box_m3", Physical, Some(Value::Float(0.0))),
             ],
             false,
         ),
@@ -1336,14 +1339,38 @@ fn speaker_part(
             format!("{series}: a whole number of drivers, 1 or more"),
         ));
     }
+    let box_m3 = f("box_m3")?;
+    if box_m3 < 0.0 {
+        return Err(ctx.fail(
+            &format!("{name}.box_m3"),
+            format!("{box_m3}: a closed box's volume, or 0 for none"),
+        ));
+    }
+    let readout = f("readout")?;
+    let field = nodes.get(3).map(String::as_str);
+    if field.is_some() != model.field.is_some() {
+        return Err(ctx.fail(
+            name,
+            "a field winding needs the fourth node (field), and only then",
+        ));
+    }
+    if field.is_some() {
+        if series != 1.0 {
+            return Err(ctx.fail(
+                name,
+                format!("speaker {name}: a field winding drives one driver (series 1)"),
+            ));
+        }
+        ctx.macro_models.extend(speaker::field_model(name, &model));
+    }
     // `readout: 0`: this speaker is only a load (its terminal voltage on `out`), whatever the build.
-    if !ctx.speaker_readout || f("readout")? == 0.0 {
+    if !ctx.speaker_readout || readout == 0.0 {
         return Ok(speaker::terminal(
-            name, &nodes[0], &nodes[1], &nodes[2], &model, series,
+            name, &nodes[0], &nodes[1], &nodes[2], &model, series, field, box_m3,
         ));
     }
     Ok(speaker::speaker(
-        name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance, series,
+        name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance, series, field, box_m3,
     ))
 }
 
@@ -2833,6 +2860,7 @@ pub fn build_ir_live(
         tolerance: None,
         models: Vec::new(),
         core_models: Vec::new(),
+        macro_models: Vec::new(),
         used_devices: HashSet::new(),
         designators: HashSet::new(),
         missing_class: BTreeSet::new(),
@@ -3075,6 +3103,7 @@ pub fn build_ir_live(
         .filter(|m| !ctx.replaced_models.contains(m.name()))
         .collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
+    models.extend(ctx.macro_models);
     let ir = CircuitIr {
         version: IR_VERSION,
         title: spec.title.clone(),

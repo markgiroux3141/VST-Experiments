@@ -56,6 +56,7 @@ from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.gyrator import Gyrator
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
@@ -221,6 +222,10 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Device) and isinstance(models.get(el.model), Contact | Carbon):
             dc.join(el.nodes[0], el.nodes[1])  # open, the contact still leaks its insulation
+        if isinstance(el, Device) and isinstance(models.get(el.model), Gyrator):
+            # a gyrator holds each port's voltage by the other port's current
+            dc.join(el.nodes[0], el.nodes[3])
+            dc.join(el.nodes[1], el.nodes[3])
         if isinstance(el, Device) and isinstance(models.get(el.model), Optocoupler | Photocell):
             dc.join(el.nodes[2], el.nodes[4])  # the state node: the device is its DC path
             dc.join(el.nodes[3], el.nodes[4])  # the cell conducts (at least its dark leak)

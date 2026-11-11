@@ -8,7 +8,7 @@
 
 tuning:
   a4_hz: {value: 440.0, source: "design: equal temperament from A4 = 440 Hz (anachronistic as a standard; the knowledge is ours)"}
-  lowest_note: {value: 36, source: "design: 49 keys, C2 (MIDI 36) to C6 (MIDI 84), four octaves: a cabinet organ's compass, twice Gray's (his 1874 instrument's keyboard was about two octaves)"}
+  lowest_note: {value: 24, source: "design: 61 keys, C1 (MIDI 24) to C6 (MIDI 84), five octaves (2026-11-11, the user's: real low notes; was C2): a large harmonium's compass with a 16 ft octave, Gray's 1874 keyboard was about two octaves"}
   highest_note: {value: 84, source: "design: see lowest_note"}
 
 # The reed: a spring-steel cantilever clamped at its root, tuned by its length.
@@ -16,11 +16,11 @@ reed:
   youngs_pa: {value: 2.0e+11, source: "provisional: model knowledge (carbon spring steel, 200-210 GPa)"}
   density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (steel)"}
   width_m: {value: 5.0e-3, source: "design: a harmonium reed's width class (4-8 mm)"}
-  thickness_low_m: {value: 0.9e-3, source: "design: the bass reed's thickness (keeps C2's reed ~106 mm long)"}
+  thickness_low_m: {value: 1.0e-3, source: "design: the bass reed's thickness (C1's reed ~158 mm long, C2's ~105 mm as before)"}
   thickness_high_m: {value: 0.45e-3, source: "design: the treble reed's (C6's ~19 mm long); linear in the note between"}
   q1: {value: 800.0, source: "provisional: model knowledge (a clamped steel reed's fundamental in air: loss factor ~1e-3 with the clamp's loss; the contact's own loss is modelled apart)"}
   q_exponent: {value: 0.5, source: "provisional: model knowledge (Q falling as (f1 / f)^0.5 to the second mode: air and clamp losses rising with frequency)"}
-  amplitude_low_m: {value: 0.6e-3, source: "design: the bass reed's swing at the tip, peak (sets its magnet's gap)"}
+  amplitude_low_m: {value: 0.8e-3, source: "design: the bass reed's swing at the tip, peak (sets its magnet's gap; C1's long reed, C2 ~0.55 mm as before)"}
   amplitude_high_m: {value: 0.12e-3, source: "design: the treble reed's; log-interpolated over the notes between"}
 
 # The electromagnet: a horseshoe of soft iron facing the reed's tip, a coil on each limb.

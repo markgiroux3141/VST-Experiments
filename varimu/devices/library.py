@@ -55,6 +55,7 @@ from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spe
 from varimu.devices.photocell import Photocell, fit_pdvp9203, photocell_from_data
 from varimu.devices.plate import SIX_LN10 as SIX_LN10_PLATE
 from varimu.devices.plate import PlateComponent, plate_from_data
+from varimu.devices.speaker import RHO_AIR_KG_M3 as RHO_AIR
 from varimu.devices.speaker import Speaker, speaker_from_data
 from varimu.devices.spring import SpringTankComponent, spring_tank_from_data
 from varimu.devices.tape import TapeFormulation, tape_from_data
@@ -1509,14 +1510,25 @@ def build_p12r() -> dict[str, Any]:
     }
 
 
-def _receiver(name: str, coil_ohm: float, coil_source: str) -> dict[str, Any]:
+def _receiver(
+    name: str,
+    coil_ohm: float,
+    coil_source: str,
+    plate_mm: float = 0.2,
+    q: float = 10.0,
+    plate_source: str = "",
+    q_source: str = "",
+) -> dict[str, Any]:
     """A magneto telephone receiver of the 1880s (a permanent bar magnet, a coil on its pole,
     a ferrotype-iron diaphragm 2 in free across) as a `speaker`-kind component: the moving
     iron's small-signal equivalent (the coil, its iron's eddy-current pair, a force factor,
     the diaphragm's fundamental and its second axisymmetric mode). A coil wound to `coil_ohm`
     in the same window: its inductances scale with the resistance, its force factor with the
-    resistance's square root (the turns), from Bell's 40 ohm."""
+    resistance's square root (the turns), from Bell's 40 ohm. A diaphragm `plate_mm` thick
+    (Bell's 0.2 mm by default): a clamped plate's frequencies and modal masses scale with its
+    thickness; `q` its fundamental's Q (felt behind it lowers it)."""
     k = coil_ohm / 40.0
+    t = plate_mm / 0.2
     plate = (
         "web: https://archive.org/details/telephone00pree (Preece & Maier, The Telephone, "
         "1889, p. 27: Bell's hand telephone, a steel bar magnet ~4.5 in, a boxwood reel wound "
@@ -1525,7 +1537,7 @@ def _receiver(name: str, coil_ohm: float, coil_source: str) -> dict[str, Any]:
     )
     # The clamped plate's fundamental: f = 0.469 (h / a^2) sqrt(E / rho (1 - nu^2)), 0.2 mm
     # iron over a 25.4 mm radius ~770 Hz, lowered by the magnet's pull (a negative stiffness).
-    f0, m_eff, q = 700.0, 0.58e-3, 10.0
+    f0, m_eff = 700.0 * t, 0.58e-3 * t
     w0 = 2 * math.pi * f0
     return {
         "name": name,
@@ -1551,11 +1563,11 @@ def _receiver(name: str, coil_ohm: float, coil_source: str) -> dict[str, Any]:
             "plate, 0.183 of its 3.2 g moving and a third of its area radiating; resonance "
             "700 Hz (0.469 (h / a^2) sqrt(E / rho (1 - nu^2)) ~770 Hz, lowered by the "
             "magnet's pull), Qms 10, the force factor 5.8 N/A at 40 ohm (Qes ~3: no period "
-            "figure found): provisional, model knowledge",
+            "figure found): provisional, model knowledge" + plate_source + q_source,
         },
         "modes": {
             "list": [
-                {"mass_kg": 0.25e-3, "f_hz": 3.89 * f0, "q": 15.0, "area_m2": -1.0e-4},
+                {"mass_kg": 0.25e-3 * t, "f_hz": 3.89 * f0, "q": 15.0, "area_m2": -1.0e-4},
             ],
             "source": "provisional: model knowledge (the clamped plate's second axisymmetric "
             "mode at 3.89 times its first, its radiating share small and of the other sign)",
@@ -1574,14 +1586,185 @@ def build_bell_rx() -> dict[str, Any]:
 
 def build_ader_rx() -> dict[str, Any]:
     """A 200 ohm receiver (the Ader system's, Preece & Maier 1889 p. ~50): the Victorian
-    synth's relay, its diaphragm on the carbon button, in the induction coil's 250 ohm
-    secondary circuit."""
+    synth's relay, its diaphragm on the carbon button, in the induction coil's secondary
+    circuit. Version 2 (2026-11-11, the user's "very honky"): a thicker diaphragm with felt
+    behind it, so its resonance is damped and sits above the band where the old one's and
+    Bell's 700 Hz peaks stacked (docs/VICTORIAN_SYNTH_PLAN.md, "The mad scientist of 1881")."""
     return _receiver(
         "ADER_RX",
         200.0,
         "web: https://archive.org/details/telephone00pree (Preece & Maier 1889, p. ~50: the "
         "Ader system's 200 ohm receiver, with a 0.5 / 250 ohm induction coil)",
+        plate_mm=RELAY_PLATE_MM,
+        q=RELAY_Q,
+        plate_source=f"; tier mad scientist, design: a {RELAY_PLATE_MM} mm sheet-iron "
+        "diaphragm (a clamped plate's fundamental and modal mass scale with its thickness, "
+        f"so ~{700 * RELAY_PLATE_MM / 0.2:.0f} Hz before the button's stiffness)",
+        q_source=f"; Qms {RELAY_Q}: tier mad scientist, provisional: model knowledge (a pad "
+        "of felt pressed behind the diaphragm, as later receivers' damping felts; no "
+        "period figure)",
     )
+
+
+# The relay receiver's diaphragm (ADER_RX@2): its thickness and its Q with the felt.
+RELAY_PLATE_MM = 0.3
+RELAY_Q = 2.5
+
+# The Siemens moving-coil parchment cone's sources (PARCHMENT_CONE).
+SIEMENS_1877 = (
+    "web: https://patents.google.com/patent/DE2355C/de (Siemens & Halske, DRP No. 2355, "
+    "patented from 14 Dec 1877: Fig. 5 a light coil wound with covered aluminium wire moving "
+    "in an annular magnetic field; Fig. 6 the coil on a membrane 'aus Pergament oder anderem "
+    "Stoffe' shaped like the eardrum)"
+)
+SIEMENS_1874 = (
+    "web: https://patents.google.com/patent/US149797A/en (E. W. Siemens, US 149,797, 1874: "
+    "the coil in the annular space between the poles of 'a permanent or electro-magnet')"
+)
+PARCHMENT = (
+    "web: https://doi.org/10.1186/s40494-020-0360-0 (Krzemien et al., Heritage Science 8:17, "
+    "2020: Table 1, contemporary parchment 180 g/m2 at 0.23 mm thick; its modulus falls from "
+    "1200 MPa at 30% RH to 400 MPa at 85%)"
+)
+ALUMINIUM = (
+    "web: https://www.mit.edu/~6.777/matprops/aluminum.htm (aluminium: 2700 kg/m3, CRC "
+    "Materials Science and Engineering Handbook; conductivity 3.538e7 S/m, so 2.83e-8 ohm m)"
+)
+COPPER = (
+    "web: https://nvlpubs.nist.gov/nistpubs/Legacy/circ/nbscircular31.pdf (NBS Circular 31: "
+    "annealed copper, 1/58 ohm mm2/m = 1.7241e-8 ohm m at 20 C)"
+)
+B_AND_S = "derived: Brown & Sharpe's gauge (1857), d = 0.127 mm x 92^((36 - n) / 39)"
+CONE_PAPER = (
+    "web: https://patents.google.com/patent/US4552243A/en (Pioneer, US 4,552,243, Table I: "
+    "cone paper 500 kg/m3, 2 GPa, its sound speed 2000 m/s, tan delta 0.05)"
+)
+RHO_PARCHMENT_KG_M3 = 0.180 / 0.23e-3  # Krzemien et al.'s grammage over its thickness
+RHO_AL_OHM_M = 1 / 3.538e7
+DENSITY_AL_KG_M3 = 2700.0
+RHO_CU_OHM_M = 1.7241e-8
+MU0 = 4e-7 * math.pi
+
+
+def b_and_s_m(n: int) -> float:
+    """Brown & Sharpe gauge n's diameter."""
+    return 0.127e-3 * 92 ** ((36 - n) / 39)
+
+
+def build_parchment_cone() -> dict[str, Any]:
+    """The Victorian synth's loud-speaking end (docs/VICTORIAN_SYNTH_PLAN.md, "The mad
+    scientist of 1881"): Siemens' 1877 moving coil on a parchment membrane, built big: a
+    10 in parchment cone, a coil of covered aluminium wire in the annular gap of an
+    electromagnet (a pot of wrought iron, its field coil fed by Leclanche cells: the force
+    factor follows the field current), for a closed oak cabinet. Tier mad scientist: period
+    materials and processes (parchment, aluminium wire as Siemens specified, wrought iron,
+    silk-covered copper, chamois leather, shellac), our design. Every number below is a
+    design choice or derived from the sources; the unsourced ones are provisional."""
+    # The cone: a 10 in frame, 9 in of parchment moving as a piston, a shallow cone.
+    a = 0.11
+    half_angle = math.radians(60.0)
+    sd = math.pi * a * a
+    grammage = 0.180
+    m_cone = grammage * sd / math.sin(half_angle)
+    # The voice coil: 262 turns of No. 32 B&S aluminium wire, 1.75 in across (mean).
+    turns, d_coil = 262, 0.0445
+    wire = b_and_s_m(32)
+    a_wire = math.pi * wire * wire / 4
+    length = turns * math.pi * d_coil
+    re = RHO_AL_OHM_M * length / a_wire
+    m_wire = length * a_wire * DENSITY_AL_KG_M3
+    m_coil = 1.3 * m_wire  # its silk covering and shellac
+    m_former = grammage * math.pi * d_coil * 0.025  # a parchment tube 25 mm long
+    m_surround = 1.5e-3
+    m_air = 2 * (8 / 3) * RHO_AIR * a**3  # the front's radiation mass, and the box's side
+    mms = m_cone + m_coil + m_former + m_surround + m_air
+    # The field: 3300 turns of No. 22 B&S copper on the centre pole, 0.254 m a turn; the
+    # gap 2.5 mm wide (radial) under a 12 mm top plate; its flux 1 / 1.5 of the gap's
+    # ideal for the iron's reluctance and the leakage.
+    n_f, mlt_f = 3300, 0.254
+    wire_f = b_and_s_m(22)
+    r_f = RHO_CU_OHM_M * n_f * mlt_f / (math.pi * wire_f * wire_f / 4)
+    i_nom = 0.4
+    gap, plate, leak = 2.5e-3, 0.012, 1.5
+    b_gap = MU0 * n_f * i_nom / (gap * leak)
+    a_gap = math.pi * d_coil * plate
+    l_f = n_f * b_gap * a_gap / i_nom
+    b_pole = b_gap * a_gap / (math.pi * 0.0205**2)
+    bl = b_gap * length
+    # The suspension: a chamois-leather surround and a corrugated parchment spider.
+    fs, qms = 35.0, 4.0
+    ws = 2 * math.pi * fs
+    cms = 1 / (ws * ws * mms)
+    rms = ws * mms / qms
+    # Breakup: parchment's longitudinal wave speed against cone paper's.
+    e_parch = 0.9e9
+    c_parch = math.sqrt(e_parch / RHO_PARCHMENT_KG_M3)
+    design = (
+        "tier mad scientist (period materials, our design); design: a 10 in parchment cone, "
+        f"9 in of it moving (Sd {sd:.4f} m2), 60 degrees from its axis"
+    )
+    return {
+        "name": "PARCHMENT_CONE",
+        "kind": "speaker",
+        "source": f"{SIEMENS_1877}; {SIEMENS_1874}; {design}; the materials: {PARCHMENT}; "
+        f"{ALUMINIUM}; {COPPER}",
+        "voice_coil": {
+            "re_ohm": re,
+            "le_h": 3.0e-3,
+            "l2_h": 4.0e-3,
+            "r2_ohm": 40.0,
+            "source": f"Re derived: {turns} turns 1.75 in across (design) of No. 32 B&S "
+            f"aluminium ({wire * 1e3:.4f} mm, {B_AND_S}; covered aluminium wire as "
+            f"{SIEMENS_1877}), "
+            f"{length:.2f} m at {ALUMINIUM}; Le, L2 || R2 provisional: model knowledge (a "
+            "coil of this many turns on an iron centre pole, its eddy currents as the LR-2 "
+            "pair, scaled from an 8 ohm driver's ~1 mH by the turns squared)",
+        },
+        "moving_system": {
+            "mms_kg": mms,
+            "cms_m_per_n": cms,
+            "rms_ns_per_m": rms,
+            "bl_tm": bl,
+            "sd_m2": sd,
+            "source": f"derived: Mms {mms * 1e3:.2f} g = the cone {m_cone * 1e3:.2f} g "
+            f"(180 g/m2 over its slant area, {PARCHMENT}) + the coil {m_coil * 1e3:.2f} g (its "
+            f"aluminium {m_wire * 1e3:.2f} g at 2700 kg/m3, {ALUMINIUM}, and 30% for the silk "
+            "and shellac: provisional) + its former 0.63 g (a parchment tube 25 mm long) + "
+            "1.5 g of surround and glue (provisional) + the air, the front's (8/3) rho a^3 "
+            "and as much in the box (a baffled piston's radiation mass; the box's side "
+            f"provisional); BL = B l at the nominal field 0.4 A: B {b_gap:.4f} T = mu0 N I / "
+            "(gap x 1.5) (3300 turns, a 2.5 mm gap; 1.5 for the iron and the leakage: "
+            "provisional) times the coil's wire in the gap; Fs 35 Hz in free air and Qms 4 "
+            "(design: a chamois-leather surround and a corrugated parchment spider; Qms "
+            "provisional: model knowledge, the leather's losses)",
+        },
+        "field": {
+            "re_ohm": r_f,
+            "l_h": l_f,
+            "i_nominal_a": i_nom,
+            "source": f"design: the field winding, {n_f} turns of No. 22 B&S copper "
+            f"({wire_f * 1e3:.4f} mm, {B_AND_S}) on the centre pole of a wrought-iron pot, "
+            f"{mlt_f} m a turn: {r_f:.2f} ohm at {COPPER}; L = N B A_gap / I with the gap "
+            "under a 12 mm top plate (the leakage flux's own linkage left out: provisional); "
+            f"0.4 A gives {b_gap:.3f} T in the gap and {b_pole:.2f} T in the 41 mm pole, far "
+            "below iron's 1.6-2.2 T (web: https://en.wikipedia.org/wiki/Saturation_(magnetic), "
+            "Laughton & Warne 2003), so BL follows the current; the field from an "
+            f"electromagnet as {SIEMENS_1874}",
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": 3.0e-3, "f_hz": 1000.0, "q": 10.0, "area_m2": 0.008},
+                {"mass_kg": 1.5e-3, "f_hz": 2200.0, "q": 10.0, "area_m2": -0.005},
+            ],
+            "source": "provisional: model knowledge (a paper cone of this size breaks up "
+            "from ~1.5-2 kHz; parchment's longitudinal wave speed sqrt(E / rho) "
+            f"{c_parch:.0f} m/s (~0.9 GPa at ~50% RH between Krzemien et al.'s 1200 and 400 "
+            f"MPa, {PARCHMENT}) against cone paper's 2000 m/s ({CONE_PAPER}) puts parchment's "
+            "lower; Q 10 from paper's tan delta 0.05 (Q ~20) with the surround's losses; the "
+            "modal masses and signed areas guessed: the outer cone lagging, then a ring in "
+            "antiphase)",
+        },
+    }
 
 
 # The decay curves' frequency grid: third octaves from 50 Hz to the plot's end (~14 kHz).
@@ -3295,6 +3478,7 @@ BUILDERS = {
     "P12R": build_p12r,
     "BELL_RX": build_bell_rx,
     "ADER_RX": build_ader_rx,
+    "PARCHMENT_CONE": build_parchment_cone,
     "EMT140": build_emt140,
     "EMT240": build_emt240,
     "6K6GT": build_6k6gt,

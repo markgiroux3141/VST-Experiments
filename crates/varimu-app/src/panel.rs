@@ -1339,7 +1339,7 @@ pub const DEVICES: [Device; 33] = [
         id: "victorian_voice",
         label: "Victorian Synth (1881)",
         short: "Victorian",
-        about: "An invented synthesizer from parts made by 1881: Gray's self-interrupting             reeds chopping a line of Leclanche cells through carbon under the keys, an             induction coil, a saturable reactor on Ewing's soft iron, a carbon relay and             Bell's receiver",
+        about: "An invented synthesizer from parts made by 1881: Gray's self-interrupting             reeds chopping a line of Leclanche cells through carbon under the keys, an             induction coil on an iron ring, a saturable reactor on Ewing's soft iron, a carbon relay and             Siemens' moving coil on a parchment cone in an oak cabinet",
         group: Group::Instruments,
         // The reeds are circuitsim's medium (docs/VICTORIAN_SYNTH_PLAN.md): each key's reed,
         // magnet, contacts and carbon at 768 kHz; the cells, iron and relay are the circuit.
@@ -1359,9 +1359,10 @@ pub const DEVICES: [Device; 33] = [
         key: None,
         pitch2: None,
         coupling: None,
-        // Two threads: the keys, batteries, induction coil and reactor | the relay and the
-        // loud-speaking end, cut at the filter's condenser (f1, held in the relay's part).
-        partition: Some(&["relay", "relay battery"]),
+        // Two threads: the keys, batteries, induction coil and reactor | the relay, the
+        // loud-speaking end and its field battery, cut at the filter's condenser (f1, held in
+        // the relay's part).
+        partition: Some(&["relay", "relay battery", "field battery"]),
         live_speaker_v: None,
         newton: None,
         method: None,

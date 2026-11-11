@@ -764,6 +764,9 @@ pub fn device_instance(
             c.name = s(name);
             Ok(DeviceModel::Contact(c))
         }
+        DeviceModel::Gyrator(_) => Err(Error(format!(
+            "{name}: a gyrator is a speaker part's field motor, not a devices entry"
+        ))),
         DeviceModel::Carbon(c) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

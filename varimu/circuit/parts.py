@@ -70,6 +70,7 @@ from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
+from varimu.devices.gyrator import Gyrator
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
@@ -377,7 +378,13 @@ def mains_sine(
 
 
 def speaker_driver(
-    name: str, plus: str, minus: str, s: spk.Speaker, series: int = 1
+    name: str,
+    plus: str,
+    minus: str,
+    s: spk.Speaker,
+    series: int = 1,
+    field: str | None = None,
+    box_m3: float = 0.0,
 ) -> tuple[list[Element], list[tuple[str, float]]]:
     """The driver's electrical equivalent (varimu.devices.speaker): the elements, and each
     radiating node (its voltage to `minus` is BL times a velocity) with its area. Element
@@ -388,8 +395,21 @@ def speaker_driver(
     `series` n: n identical drivers in series, exactly (one current, so one force and one
     velocity in each): every resistance and inductance n times, every capacitance over n,
     so a radiating node's voltage is n BL v (the n drivers' back EMF). n = 1 multiplies
-    and divides by 1.0: the elements are bit for bit those of one driver."""
+    and divides by 1.0: the elements are bit for bit those of one driver.
+
+    `box_m3` > 0: a closed box, its air's compliance (varimu.devices.speaker) in L<NAME>_cms
+    with the suspension's (two springs on the cone: Cms Cab / (Cms + Cab)). `field` (a
+    node; the component needs its `field` block): the field winding L<NAME>_f from it to
+    <name>_fs, R<NAME>_f from there to minus;
+    L2 || R2 end at <name>_v instead of the coil's node, and between them an ideal
+    transformer of ratio BL / bl_tm: G<NAME>_g1 / G<NAME>_g2 (the fixed gyrator, <name>_v to
+    <name>_x) and the device X<NAME>_g (model speaker_field_model's, <name>_x to the coil's
+    node, its field sensed at <name>_fs)."""
     n, upper = name.lower(), name.upper()
+    if field is not None and s.field is None:
+        raise ValueError(f"speaker {name}: a field node, but {s.name} has no field winding")
+    if field is not None and series != 1:
+        raise ValueError(f"speaker {name}: a field winding drives one driver (series 1)")
     bl2 = s.bl_tm * s.bl_tm
     # Plain left-to-right sums (Python 3.12's sum() compensates; Rust's builder doesn't).
     modes_kg, modes_m2 = 0.0, 0.0
@@ -399,15 +419,31 @@ def speaker_driver(
     m0 = s.mms_kg - modes_kg
     s0 = s.sd_m2 - modes_m2
     coil = f"{n}_m"
+    ve = coil if field is None else f"{n}_v"
+    cms = s.cms_m_per_n
+    if box_m3 > 0:  # the box's air and the suspension: two springs on the cone
+        cab = spk.box_compliance_m_per_n(box_m3, s.sd_m2)
+        cms = cms * cab / (cms + cab)
     els: list[Element] = [
         Resistor(f"R{upper}_re", plus, f"{n}_l", s.re_ohm * series),
         Inductor(f"L{upper}_le", f"{n}_l", f"{n}_e", s.le_h * series),
-        Inductor(f"L{upper}_l2", f"{n}_e", coil, s.l2_h * series),
-        Resistor(f"R{upper}_r2", f"{n}_e", coil, s.r2_ohm * series),
+        Inductor(f"L{upper}_l2", f"{n}_e", ve, s.l2_h * series),
+        Resistor(f"R{upper}_r2", f"{n}_e", ve, s.r2_ohm * series),
         Capacitor(f"C{upper}_m", coil, minus, m0 / bl2 / series),
-        Inductor(f"L{upper}_cms", coil, minus, s.cms_m_per_n * bl2 * series),
+        Inductor(f"L{upper}_cms", coil, minus, cms * bl2 * series),
         Resistor(f"R{upper}_rms", coil, minus, bl2 / s.rms_ns_per_m * series),
     ]
+    if field is not None:
+        assert s.field is not None
+        x, fs = f"{n}_x", f"{n}_fs"
+        g1 = spk.GYRATOR_S
+        els += [
+            Vccs(f"G{upper}_g1", ve, minus, x, minus, g1),
+            Vccs(f"G{upper}_g2", x, minus, ve, minus, -g1),
+            Device(f"X{upper}_g", speaker_field_model(name, s).name, (x, coil, fs, minus)),
+            Inductor(f"L{upper}_f", field, fs, s.field.l_h),
+            Resistor(f"R{upper}_f", fs, minus, s.field.re_ohm),
+        ]
     radiating = [(coil, s0)]
     for k, m in enumerate(s.modes, 1):
         w = 2 * math.pi * m.f_hz
@@ -423,6 +459,13 @@ def speaker_driver(
     return els, radiating
 
 
+def speaker_field_model(name: str, s: spk.Speaker) -> Gyrator:
+    """The gyrator of speaker `name`'s field winding (its conductance GYRATOR_S at the
+    nominal field current, sensed as the winding's resistive drop)."""
+    assert s.field is not None
+    return Gyrator(f"{name.upper()}_FIELD", spk.GYRATOR_S / (s.field.re_ohm * s.field.i_nominal_a))
+
+
 def speaker_readout(
     name: str,
     minus: str,
@@ -432,11 +475,15 @@ def speaker_readout(
     cabinet: spk.Cabinet,
     distance_m: float,
     series: int = 1,
+    closed: bool = False,
 ) -> list[Element]:
     """The sound pressure at `out` (pascals as volts, to ground), on axis at `distance_m`
     in front of the cabinet: front wave, back wave around the edges (varimu.devices
     .speaker). It draws no current from the driver (every coupling is a Vccs). `series`:
-    the driver's nodes are n drivers' (speaker_driver), so this reads one of them."""
+    the driver's nodes are n drivers' (speaker_driver), so this reads one of them.
+    `closed`: a closed box, the front wave alone through the baffle step's shelf
+    (L<NAME>_pf, then G<NAME>_b / R<NAME>_b / C<NAME>_b its low-pass at baffle_step_hz,
+    `out` = p_f minus half of it)."""
     n, upper = name.lower(), name.upper()
     r0 = spk.READOUT_OHM
     pf, lp = f"{n}_pf", f"{n}_b"
@@ -448,6 +495,16 @@ def speaker_readout(
         if gm != 0:
             els.append(Vccs(f"G{upper}_a{i}", GROUND, pf, node, minus, gm))
     els.append(Inductor(f"L{upper}_pf", pf, GROUND, 1.0))
+    if closed:
+        fb = spk.baffle_step_hz(cabinet)
+        return els + [
+            Vccs(f"G{upper}_b", GROUND, lp, pf, GROUND, 1 / r0),
+            Resistor(f"R{upper}_b", lp, GROUND, r0),
+            Capacitor(f"C{upper}_b", lp, GROUND, 1 / (2 * math.pi * fb * r0)),
+            Vccs(f"G{upper}_o", GROUND, out, pf, GROUND, 1 / r0),
+            Vccs(f"G{upper}_o0", GROUND, out, lp, GROUND, -0.5 / r0),
+            Resistor(f"R{upper}_o", out, GROUND, r0),
+        ]
     # Back: the directivity pole, then a doubly terminated delay line, tapped per edge.
     fb = spk.directivity_pole_hz(s.sd_m2)
     els += [
@@ -486,21 +543,32 @@ def speaker(
     cabinet: spk.Cabinet,
     distance_m: float,
     series: int = 1,
+    field: str | None = None,
+    box_m3: float = 0.0,
 ) -> list[Element]:
     """Speaker `name` between plus and minus (`series` identical drivers), the sound
-    pressure of one of them on `out`."""
-    els, radiating = speaker_driver(name, plus, minus, s, series)
-    return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m, series)
+    pressure of one of them on `out`; `field` and `box_m3` as speaker_driver's."""
+    els, radiating = speaker_driver(name, plus, minus, s, series, field, box_m3)
+    return els + speaker_readout(
+        name, minus, out, s, radiating, cabinet, distance_m, series, closed=box_m3 > 0
+    )
 
 
 def speaker_terminal(
-    name: str, plus: str, minus: str, out: str, s: spk.Speaker, series: int = 1
+    name: str,
+    plus: str,
+    minus: str,
+    out: str,
+    s: spk.Speaker,
+    series: int = 1,
+    field: str | None = None,
+    box_m3: float = 0.0,
 ) -> list[Element]:
     """Speaker `name` without its readout (a live build's, docs/RHODES_PLAN.md RH3): the
     driver between plus and minus as the amp's load, and its terminal voltage on `out`
     (G<NAME>_t into R<NAME>_t, 1 ohm to ground: it draws no current); with `series`
     drivers, one driver's (the pair's voltage over n)."""
-    els, _ = speaker_driver(name, plus, minus, s, series)
+    els, _ = speaker_driver(name, plus, minus, s, series, field, box_m3)
     upper = name.upper()
     return els + [
         Vccs(f"G{upper}_t", GROUND, out, plus, minus, 1.0 / series),

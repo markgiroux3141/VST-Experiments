@@ -8,14 +8,24 @@
   EMF behind its resistance and two polarization states): the local battery (2 cells) that
   keeps the reeds going, the line battery (4) that the keys chop, the relay's battery (3) and
   the CUTOFF battery (2);
-- the induction coil (Blake's proportions: a 0.5 ohm primary in the line, a 250 ohm secondary,
-  on an open core of soft iron wire) and the line's condenser;
+- the induction coil (Blake's 1:15 and wire, wound on a ring of soft iron wire cut by a 1 mm
+  joint: Faraday's ring of 1831 with the gap our design, so its primary is ~10 mH and the coil
+  passes the bass) and the line's condenser;
 - the filter: a two-core saturable reactor on Ewing's soft iron (the tube synth's S1 reactor,
   re-wound for the line), its series windings into a paper condenser; CUTOFF a rheostat feeding
   the control windings from their battery;
-- the carbon relay: a 200 ohm receiver (Ader's) whose diaphragm presses a carbon button in the
-  relay battery's circuit (CARBON_BUTTON), with a 40 ohm Bell receiver in that circuit;
-- `out`: the Bell receiver's sound pressure 0.3 m in front of it.
+- the carbon relay: a 200 ohm receiver (Ader's, ADER_RX@2: a thicker diaphragm damped by felt)
+  whose diaphragm presses a carbon button in the relay battery's circuit (CARBON_BUTTON), with
+  the loud-speaking end's moving coil in that circuit;
+- the loud-speaking end: Siemens' 1877 moving coil on a parchment membrane, built big
+  (PARCHMENT_CONE: a 10 in parchment cone, an aluminium coil in an electromagnet's gap) in a
+  closed oak cabinet; its field winding on a battery of its own (16 cells), so the force factor
+  sags as those cells polarize;
+- `out`: the sound pressure 1 m in front of the cabinet.
+
+Every value's source carries its tier (docs/VICTORIAN_SYNTH_PLAN.md, "The mad scientist of
+1881"): "tier period" as built by 1881, "tier mad scientist" period materials and processes in
+our design, "tier anachronism" period materials doing what was found later (none here).
 
     uv run python scripts/make_victorian_voice.py [--check]
 
@@ -25,6 +35,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -43,27 +54,70 @@ BLAKE = (
 )
 
 
+REEDS_MODEL = "GRAY_REEDS@3"
+B_AND_S = "Brown & Sharpe's gauge, 1857: d = 0.127 mm x 92^((36 - n) / 39)"
+COPPER = "1.7241e-8 ohm m, web: https://nvlpubs.nist.gov/nistpubs/Legacy/circ/nbscircular31.pdf (NBS Circular 31)"
+EWING_MU = "Ewing's soft iron's initial permeability 190 (config/magnetics.yaml soft_iron_ewing: Baur's ring, mu = 183 + 1382 H(Oe), Ewing 1900 p. 125)"
+IC_TURNS = 250
+
+
+def b_and_s_m(n: int) -> float:
+    return 0.127e-3 * 92 ** ((36 - n) / 39)
+
+
+def induction_coil() -> dict:
+    """The induction coil on a ring of soft iron wire (Faraday's ring) cut by a 1 mm joint:
+    its primary's inductance at the iron's reversible permeability (the initial one: small
+    signals ride on the line's DC, ~0.14 T per ampere through the gap, far below the knee),
+    and both windings' resistances from their wire and turns."""
+    mu0 = 4e-7 * math.pi
+    area, path, gap, mu = 3.0e-4, 0.25, 1.0e-3, 190.0
+    l_p = mu0 * IC_TURNS**2 * area / (gap + path / mu)
+    bundle = math.sqrt(area / 0.75 * 4 / math.pi)  # the iron at 3/4 of the bundle
+    turn_p = math.pi * (bundle + 1.0e-3)
+    turn_s = math.pi * (bundle + 8.5e-3)
+    a18, a32 = (math.pi * b_and_s_m(n) ** 2 / 4 for n in (18, 32))
+    r_p = 1.7241e-8 * IC_TURNS * turn_p / a18
+    r_s = 1.7241e-8 * 15 * IC_TURNS * turn_s / a32
+    return {
+        "l_p": l_p,
+        "r_p": r_p,
+        "r_s": r_s,
+        "why_l": f"mu0 N^2 A / (gap + l / mu): {IC_TURNS} turns on 3 cm^2 of iron (design: a bundle of No. 24 B&S Swedish iron wire as {BLAKE}, bent into a ring 0.25 m round), its joint cut and shimmed with paper to 1 mm (design: the line's DC, up to ~1 A, stays ~0.14 T per ampere, far below the iron's knee), the iron at {EWING_MU}; the ring's permeability at signal levels may be higher (Rayleigh), raising L by up to ~1/3: provisional",
+        "why_r_p": f"{IC_TURNS} turns of No. 18 B&S ({B_AND_S}) copper ({COPPER}), {turn_p * 100:.1f} cm a turn round the {bundle * 1000:.1f} mm bundle",
+        "why_r_s": f"{15 * IC_TURNS} turns of No. 32 B&S ({B_AND_S}) copper ({COPPER}), {turn_s * 100:.1f} cm a turn over the primary (Blake's coil had 250 ohm, {BLAKE})",
+    }
+
+
 def v(value, source: str, **extra) -> dict:
     return {"value": value, "source": source, **extra}
 
 
-def cells(prefix: str, n: int, top: str, parts: dict) -> None:
+def cells(prefix: str, n: int, top: str, parts: dict, rested: bool = False) -> None:
     """A battery of n identical Leclanche cells in series from ground to `top`: exactly one
     cell with n times the EMF and the resistances and 1/n the capacitances (an EMF behind r0
     and two R || C polarization states). One cell's states, not n: the live circuit's cost
-    grows with its states (per-cell tolerance would split it again)."""
+    grows with its states (per-cell tolerance would split it again). `rested`: the
+    polarization states start at zero (`cell_rested_v`), the cells rested and switched on
+    with the instrument; otherwise a run's DC point holds them as polarized as their DC load
+    makes them (the line and local batteries carry none until a key goes down)."""
     e, a, b = f"{prefix}e", f"{prefix}a", f"{prefix}b"
     u = prefix.upper()
     parts[f"V{u}"] = {"V": [e, "0"], "v": f"{prefix}_e0_v"}
     parts[f"R{u}0"] = {"R": [e, a], "r": f"{prefix}_r0_ohm"}
     parts[f"R{u}1"] = {"R": [a, b], "r": f"{prefix}_r1_ohm"}
-    parts[f"C{u}1"] = {"C": [a, b], "c": f"{prefix}_c1_f"}
+    rest = {"v0": "cell_rested_v"} if rested else {}
+    parts[f"C{u}1"] = {"C": [a, b], "c": f"{prefix}_c1_f", **rest}
     parts[f"R{u}2"] = {"R": [b, top], "r": f"{prefix}_r2_ohm"}
-    parts[f"C{u}2"] = {"C": [b, top], "c": f"{prefix}_c2_f"}
+    parts[f"C{u}2"] = {"C": [b, top], "c": f"{prefix}_c2_f", **rest}
+
+
+PERIOD = "tier period"
+MAD = "tier mad scientist"
 
 
 def battery_values(prefix: str, n: int, what: str, cv: dict) -> dict:
-    src = f"derived: {n} cells in series ({what}), each {CARHART}"
+    src = f"{PERIOD}; derived: {n} cells in series ({what}), each {CARHART}"
     return {
         f"{prefix}_e0_v": v(n * cv["e0_v"], src),
         f"{prefix}_r0_ohm": v(n * cv["r0_ohm"], src),
@@ -91,6 +145,13 @@ BATTERIES = (
     ),
     ("br", 3, "brel", "relay battery", "design: the relay's battery, three cells"),
     (
+        "bf",
+        16,
+        "bfld",
+        "field battery",
+        "design: the loud-speaking end's field battery, sixteen cells (a rich patron's: ~7 W into the field winding while fresh)",
+    ),
+    (
         "bc",
         6,
         "bctl",
@@ -104,13 +165,19 @@ def build() -> dict:
     cell = yaml.safe_load(CELL.read_text(encoding="utf-8"))["cell"]
     cv = {k: x["value"] for k, x in cell.items()}
     values = {}
+    ic = induction_coil()
     for prefix, n, _, _title, src in BATTERIES:
         values.update(battery_values(prefix, n, src, cv))
     values.update(
         {
+            "cell_rested_v": v(
+                0.0,
+                "design: the field battery's polarization at zero when the instrument is switched on (its cells rested; the field has its own switch): the force factor sags from there as they polarize (Carhart's 84 s and 3.2 h). The relay's and CUTOFF's batteries start at their DC point (as polarized as their load makes them: CUTOFF's rheostat is graded for it)",
+            ),
             # The reeds.
             "reeds_model": v(
-                "GRAY_REEDS@2", "the compiled keyboard (scripts/compile_victorian_reeds.py)"
+                REEDS_MODEL,
+                f"{PERIOD} (Gray's self-vibrating reeds, US 166,095 / 166,096, 1874; one per key, C1-C6): the compiled keyboard (scripts/compile_victorian_reeds.py)",
             ),
             "reeds_step_hz": v(
                 768000.0,
@@ -122,32 +189,34 @@ def build() -> dict:
             ),
             "c_line_f": v(
                 10.0e-6,
-                "design: the line's condenser, a box of paraffined paper-and-foil condensers across the line at the keys (holds the line while the keys chop it; with the induction coil's primary a ~1-2 kHz resonance)",
+                f"{PERIOD} (Fizeau's condenser, 1853); design: the line's condenser, a box of paraffined paper-and-foil condensers across the line at the keys (holds the line while the keys chop it)",
             ),
             # The induction coil.
             "ic_primary_turns": v(
-                150.0, f"design: Blake's proportions ({BLAKE}): 150 primary turns of heavy wire"
+                float(IC_TURNS),
+                f"{MAD}; design: {IC_TURNS} primary turns of No. 18 B&S copper ({B_AND_S}), on a ring of soft iron wire (Faraday's ring, 1831: a closed iron ring with two windings)",
             ),
             "ic_ratio": v(
-                15.0, f"design: 1:15 for Blake's 0.5 / 250 ohm windings ({BLAKE}) in one window"
+                15.0, f"{MAD}; design: 1:15 as Blake's coil ({BLAKE}), No. 32 B&S copper"
             ),
-            "ic_r_primary_ohm": v(0.5, BLAKE),
-            "ic_r_secondary_ohm": v(250.0, BLAKE),
-            "ic_l_primary_h": v(
-                0.00032206975045794646,
-                f"derived: mu0 N^2 A / (gap + l / mu_i): 150 turns on Miller's 9/16 in bundle at 3/4 iron (1.2 cm^2, {BLAKE}), its 4 in of soft iron (Ewing's initial permeability 190, config/magnetics.yaml soft_iron_ewing) and the open core's air return as a 10 mm gap (provisional: model knowledge)",
-            ),
+            "ic_r_primary_ohm": v(ic["r_p"], f"{MAD}; derived: {ic['why_r_p']}"),
+            "ic_r_secondary_ohm": v(ic["r_s"], f"{MAD}; derived: {ic['why_r_s']}"),
+            "ic_l_primary_h": v(ic["l_p"], f"{MAD}; derived: {ic['why_l']}"),
             "ic_l_secondary_h": v(
-                0.07246569385303796, "derived: the primary's times the turns ratio squared (15^2)"
+                ic["l_p"] * 225.0, "derived: the primary's times the turns ratio squared (15^2)"
             ),
             "ic_k": v(
-                0.968,
-                "derived: sqrt(1 - L_leak / L_p) with a ~20 uH leakage, ~6% of the primary's (provisional: model knowledge, the windings on one bundle)",
+                0.998,
+                f"{MAD}; provisional: model knowledge (both windings laid over each other around the ring's whole circumference: ~0.4% leakage, ~9 mH on the secondary)",
+            ),
+            "ic_r_term_ohm": v(
+                250.0,
+                f"{MAD}; design: a German-silver resistance across the secondary, ~the filter's design impedance sqrt(L / C) (128 mH, 1 uF: 358 ohm; lower is brighter and, at CUTOFF 0, a resonant peak; 600 ohm was ~5 dB darker): the closed coil's secondary is otherwise a current source (2.3 H against its load), and a series reactor in a current-driven loop can't filter",
             ),
             # The filter.
             "rf_turns": v(
                 525.0,
-                "design: ~66 mH per core at the iron's reversible permeability unbiased (~185: JA's c dMan/dH, soft_iron_ewing): with 2.1 uF and the ~250 ohm load aimed at a ~300 Hz low-pass, rising toward ~4 kHz biased. Measured (scripts/victorian_voice_study.py, cutoff): CUTOFF lifts the filter's output above ~2 kHz by 20-30 dB and the output's level by ~7 dB, the band below ~2 kHz barely moves, and the receivers' band (~0.3-1.5 kHz) hides most of it at the output: an open item (VICTORIAN_SYNTH_PLAN.md, V3 status)",
+                f"{MAD} (a saturable reactor: ~1900s; iron, copper and a battery, 1881); design: ~66 mH per core at the iron's reversible permeability unbiased (~185: JA's c dMan/dH, soft_iron_ewing): driven from the terminated secondary (250 ohm) into the 1 uF condenser and the relay. With Bell's receiver and the open coil (before 2026-11-11) CUTOFF read mostly as level; on the cone it moves the voice's upper harmonics 10-13 dB (scripts/victorian_voice_study.py, cutoff)",
             ),
             "rf_r_signal_ohm": v(
                 5.0, "provisional: model knowledge (525 turns of 0.4 mm wire on a 10 cm ring)"
@@ -166,10 +235,13 @@ def build() -> dict:
             "rf_leakage_h": v(
                 0.0, "provisional: model knowledge (windings on a ring couple closely)"
             ),
-            "rf_c_f": v(2.1e-6, "design: a paper condenser for the ~300 Hz low-pass"),
+            "rf_c_f": v(
+                1.0e-6,
+                f"{PERIOD} (paper-and-foil condensers); design: the filter's condenser, with the reactor's 128 mH unbiased a ~450 Hz low-pass of Q ~1.4 from the 250 ohm termination, opening as CUTOFF saturates the iron (2.1 uF with the open coil, before 2026-11-11)",
+            ),
             "cutoff_r_max_ohm": v(
                 500.0,
-                "design: the CUTOFF rheostat, 500 ohm of German silver wire (Wheatstone's rheostat, 1843), wound evenly in the log of its resistance",
+                f"{PERIOD} (Wheatstone's rheostat, 1843); design: the CUTOFF rheostat, 500 ohm of German silver wire, wound evenly in the log of its resistance",
             ),
             "cutoff_taper_mid": v(
                 0.1,
@@ -181,10 +253,13 @@ def build() -> dict:
             ),
             # The relay.
             "relay_rx": v(
-                "ADER_RX@1",
-                "the relay's receiver: a 200 ohm magneto receiver (Preece & Maier 1889, the Ader system)",
+                "ADER_RX@2",
+                f"{MAD} (a receiver driving a carbon button: the carbon relay, our design): a 200 ohm magneto receiver (Preece & Maier 1889, the Ader system), its diaphragm 0.3 mm with felt behind it (ADER_RX@2)",
             ),
-            "button": v("CARBON_BUTTON@1", "the relay's carbon button (varimu.devices.carbon)"),
+            "button": v(
+                "CARBON_BUTTON@1",
+                f"{PERIOD} (Edison's carbon button, 1877-78): the relay's carbon button (varimu.devices.carbon)",
+            ),
             "button_k_n_m": v(
                 1.0e4,
                 "provisional: model knowledge (the button's stiffness against the diaphragm, the grains' bed and its cup's spring)",
@@ -210,8 +285,17 @@ def build() -> dict:
                 "design: its leak, 1 s (numerics: the force's AC part; its rest is the preload)",
             ),
             # The loud-speaking end.
-            "out_rx": v("BELL_RX@1", "Bell's 40 ohm hand telephone (Preece & Maier 1889, p. 27)"),
-            "listen_distance_m": v(0.3, "design: the listener 0.3 m in front of the receiver"),
+            "out_cone": v(
+                "PARCHMENT_CONE@1",
+                f"{MAD}: Siemens' moving coil on a parchment membrane (DRP 2355, 1877), built big (varimu.devices.library.build_parchment_cone)",
+            ),
+            "out_box_m3": v(
+                0.3,
+                f"{MAD}; design: a closed cabinet of oak, ~0.3 m3 inside (0.75 x 0.75 x 0.55 m), its joints glued and shellacked",
+            ),
+            "out_front_m": v(0.75, "design: the cabinet's front, 0.75 m square"),
+            "out_distance_m": v(1.0, "design: the listener 1 m in front of the cabinet"),
+            "listen_distance_m": v(0.3, "design: the relay receiver's (a load only)"),
             "rx_baffle_m": v(
                 0.07,
                 "provisional: model knowledge (the receiver's case and mouthpiece as a 7 cm flat baffle)",
@@ -232,7 +316,7 @@ def build() -> dict:
     sections = []
     for prefix, n, top, title, _ in BATTERIES:
         p: dict = {}
-        cells(prefix, n, top, p)
+        cells(prefix, n, top, p, rested=prefix == "bf")
         sections.append({"title": title, "parts": p})
     sections.append(
         {
@@ -255,6 +339,7 @@ def build() -> dict:
                 "LICP": {"L": ["icp", "line"], "l": "ic_l_primary_h"},
                 "LICS": {"L": ["s1", "ics"], "l": "ic_l_secondary_h"},
                 "RICS": {"R": ["ics", "0"], "r": "ic_r_secondary_ohm"},
+                "RTERM": {"R": ["s1", "0"], "r": "ic_r_term_ohm"},
                 "KIC": {"K": ["LICP", "LICS"], "k": "ic_k"},
             },
         }
@@ -334,12 +419,13 @@ def build() -> dict:
                 "VPRE": {"V": ["0", "fref"], "v": "button_preload_n"},
                 "XBUT": {"device": ["brel", "o1", "fx", "fref"], "model": "XBUT"},
                 "OUT": {
-                    "speaker": ["o1", "0", "out"],
-                    "component": "out_rx",
-                    "distance_m": "listen_distance_m",
-                    "width_m": "rx_baffle_m",
-                    "height_m": "rx_baffle_m",
+                    "speaker": ["o1", "0", "out", "bfld"],
+                    "component": "out_cone",
+                    "distance_m": "out_distance_m",
+                    "width_m": "out_front_m",
+                    "height_m": "out_front_m",
                     "depth_m": "rx_depth_m",
+                    "box_m3": "out_box_m3",
                 },
             },
         }
@@ -347,12 +433,26 @@ def build() -> dict:
     return {
         "title": "Victorian synth voice (1881)",
         "input": "in",
-        "probes": ["out", "line", "loc", "bline", "s1", "f1", "fx", "o1", "ol", "ok"],
+        "probes": [
+            "out",
+            "line",
+            "loc",
+            "bline",
+            "s1",
+            "f1",
+            "fx",
+            "o1",
+            "ol",
+            "ok",
+            "out_m",
+            "out_fs",
+            "bfld",
+        ],
         "full_scale": {
             "input_volts_peak": v(1.0, "design: the voice has no audio input (a load on `in`)"),
             "output_pascals_peak": v(
-                0.003,
-                "derived: a 4-key chord at velocity 90 with a run over it peaks at ~0.0014-0.002 Pa 0.3 m in front of the receiver (scripts/victorian_voice_study.py demo, 2026-11-11), with ~4-6 dB of headroom",
+                0.02,
+                "derived: a 4-key chord at velocity 90 with a run over it peaks at ~0.011 Pa 1 m in front of the cone's cabinet (scripts/victorian_voice_study.py demo, 2026-11-11, the field battery fresh), with ~5 dB of headroom",
             ),
         },
         "controls": controls,
@@ -367,10 +467,12 @@ HEADER = """\
 #
 # The Victorian synth's 1881 voice (docs/VICTORIAN_SYNTH_PLAN.md, V3): Gray's reeds (the
 # reed_keys medium) chopping a line of Leclanche cells through the carbon under each key; the
-# line's induction coil; a saturable reactor on Ewing's soft iron with CUTOFF on its control
-# battery; a carbon relay (a 200 ohm receiver pressing a carbon button) driving Bell's 40 ohm
-# receiver; `out` its sound pressure 0.3 m in front (pascals as volts). Every part existed by
-# 1881; the wiring is ours. "design:" values are the instrument builder's choices.
+# line's induction coil on a ring of soft iron wire; a saturable reactor on Ewing's soft iron
+# with CUTOFF on its control battery; a carbon relay (a 200 ohm receiver pressing a carbon
+# button) driving Siemens' moving coil on a parchment cone, its field an electromagnet on its
+# own battery, in a closed oak cabinet; `out` the sound pressure 1 m in front (pascals as
+# volts). Every material existed by 1881; each value's source says its tier (period / mad
+# scientist). "design:" values are the instrument builder's choices.
 
 """
 

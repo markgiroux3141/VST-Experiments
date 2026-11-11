@@ -277,6 +277,7 @@ class Context:
     tolerance: parts.Tolerance | None
     models: dict[str, DeviceModel] = field(default_factory=dict)  # devices key -> model
     core_models: list[MagneticCore] = field(default_factory=list)
+    macro_models: list[DeviceModel] = field(default_factory=list)  # a speaker's field
     used_devices: set[str] = field(default_factory=set)
     designators: set[str] = field(default_factory=set)
     missing_class: set[str] = field(default_factory=set)
@@ -876,11 +877,22 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
     if series < 1 or series != int(series):
         raise ctx.fail(f"{name}.series", f"{series}: a whole number of drivers, 1 or more")
     series = int(series)
-    # `readout: 0`: only a load (its terminal voltage on `out`), whatever the build.
-    if not ctx.speaker_readout or a["readout"] == 0:
-        return parts.speaker_terminal(name, *conn, model, series)
-    cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
-    return parts.speaker(name, *conn, model, cab, a["distance_m"], series)
+    box = a["box_m3"]
+    if box < 0:
+        raise ctx.fail(f"{name}.box_m3", f"{box}: a closed box's volume, or 0 for none")
+    field = conn[3] if len(conn) > 3 else None
+    if (field is None) != (model.field is None):
+        raise ctx.fail(name, "a field winding needs the fourth node (field), and only then")
+    if field is not None:
+        ctx.macro_models.append(parts.speaker_field_model(name, model))
+    try:
+        # `readout: 0`: only a load (its terminal voltage on `out`), whatever the build.
+        if not ctx.speaker_readout or a["readout"] == 0:
+            return parts.speaker_terminal(name, *conn[:3], model, series, field, box)
+        cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
+        return parts.speaker(name, *conn[:3], model, cab, a["distance_m"], series, field, box)
+    except ValueError as err:
+        raise ctx.fail(name, str(err)) from err
 
 
 def _capsule(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1420,7 +1432,9 @@ for _name, _macro in {
             "offset_y_m": Param("physical", 0.0),
             "readout": Param("number", 1.0),
             "series": Param("number", 1.0),
+            "box_m3": Param("physical", 0.0),
         },
+        optional_nodes=1,
     ),
 }.items():
     register(_name, _macro)
@@ -1774,6 +1788,7 @@ def _build(
         models=(
             *(m for m in ctx.models.values() if m.name not in ctx.replaced_models),
             *ctx.core_models,
+            *ctx.macro_models,
         ),
         sections=tuple(sections),
         controls=(

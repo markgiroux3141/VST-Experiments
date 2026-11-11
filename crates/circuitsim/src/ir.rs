@@ -868,6 +868,7 @@ pub enum DeviceModel {
     Photocell(Photocell),
     Contact(Contact),
     Carbon(Carbon),
+    Gyrator(Gyrator),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -1075,6 +1076,17 @@ pub struct Carbon {
     pub soft_n: f64,
 }
 
+/// `varimu.devices.gyrator.Gyrator`: a gyrator whose conductance follows a sensed
+/// voltage (a moving-coil motor's force factor set by its field current), pins
+/// (a, b, f, ref): i_a = g V(b, ref) into a, i_b = -g V(a, ref) into b, none into f,
+/// g = g_per_v V(f, ref).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Gyrator {
+    pub name: String,
+    pub g_per_v: f64,
+}
+
 /// A BJT's polarity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1203,6 +1215,7 @@ impl DeviceModel {
             DeviceModel::Photocell(m) => &m.name,
             DeviceModel::Contact(m) => &m.name,
             DeviceModel::Carbon(m) => &m.name,
+            DeviceModel::Gyrator(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Jfet(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
@@ -1220,7 +1233,7 @@ impl DeviceModel {
             DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
             DeviceModel::Photocell(_) => &["t", "tb", "s", "ra", "rb"],
             DeviceModel::Contact(_) => &["a", "b", "c", "ref"],
-            DeviceModel::Carbon(_) => &["a", "b", "f", "ref"],
+            DeviceModel::Carbon(_) | DeviceModel::Gyrator(_) => &["a", "b", "f", "ref"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Jfet(_) => &["d", "g", "s"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
@@ -2184,6 +2197,9 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
                 ("soft_n", c.soft_n),
             ]);
             finite(&format!("{name}.exponent"), c.exponent)?;
+        }
+        DeviceModel::Gyrator(g) => {
+            finite(&format!("{name}.g_per_v"), g.g_per_v)?;
         }
         DeviceModel::Photocell(p) => {
             values.extend([

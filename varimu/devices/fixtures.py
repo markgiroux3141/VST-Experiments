@@ -39,6 +39,7 @@ from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.gyrator import Gyrator
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
@@ -87,6 +88,9 @@ _CONTACT_V = (-3.0, -0.5, 0.0, 0.4, 2.0)
 _CONTACT_C = (-1.0, 0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0, 2.0)
 # A carbon button pulled off (negative force), through its softened zero to pressed hard.
 _CARBON_F = (-0.5, -0.02, 0.0, 0.005, 0.02, 0.1, 0.5, 2.0)
+# A gyrator's two ports both ways, its field from reversed through zero to past nominal.
+_GYR_V = (-30.0, -1.0, 0.0, 0.3, 12.0)
+_GYR_F = (-2.0, 0.0, 0.5, 18.6, 40.0)
 # A thyratron from reverse anode volts through the arc's drop to its strike, the grid from
 # deep cutoff past its floating potential, the state from below its range (held) through
 # the pre-breakdown densities and the arc to above its range (never on the range's edges).
@@ -154,6 +158,7 @@ def _models() -> list:
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),
         _JA1986,
+        Gyrator("GYRATOR_FIELD", 0.0537),
     ]
     return [*default, *mismatch, *extra]
 
@@ -198,6 +203,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
     elif isinstance(m, Photocell):
         grid = itertools.product(_PCELL_DT, _PCELL_TB, _OPTO_U, _OPTO_VR)
         ports = [(dt + tb, tb, u, vr) for dt, tb, u, vr in grid]
+        currents = np.array([m.currents(p) for p in ports])
+    elif isinstance(m, Gyrator):
+        grid = itertools.product(_GYR_V, _GYR_V, _GYR_F)
+        ports = [(float(a), float(b), float(c)) for a, b, c in grid]
         currents = np.array([m.currents(p) for p in ports])
     elif isinstance(m, Carbon):
         grid = itertools.product(_CONTACT_V, _CONTACT_V, _CARBON_F)

@@ -5,11 +5,15 @@
 
 Studies (renders at the draft quality, the circuit as the app plays it, JA cores):
 - `demo`: a 4-key chord with a run over it, and the same at CUTOFF 0 / 1 (WAVs, float, peak
-  -1 dBFS each; the sound pressure 0.3 m in front of Bell's receiver);
+  -1 dBFS each; the sound pressure 1 m in front of the parchment cone's cabinet);
 - `velocity`: one key (A3) struck at velocities 10-127: the output's level (dB re the loudest)
   and the line's current (the carbon's law through the key's force);
 - `cutoff`: a held C major chord at CUTOFF 0-1: the output's spectral centroid and level (the
-  reactor's iron biased toward saturation lowers its inductance);
+  reactor's iron biased toward saturation lowers its inductance), and A3's harmonics;
+- `lows`: single notes C1, C2, A2, A3: each one's harmonics re its fundamental, its level and
+  the cone's peak excursion (lows.wav: the four in turn);
+- `field`: a 4-key chord held 60 s from switch-on: the field battery's sag (the field current,
+  the force factor's share, the output's level);
 - `sag`: 1, 4 and 8 keys held for 4 s: the local battery's and the line's volts (the cells'
   ohmic drop and polarization), and the pitch a reed (the reference, varimu/victorian/reed.py)
   runs at on the local battery's sagged volts against the nominal 2.8 V;
@@ -120,8 +124,86 @@ def study_cutoff(summary: dict) -> None:
     for c in (0.0, 0.25, 0.5, 0.75, 1.0):
         r = render(1.0, [(0.05, "on", n, 100) for n in (48, 52, 55, 60)], c)
         seg = r["v(out)"][int(0.5 * FS) : int(0.95 * FS)]
-        rows.append({"cutoff": c, "centroid_hz": centroid(seg), "rms_pa": float(np.std(seg))})
+        a3 = render(1.0, [(0.05, "on", 57, 90)], c)["v(out)"][int(0.5 * FS) : int(0.95 * FS)]
+        rows.append(
+            {
+                "cutoff": c,
+                "centroid_hz": centroid(seg),
+                "rms_pa": float(np.std(seg)),
+                "a3_harmonics_db": harmonics_db(a3, 220.0),
+            }
+        )
     summary["cutoff"] = rows
+
+
+def harmonics_db(x: np.ndarray, f0: float, n: int = 8) -> list[float]:
+    """Harmonics 1..n of a held note (dB re the fundamental), each the largest bin within
+    +-3 bins of k f0 in a Hann-windowed spectrum."""
+    sp = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    fr = np.fft.rfftfreq(len(x), 1 / FS)
+    lv = []
+    for k in range(1, n + 1):
+        i = int(np.argmin(np.abs(fr - k * f0)))
+        lv.append(db(float(sp[max(0, i - 3) : i + 4].max())))
+    return [v - lv[0] for v in lv]
+
+
+def study_lows(summary: dict) -> None:
+    """Single notes from C1 up (velocity 90, CUTOFF at its default): each one's harmonics re
+    its fundamental, its level, and the cone's peak excursion (its coil node is BL0 times the
+    velocity: the component's bl_tm)."""
+    from varimu.devices.library import load_speaker
+
+    spec = load_circuit(circuit_path("victorian_voice"))
+    bl0 = load_speaker(spec.values["out_cone"]["value"]).bl_tm
+    rows, takes = [], []
+    for note in (24, 36, 45, 57):
+        r = render(1.6, [(0.05, "on", note, 90), (1.5, "off", note, 0)])
+        takes.append(r["v(out)"])
+        seg = slice(int(0.5 * FS), int(1.45 * FS))
+        f0 = 440.0 * 2 ** ((note - 69) / 12)
+        h = harmonics_db(r["v(out)"][seg], f0)
+        x = np.cumsum(r["v(out_m)"] / bl0) / FS
+        x -= x[: int(0.05 * FS)].mean()
+        rows.append(
+            {
+                "note": note,
+                "f0_hz": f0,
+                "rms_pa": float(np.std(r["v(out)"][seg])),
+                "harmonics_db_re_fundamental": h,
+                "fundamental_db_re_strongest": -max(h),
+                "peak_excursion_mm": float(np.max(np.abs(x)) * 1e3),
+            }
+        )
+    summary["lows"] = rows
+    wav("lows", np.concatenate(takes))
+
+
+def study_field(summary: dict) -> None:
+    """The field battery's sag: a 4-key chord held 60 s from switch-on (the cells rested):
+    the field current (its winding's drop over its resistance), the force factor's share of
+    nominal and the output's level, at 0.5 s and every 10 s."""
+    from varimu.devices.library import load_speaker
+
+    spec = load_circuit(circuit_path("victorian_voice"))
+    s = load_speaker(spec.values["out_cone"]["value"])
+    assert s.field is not None
+    r = render(61.0, [(0.05, "on", n, 90) for n in CHORD[:4]])
+    rows = []
+    for t in (0.5, 10, 20, 30, 40, 50, 60):
+        seg = slice(int(t * FS) - int(0.25 * FS), int(t * FS) + int(0.25 * FS))
+        i_f = float(np.mean(r["v(out_fs)"][seg])) / s.field.re_ohm
+        rows.append(
+            {
+                "t_s": t,
+                "field_a": i_f,
+                "bl_share": i_f / s.field.i_nominal_a,
+                "out_rms_pa": float(np.std(r["v(out)"][seg])),
+            }
+        )
+    for row in rows:
+        row["out_db_re_start"] = db(row["out_rms_pa"] / rows[0]["out_rms_pa"])
+    summary["field"] = rows
 
 
 def _pitch_at(args: tuple[int, float]) -> float:
@@ -168,7 +250,7 @@ def _breaker(args: tuple[int, int]) -> tuple[int, int, float, list[float]]:
 
 
 def study_breaker(summary: dict) -> None:
-    jobs = [(n, ov) for n in (36, 48, 60, 72, 84) for ov in (8, 64)]
+    jobs = [(n, ov) for n in (24, 36, 48, 60, 72, 84) for ov in (8, 64)]
     with ProcessPoolExecutor(8) as ex:
         res = list(ex.map(_breaker, jobs))
     ref = {n: np.array(h) for n, ov, _, h in res if ov == 64}
@@ -198,6 +280,8 @@ STUDIES = {
     "velocity": study_velocity,
     "cutoff": study_cutoff,
     "sag": study_sag,
+    "lows": study_lows,
+    "field": study_field,
     "demo": study_demo,
 }
 

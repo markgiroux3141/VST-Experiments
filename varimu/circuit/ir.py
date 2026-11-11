@@ -54,6 +54,7 @@ from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.gyrator import Gyrator
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import KorenPentode, Pentode
@@ -778,6 +779,7 @@ DeviceModel = (
     | Photocell
     | Contact
     | Carbon
+    | Gyrator
 )
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -793,6 +795,7 @@ PINS: dict[type, tuple[str, ...]] = {
     jfet_mod.Jfet: ("d", "g", "s"),
     Contact: ("a", "b", "c", "ref"),
     Carbon: ("a", "b", "f", "ref"),
+    Gyrator: ("a", "b", "f", "ref"),
 }
 
 
@@ -1377,6 +1380,8 @@ def _validate_model(m: DeviceModel) -> None:
             ("soft_n", m.soft_n),
         ]
         _finite(f"{m.name}.exponent", m.exponent)
+    elif isinstance(m, Gyrator):
+        _finite(f"{m.name}.g_per_v", m.g_per_v)
     elif isinstance(m, Optocoupler):
         values += [
             (w, getattr(m, w))
@@ -1498,6 +1503,7 @@ _MODEL_KINDS = {
     "photocell": Photocell,
     "contact": Contact,
     "carbon": Carbon,
+    "gyrator": Gyrator,
     "thyratron": Thyratron,
     "bjt": Bjt,
     "jfet": jfet_mod.Jfet,
