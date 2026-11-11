@@ -32,6 +32,9 @@ checks of varimu.measure.generic and the circuit's own).
 - fairchild_670_keyed (compressor with a KEY input, SIDECHAIN_PLAN.md K1):
   varimu.measure.keyed_suite: INT against the stock 670, the duck against the key's
   level, recovery per time constant, thump; keyed by a kick under a bass tone.
+- ampex_300_4 (four-track tape deck, PERIOD_GEAR_BACKLOG.md PG1 MT5):
+  varimu.measure.deck_suite: per channel the 351's response and THD, S/N against AI-14's
+  four-track figure, crosstalk between neighbours against MT3's fitted curve.
 - urei_1176 (FET limiter, B12): varimu.measure.limiter_suite: UA's reissue manual's
   figures: gain, response, maximum output, static curves per ratio, attack and release
   on the GR line, THD while limiting.
@@ -147,11 +150,18 @@ def _run_tape(*args, **kwargs):
     return tape_suite.run(*args, **kwargs)
 
 
+def _run_deck(*args, **kwargs):
+    from varimu.measure import deck_suite
+
+    return deck_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
     "fender_5e3": Profile("fender_5e3", "guitar_amp", _run_amp),
     "ampex_351": Profile("ampex_351", "tape_machine", _run_tape),
+    "ampex_300_4": Profile("ampex_300_4", "tape_machine", _run_deck),
     "telefunken_v76": Profile("telefunken_v76", "mic_preamp", _run_preamp),
     "telefunken_v72": Profile("telefunken_v72", "mic_preamp", _run_v72),
     "ua_610": Profile("ua_610", "mic_preamp", _run_ua610),

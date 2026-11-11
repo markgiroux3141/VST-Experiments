@@ -255,8 +255,9 @@ def run_transient(
     inputs ({name: volts}, each as long as `input_v`): held at their first sample while
     the circuit settles, and linear between samples at every rate (a gate's step stays a
     step, where band-limited resampling would ring); an audio control (`Control.audio`, a
-    stereo unit's right channel) is resampled and interpolated as the input is. `stats`: a dict to fill with the
-    engine's statistics of the run (circuitsim.simulate's). `notes` play the IR's media
+    stereo unit's right channel) is resampled and interpolated as the input is. `stats`: a
+    dict to fill with the engine's statistics of the run (circuitsim.simulate's). `notes`
+    play the IR's media
     played by keys (a harp, docs/RHODES_PLAN.md RH3; a Clavinet's strings, CL3): (seconds
     from the input's start, "on" | "off" | "pedal" | "pressure", MIDI note, velocity, pedal
     0 / 1 or pressure 0-127), in order; each lands on
@@ -338,6 +339,7 @@ def run_transient_chunked(
     fade_s: float = 0.01,
     workers: int = 4,
     progress: Callable[[float], None] | None = None,
+    controls: Mapping[str, np.ndarray] | None = None,
 ) -> TransientResult:
     """`run_transient` in pieces of `chunk_s` seconds run at once on `workers` threads
     (TAPE_SPEED_PLAN.md P3: a long offline print in a fraction of the wall time).
@@ -350,7 +352,10 @@ def run_transient_chunked(
     tape's head distance and its playback EQ's bass. What a piece can't continue is the
     state the warm-up doesn't bring back: a free oscillator's phase (the Ampex 351's bias:
     compare pieces with the whole in band levels, not waveforms), a tape's grain cells
-    (the same coating, cells a flutter's integral apart). No control inputs or notes."""
+    (the same coating, cells a flutter's integral apart). `controls` as `run_transient`'s:
+    each piece takes its stretch, an audio control (`Control.audio`: the Ampex 300-4's
+    `in2` .. `in4`) faded in as the input is, any other as it stands (crates/varimu-app's
+    `render_pieces_controls`, step for step). No notes."""
     s = settings or TransientSettings.from_sim_settings(engine="circuitsim")
     x = np.asarray(input_v, float)
     fs, n = s.sample_rate, len(x)
@@ -360,6 +365,10 @@ def run_transient_chunked(
     tail = round(0.02 * fs)
     if c <= f:
         raise ValueError("run_transient_chunked: chunk_s must exceed fade_s")
+    audio = {ct.name for ct in ir.controls if ct.audio}
+    ctl = {k: np.asarray(v, float) for k, v in (controls or {}).items()}
+    if any(len(v) != n for v in ctl.values()):
+        raise ValueError("run_transient_chunked: every control as long as the input")
     starts = list(range(0, n, c))
     done = np.zeros(len(starts))
     lock = threading.Lock()
@@ -368,9 +377,15 @@ def run_transient_chunked(
         s0 = starts[j]
         a, b = max(0, s0 - w), min(n, s0 + c + f + tail)
         keep = min(n, s0 + c + f) - a
+        fade = 0.5 - 0.5 * np.cos(np.pi * np.arange(ramp) / ramp) if a > 0 and ramp else None
         u = x[a:b].copy()
-        if a > 0 and ramp:
-            u[:ramp] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(ramp) / ramp)
+        if fade is not None:
+            u[:ramp] *= fade
+        cu = {}
+        for k, v in ctl.items():
+            cu[k] = v[a:b].copy()
+            if fade is not None and k in audio:
+                cu[k][:ramp] *= fade
 
         def prog(frac: float) -> None:
             if progress is not None:
@@ -379,7 +394,7 @@ def run_transient_chunked(
                     progress(float(done.sum()) / sum(min(n, q + c + f + tail) - max(0, q - w)
                                                      for q in starts))  # fmt: skip
 
-        r = run_transient(ir, u, settings=s, progress=prog, origin_s=a / fs)
+        r = run_transient(ir, u, settings=s, progress=prog, origin_s=a / fs, controls=cu or None)
         return a, s0, {k: v[s0 - a : keep] for k, v in r.vectors.items()}, r.wall_s
 
     t0 = time.perf_counter()

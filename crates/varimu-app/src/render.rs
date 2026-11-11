@@ -100,12 +100,41 @@ type PieceProbes = Vec<(String, Vec<f64>)>;
 /// transport and grain continue the whole run's), joined by crossfades: Python's
 /// `fast.run_transient_chunked`, step for step. What a piece can't continue is what its
 /// warm-up doesn't bring back (a free oscillator's phase, a tape's grain cells). One
-/// piece is a plain [`render`]. No control inputs.
+/// piece is a plain [`render`].
 #[allow(clippy::too_many_arguments)]
 pub fn render_pieces(
     circuit: &Circuit,
     values: &Values,
     samples: &[f64],
+    s: &Settings,
+    p: Pieces,
+    workers: usize,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<Rendered, String> {
+    render_pieces_controls(
+        circuit,
+        values,
+        samples,
+        &[],
+        s,
+        p,
+        workers,
+        progress,
+        cancel,
+    )
+}
+
+/// [`render_pieces`] with the circuit's control inputs driven (as [`render_controls`]): each
+/// piece takes its stretch of every control; an audio control (the Ampex 300-4's `in2` ..
+/// `in4`, a stereo unit's right channel) is faded in as the input is, any other (a gate, a
+/// knob's track) starts as it stands. One piece is a plain [`render_controls`].
+#[allow(clippy::too_many_arguments)]
+pub fn render_pieces_controls(
+    circuit: &Circuit,
+    values: &Values,
+    samples: &[f64],
+    controls: &[(&str, &[f64])],
     s: &Settings,
     p: Pieces,
     workers: usize,
@@ -120,8 +149,14 @@ pub fn render_pieces(
         return Err("render_pieces: chunk_s must exceed fade_s".into());
     }
     if n <= c {
-        return render(circuit, values, samples, s, progress, cancel);
+        return render_controls(circuit, values, samples, controls, s, progress, cancel);
     }
+    let ir = circuit.build(values)?;
+    let audio: Vec<bool> = controls
+        .iter()
+        .map(|(name, _)| ir.controls.iter().any(|c| c.name == *name && c.audio))
+        .collect();
+    drop(ir);
     let t0 = std::time::Instant::now();
     let ramp = (w / 2).min((0.05 * fs).round_ties_even() as usize);
     // Past what a piece keeps, so the resampling filters' edges fall outside it.
@@ -143,19 +178,38 @@ pub fn render_pieces(
         let s0 = starts[j];
         let (a, b) = span(s0);
         let keep = n.min(s0 + c + f) - a;
-        let mut u = samples[a..b].to_vec();
-        if a > 0 && ramp > 0 {
-            for (i, x) in u.iter_mut().take(ramp).enumerate() {
-                *x *= 0.5 - 0.5 * (std::f64::consts::PI * i as f64 / ramp as f64).cos();
+        let fade_in = |u: &mut [f64]| {
+            if a > 0 && ramp > 0 {
+                for (i, x) in u.iter_mut().take(ramp).enumerate() {
+                    *x *= 0.5 - 0.5 * (std::f64::consts::PI * i as f64 / ramp as f64).cos();
+                }
             }
-        }
+        };
+        let mut u = samples[a..b].to_vec();
+        fade_in(&mut u);
+        let ctl: Vec<Vec<f64>> = controls
+            .iter()
+            .zip(&audio)
+            .map(|((_, x), &aud)| {
+                let mut v = x[a.min(x.len())..b.min(x.len())].to_vec();
+                if aud {
+                    fade_in(&mut v);
+                }
+                v
+            })
+            .collect();
+        let ctl: Vec<(&str, &[f64])> = controls
+            .iter()
+            .zip(&ctl)
+            .map(|((name, _), v)| (*name, v.as_slice()))
+            .collect();
         let origin = (a as f64 / fs * s.sim_rate() as f64).round_ties_even() as u64;
         let len = (b - a) as f64;
         let r = render_at(
             circuit,
             values,
             &u,
-            &[],
+            &ctl,
             s,
             origin,
             |x| done[j].store((x * len).to_bits(), Ordering::Relaxed),
@@ -489,5 +543,46 @@ mod tests {
         let one = render_pieces(&p.circuit, &Vec::new(), &x, s, long, 3, |_| {}, &no).unwrap();
         assert_eq!(one.out, whole.out);
         eprintln!("pieces vs whole: {db:.1} dB re signal");
+    }
+
+    #[test]
+    fn pieces_carry_an_audio_control() {
+        let p = Prepared::load(&config(), "audio_input_test", Quality::Draft1x, false).unwrap();
+        let s = &p.settings;
+        let fs = s.sample_rate as f64;
+        let n = (3.3 * fs) as usize;
+        let sine = |f: f64, a: f64| -> Vec<f64> {
+            (0..n)
+                .map(|i| a * (2.0 * std::f64::consts::PI * f * i as f64 / fs).sin())
+                .collect()
+        };
+        let (x, x2) = (sine(440.0, 0.3), sine(1000.0, 0.02));
+        let ctl = [("in2", x2.as_slice())];
+        let no = AtomicBool::new(false);
+        let whole = render_controls(&p.circuit, &Vec::new(), &x, &ctl, s, |_| {}, &no).unwrap();
+        let cut = Pieces {
+            chunk_s: 1.0,
+            warmup_s: 0.5,
+            fade_s: 0.01,
+        };
+        let pieces =
+            render_pieces_controls(&p.circuit, &Vec::new(), &x, &ctl, s, cut, 3, |_| {}, &no)
+                .unwrap();
+        let rms = |v: &[f64]| (v.iter().map(|a| a * a).sum::<f64>() / v.len() as f64).sqrt();
+        let probe = |r: &Rendered| {
+            r.probes
+                .iter()
+                .find(|(k, _)| k == "v(out_2)")
+                .unwrap()
+                .1
+                .clone()
+        };
+        let (a, b) = (probe(&whole), probe(&pieces));
+        assert_eq!(a.len(), b.len());
+        assert!(rms(&a) > 0.1, "the audio control drives out_2: {}", rms(&a));
+        let diff: Vec<f64> = a.iter().zip(&b).map(|(u, v)| u - v).collect();
+        let db = 20.0 * (rms(&diff) / rms(&a)).log10();
+        assert!(db < -80.0, "out_2 in pieces vs whole {db:.1} dB re signal");
+        eprintln!("out_2 in pieces vs whole: {db:.1} dB re signal");
     }
 }

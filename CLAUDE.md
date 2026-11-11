@@ -877,7 +877,13 @@ oscillator, one island, four tapes on SCOTCH202@1, record heads coupled), aligne
 `scripts/align_300_4.py` and trimmed by `scripts/ampex_300_4_trim.py --coupling --bias --write`;
 prints at 122x real time (the 351 27x; `scripts/ampex_300_4_speed.py`); on 202 RECORD LEVEL runs out 0.54 dB short of operating level (a print's drive takes it); each BIAS ADJUST ~46.6 pF on the deck (one channel 36.7). Tests `tests/test_multitrack.py`,
 `tests/test_multirate_controls.py`, `tests/test_ampex_300_4.py`; `scripts/multitrack_engine_study.py`.
-Next: MT6 (the session's tape print of four stems). PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
+**Third session (2026-11-10, the doc's "Built in the third session"):** the deck's profile `varimu unit --circuit
+ampex_300_4` (`varimu/measure/deck_suite.py`: every spec passes; channel 1, the master's, ~1.2 dB dirtier); pieces with
+control inputs (`render::render_pieces_controls`, `fast.run_transient_chunked(controls=)`); MT6's deck as a session
+property (`varimu_app::deck`: `Session::deck`, `Track::tape` plays in place of the lane, inserts print the tape; the
+Session view's Tape deck window; `examples/tape_print.rs`); the user's assignment 1 bass, 2 guitar, 3 lead, 4 harmonies.
+**Parked by the user:** the song's print takes ~3 hours (stopped at 26 %); options in the doc (four islands, a reduced deck
+tier, overnight). PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
 the Langevin EQ-251A. A mix from scratch starts from `stems/Did she mention my name/full/` (the user's call).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks

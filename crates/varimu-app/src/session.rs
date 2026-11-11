@@ -77,6 +77,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
+use crate::deck::{Deck, DeckInput, DeckPrint};
 use crate::performance::Performance;
 use crate::print::{Slot, key_control};
 use crate::settings::Quality;
@@ -1273,6 +1274,23 @@ pub struct Track {
     pub midi: bool,
     /// The lane's sum, made once per arrangement (shared by clones: keyed by signature).
     lane_cache: Arc<std::sync::Mutex<Option<LaneSum>>>,
+    /// Its tape track's playback when the session's deck has printed it (not saved: set by
+    /// [`Session::attach_tape`] from the deck's print, found again in the cache).
+    pub tape: Option<TapePlay>,
+}
+
+/// A track's tape track as the session's deck printed it (docs/PERIOD_GEAR_BACKLOG.md MT6,
+/// `crate::deck`): it plays in place of the lane while the lane is the one recorded.
+#[derive(Debug, Clone)]
+pub struct TapePlay {
+    /// The deck print's key.
+    pub key: String,
+    /// The lane it recorded ([`Track::lane_signature`]).
+    pub lane: String,
+    /// Where the tape starts on the timeline.
+    pub start: i64,
+    /// The tape track's playback (mono, the lane's level).
+    pub audio: Arc<Vec<f32>>,
 }
 
 impl Track {
@@ -1294,6 +1312,7 @@ impl Track {
             monitor: Monitor::Device,
             midi: true,
             lane_cache: Arc::new(std::sync::Mutex::new(None)),
+            tape: None,
         }
     }
 
@@ -1467,14 +1486,35 @@ impl Track {
 
     /// The lane summed (before the strip; a stereo lane's left), from its first sound: a
     /// lone clip playing its whole take plainly is the take's own audio (so a print of it
-    /// keeps its key).
+    /// keeps its key). A track on the session's deck plays its tape track instead
+    /// ([`Track::tape_playing`]).
     pub fn lane(&self) -> Option<(i64, Arc<Vec<f32>>)> {
         self.lane_lr().map(|(s, a, _)| (s, a))
     }
 
+    /// Its tape track's playback, while it was printed from the lane as it is (an edited
+    /// lane plays raw until the deck prints again).
+    pub fn tape_playing(&self) -> Option<&TapePlay> {
+        self.tape
+            .as_ref()
+            .filter(|t| t.lane == self.lane_signature())
+    }
+
+    /// What its chain starts from: the lane, or its tape track's print of the lane (for
+    /// prints: a tape print re-keys the inserts after it).
+    pub fn source_signature(&self) -> String {
+        match self.tape_playing() {
+            Some(t) => format!("tape {}|{}", t.key, self.lane_signature()),
+            None => self.lane_signature(),
+        }
+    }
+
     /// Whether its lane is stereo: a clip of a stereo sound plays in it (its mono clips then
-    /// play on both sides; docs/STEREO_PLAN.md ST2).
+    /// play on both sides; docs/STEREO_PLAN.md ST2); a tape track is mono.
     pub fn is_stereo(&self) -> bool {
+        if self.tape_playing().is_some() {
+            return false;
+        }
         self.clips
             .iter()
             .filter(|c| !c.muted && c.len > 0)
@@ -1484,6 +1524,15 @@ impl Track {
 
     /// [`Track::lane`] with a stereo lane's right channel.
     pub fn lane_lr(&self) -> Option<Placed> {
+        if let Some(t) = self.tape_playing() {
+            return Some((t.start, t.audio.clone(), None));
+        }
+        self.clips_lr()
+    }
+
+    /// The lane's clips summed, as [`Track::lane_lr`] but never its tape (what the deck
+    /// records).
+    pub fn clips_lr(&self) -> Option<Placed> {
         let pieces = self.pieces();
         let start = pieces.iter().map(|p| p.start).min()?;
         let end = pieces.iter().map(|p| p.start + p.len as i64).max()?;
@@ -1545,8 +1594,11 @@ impl Track {
             .collect()
     }
 
-    /// Where its lane starts and ends (none: no clip sounds).
+    /// Where its lane starts and ends (none: no clip sounds); its tape track's, when it plays.
     pub fn lane_span(&self) -> Option<(i64, i64)> {
+        if let Some(t) = self.tape_playing() {
+            return Some((t.start, t.start + t.audio.len() as i64));
+        }
         let pieces = self.pieces();
         Some((
             pieces.iter().map(|p| p.start).min()?,
@@ -1564,14 +1616,14 @@ impl Track {
             .filter(|s| !s.bypass)
             .map(Slot::to_json)
             .collect();
-        (!on.is_empty()).then(|| format!("{}|{rate}|{}", self.lane_signature(), Value::Array(on)))
+        (!on.is_empty()).then(|| format!("{}|{rate}|{}", self.source_signature(), Value::Array(on)))
     }
 
     /// The print that plays: of the lane as it is (current, or of older inserts: stale)
     /// while there's a chain to print.
     fn print_playing(&self, rate: u32) -> Option<&Printed> {
         self.chain_signature(rate)?;
-        let lane = self.lane_signature();
+        let lane = self.source_signature();
         self.printed.as_ref().filter(|p| p.lane == lane)
     }
 
@@ -1589,14 +1641,21 @@ impl Track {
         self.lane_lr().map(|l| (l, false))
     }
 
-    /// What the mix plays of it, as track `index`: its print through its strip, else each
-    /// piece of its lane (its stretch, offset, the clip's gain and fades; SE5).
+    /// What the mix plays of it, as track `index`: its print through its strip, else its
+    /// tape track, else each piece of its lane (its stretch, offset, the clip's gain and
+    /// fades; SE5).
     pub fn mix_clips(&self, rate: u32, index: usize) -> Vec<MixClip> {
         if let Some(p) = self.print_playing(rate) {
             return vec![MixClip {
                 track: index,
                 right: p.right.clone(),
                 ..MixClip::whole(p.start, p.audio.clone(), self.gains())
+            }];
+        }
+        if let Some(t) = self.tape_playing() {
+            return vec![MixClip {
+                track: index,
+                ..MixClip::whole(t.start, t.audio.clone(), self.gains())
             }];
         }
         self.piece_clips(&self.pieces(), self.gains(), index)
@@ -2045,6 +2104,11 @@ pub struct Session {
     pub master_inserts: Vec<Slot>,
     /// The master chain's latest print (not saved: found again in the cache).
     pub master_printed: Option<Printed>,
+    /// The multitrack tape deck its tracks are recorded on (docs/PERIOD_GEAR_BACKLOG.md MT6;
+    /// `crate::deck`), if it has one.
+    pub deck: Option<Deck>,
+    /// The deck's latest print (not saved: found again in the cache).
+    pub deck_printed: Option<DeckPrint>,
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
@@ -2065,6 +2129,8 @@ impl Session {
             master_db: 0.0,
             master_inserts: Vec::new(),
             master_printed: None,
+            deck: None,
+            deck_printed: None,
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
@@ -2298,7 +2364,7 @@ impl Session {
             }
             let plays = match t.print_playing(self.rate) {
                 Some(p) => format!("print {}@{}", p.signature, p.start),
-                None => format!("lane {}@{}", t.lane_signature(), t.lane_span().unwrap().0),
+                None => format!("lane {}@{}", t.source_signature(), t.lane_span().unwrap().0),
             };
             s.push_str(&format!("{}:{plays}:{}:{};", t.id, t.volume_db, t.pan));
         }
@@ -2358,6 +2424,80 @@ impl Session {
     }
 
     /// The track whose id is `id`.
+    /// Each track's tape playback from the deck's print (every other track none): the
+    /// assigned tracks the print recorded (docs/PERIOD_GEAR_BACKLOG.md MT6).
+    pub fn attach_tape(&mut self) {
+        for t in &mut self.tracks {
+            t.tape = None;
+        }
+        let (Some(deck), Some(p)) = (&self.deck, &self.deck_printed) else {
+            return;
+        };
+        for k in 0..crate::deck::TRACKS {
+            let (Some(id), Some(lane), Some(audio)) = (&deck.tracks[k], &p.lanes[k], &p.tape[k])
+            else {
+                continue;
+            };
+            if let Some(t) = self.tracks.iter_mut().find(|t| &t.id == id) {
+                t.tape = Some(TapePlay {
+                    key: p.key.clone(),
+                    lane: lane.clone(),
+                    start: p.start,
+                    audio: audio.clone(),
+                });
+            }
+        }
+    }
+
+    /// The deck's print taken in: the assigned tracks play their tape tracks.
+    pub fn set_deck_print(&mut self, p: DeckPrint) {
+        self.deck_printed = Some(p);
+        self.attach_tape();
+    }
+
+    /// What the deck records: each assigned track's lane (its clips, never a tape), placed
+    /// (`crate::deck::place`). None without a deck or a sounding assigned lane.
+    pub fn deck_input(&self) -> Option<DeckInput> {
+        let deck = self.deck.as_ref()?;
+        let lanes: Vec<Option<(String, Placed)>> = deck
+            .tracks
+            .iter()
+            .map(|id| {
+                let t = self.tracks.iter().find(|t| Some(&t.id) == id.as_ref())?;
+                Some((t.lane_signature(), t.clips_lr()?))
+            })
+            .collect();
+        crate::deck::place(std::array::from_fn(|k| {
+            lanes[k].as_ref().map(|(sig, (at, l, r))| {
+                (
+                    sig.clone(),
+                    *at,
+                    l.as_slice(),
+                    r.as_deref().map(|r| r.as_slice()),
+                )
+            })
+        }))
+    }
+
+    /// What a deck print of the session as it is would be made from (None: no deck).
+    pub fn deck_signature(&self) -> Option<String> {
+        let deck = self.deck.as_ref()?;
+        Some(crate::deck::signature(
+            deck,
+            self.deck_input().as_ref(),
+            self.rate,
+        ))
+    }
+
+    /// Whether the deck's print is of the deck and lanes as they are.
+    pub fn deck_current(&self) -> bool {
+        match (self.deck_signature(), &self.deck_printed) {
+            (None, _) => true,
+            (Some(s), Some(p)) => p.signature == s,
+            (Some(_), None) => false,
+        }
+    }
+
     pub fn track_index(&self, id: &str) -> Option<usize> {
         self.tracks.iter().position(|t| t.id == id)
     }
@@ -2488,7 +2628,7 @@ impl Session {
             None => "silence".to_string(),
             Some((start, _)) => format!(
                 "{}@{start}[{}]",
-                t.lane_signature(),
+                t.source_signature(),
                 self.signature_of(i, seen).unwrap_or_default()
             ),
         }
@@ -3114,7 +3254,7 @@ impl Session {
                 })
             })
             .collect();
-        json!({
+        let mut v = json!({
             "version": 2,
             "rate": self.rate,
             "transport": transport_json(&self.transport),
@@ -3128,7 +3268,12 @@ impl Session {
                 .iter()
                 .map(|m| json!([m.position, m.name]))
                 .collect::<Vec<_>>(),
-        })
+        });
+        // Only a session with a deck says so (the others' files are as they were).
+        if let Some(d) = &self.deck {
+            v["deck"] = d.to_json();
+        }
+        v
     }
 
     /// Back to a state from [`Session::state`] (its takes from memory, else from their
@@ -3238,6 +3383,10 @@ impl Session {
             })
             .unwrap_or_default();
         self.markers.sort_by_key(|m| m.position);
+        self.deck = match &v["deck"] {
+            Value::Null => None,
+            d => Some(Deck::from_json(d)?),
+        };
         // Prints carry over to the restored tracks: the one made from the same chain on the
         // same lane, else any print of that lane (stale until it is printed again).
         let prints: Vec<Printed> = self
@@ -3246,10 +3395,11 @@ impl Session {
             .filter_map(|t| t.printed.clone())
             .collect();
         self.tracks = tracks;
+        self.attach_tape();
         for i in 0..self.tracks.len() {
             let sig = self.chain_signature(i);
             let t = &mut self.tracks[i];
-            let lane = t.lane_signature();
+            let lane = t.source_signature();
             let same = prints.iter().find(|p| Some(&p.signature) == sig.as_ref());
             t.printed = same
                 .or_else(|| prints.iter().find(|p| p.lane == lane))
@@ -3292,6 +3442,8 @@ impl Session {
             master_db: 0.0,
             master_inserts: Vec::new(),
             master_printed: None,
+            deck: None,
+            deck_printed: None,
             known: HashMap::new(),
             revisions: HashMap::new(),
         };
@@ -4700,6 +4852,82 @@ mod tests {
         assert_eq!(u.master_inserts.len(), 1);
         assert_eq!(u.master_inserts[0].device, "ampex_351_insert");
         assert_eq!(u.master_inserts[0].makeup_db, 1.5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tape_deck_print_plays_in_place_of_its_lanes() {
+        let dir = std::env::temp_dir().join(format!("varimu_deck_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        s.tracks.push(Track::new("Track 2"));
+        let rec = |v: f32, start: i64| Recorded {
+            start,
+            latency: 0,
+            samples: vec![v; 100],
+            right: Some(vec![-v; 100]),
+            performance: None,
+        };
+        s.add_take(0, rec(0.1, 10), "x").expect("saved");
+        s.add_take(1, rec(0.3, 30), "x").expect("saved");
+        assert!(s.deck_input().is_none() && s.deck_current());
+        let mut deck = Deck::default();
+        deck.tracks[0] = Some(s.tracks[1].id.clone());
+        deck.tracks[1] = Some(s.tracks[0].id.clone());
+        s.deck = Some(deck);
+        // The deck records each lane's mid (0 here: L = -R) from the earliest start.
+        let input = s.deck_input().expect("lanes");
+        assert_eq!(input.start, 10);
+        assert_eq!(input.lanes[1].as_ref().unwrap().1.len(), 100);
+        assert_eq!(input.lanes[0].as_ref().unwrap().1.len(), 120);
+        assert!(input.lanes[2].is_none() && !s.deck_current());
+        let sig = s.deck_signature().unwrap();
+        let tape = |v: f32| Some(Arc::new(vec![v; 130]));
+        s.set_deck_print(DeckPrint {
+            key: "k".into(),
+            signature: sig,
+            lanes: std::array::from_fn(|k| input.lanes[k].as_ref().map(|l| l.0.clone())),
+            start: input.start,
+            tape: [tape(0.5), tape(0.25), None, None],
+            sync: Default::default(),
+            cached: false,
+            realtime_factor: 0.0,
+        });
+        assert!(s.deck_current());
+        // Each track plays its tape track (mono), from the deck's start.
+        assert!(!s.tracks[0].is_stereo());
+        let mut out = vec![[0.0f32; 2]; 200];
+        s.mix().add(0, &mut out);
+        assert_eq!(out[15][0], 0.25 + 0.5);
+        assert_eq!((out[135][0], out[145][0]), (0.75, 0.0));
+        let tape_sig = s.tracks[0].source_signature();
+        assert_ne!(tape_sig, s.tracks[0].lane_signature());
+        // An insert prints the tape: its chain is keyed on it.
+        s.tracks[0].inserts.push(Slot::new("pultec_eqp1a"));
+        assert!(
+            s.tracks[0]
+                .chain_signature(1000)
+                .unwrap()
+                .starts_with("tape k|")
+        );
+        s.tracks[0].inserts.clear();
+        // Saved and loaded: the deck comes back (its print is found again in the cache);
+        // undone: the tape still plays.
+        s.save().expect("saved");
+        let state = s.state();
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!(u.deck, s.deck);
+        assert!(u.tracks[0].tape.is_none());
+        s.restore(&state).expect("restored");
+        assert_eq!(s.tracks[0].source_signature(), tape_sig);
+        // An edited lane plays raw until the deck prints again.
+        s.tracks[0].clips[0].gain_db = -6.0;
+        assert!(s.tracks[0].tape_playing().is_none() && s.tracks[0].is_stereo());
+        assert!(s.tracks[1].tape_playing().is_some() && !s.deck_current());
+        // Without the deck the lanes play.
+        s.deck = None;
+        s.attach_tape();
+        assert!(s.tracks[1].tape.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

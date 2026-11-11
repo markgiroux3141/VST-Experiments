@@ -32,6 +32,7 @@
 pub mod audio;
 pub mod clav_proxy;
 pub mod components;
+pub mod deck;
 pub mod edit;
 pub mod editor;
 pub mod live;

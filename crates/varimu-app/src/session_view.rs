@@ -132,6 +132,7 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
 use varimu_app::audio;
+use varimu_app::deck::{self, Deck, DeckJob};
 use varimu_app::live::{Circuit, Values};
 use varimu_app::loop_render::{self, Excerpt, Rendered};
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
@@ -139,7 +140,7 @@ use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
 use varimu_app::performance::Performance;
 use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey, input_devices};
 use varimu_app::prefs::ALIGNMENT_DBFS;
-use varimu_app::print::{Job, KeyRoute, Slot, find_device};
+use varimu_app::print::{Job, KeyRoute, NOT_PRINTED, Slot, find_device};
 use varimu_app::session::{
     Clip, Marker, Mix, MixClip, Monitor, NO_TRACK, OVERVIEW_BIN, Overview, Placed, Printed,
     Session, Take, Track, default_fade, new_clip_id, take_dir,
@@ -467,6 +468,13 @@ pub struct SessionView {
     varispeed_st: f64,
     xfade_ms: f64,
     bounce_mute: bool,
+    /// The tape deck's window shown (docs/PERIOD_GEAR_BACKLOG.md MT6).
+    deck_open: bool,
+    /// The deck's print (or its lookup in the cache) running.
+    deck_job: Option<DeckJob>,
+    /// Deck signatures already looked up in the cache, and why the last print failed.
+    deck_looked_up: HashSet<String>,
+    deck_error: Option<String>,
     edit_note: Option<String>,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
@@ -778,6 +786,10 @@ impl SessionView {
             varispeed_st: 0.0,
             xfade_ms: 10.0,
             bounce_mute: false,
+            deck_open: false,
+            deck_job: None,
+            deck_looked_up: HashSet::new(),
+            deck_error: None,
             edit_note: None,
             stopped_at: None,
             lanes_w: 800.0,
@@ -998,6 +1010,7 @@ impl SessionView {
         self.poll_recording(play);
         let armed = play.player().is_some_and(|p| p.take_armed());
         self.poll_prints(ui.ctx(), armed);
+        self.poll_deck(ui.ctx());
         let live = play.player().is_some() && !play.adopted();
         self.poll_take_renders(ui.ctx(), armed, live);
         self.keys(ui, play);
@@ -1082,6 +1095,16 @@ impl SessionView {
                     self.arrangement(ui, play);
                 }
             });
+        if self.deck_open {
+            let mut open = true;
+            egui::Window::new("Tape deck")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_pos(ui.max_rect().center() - egui::vec2(220.0, 160.0))
+                .show(ui.ctx(), |ui| self.deck_window(ui));
+            self.deck_open = open;
+        }
         if self.show_keys {
             let mut open = true;
             egui::Window::new("Keys")
@@ -1588,6 +1611,11 @@ impl SessionView {
         self.export_note = None;
         self.render_queue.clear();
         self.loop_render = None;
+        if let Some(j) = self.deck_job.take() {
+            j.cancel();
+        }
+        self.deck_looked_up.clear();
+        self.deck_error = None;
         self.record_pending = false;
         self.recording = None;
         // What pointed into it: selections, menus, panels, the roll.
@@ -1748,7 +1776,7 @@ impl SessionView {
     fn audition_input(&self, t: usize, k: usize) -> Option<(Arc<Vec<f32>>, i64, String)> {
         let track = self.session.tracks.get(t)?;
         let (start, lane, lane_r) = track.lane_lr()?;
-        let sig = track.lane_signature();
+        let sig = track.source_signature();
         let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
         let printed = track
             .printed
@@ -1803,7 +1831,7 @@ impl SessionView {
     fn insert_input_lr(&self, t: usize, k: usize) -> Option<Placed> {
         let track = self.session.tracks.get(t)?;
         let (start, lane, lane_r) = track.lane_lr()?;
-        let sig = track.lane_signature();
+        let sig = track.source_signature();
         let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
         let printed = track
             .printed
@@ -1902,7 +1930,7 @@ impl SessionView {
                     self.insert_input_lr(t, k),
                     format!(
                         "{}|{}",
-                        self.session.tracks[t].lane_signature(),
+                        self.session.tracks[t].source_signature(),
                         self.session.key_signature(t, &slot)
                     ),
                 )
@@ -2507,7 +2535,7 @@ impl SessionView {
                         Some(cache.clone()),
                     )
                 };
-                let (id, lane) = (t.id.clone(), t.lane_signature());
+                let (id, lane) = (t.id.clone(), t.source_signature());
                 if lookup {
                     self.looked_up.insert(sig.clone());
                 } else {
@@ -2534,6 +2562,209 @@ impl SessionView {
     /// The master chain's print: looked up in the cache when it isn't current, made when
     /// asked for once every audible track's print is current (the tracks' prints are asked
     /// for with it).
+    /// The deck's print: a finished one taken in (the assigned tracks play their tape
+    /// tracks); while none is current, the cache looked up once per signature (nothing is
+    /// printed until asked: SE1).
+    fn poll_deck(&mut self, ctx: &egui::Context) {
+        if let Some(j) = &self.deck_job {
+            if !j.is_finished() {
+                ctx.request_repaint_after(Duration::from_millis(250));
+                return;
+            }
+            match j.join() {
+                Some(Ok(p)) => {
+                    self.session.set_deck_print(p);
+                    self.deck_error = None;
+                }
+                Some(Err(e)) if e == NOT_PRINTED => {}
+                Some(Err(e)) => self.deck_error = Some(e),
+                None => {}
+            }
+            self.deck_job = None;
+        }
+        if self.session.deck_current() {
+            return;
+        }
+        let (Some(sig), Some(deck), Some(input)) = (
+            self.session.deck_signature(),
+            self.session.deck.clone(),
+            self.session.deck_input(),
+        ) else {
+            return;
+        };
+        if !self.deck_looked_up.insert(sig) {
+            return;
+        }
+        self.deck_job = Some(DeckJob::spawn(
+            &self.root.join("config"),
+            deck,
+            input,
+            self.session.rate,
+            Some(self.session.dir.join("prints")),
+            false,
+        ));
+    }
+
+    /// The tape deck's window: its tape tracks' assignment and record trims, its noise, the
+    /// print and where it stands.
+    fn deck_window(&mut self, ui: &mut egui::Ui) {
+        let idle = self.recording.is_none();
+        let Some(mut deck) = self.session.deck.clone() else {
+            ui.label(
+                RichText::new(
+                    "No tape deck. An Ampex 300-4 records up to four tracks on one 1/2 in \
+                     tape: one transport, neighbouring tracks crosstalk, each track's own hiss.",
+                )
+                .small()
+                .color(theme::MUTED),
+            );
+            if ui
+                .add_enabled(idle, egui::Button::new("Add an Ampex 300-4"))
+                .clicked()
+            {
+                self.session.deck = Some(Deck::default());
+                self.save();
+            }
+            return;
+        };
+        let names: Vec<(String, String)> = self
+            .session
+            .tracks
+            .iter()
+            .map(|t| (t.id.clone(), t.name.clone()))
+            .collect();
+        let rate = self.session.rate;
+        egui::Grid::new("deck_tracks")
+            .num_columns(3)
+            .show(ui, |ui| {
+                for k in 0..deck::TRACKS {
+                    let edge = if k == 0 || k == deck::TRACKS - 1 {
+                        "edge"
+                    } else {
+                        "inner"
+                    };
+                    ui.label(RichText::new(format!("Tape track {} ({edge})", k + 1)).small());
+                    let shown = deck.tracks[k]
+                        .as_ref()
+                        .and_then(|id| names.iter().find(|(i, _)| i == id))
+                        .map_or("none".to_string(), |(_, n)| n.clone());
+                    let before = deck.tracks[k].clone();
+                    egui::ComboBox::from_id_salt(("deck_track", k))
+                        .selected_text(shown)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut deck.tracks[k], None, "none");
+                            for (id, name) in &names {
+                                ui.selectable_value(&mut deck.tracks[k], Some(id.clone()), name);
+                            }
+                        });
+                    if deck.tracks[k] != before {
+                        // One tape track per session track: taken off any other.
+                        if let Some(id) = deck.tracks[k].clone() {
+                            for (j, t) in deck.tracks.iter_mut().enumerate() {
+                                if j != k && t.as_ref() == Some(&id) {
+                                    *t = None;
+                                }
+                            }
+                        }
+                        // Its record trim, set once from the lane (as an insert's first trim).
+                        deck.trims_db[k] = deck.tracks[k]
+                            .as_ref()
+                            .and_then(|id| self.session.tracks.iter().find(|t| &t.id == id))
+                            .and_then(|t| t.clips_lr())
+                            .map_or(0.0, |(_, l, r)| {
+                                let m: Vec<f32> = match r {
+                                    Some(r) => {
+                                        l.iter().zip(r.iter()).map(|(a, b)| 0.5 * (a + b)).collect()
+                                    }
+                                    None => l.to_vec(),
+                                };
+                                deck::trim_for(&m, rate)
+                            });
+                    }
+                    ui.add(
+                        egui::DragValue::new(&mut deck.trims_db[k])
+                            .range(-40.0..=40.0)
+                            .speed(0.1)
+                            .suffix(" dB"),
+                    )
+                    .on_hover_text(
+                        "The record trim: the fader in front of the channel (set from the lane's \
+                     loudest 8 s to 0 VU, +0.5 dB for 202's operating level); the playback \
+                     comes back at the lane's level",
+                    );
+                    ui.end_row();
+                }
+            });
+        ui.checkbox(&mut deck.noise, "Noise (the tape's hiss, the tubes')");
+        if Some(&deck) != self.session.deck.as_ref() {
+            self.session.deck = Some(deck);
+            self.save();
+        }
+        ui.separator();
+        let input = self.session.deck_input();
+        let status = match (&self.deck_job, &self.session.deck_printed) {
+            (Some(j), _) if self.session.deck_signature().as_deref() == Some(&j.signature) => {
+                format!("printing… {:.0} %", 100.0 * j.progress())
+            }
+            _ if input.is_none() => "no assigned track has a sound".into(),
+            (_, Some(p)) if self.session.deck_current() => format!(
+                "printed: the assigned tracks play their tape tracks{}",
+                if p.realtime_factor > 0.0 {
+                    format!(" ({:.0}x real time)", p.realtime_factor)
+                } else {
+                    String::new()
+                }
+            ),
+            (_, Some(_)) => "printed for other settings or lanes: print again".into(),
+            (_, None) => "not printed".into(),
+        };
+        ui.label(RichText::new(status).small().color(theme::MUTED));
+        if let Some(e) = &self.deck_error {
+            ui.label(RichText::new(e).small().color(theme::FAULT));
+        }
+        let printing = self.deck_job.is_some();
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(
+                    idle && !printing && input.is_some() && !self.session.deck_current(),
+                    egui::Button::new("Print to tape"),
+                )
+                .on_hover_text(
+                    "Every assigned track recorded at once, as one pass, at production (in \
+                     pieces, the tape on the GPU when there is one): about two hours of wall \
+                     clock for three minutes of four tracks",
+                )
+                .clicked()
+                && let (Some(deck), Some(input)) = (self.session.deck.clone(), input)
+            {
+                self.deck_error = None;
+                self.deck_job = Some(DeckJob::spawn(
+                    &self.root.join("config"),
+                    deck,
+                    input,
+                    rate,
+                    Some(self.session.dir.join("prints")),
+                    true,
+                ));
+            }
+            if printing && ui.button("Cancel").clicked() {
+                if let Some(j) = &self.deck_job {
+                    j.cancel();
+                }
+            }
+            if ui
+                .add_enabled(idle && !printing, egui::Button::new("Remove the deck"))
+                .on_hover_text("The tracks play their lanes again (the print stays in the cache)")
+                .clicked()
+            {
+                self.session.deck = None;
+                self.session.deck_printed = None;
+                self.session.attach_tape();
+                self.save();
+            }
+        });
+    }
+
     fn poll_master_print(&mut self) {
         if !self.session.master_print_current() && self.master_wanted {
             let any_solo = self.session.tracks.iter().any(|t| t.solo);
@@ -4161,7 +4392,7 @@ impl SessionView {
                 let i = self.session.track_index(&r.track)?;
                 let t = &self.session.tracks[i];
                 let (start, _) = t.lane_span()?;
-                Some(json!({"track": r.track, "lane": t.lane_signature(), "position": start}))
+                Some(json!({"track": r.track, "lane": t.source_signature(), "position": start}))
             })
             .collect();
         let from = json!({
@@ -6878,6 +7109,17 @@ impl SessionView {
                 .response
                 .on_disabled_hover_text("Select a clip");
             });
+            if ui
+                .selectable_label(self.deck_open, RichText::new("Tape deck").small())
+                .on_hover_text(
+                    "The session's multitrack tape (an Ampex 300-4, four tracks on 1/2 in): \
+                     tracks assigned to its tape tracks, recorded together in one print, each \
+                     then playing its tape track",
+                )
+                .clicked()
+            {
+                self.deck_open = !self.deck_open;
+            }
             ui.add_enabled_ui(idle, |ui| {
                 ui.menu_button(RichText::new("⤓ Bounce ▾").small(), |ui| {
                     let any_solo = self.session.tracks.iter().any(|t| t.solo);

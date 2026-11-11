@@ -1,0 +1,39 @@
+# A test circuit with a second audio input (crates/varimu-app's render tests: a render in
+# pieces with control inputs against the whole render): two 12AX7 stages on one plate
+# supply, `in` -> `out` and the audio input `in2` -> `out_2`.
+
+title: two 12AX7 stages, one on an audio input (test circuit)
+
+input: in
+
+audio_inputs: {in2: a2}
+
+probes: [out, out_2]
+
+values:
+
+devices:
+  V1: {device: 12AX7@1}
+  V2: {device: 12AX7@1}
+
+sections:
+  - title: main
+    parts:
+      CI: {C: [a, g], c: {value: 1.0e-07, source: 'provisional: model knowledge (coupling capacitor: 1.6 Hz with the grid leak)'}}
+      CK: {C: [k, '0'], c: {value: 2.2e-05, source: 'provisional: model knowledge (cathode bypass, a few Hz)'}}
+      CO: {C: [p, out], c: {value: 1.0e-07, source: 'provisional: model knowledge (output coupling capacitor)'}}
+      RG: {R: [g, '0'], r: {value: 1000000.0, source: 'provisional: model knowledge (12AX7 grid leak, 0.5-1 MOhm)'}}
+      RK: {R: [k, '0'], r: {value: 1500.0, source: 'provisional: model knowledge (12AX7 self-bias with a 100k plate load, 1.5k)'}}
+      RL: {R: [out, '0'], r: {value: 470000.0, source: 'provisional: model knowledge (the next stage''s grid leak)'}}
+      RP: {R: [bp, p], r: {value: 100000.0, source: 'provisional: model knowledge (12AX7 plate load, 100k)'}}
+      RS: {R: [in, a], r: {value: 10000.0, source: 'provisional: model knowledge (a source impedance)'}}
+      VB: {V: [bp, '0'], v: {value: 250, source: 'provisional: model knowledge (a textbook 12AX7 plate supply, 250-300 V)'}}
+      XV1: {device: [p, g, k], model: V1}
+      CI2: {C: [a2, g2], c: {value: 1.0e-07, source: 'provisional: model knowledge (as CI)'}}
+      CK2: {C: [k2, '0'], c: {value: 2.2e-05, source: 'provisional: model knowledge (as CK)'}}
+      CO2: {C: [p2, out_2], c: {value: 1.0e-07, source: 'provisional: model knowledge (as CO)'}}
+      RG2: {R: [g2, '0'], r: {value: 1000000.0, source: 'provisional: model knowledge (as RG)'}}
+      RK2: {R: [k2, '0'], r: {value: 1500.0, source: 'provisional: model knowledge (as RK)'}}
+      RL2: {R: [out_2, '0'], r: {value: 470000.0, source: 'provisional: model knowledge (as RL)'}}
+      RP2: {R: [bp, p2], r: {value: 100000.0, source: 'provisional: model knowledge (as RP)'}}
+      XV2: {device: [p2, g2, k2], model: V2}

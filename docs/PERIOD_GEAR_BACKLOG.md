@@ -316,6 +316,76 @@ be ~0.5-1 hour for this song. Measure before promising.
   output transformers). A 3-minute song as one run ~6 hours; in pieces (P3; each piece ~2.2
   cores) about 2 hours is the estimate, not measured.
 
+### Built in the third session (2026-11-10)
+
+- **MT5's profile:** `varimu unit --circuit ampex_300_4` (`varimu/measure/deck_suite.py`,
+  registered in `varimu/measure/profiles.py`): the generated deck as it stands (its channel
+  alignment and trims), production, noise on, the GPU kernel, 32 renders (58 min, 5 at once).
+  Every channel tones at once on different frequencies (neighbours bands apart), 400 Hz THD
+  against level on all four, silence for S/N, an edge track driven for crosstalk (1 -> 2 and
+  4 -> 3 in one run). `reports/units/ampex_300_4_nominal/`. **All specs pass:**
+  - response re 1 kHz, -10 dB, 30 Hz-15 kHz: -1.78 / +1.06, -1.77 / +0.86, -1.58 / +1.06,
+    -1.57 / +1.06 dB (the 351's +-2 dB); the low end's dip at 30 and 70 Hz, -1.4 to -1.6 dB
+    at 15 kHz;
+  - S/N (400 Hz at 3% against the 30-15,000 Hz noise, AI-14's definition): 58.9 / 58.7 / 58.7
+    / 59.6 dB (AI-14: "about 55" for four tracks on 1/2 in);
+  - crosstalk 1.04 dB rms from MT3's fitted curve (63 Hz left out: the fit's null sits under
+    the mains' 60 Hz hum and the hiss in a tone's band, measured -57 to -58 dB), the two
+    edge pairs within 0.6 dB of each other, worst mid band -51.0 dB (AI-14: "around 50");
+    16 kHz 2.5-2.8 dB under the fit (the record heads' coupling in the circuit rolls off
+    above 10 kHz, as the trim said);
+  - rails within 5.3 %.
+  - **Found: the master's channel records dirtier.** 1 % THD at +0.29 dB re 0 VU on channel
+    1 (0.94 % at 0 VU, the channel alignment's 0.92 %), +1.52 to +1.57 dB on the three
+    slaves (0.69-0.70 %), 3 % at +5.4 against +5.9 dB. Each head's bias current is the same
+    3.47 mA (the trim); what differs is how it gets there (the master's own bias network
+    against the slaves' lines off its erase-head node). Not chased.
+- **Pieces with control inputs** (TAPE_SPEED_PLAN.md P3 on the deck): the app's
+  `render::render_pieces_controls` and Python's `fast.run_transient_chunked(controls=)`,
+  step for step: each piece takes its stretch of every control, an audio control faded in
+  as the input is. Tests: `render::tests::pieces_carry_an_audio_control` (the test circuit
+  `config/circuits/audio_input_test.yaml`, two 12AX7 stages, `in2` an audio input: < -80 dB
+  from one run), `tests/test_chunked.py::test_pieces_carry_an_audio_control`.
+- **MT6: the deck in the session** (`varimu_app::deck`; decision 3). The session's `deck`
+  (saved in `session.json` only when there is one): the device, each tape track's session
+  track (by id), a record trim per tape track, the panel's values, noise. A trim is set once
+  when a track is assigned: the lane's loudest 8 s to the alignment level, as an insert's
+  first trim, **+0.5 dB** (`deck::DRIVE_DB`: 202's operating level at 0 VU). A **tape
+  print** records every assigned lane (its clips, before inserts and strip; a stereo lane's
+  mid: a tape track is mono) at once from the earliest lane's start, at production in
+  P3's pieces, shifted back by the head distance, each line out brought back to its lane's
+  level by the trim's inverse; the Sel-Sync readouts `sy`.. are kept beside it, advanced
+  the same (in time with what was recorded: what a later pass hears in SYNC). Cached in
+  `<session>/prints/deck-<key>/` (`tape<k>.wav`, `sync<k>.wav`, `deck.json`). Each assigned
+  track then plays its tape track in place of its lane (`Track::tape`, `tape_playing`;
+  `lane_lr`, `mix_clips`, `lane_span` follow it, `clips_lr` is the raw lane), and its
+  inserts print the tape (`Track::source_signature` keys them); an edited lane plays raw
+  until the deck prints again; a print of older deck settings plays on, stale. The Session
+  view's **Tape deck** window (toolbar): a track per tape track, trims, noise, Print to
+  tape, Cancel, Remove; on load the print is looked up in the cache (SE1: nothing prints
+  until asked). Headless: `cargo run --release -p varimu-app --example tape_print --
+  --session DIR [--stems DIR --tracks "a,b,c,d" [--from S --seconds S]] [--measure CHUNK_S
+  --out DIR]`. Tests: `deck::tests`, `session::tests::a_tape_deck_print_plays_in_place_of_its_lanes`.
+  - A 2 s smoke print (90-92 s of the stems): each tape track 0.8-1.9 dB under its lane's
+    broadband level, the voices within 2 samples of their lanes, the bass 36 samples (the
+    tape's low-end phase).
+- **The song on tape: started, stopped (the user's call).** The session `sessions/did she
+  mention my name (tape)` (git-ignored) holds the four full stems at 48 kHz with the deck
+  assigned (**the user's assignment: 1 bass, 2 guitar, 3 lead vocal, 4 harmonies**; trims
+  set), not printed. Its print (157 s, six 30 s pieces at once, the GPU kernel) ran 26 % in
+  46 min: **about 3 hours for the song** (each piece needs ~2.2 threads, six at once
+  overcommit the 8 cores / 16 threads, and each slows). The user stopped it: 3 hours a song
+  is too long, the user will think about what to do. Options put to the user:
+  1. **Four islands** (a record side per track; the master oscillator's bias and the heads'
+     coupling reach each a sample late): probably 3-4x faster per piece; measure against the
+     one-island print (the reference), as decision 7 asked.
+  2. **A reduced tape tier for the deck** (DELAY_PLAN.md's reduced tape, as the 351 insert's
+     live tier, ~0.5x real time): the grey box for drafts, the literal print kept for finals.
+  3. Print overnight as is (cached once printed).
+- **Not run (deferred with the print):** the 30 s seam check of the deck's pieces against one
+  run (`examples/tape_print.rs --measure 10` on 90-120 s, then `scripts/deck_pieces_study.py`
+  -> `reports/multitrack/deck/pieces.json`).
+
 ### Milestones (first pass: the tube Ampex 300-4 with Sel-Sync and crosstalk)
 - **MT0 Sources.** The Ampex 300-4's manual (the 1/2 in headblock, track format, head spacings,
   the Sel-Sync switching and its EQ), tape data for 201 / 202, published crosstalk and Sel-Sync
@@ -426,3 +496,11 @@ HLF-3C wait.
   piece-wise print's measured speed. **Next: MT6** (the session's track assignment, still
   the user's call, and the one-pass tape print of the four stems; the deck's Sel-Sync
   outputs `sy`.. stored with the print for later overdubs).
+- 2026-11-10 (third session, on main; "Built in the third session" above): MT5's profile
+  (every spec passes; the master's channel records ~1.2 dB dirtier), pieces with control
+  inputs (app and Python), MT6's deck in the session (`varimu_app::deck`, the Tape deck
+  window, `examples/tape_print.rs`), the user's track assignment (1 bass, 2 guitar, 3 lead,
+  4 harmonies). **Parked by the user:** the song's tape print takes ~3 hours (stopped at
+  26 %); the user will decide between four islands, a reduced deck tier, or printing
+  overnight. MT6's done-when (the song printed and played) is open; so are the seam check,
+  Sel-Sync overdubs, bounces and punch-in.
