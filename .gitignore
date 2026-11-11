@@ -94,6 +94,10 @@ data/schematics/emi_redd47/*
 data/schematics/neumann_m49/*
 !data/schematics/neumann_m49/README.md
 data/schematics/carbon_transmitter/*.pdf
+data/schematics/cloudlifter/*
+!data/schematics/cloudlifter/README.md
+data/schematics/mza14/*
+!data/schematics/mza14/README.md
 
 # Reference recordings of real instruments and songs (commercial / third-party audio), never committed
 real instrument samples/

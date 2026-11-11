@@ -19,11 +19,16 @@ From RecordingHacks' M 49 page (https://recordinghacks.com/microphones/Neumann/M
 
 The AC701's sheet (Telefunken, frank.pocnet.net) is `data/datasheets/sources/telefunken_ac701.pdf`.
 
-## Missing: the circuit diagram
+## The circuit diagram (supplied by the user 2026-11-11, from the walled sources below)
 
-Neither RecordingHacks nor coutant.org nor Neumann's site has the M 49's drawing (searched
-2026-11-11; coutant.org's "m49-52.pdf" is Altec's unrelated solid-state M49). Where it is (each
-needs a login or a request; the user fetches):
+- `M49c-schematic.jpg` (sha256 4346bda8ebc1ab66007eb27f68c94dcf0303f7f3d7a5438224b83c302d4d312b):
+  Neumann's "Kondensatormikrophon / Condenser-Microphone M49c", M49c-930-00, "gültig ab Gerät-Nr.
+  2660", dated 4.12.64; statically measured voltages in ovals. **sch:** below.
+- `M49-redraw-eagle.png` (sha256 b65d8277b7be989bcaf68ab4e5f15b4808664aadd35726e97a71a01133ee3ac0):
+  a builder's Eagle redraw of the same circuit (pin names, R1-R12, C2-C9 as Neumann's); a
+  cross-check only.
+
+Where they came from (login or request):
 
 ```
 https://groupdiy.com/threads/m49c-circuit-details-questions.80237
@@ -32,3 +37,18 @@ https://groupdiy.com/threads/m49c-circuit-details-questions.80237
 ```
 https://www.radiomuseum.org/r/neumann_kondensator_mikrofon_m49b.html
 ```
+
+## sch: (first reading, 2026-11-11)
+
+- The capsule KK49 (2 x 78...83 pF; RecordingHacks: the K47's twin): the backplate at ca. +58 V
+  through R2 100M from the B+ line's R8 / R9 divider (1M / 1M from +116 V); one diaphragm to the
+  grid (g) with R5 150M to the A- line; the other diaphragm through R1 150M and R11 100M from pin 6,
+  "adjustable capsule polarizing voltage 0...116 V" (the N 49 c's remote pattern control), C7 0.01u;
+  C1 1000p and S2 (on the head) with C4 "ca. 8 pF abgleichen / selected" from the anode: a
+  feedback / compensation path selected on test; R3 5M, C2 / C3 0.01u, R4 200 ohm, R12 2M, C8 0.01u,
+  pin 8 the calibration input.
+- Rö1 AC 701k: the anode at ca. 43 V (0.73 mA) on R10 100k from +116 V (0.79 mA total), C6 800 pF;
+  the cathode at +1.6 V on R7 22k with C9 25 uF / 6 V; the filament from +H (3.8...4.2 V, 100 mA,
+  pin 4) to the A- line.
+- C5 1u into Ü1 (BV 11), S1 the 200 / 50 ohm strap, out on pins 1 / 2.
+- Not yet read wire by wire: C4 / S2's ends, R3's and R12's nodes, the A- / B- return.
