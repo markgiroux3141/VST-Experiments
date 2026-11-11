@@ -231,11 +231,16 @@ class Crosstalk:
         return self.contour_width_ratio * fmt.width_m
 
     def playback(self, f_hz: np.ndarray, speed_m_s: float, fmt: TrackFormat, d_m: float):
-        """The neighbour's EMF over a flat on-track playback (the curve's terms): the
-        contour's pickup plus the cores' coupling, signed."""
+        """The neighbour's EMF over the driven track's own (both through the same playback
+        EQ, as Ampex measured them; the engine's ratio, `varimu.devices.tape.CrossPickup`):
+        the contour's pickup over the head's own reading, plus the cores' coupling (a
+        fraction of the driven head's own reading), signed. The head's own reading isn't
+        flat: its bump moves the low end by up to ~4 dB on the 351's head (until 2026-11-10
+        the fit took it as flat)."""
         k = 2.0 * math.pi * np.asarray(f_hz, float) / speed_m_s
         lat = lateral(k, d_m, self.contour_width_m(fmt))
-        return self.unshielded * contour_term(self.head, k) * lat + self.core
+        own = gap_term(self.head, k) + contour_term(self.head, k)
+        return self.unshielded * contour_term(self.head, k) * lat / own + self.core
 
     def curve_db(self, f_hz: np.ndarray, speed_m_s: float, fmt: TrackFormat) -> np.ndarray:
         """Crosstalk on an adjacent track as Ampex measured it (dB re the driven track's

@@ -208,9 +208,113 @@ be ~0.5-1 hour for this song. Measure before promising.
   octaves 4.8 dB: the curve's lobes sit elsewhere, worst 71 Hz, -16.7 dB). Scaled to four
   tracks by AI-14's 55 -> 50 dB: **-52 dB mid band**, -30 dB at 31.5 Hz, -38 dB at 16 kHz
   (15 ips). Above 16 kHz Ampex's curve levels off; ours keeps rising (3 dB over at 20 kHz).
-- **Not built yet:** crosstalk in the engine (the medium's neighbour pickup, terms 1-2; the
-  record coils' coupling in the circuit, term 3), Sel-Sync (MT4), the deck's circuit (MT5),
-  the session (MT6).
+- **The fit's reference corrected (2026-11-10, second session).** The fit took the driven
+  track's own playback as flat; Ampex measured the neighbour against the driven track through
+  the same EQ, and our head's own reading isn't flat (its bump, +3.7 dB at 40 Hz).
+  `Crosstalk.playback` is now the neighbour's EMF over the driven head's own, which is what
+  the engine computes. Refit: **1.64 dB rms on octaves** (was 1.85), 5.0 dB on third octaves
+  (was 4.8); the cores' coupling now negative (-59.2 dB), unshielded 0.84, the contour width
+  ratio again at its bound (1.848, the three-track pitch); record terms -54.3 dB (mutual) and
+  -53.2 dB (capacitive) at 10 kHz. Four tracks: -54.0 dB at 1 kHz, -29.6 dB at 31.5 Hz, a
+  null at 63 Hz (the contour and core terms cancel), -38.8 dB at 16 kHz
+  (`reports/multitrack/crosstalk/fit.json`).
+
+### Built in the second session (2026-11-10)
+
+- **MT3 in the engine: a head reads its neighbours' tracks.** Design (decided here, stated
+  as the brief asked): **tape elements of one tape form a group**, not one multi-track
+  medium element. Playback crosstalk is linear in the recorded magnetization, so each
+  track's stream also computes, from the same recorded blocks, the slope a head one pitch
+  away reads of it (`CrossPickup`: the contour's term through the shields times the lateral
+  factor, plus the cores' coupling times the head's own reading), and the media layer adds
+  each neighbour's cross EMF to a head's own. Everything the single-track medium has
+  (literal bias, multi-rate feeds, one sense per medium, a recorder thread per track, grain
+  per element, reduced tape) stays as it was; the group only needs its tracks in one
+  partition part (refused otherwise).
+  - Python reference: `varimu/devices/tape.py` (`CrossPickup`, `lateral_factor`: K0's
+    integral in closed form over the triangle, the trapezoidal rule in t, both languages;
+    `cross_hx_spectrum`; `flux_slope(cross=)`), `tape_machine.TapeStream(crosstalk=)`
+    (`push_both`, `cross_out`), `with_neighbours`.
+  - circuitsim: `TapeParams.crosstalk` (`TapeCrosstalk`: group, track, pitch, unshielded,
+    contour width, core), the finisher's cross slope, `TapeStream::push_many_readouts`,
+    `media::crosstalk_pairs`, the transient's sum per output row, partition.rs's one-part
+    check; `tape_stream_run(readouts=True)`.
+  - IR and both builders: the tape part's `crosstalk_group`, `crosstalk_track`,
+    `crosstalk_pitch_m`, `crosstalk_unshielded`, `crosstalk_contour_width_m`,
+    `crosstalk_core` (all or none; refused on a reduced tape); two tapes on one track refused
+    (both languages). Test circuit `config/circuits/tape_tracks_test.yaml`.
+  - Agreement: Rust against the reference within 1e-11 (own bit for bit unchanged), in a
+    circuit within 1e-9; on the deck's heads (`scripts/multitrack_engine_study.py` ->
+    `reports/multitrack/engine/`) the engine's crosstalk is the fitted model's within
+    0.006 dB at 31.5 Hz-16 kHz, 0.28 dB at the 63 Hz null (-81.6 dB). The cross slope is read
+    over the own head's reach either side of a block; the lateral spread's 1/x^2 tail past it
+    costs at most 2 % (0.17 dB) on the deck's 14 mm reach (measured with a synthetic pattern
+    against a 6-block window).
+- **MT4: Sel-Sync's readout.** A tape part's optional fourth node `sync` (and `sync_l_h`,
+  the record coil seen in playback) gives the record head's reading (its 51 um gap, the same
+  pole faces, its field per ampere) of the tape the repro head reads at that sample, behind
+  the record coil: the medium's `sync` (`TapeSync`), the IR's `Tape.sync_out`, a second
+  output of the medium (and its neighbours' record-head cross EMF). That stretch of tape
+  passed the record gap a head distance earlier, so the readout is the Sel-Sync monitor one
+  head distance late: stored with a pass's print and advanced by the head distance, it is
+  what a later pass hears in SYNC (the earlier pass's wow and flutter, not its own; the
+  second order of a real overdub). No new storage concept: a pass's print already keeps its
+  outputs.
+  - **The finding (no published figure exists):** heard in Sel-Sync, the record head plays
+    -0.8 dB at 2 kHz, -4.3 dB at 4 kHz, -12.3 dB at 6 kHz against the repro head, nulls at
+    7.47 kHz (v / g at 15 ips), and comes back only to -13 to -23 dB above it (+0.2 dB in the
+    bass). The engine's record-over-repro ratio is the heads' spectra's within 0.002 dB.
+  - Alignment: an overdub recorded where pass 2 hears pass 1 in Sel-Sync plays back within a
+    sample of pass 1 (`test_an_overdub_monitored_in_sync_lines_up_to_a_sample`, the
+    transport shared, flutter on).
+- **MT5's prerequisite: audio controls in a multi-rate part** (circuitsim's partition.rs,
+  stream.rs). An audio control (`audio_inputs`) whose node is in one multi-rate part alone is
+  that part's: it reads the control's samples from the stream's shared history as it reads
+  the input (the same interpolation, each step a part of the sample's polynomial); the first
+  part trims that history behind it. A plain control must still stay in the first part.
+  Tested: an island driven by an audio control equals it driven by the input within 1e-12,
+  and a stream fed in uneven chunks equals one run bit for bit
+  (`tests/test_multirate_controls.py`).
+- **MT5: the deck's circuit.** `config/circuits/ampex_300_4.yaml`, GENERATED by
+  `scripts/make_ampex_300_4.py` from `ampex_351.yaml`: four 351 channels (each its own
+  supply, as the 351-2's), channel 1 on `in`, channels 2-4 on the audio inputs `in2`..`in4`
+  (read in the island), line outs `out`, `out_2`..; one master oscillator (channel 1's 1V6,
+  1T5 and erase head; each slave's bias line, its own BIAS ADJUST `bias_adjust_f_2`.., from
+  the master's erase-head node; the slaves' erase heads not modelled); the four record sides
+  one island (20 steps); four tape parts on SCOTCH202@1, 70 mil tracks, one crosstalk group,
+  each with its Sel-Sync readout on `sy`, `sy_2`..; the repro heads the 351's, wound for its
+  output (rep_h_per_a x 234 / 70); 15 ips only. The record heads' coupling: a coefficient
+  between neighbouring heads (`k_rec_heads`, provisional 0.02) and a capacitance between
+  their hot ends (`c_rec_heads_f`), the latter sized by `scripts/ampex_300_4_trim.py
+  --coupling` to the fit's record-side crosstalk at 10 kHz: the heads hang on the 6201's
+  ~11 kohm, so a mutual inductance would need k ~ 0.2 to give it (not a shielded stack's),
+  and the record term's slope in the circuit is the heads' (their resistance: ~6 dB an
+  octave), not the fit's 6 + 12. **Trimmed:** 74 pF gives the fit's -45.7 dB at 10 kHz;
+  in the circuit -57.7 / -51.8 / -39.4 dB at 2.5 / 5 / 20 kHz (the fit's record terms:
+  ~-61 / ~-54 / ~-35 dB: 3 dB over at 2.5 kHz, where the playback terms' -54 dB rule, 4 dB
+  under at 20 kHz); k 0.02 alone gives -74 dB at 10 kHz (`reports/multitrack/deck/trim.json`).
+  Also `ampex_300_4_channel.yaml`: one channel, for the
+  alignment (`scripts/align_300_4.py`: tape_align's steps on it, all but the 7-1/2 ips one);
+  the deck then carries it, and the trim's `--bias` sets each channel's BIAS ADJUST on the
+  deck to that alignment's bias current (four bias lines on the master, the heads' coupling).
+  Tests `tests/test_ampex_300_4.py`; both builders agree (72 cases).
+- **Aligned and trimmed** (`reports/multitrack/deck/channel_alignment.{json,png}`,
+  `trim.json`; `config/ampex_300_4_trims.yaml`). The 351's procedure on one deck channel
+  (SCOTCH202 on the 70 mil head): playback EQ 2R31 0.812 (0.63 dB rms 1-15 kHz), bias at
+  36.7 pF (3.47 mA rms; the 351 on 111: 31.1 pF), 1C7 398 pF (0.84 dB rms), PLAYBACK LEVEL
+  0.432 (700 Hz at -18.04 dBFS). **RECORD LEVEL runs out:** fully up, 0 VU in records 400 Hz
+  at 0.92% THD, **0.54 dB short of operating level** (202's coercivity against the 351's
+  record gain at its -10 dBm bridging input; `align_300_4.py` reports it rather than
+  failing). A studio fed the deck hotter: a print's drive takes it (+0.5 dB for operating
+  level at 0 VU). On the deck each BIAS ADJUST sets its head to that 3.47 mA within 0.12 %:
+  ~46.6 pF (the master drives four lines and sags), the inner heads 0.15 pF less (their
+  neighbours' bias through the heads' coupling).
+- **The one-island print's speed** (`scripts/ampex_300_4_speed.py` ->
+  `reports/multitrack/deck/speed.json`; production, the GPU kernel, a tone per track): **122x
+  slower than real time**, the 351 alone 27x on the same panel. The island is the bound (busy
+  117 s of 162 s, 3.6x the 351's), the rest 75 s (266 unknowns: four supplies, repro sides,
+  output transformers). A 3-minute song as one run ~6 hours; in pieces (P3; each piece ~2.2
+  cores) about 2 hours is the estimate, not measured.
 
 ### Milestones (first pass: the tube Ampex 300-4 with Sel-Sync and crosstalk)
 - **MT0 Sources.** The Ampex 300-4's manual (the 1/2 in headblock, track format, head spacings,
@@ -311,3 +415,14 @@ HLF-3C wait.
   medium, MT3's model built and fitted in Python ("Where it stands" above). Decisions 4, 6, 7
   taken (Claude's recommendations). Next: crosstalk in the engine (circuitsim's tape stream reading its neighbours, the Python
   reference first) and MT4 (Sel-Sync: the record head's playback).
+- 2026-11-10 (second session, on main; "Built in the second session" above): MT3 in the
+  engine (a group of tape elements; the fit's reference corrected, 1.64 dB rms), MT4's
+  Sel-Sync readout and its finding (the 51 um gap's null at 7.47 kHz), audio controls inside
+  a multi-rate island, MT5's deck (`ampex_300_4.yaml`, generated, aligned per the 351's
+  procedure, the record heads' coupling and each BIAS ADJUST trimmed on the deck), its
+  print at 122x real time. Found: RECORD LEVEL is 0.54 dB short of operating level on 202.
+  Not done: MT4's figures (none published: the model's response is the finding), MT5's
+  profile (`varimu unit --circuit ampex_300_4`: no suite registered for the deck yet), a
+  piece-wise print's measured speed. **Next: MT6** (the session's track assignment, still
+  the user's call, and the one-pass tape print of the four stems; the deck's Sel-Sync
+  outputs `sy`.. stored with the print for later overdubs).

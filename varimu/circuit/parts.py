@@ -52,6 +52,7 @@ from varimu.circuit.ir import (
     Spring,
     Tape,
     TapeMedium,
+    TapeSync,
     Varispeed,
     Vccs,
     VoltageSource,
@@ -1283,6 +1284,16 @@ TAPE_VALUES = (
 )
 
 
+#: The track's crosstalk on a tape of several (PERIOD_GEAR_BACKLOG.md PG1, MT3; the IR's
+#: TapeCrosstalk, varimu.devices.tape.CrossPickup): optional, with crosstalk_group (a name)
+#: and crosstalk_track (a count), all or none.
+TAPE_CROSSTALK = (
+    "crosstalk_pitch_m",
+    "crosstalk_unshielded",
+    "crosstalk_contour_width_m",
+    "crosstalk_core",
+)
+
 #: The values only the medium's own bias reads (the literal bias leaves them out).
 TAPE_OWN_BIAS = ("bias_a_m", "rec_l_h")
 
@@ -1322,6 +1333,25 @@ def tape_transport(speed_m_s: float, tr: Mapping[str, float]) -> tuple[tuple, tu
         (tr["scrape_rms"], tr["scrape_c_m_s"] / (2.0 * tr["scrape_span_m"]), tr["scrape_q"]),
     )
     return periodic, random
+
+
+def tape_sync(
+    name: str, node: str, rec_h_per_a: float, l_h: float, r_ohm: float
+) -> tuple[TapeSync, str, list[Element]]:
+    """Tape part `name`'s record head as a playback head (Sel-Sync; PERIOD_GEAR_BACKLOG.md
+    PG1, MT4): the medium's readout (rec_h_per_a, the record head's field per ampere), the
+    node its EMF drives (<name>_y) and the record coil behind it to `node`
+    (L<name>_sync, R<name>_sync: l_h, r_ohm)."""
+    n, upper = name.lower(), name.upper()
+    y = f"{n}_y"
+    return (
+        TapeSync(rec_h_per_a),
+        y,
+        [
+            Inductor(f"L{upper}_sync", y, f"{n}_yb", l_h),
+            Resistor(f"R{upper}_sync", f"{n}_yb", node, r_ohm),
+        ],
+    )
 
 
 def tape(

@@ -292,6 +292,30 @@ class Varispeed:
 
 
 @dataclass(frozen=True)
+class TapeCrosstalk:
+    """A track among several on one tape (circuitsim's `tape_stream::TapeCrosstalk`; the
+    reference's `varimu.devices.tape.CrossPickup` with the group and the track's number;
+    PERIOD_GEAR_BACKLOG.md PG1, MT3): the circuit's tapes with the same `group` are one
+    tape's tracks, `track` numbering them across its width (one apart: neighbours, whose
+    heads read each other's tracks)."""
+
+    group: str
+    track: int
+    pitch_m: float
+    unshielded: float
+    contour_width_m: float
+    core: float
+
+
+@dataclass(frozen=True)
+class TapeSync:
+    """The record head as a playback head (Sel-Sync; circuitsim's `tape_stream::TapeSync`,
+    the reference `TapeStream`'s sync_h_per_a): its deep-gap field per coil ampere."""
+
+    h_per_a: float
+
+
+@dataclass(frozen=True)
 class TapeMedium:
     """Tape's parameters (circuitsim's `tape_stream::TapeParams`;
     `varimu.devices.tape_machine.stream_params` writes them): the tape component's
@@ -345,6 +369,11 @@ class TapeMedium:
     # The capstan's motor on a variable-frequency supply (`Varispeed`); None: no varispeed,
     # and no such key in the JSON.
     varispeed: Varispeed | None = None
+    # The track's place on a tape of several (`TapeCrosstalk`); None: one track alone, and
+    # no such key in the JSON.
+    crosstalk: TapeCrosstalk | None = None
+    # The record head's playback (Sel-Sync, `TapeSync`); None: none, and no such key.
+    sync: TapeSync | None = None
 
 
 @dataclass(frozen=True)
@@ -366,6 +395,9 @@ class Tape:
     # The capstan's supply (varispeed): the node whose voltage is its frequency (1 V =
     # 1 Hz), sensed after each sample; the medium's `varispeed` reads it. None: no such key.
     supply: str | None = None
+    # The record head's playback (Sel-Sync; the medium's `sync`): its EMF drives this node
+    # to ground a sample after the step, like `out`. None: no such key.
+    sync_out: str | None = None
 
 
 @dataclass(frozen=True)
@@ -751,8 +783,9 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
-    if isinstance(el, Tape) and el.supply is not None:
-        return (el.sense_pos, el.sense_neg, el.out, el.supply)
+    if isinstance(el, Tape) and (el.supply is not None or el.sync_out is not None):
+        extra = tuple(n for n in (el.supply, el.sync_out) if n is not None)
+        return (el.sense_pos, el.sense_neg, el.out, *extra)
     if isinstance(el, Plate | Spring | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
     if isinstance(el, Harp):
@@ -911,6 +944,15 @@ class CircuitIR:
             _validate_model(m)
 
         resets_before: set[str] = set()  # reset event kernels seen so far (an edge follows one)
+        tracks: dict[tuple[str, int], str] = {}  # a tape's tracks (crosstalk groups)
+        for el in self.elements():
+            if isinstance(el, Tape) and el.medium.crosstalk is not None:
+                key = (el.medium.crosstalk.group, el.medium.crosstalk.track)
+                if key in tracks:
+                    raise IRError(
+                        f"{el.name} and {tracks[key]} are both track {key[1]} of {key[0]}"
+                    )
+                tracks[key] = el.name
         for s in self.sections:
             if s.substeps is not None and (
                 not isinstance(s.substeps, int) or isinstance(s.substeps, bool) or s.substeps < 1
@@ -1390,6 +1432,9 @@ _OMITTED_WHEN_NONE = {
     (TapeMedium, "bias_substeps"),
     (TapeMedium, "reduced"),
     (TapeMedium, "varispeed"),
+    (TapeMedium, "crosstalk"),
+    (TapeMedium, "sync"),
+    (Tape, "sync_out"),
     (Tape, "supply"),
     (KorenPentode, "screen"),
     (Bjt, "temp_k"),
@@ -1731,6 +1776,10 @@ def _decode_tape_medium(d: dict) -> TapeMedium:
             ),
         ),
         varispeed=lambda v: _fields(Varispeed, v, tagged=False),
+        sync=lambda y: _fields(TapeSync, y, tagged=False),
+        crosstalk=lambda c: dataclasses.replace(
+            _fields(TapeCrosstalk, c, tagged=False), track=_count(c["track"])
+        ),
     )
     ints = {f.name for f in dataclasses.fields(TapeMedium) if f.type == "int"}
     return dataclasses.replace(m, **{k: int(getattr(m, k)) for k in ints})
@@ -1806,6 +1855,29 @@ def _validate_tape(el: Tape, input_node: str) -> None:
             raise IRError(f"{el.name}.medium: the varispeed's motor is out of range")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its repro head drives {el.out} (ground or the input)")
+    x = m.crosstalk
+    if x is not None:
+        ok = (
+            x.pitch_m > x.contour_width_m > 0
+            and x.unshielded >= 0
+            and math.isfinite(x.core)
+            and math.isfinite(x.pitch_m)
+            and x.group != ""
+        )
+        if not ok:
+            raise IRError(
+                f"{el.name}.medium: crosstalk needs pitch > contour width > 0, unshielded >= 0"
+            )
+        if m.reduced is not None:
+            raise IRError(f"{el.name}.medium: crosstalk is the full medium's, not a reduced one's")
+    if (el.sync_out is None) != (m.sync is None):
+        raise IRError(f"{el.name}: a sync node and the medium's sync readout go together")
+    if m.sync is not None and m.reduced is not None:
+        raise IRError(f"{el.name}.medium: Sel-Sync is the full medium's, not a reduced one's")
+    if m.sync is not None and not (math.isfinite(m.sync.h_per_a) and m.sync.h_per_a > 0):
+        raise IRError(f"{el.name}.medium: sync needs the record head's field per ampere > 0")
+    if el.sync_out is not None and el.sync_out in (GROUND, input_node, el.out):
+        raise IRError(f"{el.name}: its record head drives {el.sync_out} (ground, the input or out)")
 
 
 def _decode_model(d: dict) -> DeviceModel:

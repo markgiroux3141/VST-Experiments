@@ -110,6 +110,117 @@ pub struct TapeParams {
     /// tape runs at speed_m_s (and its flutter), and no such key in the JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub varispeed: Option<Varispeed>,
+    /// The track's place on a tape of several (PERIOD_GEAR_BACKLOG.md PG1, MT3; the
+    /// reference's `CrossPickup`): each push also gives the EMF a head beside it reads of
+    /// this track ([`TapeStream::push_many_cross`]), and the media add a group's
+    /// neighbours' to each head's own (`crate::media`). None: one track alone, and no such
+    /// key in the JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crosstalk: Option<TapeCrosstalk>,
+    /// The record head's playback (Sel-Sync; PG1, MT4; the reference's sync_h_per_a): each
+    /// push also gives the record head's reading of the tape the repro head reads then
+    /// ([`Readouts`]). None: no such readout, and no such key in the JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync: Option<TapeSync>,
+}
+
+/// The record head as a playback head (Sel-Sync): its deep-gap field per coil ampere (its
+/// gap and pole faces are the medium's `rec_gap_m`, `pole_m`, `relax_m`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TapeSync {
+    pub h_per_a: f64,
+}
+
+/// A push's other readouts, per push ([`TapeStream::push_many_readouts`]); each empty when
+/// the medium hasn't it: the cross EMF a head beside the track reads (crosstalk), the
+/// record head's EMF (Sel-Sync) and the cross EMF a record head beside it reads.
+#[derive(Debug, Clone, Default)]
+pub struct Readouts {
+    pub cross: Vec<f64>,
+    pub sync: Vec<f64>,
+    pub sync_cross: Vec<f64>,
+}
+
+impl Readouts {
+    fn clear(&mut self) {
+        self.cross.clear();
+        self.sync.clear();
+        self.sync_cross.clear();
+    }
+}
+
+/// A block's flux slopes over its cells and 2 either side (the readouts' empty when the
+/// medium hasn't them).
+#[derive(Debug, Clone)]
+struct BlockSlopes {
+    b: usize,
+    own: Vec<f64>,
+    cross: Vec<f64>,
+    sync: Vec<f64>,
+    sync_cross: Vec<f64>,
+}
+
+/// A track among several on one tape (`varimu.devices.tape.CrossPickup`, the group and
+/// the track's number): the tapes of a circuit with the same `group` are one tape's
+/// tracks, `track` numbering them across its width (one apart: neighbours). What a head
+/// pitch_m from this track reads of it: the outer contour's field through the shields
+/// (`unshielded`), spread as a strip contour_width_m wide ([`lateral_factor`]), plus the
+/// cores' flat coupling (`core`) times the neighbour head's own reading.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TapeCrosstalk {
+    pub group: String,
+    #[serde(deserialize_with = "count")]
+    pub track: usize,
+    pub pitch_m: f64,
+    pub unshielded: f64,
+    pub contour_width_m: f64,
+    pub core: f64,
+}
+
+impl TapeCrosstalk {
+    fn check(&self) -> Result<(), String> {
+        if self.pitch_m > self.contour_width_m
+            && self.contour_width_m > 0.0
+            && self.unshielded >= 0.0
+            && self.core.is_finite()
+            && self.pitch_m.is_finite()
+            && !self.group.is_empty()
+        {
+            Ok(())
+        } else {
+            Err("tape: crosstalk needs pitch > contour width > 0, unshielded >= 0, a group".into())
+        }
+    }
+}
+
+/// `lateral_factor`'s quadrature: the step in t, and where it stops (the integrand below
+/// e^-LATERAL_DECAY).
+const LATERAL_STEP: f64 = 0.1;
+const LATERAL_DECAY: f64 = 60.0;
+
+/// `varimu.devices.tape.lateral_factor`: the field of a strip contour w wide read at
+/// centre distance d > w across the tape, relative to a track of infinite width, by the
+/// trapezoidal rule in t of k / (pi w) e^{-a (d - w)} (1 - e^{-a w})^2 / a^2, a = k cosh t
+/// (0 at k = 0), in the reference's order of operations.
+pub fn lateral_factor(k: f64, d: f64, w: f64) -> f64 {
+    let k = k.abs();
+    if k == 0.0 {
+        return 0.0;
+    }
+    let gap = d - w;
+    let n = ((LATERAL_DECAY / (k * gap)).max(1.0).acosh() / LATERAL_STEP).ceil() as usize;
+    let f = |i: usize| {
+        let a = k * (LATERAL_STEP * i as f64).cosh();
+        let e = (-a * w).exp_m1();
+        (-a * gap).exp() * (e * e) / (a * a)
+    };
+    let mut acc = 0.5 * f(0);
+    for i in 1..=n {
+        acc += f(i);
+    }
+    k / (PI * w) * LATERAL_STEP * acc
 }
 
 /// The capstan's hysteresis synchronous motor on a variable-frequency supply (the reference
@@ -391,6 +502,22 @@ impl TapeParams {
             }
             r.check(self.layers)?;
         }
+        if self
+            .sync
+            .as_ref()
+            .is_some_and(|y| !(y.h_per_a.is_finite() && y.h_per_a > 0.0))
+        {
+            return Err("tape: sync needs the record head's field per ampere > 0".into());
+        }
+        if self.sync.is_some() && self.reduced.is_some() {
+            return Err("tape: Sel-Sync is the full medium's (not a reduced one's)".into());
+        }
+        if let Some(x) = &self.crosstalk {
+            x.check()?;
+            if self.reduced.is_some() {
+                return Err("tape: crosstalk is the full medium's (not a reduced one's)".into());
+            }
+        }
         let ds = self.ds_m;
         let (nb, nm, nr) = self.cells();
         if nr > nb {
@@ -407,10 +534,16 @@ impl TapeParams {
         Ok(())
     }
 
-    /// Cells per block, per margin, and the repro head's reach in cells.
+    /// Cells per block, per margin, and the reading heads' reach in cells (the repro
+    /// head's, or the wider of it and the record head's with the Sel-Sync readout).
     fn cells(&self) -> (usize, usize, usize) {
         let ds = self.ds_m;
-        let reach = 2.0 * (self.rep_gap_m / 2.0 + self.pole_m + self.relax_m);
+        let gap = if self.sync.is_some() {
+            self.rep_gap_m.max(self.rec_gap_m)
+        } else {
+            self.rep_gap_m
+        };
+        let reach = 2.0 * (gap / 2.0 + self.pole_m + self.relax_m);
         (
             (self.block_m / ds).round() as usize,
             (self.margin_m / ds).round() as usize,
@@ -451,6 +584,21 @@ fn hx_spectrum(head: &Head, k: f64, y: f64) -> f64 {
         1.0
     };
     g * (-k.abs() * y).exp() * (gap - (k * ec).cos() * relax)
+}
+
+/// `cross_hx_spectrum`: [`hx_spectrum`] for a neighbouring head, with the lateral factor
+/// `lat` at k: g e^{-|k| y} [core sinc(k g / 2) - (unshielded L + core) cos(k e_c) R(k)].
+fn cross_hx_spectrum(head: &Head, k: f64, y: f64, x: &TapeCrosstalk, lat: f64) -> f64 {
+    let (g, p, r) = (head.gap, head.pole, head.relax);
+    let gap = sinc(k * g / (2.0 * PI));
+    let ec = g / 2.0 + p + r / 2.0;
+    let relax = if r > 0.0 {
+        sinc(k * r / (2.0 * PI))
+    } else {
+        1.0
+    };
+    g * (-k.abs() * y).exp()
+        * (x.core * gap - (x.unshielded * lat + x.core) * (k * ec).cos() * relax)
 }
 
 /// Newton steps of `refine_extremum` (fixed, so both languages take the same ones).
@@ -1099,6 +1247,8 @@ struct Finisher {
     p: TapeParams,
     axes: Vec<[f64; 3]>,
     rep_head: Head,
+    /// The record head (the Sel-Sync readout's).
+    rec_head: Head,
     nb: usize,
     nr: usize,
     k_max: f64,
@@ -1115,6 +1265,9 @@ struct Finisher {
     packing_prev: f64,
     /// The next block to finish.
     next: usize,
+    /// Crosstalk's lateral factor on the slopes' FFT bins (`lateral_factor`), by length
+    /// (one per head's window).
+    lateral: Vec<(usize, Vec<f64>)>,
 }
 
 impl Finisher {
@@ -1124,6 +1277,7 @@ impl Finisher {
             p: self.p.clone(),
             axes: self.axes.clone(),
             rep_head: self.rep_head,
+            rec_head: self.rec_head,
             nb: self.nb,
             nr: self.nr,
             k_max: self.k_max,
@@ -1134,12 +1288,13 @@ impl Finisher {
             cell_origin: self.cell_origin,
             packing_prev: 0.0,
             next: 0,
+            lateral: self.lateral.clone(),
         }
     }
 
     /// A recorded block: its cells (without the margins), the grain, and its predecessor's
     /// flux slope (which reads it), in block order.
-    fn finish(&mut self, d: Done) -> Option<(usize, Vec<f64>)> {
+    fn finish(&mut self, d: Done) -> Slope {
         let b = d.b;
         debug_assert_eq!(b, self.next);
         let (cells, nb) = (d.cells, self.nb);
@@ -1163,7 +1318,7 @@ impl Finisher {
             let g = self.slope_block(b - 1);
             self.rec.retain(|(c, _, _)| *c + 2 > b);
             self.demag.retain(|(c, _)| *c + 2 > b);
-            return Some((b - 1, g));
+            return Some(g);
         }
         None
     }
@@ -1230,22 +1385,50 @@ impl Finisher {
     }
 
     /// `flux_slope` over a window (layers x w cells).
-    /// The flux slope over w cells; a reduced block's with its bias's D(k) (demag).
+    /// The flux slope over w cells; a reduced block's with its bias's D(k) (demag);
+    /// `cross`: the slope a neighbouring head reads (`cross_hx_spectrum`; the medium's
+    /// crosstalk).
     fn flux_slope(
         &mut self,
         mx: &[f64],
         my: &[f64],
         w: usize,
         demag: Option<&ReductionPoint>,
+        head: Head,
+        cross: bool,
     ) -> Vec<f64> {
-        let p = &self.p;
-        let head = self.rep_head;
-        let ext = (4.0 * (head.gap / 2.0 + head.pole + head.relax) / p.ds_m).ceil() as usize;
+        let ext = (4.0 * (head.gap / 2.0 + head.pole + head.relax) / self.p.ds_m).ceil() as usize;
         let n = (w + 2 * ext).next_power_of_two();
-        let freq = 1.0 / (n as f64 * p.ds_m);
+        let freq = 1.0 / (n as f64 * self.p.ds_m);
         let ks: Vec<f64> = (0..n / 2 + 1)
             .map(|j| 2.0 * PI * (j as f64 * freq))
             .collect();
+        let x = if cross {
+            self.p.crosstalk.clone()
+        } else {
+            None
+        };
+        if let Some(x) = &x
+            && !self.lateral.iter().any(|(m, _)| *m == n)
+        {
+            let lat = ks
+                .iter()
+                .map(|&k| lateral_factor(k, x.pitch_m, x.contour_width_m))
+                .collect();
+            self.lateral.push((n, lat));
+        }
+        let p = &self.p;
+        let lat: &[f64] = match &x {
+            Some(_) => {
+                &self
+                    .lateral
+                    .iter()
+                    .find(|(m, _)| *m == n)
+                    .expect("computed above")
+                    .1
+            }
+            None => &[],
+        };
         let dy = p.coating_m / p.layers as f64;
         let (layers, spacing, k_max) = (p.layers, p.spacing_m, self.k_max);
         let mut acc = vec![Complex64::new(0.0, 0.0); n / 2 + 1];
@@ -1254,7 +1437,10 @@ impl Finisher {
             let fx = rfft(&mut self.planner, &mx[l * w..(l + 1) * w], n);
             let fy = rfft(&mut self.planner, &my[l * w..(l + 1) * w], n);
             for (j, a) in acc.iter_mut().enumerate() {
-                let sx = hx_spectrum(&head, ks[j], y);
+                let sx = match &x {
+                    None => hx_spectrum(&head, ks[j], y),
+                    Some(x) => cross_hx_spectrum(&head, ks[j], y, x, lat[j]),
+                };
                 *a += fx[j] * sx;
                 let sy = Complex64::new(0.0, ks[j].signum() * sx);
                 *a -= fy[j] * sy;
@@ -1277,7 +1463,10 @@ impl Finisher {
         irfft(&mut self.planner, &acc, n, w)
     }
 
-    fn slope_block(&mut self, b: usize) -> Vec<f64> {
+    /// Block b's flux slopes over its cells and 2 either side: the repro head's, the cross
+    /// slope a neighbouring head reads (crosstalk), the record head's and its cross
+    /// (Sel-Sync); the ones the medium hasn't empty.
+    fn slope_block(&mut self, b: usize) -> BlockSlopes {
         let (nb, nr, layers) = (self.nb, self.nr, self.p.layers);
         let w = nb + 2 * nr;
         let mut wx = vec![0.0; layers * w];
@@ -1307,13 +1496,27 @@ impl Finisher {
             .iter()
             .find(|(c, _)| *c == b)
             .map(|(_, q)| q.clone());
-        let g = self.flux_slope(&wx, &wy, w, demag.as_deref());
-        g[nr - 2..nr + nb + 2].to_vec()
+        let (rep, rec) = (self.rep_head, self.rec_head);
+        let (cross, sync) = (self.p.crosstalk.is_some(), self.p.sync.is_some());
+        let mut slope = |head: Head, x: bool, on: bool| {
+            if !on {
+                return Vec::new();
+            }
+            let g = self.flux_slope(&wx, &wy, w, demag.as_deref(), head, x);
+            g[nr - 2..nr + nb + 2].to_vec()
+        };
+        BlockSlopes {
+            b,
+            own: slope(rep, false, true),
+            cross: slope(rep, true, cross),
+            sync: slope(rec, false, sync),
+            sync_cross: slope(rec, true, sync && cross),
+        }
     }
 }
 
-/// A block's predecessor's flux slope, (block, G), if the block has a predecessor.
-type Slope = Option<(usize, Vec<f64>)>;
+/// A block's predecessor's flux slopes, if the block has a predecessor.
+type Slope = Option<BlockSlopes>;
 
 /// A reduced medium's apertures as FIRs on the samples: (k0, M_x's, M_y's), layers x taps.
 type Firs = (i64, Vec<Vec<f64>>, Vec<Vec<f64>>);
@@ -1458,8 +1661,10 @@ pub struct TapeStream {
     m: usize,
     first: usize,
     n: usize,
-    /// Flux slopes: (block, G over the block's cells and 2 either side).
-    slopes: Vec<(usize, Vec<f64>)>,
+    /// Flux slopes per block (over the block's cells and 2 either side).
+    slopes: Vec<BlockSlopes>,
+    /// The Sel-Sync readout's EMF scale (the record head's field per ampere's; 0 without).
+    sync_scale: f64,
     /// The next block to finish (its grain, its predecessor's slope) and the next to hand
     /// the worker: the blocks in between are being recorded.
     next_rec: usize,
@@ -1589,6 +1794,7 @@ impl TapeStream {
             p: p.clone(),
             axes: ctx.axes.clone(),
             rep_head,
+            rec_head,
             nb,
             nr,
             k_max: 2.0 * PI * 0.45 * fs / p.speed_m_s,
@@ -1599,6 +1805,7 @@ impl TapeStream {
             cell_origin: 0,
             packing_prev: 0.0,
             next: 0,
+            lateral: Vec::new(),
         };
         let mut st = TapeStream {
             fs,
@@ -1617,6 +1824,11 @@ impl TapeStream {
             nb,
             nm,
             scale: MU0 * p.track_m * p.ms_a_m * p.rep_h_per_a * dy,
+            sync_scale: MU0
+                * p.track_m
+                * p.ms_a_m
+                * p.sync.as_ref().map_or(0.0, |y| y.h_per_a)
+                * dy,
             h: Vec::new(),
             m: p.bias_substeps.unwrap_or(1),
             first: 0,
@@ -2016,7 +2228,22 @@ impl TapeStream {
     /// [`push`](Self::push) for each of hs in turn (the same results, any chunking), the
     /// EMFs into out.
     pub fn push_many(&mut self, hs: &[f64], out: &mut Vec<f64>) -> Result<(), String> {
-        self.push_inner(hs, None, out)
+        self.push_inner(hs, None, out, None)
+    }
+
+    /// [`push_many`](Self::push_many) (with the capstan's supply frequencies, if it has
+    /// varispeed) and, per push, the medium's other readouts ([`Readouts`]: crosstalk's
+    /// cross EMF, Sel-Sync's record head; the reference's `cross_out`, `sync_out`,
+    /// `sync_cross_out`), cleared first.
+    pub fn push_many_readouts(
+        &mut self,
+        hs: &[f64],
+        supply_hz: Option<&[f64]>,
+        out: &mut Vec<f64>,
+        readouts: &mut Readouts,
+    ) -> Result<(), String> {
+        readouts.clear();
+        self.push_inner(hs, supply_hz, out, Some(readouts))
     }
 
     /// [`push_many`](Self::push_many) with the capstan's supply frequency (Hz) at each
@@ -2028,7 +2255,7 @@ impl TapeStream {
         supply_hz: &[f64],
         out: &mut Vec<f64>,
     ) -> Result<(), String> {
-        self.push_inner(hs, Some(supply_hz), out)
+        self.push_inner(hs, Some(supply_hz), out, None)
     }
 
     fn push_inner(
@@ -2036,6 +2263,7 @@ impl TapeStream {
         hs: &[f64],
         supply: Option<&[f64]>,
         out: &mut Vec<f64>,
+        mut readouts: Option<&mut Readouts>,
     ) -> Result<(), String> {
         let m = self.m;
         if !hs.len().is_multiple_of(m) {
@@ -2147,15 +2375,28 @@ impl TapeStream {
             };
             if u < 0.0 {
                 out.push(0.0);
+                if let Some(r) = readouts.as_deref_mut() {
+                    for (v, on) in [
+                        (&mut r.cross, self.p.crosstalk.is_some()),
+                        (&mut r.sync, self.p.sync.is_some()),
+                        (
+                            &mut r.sync_cross,
+                            self.p.crosstalk.is_some() && self.p.sync.is_some(),
+                        ),
+                    ] {
+                        if on {
+                            v.push(0.0);
+                        }
+                    }
+                }
                 continue;
             }
             let b = u.floor() as usize / self.nb;
-            let g = &self
+            let g = self
                 .slopes
                 .iter()
-                .find(|(c, _)| *c == b)
-                .ok_or("tape: a block was read before it was recorded")?
-                .1;
+                .find(|g| g.b == b)
+                .ok_or("tape: a block was read before it was recorded")?;
             let origin = (b * self.nb) as i64 - 2;
             // The EMF goes with the tape's speed (varispeed's; flutter's left out).
             let vk = if self.p.varispeed.is_some() {
@@ -2163,11 +2404,23 @@ impl TapeStream {
             } else {
                 v
             };
-            out.push(-vk * self.scale * cubic_held(g, u - origin as f64, 0));
+            let at = u - origin as f64;
+            out.push(-vk * self.scale * cubic_held(&g.own, at, 0));
+            if let Some(r) = readouts.as_deref_mut() {
+                for (v, s, scale) in [
+                    (&mut r.cross, &g.cross, self.scale),
+                    (&mut r.sync, &g.sync, self.sync_scale),
+                    (&mut r.sync_cross, &g.sync_cross, self.sync_scale),
+                ] {
+                    if !s.is_empty() {
+                        v.push(-vk * scale * cubic_held(s, at, 0));
+                    }
+                }
+            }
             last = Some(b);
         }
         if let Some(b) = last {
-            self.slopes.retain(|(c, _)| *c + 1 >= b);
+            self.slopes.retain(|g| g.b + 1 >= b);
         }
         Ok(())
     }

@@ -41,6 +41,16 @@ pub fn zone_floor_a_m() -> f64 {
     120.0 * (1000.0 / (4.0 * std::f64::consts::PI))
 }
 
+/// The track's crosstalk on a tape of several (`parts.TAPE_CROSSTALK`;
+/// PERIOD_GEAR_BACKLOG.md PG1, MT3): with `crosstalk_group` (a name) and `crosstalk_track`
+/// (a count), all or none.
+pub const CROSSTALK: [&str; 4] = [
+    "crosstalk_pitch_m",
+    "crosstalk_unshielded",
+    "crosstalk_contour_width_m",
+    "crosstalk_core",
+];
+
 /// The part's physical values, in the macro's order (`parts.TAPE_VALUES`).
 pub const VALUES: [&str; 16] = [
     "speed_m_s",
@@ -170,6 +180,28 @@ pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
     })
 }
 
+/// Tape part `name`'s record head as a playback head (`parts.tape_sync`; Sel-Sync): the
+/// node its EMF drives (<name>_y) and the record coil behind it to `node`.
+pub fn sync_coil(name: &str, node: &str, l_h: f64, r_ohm: f64) -> (String, Vec<Element>) {
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let y = format!("{n}_y");
+    let els = vec![
+        Element::Inductor(Inductor {
+            name: format!("L{upper}_sync"),
+            a: y.clone(),
+            b: format!("{n}_yb"),
+            l_h,
+        }),
+        Element::Resistor(Resistor {
+            name: format!("R{upper}_sync"),
+            a: format!("{n}_yb"),
+            b: node.to_string(),
+            r_ohm,
+        }),
+    ];
+    (y, els)
+}
+
 /// The tape part (`parts.tape`): the record coil, the tape and the repro coil. `v`: the
 /// values of [`VALUES`], in order. `bias_substeps`: the literal bias (rec_plus and
 /// rec_minus the record coil's resistance's ends in a multi-rate section; no record coil
@@ -253,6 +285,8 @@ pub fn tape(
         packing_corr_m: t.grain[3],
         bias_substeps,
         reduced: None,
+        crosstalk: None,
+        sync: None,
         varispeed: match (supply, transport) {
             (Some((_, nominal_hz)), Some(tr)) => Some(Varispeed {
                 nominal_hz,
@@ -290,6 +324,7 @@ pub fn tape(
         out: format!("{n}_e"),
         medium: Box::new(medium),
         supply: supply.map(|(node, _)| node.to_string()),
+        sync_out: None,
     }));
     els.extend([
         Element::Inductor(Inductor {

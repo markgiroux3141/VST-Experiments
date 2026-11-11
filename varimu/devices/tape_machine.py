@@ -39,6 +39,7 @@ from scipy import signal as sps
 
 from varimu.devices.tape import (
     MU0,
+    CrossPickup,
     HeadGeometry,
     Slab,
     TapeFormulation,
@@ -504,9 +505,14 @@ def stream_params(
     rep_h_per_a: float = 1.0,
     bias_phase: float = 0.0,
     head_distance_m: float | None = None,
+    crosstalk: tuple[str, int, CrossPickup] | None = None,
+    sync_h_per_a: float | None = None,
 ) -> dict:
     """`TapeStream`'s parameters as circuitsim's `TapeParams` takes them (the stream's
-    port and the IR element `Tape`). The spec's zone floor must be set."""
+    port and the IR element `Tape`). The spec's zone floor must be set. crosstalk:
+    (group, track, pickup): the track's place on a tape of several (`TapeStream`'s
+    crosstalk; the IR's `TapeCrosstalk`). sync_h_per_a: the record head's playback
+    (Sel-Sync, `TapeStream`'s sync_h_per_a; the IR's `TapeSync`)."""
     if spec.zone_floor_oe is None:
         raise ValueError("a stream needs an explicit zone floor (spec.zone_floor_oe)")
     p, o, nz = tape.preisach, tape.orientation, tape.noise
@@ -549,6 +555,21 @@ def stream_params(
         "packing": nz.packing if nz else 0.0,
         "packing_sigma": nz.packing_sigma if nz else 0.0,
         "packing_corr_m": nz.packing_corr_m if nz else 0.0,
+        **({} if sync_h_per_a is None else {"sync": {"h_per_a": float(sync_h_per_a)}}),
+        **(
+            {}
+            if crosstalk is None
+            else {
+                "crosstalk": {
+                    "group": crosstalk[0],
+                    "track": int(crosstalk[1]),
+                    "pitch_m": crosstalk[2].pitch_m,
+                    "unshielded": crosstalk[2].unshielded,
+                    "contour_width_m": crosstalk[2].contour_width_m,
+                    "core": crosstalk[2].core,
+                }
+            }
+        ),
         **(
             {}
             if spec.varispeed_nominal_hz is None
@@ -592,7 +613,22 @@ class TapeStream:
     frequency (`push_many(hs, supply_hz)`). The rotor follows it as an all-pole resonator at
     hunting_hz, Q hunting_q (unity at DC; scipy's lfilter, DF2T), starting steady at the
     first frequency (the tape ran at it before t = 0); its output after push n is the factor
-    on the speed at sample n + 1. The EMF goes with that factor (flutter's left out)."""
+    on the speed at sample n + 1. The EMF goes with that factor (flutter's left out).
+
+    Crosstalk (`CrossPickup`; PERIOD_GEAR_BACKLOG.md PG1, MT3): the track is one of several
+    on the tape, and each push also gives the EMF a head beside it reads of this track
+    (`cross_out` after `push_many`, `push_both`): each block's slope through
+    `cross_hx_spectrum` as well. A head's EMF is its own plus its neighbours' cross EMFs
+    (`with_neighbours`); the record heads' coupling is the circuit's.
+
+    Sel-Sync (sync_h_per_a: the record head's deep-gap field per coil ampere; PG1, MT4):
+    each push also gives the record head's reading (its gap, the same pole faces) of the
+    tape the repro head reads at that sample (`sync_out`, and `sync_cross_out` for a head
+    beside it, with crosstalk). That stretch of tape passed the record gap a head distance
+    earlier, so this is the Sel-Sync monitor's EMF one head distance late: a later pass,
+    recording against it in SYNC, hears it advanced by that distance, and what it records
+    lands on the same stretch of tape as what it heard (an earlier pass's wow and flutter,
+    not its own). The window around each block takes the wider head's reach."""
 
     def __init__(
         self,
@@ -608,7 +644,21 @@ class TapeStream:
         noise_name: str = "tape",
         transport_seed: int = 0,
         literal: int | None = None,
+        crosstalk: CrossPickup | None = None,
+        sync_h_per_a: float | None = None,
     ):
+        if crosstalk is not None:
+            crosstalk.check()
+        if sync_h_per_a is not None and not sync_h_per_a > 0:
+            raise ValueError("sync: the record head's field per ampere > 0")
+        self.crosstalk = crosstalk
+        self.sync_h_per_a = sync_h_per_a
+        self.cross_slopes: dict[int, np.ndarray] = {}
+        self.sync_slopes: dict[int, np.ndarray] = {}
+        self.sync_cross_slopes: dict[int, np.ndarray] = {}
+        self.cross_out = np.zeros(0)
+        self.sync_out = np.zeros(0)
+        self.sync_cross_out = np.zeros(0)
         if literal is not None and (literal < 2 or hg_bias != 0.0):
             raise ValueError("literal bias: M >= 2 samples per push, and hg_bias 0")
         self.literal = literal
@@ -627,7 +677,8 @@ class TapeStream:
         self.d = spec.head_distance_m if head_distance_m is None else head_distance_m
         self.nb = int(round(spec.block_m / ds))
         self.nm = int(round(spec.margin_m / ds))
-        reach = 2.0 * (spec.rep_gap_m / 2.0 + spec.pole_m + spec.relax_m)
+        gap = spec.rep_gap_m if sync_h_per_a is None else max(spec.rep_gap_m, spec.rec_gap_m)
+        reach = 2.0 * (gap / 2.0 + spec.pole_m + spec.relax_m)
         self.nr = int(math.ceil(reach / ds))
         if self.nr > self.nb:
             raise ValueError(f"the repro head's reach ({reach:.3g} m) is longer than a block")
@@ -639,6 +690,7 @@ class TapeStream:
         self.k_max = 2.0 * math.pi * 0.45 * self.fs / v
         dy = tape.coating_m / spec.layers
         self.scale = MU0 * spec.track_m * tape.ms_a_m * rep_h_per_a * dy
+        self.sync_scale = MU0 * spec.track_m * tape.ms_a_m * (sync_h_per_a or 0.0) * dy
         self.h = np.zeros(0)  # samples first, first + 1, ... (literal: the fast samples)
         self.first = 0
         self.n = 0  # samples pushed
@@ -875,6 +927,16 @@ class TapeStream:
                 wy[:, a0 - c0 : a1 - c0] = my[:, a0 - c * nb : a1 - c * nb]
         g = flux_slope(wx, self.slab, self.spec.rep_head(), self.k_max, wy)
         self.slopes[b] = g[nr - 2 : nr + nb + 2]
+        if self.crosstalk is not None:
+            c = flux_slope(wx, self.slab, self.spec.rep_head(), self.k_max, wy, self.crosstalk)
+            self.cross_slopes[b] = c[nr - 2 : nr + nb + 2]
+        if self.sync_h_per_a is not None:
+            rec = self.spec.rec_head()
+            g = flux_slope(wx, self.slab, rec, self.k_max, wy)
+            self.sync_slopes[b] = g[nr - 2 : nr + nb + 2]
+            if self.crosstalk is not None:
+                c = flux_slope(wx, self.slab, rec, self.k_max, wy, self.crosstalk)
+                self.sync_cross_slopes[b] = c[nr - 2 : nr + nb + 2]
 
     def ready(self, b: int) -> bool:
         """Block b's samples are in."""
@@ -945,6 +1007,9 @@ class TapeStream:
             self.fac = self.fac[cut - self.fac_first :]
             self.fac_first = cut
         out = np.zeros(len(hs) // m)
+        cross = np.zeros(len(hs) // m)
+        sync = np.zeros(len(hs) // m)
+        sync_cross = np.zeros(len(hs) // m)
         if self.moving:
             k = np.arange(n0, self.n) + 1 - self.s_first
             u = (self.s[k] - self.d) / self.slab.ds_m
@@ -960,13 +1025,48 @@ class TapeStream:
                 vk = self.v * self._fac(np.arange(n0, self.n)[sel] + 1)
             g = cubic_held(self.slopes[int(b)], u[sel] - (b * self.nb - 2))
             out[sel] = -vk * self.scale * g
+            at = u[sel] - (b * self.nb - 2)
+            if self.crosstalk is not None:
+                cross[sel] = -vk * self.scale * cubic_held(self.cross_slopes[int(b)], at)
+            if self.sync_h_per_a is not None:
+                sync[sel] = -vk * self.sync_scale * cubic_held(self.sync_slopes[int(b)], at)
+                if self.crosstalk is not None:
+                    c = cubic_held(self.sync_cross_slopes[int(b)], at)
+                    sync_cross[sel] = -vk * self.sync_scale * c
         if live.any():
             for b in [k for k in self.slopes if k < int(blocks[live].max()) - 1]:
                 del self.slopes[b]
+                self.cross_slopes.pop(b, None)
+                self.sync_slopes.pop(b, None)
+                self.sync_cross_slopes.pop(b, None)
+        self.cross_out, self.sync_out, self.sync_cross_out = cross, sync, sync_cross
         return out
+
+    def push_both(self, hs: np.ndarray, supply_hz=None) -> tuple[np.ndarray, np.ndarray]:
+        """`push_many`'s EMF and the cross EMF a neighbouring head reads (crosstalk)."""
+        if self.crosstalk is None:
+            raise ValueError("the stream has no crosstalk")
+        own = self.push_many(hs, supply_hz)
+        return own, self.cross_out
 
     def push(self, h: float) -> float:
         return float(self.push_many(np.array([h]))[0])
+
+
+def with_neighbours(tracks: list[int], own: list[np.ndarray], cross: list[np.ndarray]) -> list:
+    """Each head's EMF on a tape of several tracks (`TapeStream`'s crosstalk): its own
+    plus the cross EMF of the tracks beside it (track numbers one apart: an edge track has
+    one neighbour), added in the order given (as circuitsim's media add them)."""
+    if len(set(tracks)) != len(tracks):
+        raise ValueError("crosstalk: two streams on one track")
+    out = []
+    for i, ti in enumerate(tracks):
+        y = np.array(own[i], float)
+        for j, tj in enumerate(tracks):
+            if abs(tj - ti) == 1:
+                y = y + cross[j]
+        out.append(y)
+    return out
 
 
 # --- The print --------------------------------------------------------------------------

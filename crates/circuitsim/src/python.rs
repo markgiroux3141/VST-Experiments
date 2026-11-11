@@ -571,11 +571,13 @@ fn tape_record<'py>(
 /// medium's bias changes, (push index, deep-gap peak A/m) rising, each set before that
 /// push (the pushes split there); `origin`: the stream starts at that step of a longer run
 /// (`TapeStream::set_origin`); `gpu`: the recording kernel on the GPU in f32
-/// (`TapeStream::set_gpu`). Returns the repro EMF after each push (at t_{n+1}).
+/// (`TapeStream::set_gpu`). Returns the repro EMF after each push (at t_{n+1});
+/// `readouts`: {"emf": that, and the medium's other readouts per push: "cross" (crosstalk),
+/// "sync" and "sync_cross" (Sel-Sync), those it has}.
 /// With the literal bias (`bias_substeps` M), `h` is the head's whole field, M samples per
 /// step (`chunk` a multiple of M). Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0, gpu = false))]
+#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0, gpu = false, readouts = false))]
 #[allow(clippy::too_many_arguments)]
 fn tape_stream_run<'py>(
     py: Python<'py>,
@@ -589,52 +591,80 @@ fn tape_stream_run<'py>(
     bias_a_m: Option<Vec<(usize, f64)>>,
     origin: u64,
     gpu: bool,
+    readouts: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let p: crate::tape_stream::TapeParams =
         serde_json::from_str(params).map_err(|e| invalid(format!("tape_stream_run: {e}")))?;
     let h = h.as_array().to_vec();
     let supply = supply_hz.map(|s| s.as_array().to_vec());
     let changes = bias_a_m.unwrap_or_default();
-    let out = py.detach(|| -> Result<Vec<f64>, String> {
-        let mut st = crate::tape_stream::TapeStream::build(
-            &p,
-            fs,
-            noise_seed.map(|seed| (seed, "tape")),
-            transport_seed,
-        )?;
-        st.set_origin(origin)?;
-        st.set_gpu(gpu)?;
-        let mut out = Vec::with_capacity(h.len());
-        let m = st.substeps();
-        let chunk = (chunk.max(1)).div_ceil(m) * m;
-        // Pushed `chunk` at a time, split at each bias change.
-        let cuts = changes
-            .iter()
-            .map(|c| (c.0 * m).min(h.len()))
-            .chain(std::iter::once(h.len()));
-        let mut pos = 0;
-        for (ci, end) in cuts.enumerate() {
-            while pos < end {
-                let e = (pos + chunk).min(end);
-                let c = &h[pos..e];
-                match &supply {
+    let has = (p.crosstalk.is_some(), p.sync.is_some());
+    let out = py.detach(
+        || -> Result<(Vec<f64>, crate::tape_stream::Readouts), String> {
+            let mut st = crate::tape_stream::TapeStream::build(
+                &p,
+                fs,
+                noise_seed.map(|seed| (seed, "tape")),
+                transport_seed,
+            )?;
+            st.set_origin(origin)?;
+            st.set_gpu(gpu)?;
+            let mut out = Vec::with_capacity(h.len());
+            let mut all = crate::tape_stream::Readouts::default();
+            let mut part = crate::tape_stream::Readouts::default();
+            let m = st.substeps();
+            let chunk = (chunk.max(1)).div_ceil(m) * m;
+            // Pushed `chunk` at a time, split at each bias change.
+            let cuts = changes
+                .iter()
+                .map(|c| (c.0 * m).min(h.len()))
+                .chain(std::iter::once(h.len()));
+            let mut pos = 0;
+            for (ci, end) in cuts.enumerate() {
+                while pos < end {
+                    let e = (pos + chunk).min(end);
+                    let c = &h[pos..e];
                     // Varispeed: the supply's frequency at each push (one per push).
-                    Some(sup) => {
+                    let sup = supply.as_ref().map(|sup| {
                         let k0 = pos / m;
                         let k1 = (k0 + c.len() / m).min(sup.len());
-                        st.push_many_supply(c, &sup[k0..k1], &mut out)?
+                        &sup[k0..k1]
+                    });
+                    match (readouts, sup) {
+                        (true, sup) => {
+                            st.push_many_readouts(c, sup, &mut out, &mut part)?;
+                            all.cross.extend_from_slice(&part.cross);
+                            all.sync.extend_from_slice(&part.sync);
+                            all.sync_cross.extend_from_slice(&part.sync_cross);
+                        }
+                        (false, Some(sup)) => st.push_many_supply(c, sup, &mut out)?,
+                        (false, None) => st.push_many(c, &mut out)?,
                     }
-                    None => st.push_many(c, &mut out)?,
+                    pos = e;
                 }
-                pos = e;
+                if let Some(&(_, hg)) = changes.get(ci) {
+                    st.set_bias(hg)?;
+                }
             }
-            if let Some(&(_, hg)) = changes.get(ci) {
-                st.set_bias(hg)?;
-            }
+            Ok((out, all))
+        },
+    );
+    let (out, all) = out.map_err(|e| invalid(&e))?;
+    if readouts {
+        let d = PyDict::new(py);
+        d.set_item("emf", out.into_pyarray(py))?;
+        if has.0 {
+            d.set_item("cross", all.cross.into_pyarray(py))?;
         }
-        Ok(out)
-    });
-    Ok(out.map_err(|e| invalid(&e))?.into_pyarray(py).into_any())
+        if has.1 {
+            d.set_item("sync", all.sync.into_pyarray(py))?;
+        }
+        if has.0 && has.1 {
+            d.set_item("sync_cross", all.sync_cross.into_pyarray(py))?;
+        }
+        return Ok(d.into_any());
+    }
+    Ok(out.into_pyarray(py).into_any())
 }
 
 /// The tape particles' state after field histories (`crate::tape::Preisach::state_after`;

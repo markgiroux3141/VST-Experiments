@@ -57,7 +57,9 @@ impl MediumElement {
         match self {
             MediumElement::Plate(p) => vec![&p.out],
             MediumElement::Spring(p) => vec![&p.out],
-            MediumElement::Tape(t) => vec![&t.out],
+            MediumElement::Tape(t) => std::iter::once(t.out.as_str())
+                .chain(t.sync_out.as_deref())
+                .collect(),
             MediumElement::Harp(h) => vec![&h.out],
             MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
             MediumElement::NovaKeys(k) => k.outs.iter().map(String::as_str).collect(),
@@ -109,9 +111,11 @@ pub struct TapeMedium {
     origin: u64,
     /// The recording kernel on the GPU (`Medium::set_tape_gpu`), for a stream made anew.
     gpu: bool,
-    /// Scratch: a push's fields and its EMF.
+    /// Scratch: a push's fields and its EMF (and its other readouts: crosstalk's,
+    /// Sel-Sync's).
     fields: Vec<f64>,
     emf: Vec<f64>,
+    readouts: crate::tape_stream::Readouts,
 }
 
 impl TapeMedium {
@@ -150,15 +154,75 @@ impl TapeMedium {
         self.fields.clear();
         self.fields.extend(vs.map(|v| k * v));
         self.emf.clear();
-        match supply_hz {
-            Some(f) => self
-                .stream
-                .push_many_supply(&self.fields, &[f], &mut self.emf),
-            None => self.stream.push_many(&self.fields, &mut self.emf),
+        if self.tape.medium.crosstalk.is_some() || self.tape.medium.sync.is_some() {
+            let sup = supply_hz.map(|f| [f]);
+            self.stream.push_many_readouts(
+                &self.fields,
+                sup.as_ref().map(|s| &s[..]),
+                &mut self.emf,
+                &mut self.readouts,
+            )
+        } else {
+            match supply_hz {
+                Some(f) => self
+                    .stream
+                    .push_many_supply(&self.fields, &[f], &mut self.emf),
+                None => self.stream.push_many(&self.fields, &mut self.emf),
+            }
         }
         .expect("the tape's blocks are recorded before the repro head reads them");
         self.emf[0]
     }
+}
+
+/// The crosstalk between a circuit's tapes (PERIOD_GEAR_BACKLOG.md PG1, MT3): for media
+/// `els` whose outputs' rows start at `first_row` (in order, [`MediumElement::outs`] each),
+/// the triples (row of a head's output, the medium beside it on the same tape, which of
+/// its outputs) whose cross EMF ([`Medium::cross`]) that output adds: tapes of one
+/// crosstalk group, tracks one apart (an edge track has one neighbour); the repro head's
+/// output (0) the neighbour's repro cross, a Sel-Sync output (1) its record head's. Two
+/// tapes of a group on one track are refused.
+pub fn crosstalk_pairs(
+    els: &[&MediumElement],
+    first_row: usize,
+) -> Result<Vec<(usize, usize, usize)>, String> {
+    let mut rows = Vec::with_capacity(els.len());
+    let mut row = first_row;
+    for e in els {
+        rows.push(row);
+        row += e.outs().len();
+    }
+    let track = |e: &MediumElement| match e {
+        MediumElement::Tape(t) => t
+            .medium
+            .crosstalk
+            .as_ref()
+            .map(|x| (x.group.clone(), x.track)),
+        _ => None,
+    };
+    let mut pairs = Vec::new();
+    for (i, a) in els.iter().enumerate() {
+        let Some((ga, ta)) = track(a) else { continue };
+        for (j, b) in els.iter().enumerate() {
+            let Some((gb, tb)) = track(b) else { continue };
+            if i == j || ga != gb {
+                continue;
+            }
+            if ta == tb {
+                return Err(format!(
+                    "tape: {} and {} are both track {ta} of {ga}",
+                    a.name(),
+                    b.name()
+                ));
+            }
+            if ta.abs_diff(tb) == 1 {
+                for o in 0..a.outs().len() {
+                    pairs.push((rows[i] + o, j, o));
+                }
+            }
+        }
+    }
+    Ok(pairs)
 }
 
 /// A medium running beside the circuit at the step rate.
@@ -202,6 +266,7 @@ impl Medium {
                 gpu: false,
                 fields: Vec::new(),
                 emf: Vec::new(),
+                readouts: Default::default(),
             })),
             MediumElement::Harp(h) => Medium::Harp(Box::new(crate::harp::Medium::new(h, fs))),
             MediumElement::ClavStrings(c) => Medium::Clav(Box::new(ClavMedium {
@@ -261,11 +326,26 @@ impl Medium {
         }
     }
 
-    /// Its outputs (one but a Clavinet's strings: three).
+    /// The cross EMF of the last push for output j: what a head beside this tape's
+    /// track reads of it, the repro head (0) or the record head (1, Sel-Sync) (a tape with
+    /// crosstalk; 0 for every other medium).
+    pub fn cross(&self, j: usize) -> f64 {
+        match self {
+            Medium::Tape(m) => {
+                let r = &m.readouts;
+                let v = if j == 0 { &r.cross } else { &r.sync_cross };
+                v.first().copied().unwrap_or(0.0)
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// Its outputs (one but a Clavinet's strings: three; a tape with Sel-Sync: two).
     pub fn outs(&self) -> usize {
         match self {
             Medium::Clav(_) => 3,
             Medium::Nova(m) => m.outs(),
+            Medium::Tape(m) if m.tape.sync_out.is_some() => 2,
             _ => 1,
         }
     }
@@ -275,6 +355,7 @@ impl Medium {
         match self {
             Medium::Clav(m) => m.last[j],
             Medium::Nova(m) => m.output(j),
+            Medium::Tape(m) if j == 1 => m.readouts.sync.first().copied().unwrap_or(0.0),
             _ => panic!("a medium of one output"),
         }
     }

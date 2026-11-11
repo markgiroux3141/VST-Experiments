@@ -1,0 +1,100 @@
+# Two tracks of one tape between their heads, driven and loaded by resistors: the multitrack
+# medium's test circuit (docs/PERIOD_GEAR_BACKLOG.md, PG1: MT3's crosstalk and MT4's
+# Sel-Sync), not modelled hardware. Track 1 records the input, track 2 a third of it; each
+# repro head reads its own track and its neighbour's (a crosstalk group), and each record
+# head plays back too (its fourth node, behind the record coil: Sel-Sync). The tape, heads
+# and coils are config/circuits/tape_test.yaml's; the format and the crosstalk are the
+# Ampex 300-4's (config/circuits/ampex_300_4.yaml has their sources).
+
+title: "Two tracks of one tape (test)"
+input: in
+probes: [out1, out2, sync1, sync2]
+
+values:
+  tape_model: {value: SCOTCH202@1, source: "config/components/scotch202/1.yaml (Scotch 202, provisional: scripts/make_scotch202.py)"}
+  speed_m_s: {value: 0.381, source: "data/schematics/ampex_351/README.md (1962 manual p10: 15 ips)"}
+  f_bias_hz: {value: 100.0e+3, source: "data/schematics/ampex_351/README.md (1962 manual p78: approximately 100 kc)"}
+  bias_a_m: {value: 59894.50528647803, source: "config/circuits/tape_test.yaml's (the print's alignment on SCOTCH111@3; a test value here)"}
+  rec_gap_m: {value: 12.7e-6, source: "provisional: web: ATR Master Tape sheet's test record gap 0.5 mil (the 351's isn't printed)"}
+  rep_gap_m: {value: 6.35e-6, source: "data/schematics/ampex_351/README.md (1962 manual p70: repro gap 0.00025 in)"}
+  pole_m: {value: 3.0e-3, source: "provisional: model knowledge (a 1950s ring head's pole faces, ~3 mm)"}
+  relax_m: {value: 3.0e-3, source: "provisional: model knowledge (the head contour receding from the tape over a few mm)"}
+  spacing_m: {value: 0.5e-6, source: "provisional: model knowledge (contact recording, 0.1-1 um)"}
+  track_m: {value: 1.778e-3, source: "data/schematics/ampex_300_4/README.md (the 354 manual p 44: 70 mil tracks for the 4 track master)"}
+  head_distance_m: {value: 50.8e-3, source: "provisional: secondary sources (the 350/351 headblock's record-to-repro gap spacing ~2 in)"}
+  rec_l_h: {value: 0.1, source: "provisional: model knowledge (a high-impedance record head, ~0.1 H)"}
+  rec_r_ohm: {value: 100.0, source: "provisional: model knowledge (its winding, ~100 ohm)"}
+  rec_h_per_a: {value: 2.0e+7, source: "provisional: model knowledge (~300 turns at 85% efficiency over the 12.7 um gap)"}
+  rep_l_h: {value: 0.5, source: "provisional: model knowledge (a high-impedance repro head for a tube preamp, ~0.5 H)"}
+  rep_r_ohm: {value: 500.0, source: "provisional: model knowledge (its winding, ~500 ohm)"}
+  rep_h_per_a: {value: 2.5e+8, source: "provisional: model knowledge (~2000 turns at 80% efficiency over the 6.35 um gap)"}
+  pitch_m: {value: 3.302e-3, source: "data/schematics/ampex_300_4/README.md (the 354 manual p 44: 70 mil tracks 60 mil apart, 130 mil centres)"}
+  xt_unshielded: {value: 0.839373, source: "provisional: fitted to Ampex's measured crosstalk (scripts/multitrack_crosstalk_study.py, reports/multitrack/crosstalk/fit.json: unshielded)"}
+  xt_contour_width_m: {value: 0.00328591, source: "derived: the fit's contour width ratio 1.8481 (reports/multitrack/crosstalk/fit.json) times the 70 mil track"}
+  xt_core: {value: -0.00195347, source: "derived: the fit's cores' coupling (-59.2 dB, negative: reports/multitrack/crosstalk/fit.json) +5 dB for four tracks on 1/2 in (Ampex AI-14 p 13; varimu.multitrack.crosstalk.FOUR_VS_THREE_DB)"}
+  r_drive_ohm: {value: 22.0e+3, source: "provisional: model knowledge (sets 0 dBFS near the operating level's ~0.6 mA)"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a repro preamp's grid leak)"}
+
+sections:
+  - title: tape
+    parts:
+      RD1: {R: [in, rec1], r: r_drive_ohm}
+      RS2A: {R: [in, d2], r: r_drive_ohm}
+      RS2B: {R: [d2, "0"], r: r_drive_ohm}
+      RD2: {R: [d2, rec2], r: r_drive_ohm}
+      T1:
+        tape: [rec1, "0", out1, sync1]
+        component: tape_model
+        speed_m_s: speed_m_s
+        f_bias_hz: f_bias_hz
+        bias_a_m: bias_a_m
+        rec_gap_m: rec_gap_m
+        rep_gap_m: rep_gap_m
+        pole_m: pole_m
+        relax_m: relax_m
+        spacing_m: spacing_m
+        track_m: track_m
+        head_distance_m: head_distance_m
+        rec_l_h: rec_l_h
+        rec_r_ohm: rec_r_ohm
+        rec_h_per_a: rec_h_per_a
+        rep_l_h: rep_l_h
+        rep_r_ohm: rep_r_ohm
+        rep_h_per_a: rep_h_per_a
+        sync_l_h: rec_l_h
+        crosstalk_group: deck
+        crosstalk_track: 1
+        crosstalk_pitch_m: pitch_m
+        crosstalk_unshielded: xt_unshielded
+        crosstalk_contour_width_m: xt_contour_width_m
+        crosstalk_core: xt_core
+      T2:
+        tape: [rec2, "0", out2, sync2]
+        component: tape_model
+        speed_m_s: speed_m_s
+        f_bias_hz: f_bias_hz
+        bias_a_m: bias_a_m
+        rec_gap_m: rec_gap_m
+        rep_gap_m: rep_gap_m
+        pole_m: pole_m
+        relax_m: relax_m
+        spacing_m: spacing_m
+        track_m: track_m
+        head_distance_m: head_distance_m
+        rec_l_h: rec_l_h
+        rec_r_ohm: rec_r_ohm
+        rec_h_per_a: rec_h_per_a
+        rep_l_h: rep_l_h
+        rep_r_ohm: rep_r_ohm
+        rep_h_per_a: rep_h_per_a
+        sync_l_h: rec_l_h
+        crosstalk_group: deck
+        crosstalk_track: 2
+        crosstalk_pitch_m: pitch_m
+        crosstalk_unshielded: xt_unshielded
+        crosstalk_contour_width_m: xt_contour_width_m
+        crosstalk_core: xt_core
+      RL1: {R: [out1, "0"], r: r_load_ohm}
+      RL2: {R: [out2, "0"], r: r_load_ohm}
+      RY1: {R: [sync1, "0"], r: r_load_ohm}
+      RY2: {R: [sync2, "0"], r: r_load_ohm}

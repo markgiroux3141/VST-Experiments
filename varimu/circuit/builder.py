@@ -203,6 +203,7 @@ from varimu.circuit.ir import (
     Section,
     SineSource,
     Tape,
+    TapeCrosstalk,
     TapeMedium,
     TapeReduction,
     TapeReductionPoint,
@@ -1018,7 +1019,47 @@ def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
         supply = (ctx.text(f"{name}.supply", a["supply"]), a["supply_nominal_hz"])
     elif a["supply_nominal_hz"] is not None:
         raise ctx.fail(f"{name}.supply_nominal_hz", "only with a supply node")
-    els = parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr, supply)
+    els = parts.tape(name, *conn[:3], model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr, supply)
+    # Sel-Sync: the record head as a playback head, its EMF behind its coil to the 4th node.
+    if len(conn) == 4:
+        if a["sync_l_h"] is None:
+            raise ctx.fail(f"{name}.sync_l_h", "required with a sync node (Sel-Sync)")
+        if ctx.events and a["reduction"] is not None:
+            raise ctx.fail(
+                f"{name}.reduction", "Sel-Sync is the full medium's (not a reduced one's)"
+            )
+        sy, y, coil = parts.tape_sync(
+            name, conn[3], a["rec_h_per_a"], a["sync_l_h"], a["rec_r_ohm"]
+        )
+        els = [
+            dataclasses.replace(e, medium=dataclasses.replace(e.medium, sync=sy), sync_out=y)
+            if isinstance(e, Tape)
+            else e
+            for e in els
+        ] + coil
+    elif a["sync_l_h"] is not None:
+        raise ctx.fail(f"{name}.sync_l_h", "only with a sync node (the part's 4th)")
+    # The track's crosstalk on a tape of several: all or none.
+    keys = ("crosstalk_group", "crosstalk_track", *parts.TAPE_CROSSTALK)
+    if any(a[k] is not None for k in keys):
+        missing = [k for k in keys if a[k] is None]
+        if missing:
+            raise ctx.fail(f"{name}.{missing[0]}", "the crosstalk's values go all or none")
+        x = TapeCrosstalk(
+            ctx.text(f"{name}.crosstalk_group", a["crosstalk_group"]),
+            a["crosstalk_track"],
+            *(a[k] for k in parts.TAPE_CROSSTALK),
+        )
+        if ctx.events and a["reduction"] is not None:
+            raise ctx.fail(
+                f"{name}.reduction", "crosstalk is the full medium's (not a reduced one's)"
+            )
+        els = [
+            dataclasses.replace(e, medium=dataclasses.replace(e.medium, crosstalk=x))
+            if isinstance(e, Tape)
+            else e
+            for e in els
+        ]
     if a["reduction_bias"] is not None and a["reduction"] is None:
         raise ctx.fail(f"{name}.reduction_bias", "only with a reduction")
     if not (ctx.events and a["reduction"] is not None):
@@ -1260,7 +1301,12 @@ for _name, _macro in {
             "reduction_bias": Param("raw", None),
             "supply": Param("raw", None),
             "supply_nominal_hz": Param("physical", None),
+            "crosstalk_group": Param("raw", None),
+            "crosstalk_track": Param("count", None),
+            **{k: Param("physical", None) for k in parts.TAPE_CROSSTALK},
+            "sync_l_h": Param("physical", None),
         },
+        optional_nodes=1,
     ),
     "opamp": Macro(
         _opamp,

@@ -170,6 +170,7 @@ fn split_nodes(e: &Element) -> Vec<&str> {
         Element::Tape(t) => {
             let mut v = vec![t.out.as_str()];
             v.extend(t.supply.as_deref());
+            v.extend(t.sync_out.as_deref());
             v
         }
         _ => e.nodes(),
@@ -198,6 +199,9 @@ pub(crate) struct Split {
     pub remote: Vec<RemoteSense>,
     /// The part with the audio input (0, or a multi-rate part).
     pub input_part: usize,
+    /// Each control input's part (IR order): 0, or the multi-rate part with an audio
+    /// control's node (it reads its samples as it reads the input).
+    pub control_part: Vec<usize>,
 }
 
 impl Split {
@@ -350,11 +354,27 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             }
         }
     };
-    if let Some(c) = ir.controls.iter().find(|c| !node_sets[0].contains(&c.node)) {
-        return Err(Error::new(format!(
-            "partition: control {}'s node must stay in the first partition",
-            c.name
-        )));
+    // Each control input's part: the first, or (an audio control: a second channel's
+    // audio, read as the input is) the one multi-rate part with its node.
+    let mut control_part = Vec::with_capacity(ir.controls.len());
+    for c in &ir.controls {
+        if node_sets[0].contains(&c.node) {
+            control_part.push(0);
+            continue;
+        }
+        let with: Vec<usize> = (1..n_parts)
+            .filter(|&p| node_sets[p].contains(&c.node))
+            .collect();
+        match with[..] {
+            [q] if c.audio && substeps[q] > 1 => control_part.push(q),
+            _ => {
+                return Err(Error::new(format!(
+                    "partition: control {}'s node must stay in the first partition (an audio \
+                     control's may be one multi-rate part's alone)",
+                    c.name
+                )));
+            }
+        }
     }
     // Tapes with the literal bias: their senses in the multi-rate part of their steps.
     let mut remote = Vec::new();
@@ -596,11 +616,13 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             } else {
                 STUB_INPUT.into()
             },
-            controls: if p == 0 {
-                ir.controls.clone()
-            } else {
-                Vec::new()
-            },
+            controls: ir
+                .controls
+                .iter()
+                .zip(&control_part)
+                .filter(|(_, q)| **q == p)
+                .map(|(c, _)| c.clone())
+                .collect(),
             heaters: ir.heaters.clone(),
             // Every part keeps the noise spec (streams are keyed by element name), with the
             // mains wander on the mains sources it has.
@@ -624,6 +646,28 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             sections,
         });
     }
+    // A tape's tracks read each other (crosstalk, `crate::media::crosstalk_pairs`): one
+    // part holds every track of a group.
+    let mut group_part: Vec<(&str, usize)> = Vec::new();
+    for (q, part) in parts.iter().enumerate() {
+        for e in part.elements() {
+            let Element::Tape(t) = e else { continue };
+            let Some(x) = &t.medium.crosstalk else {
+                continue;
+            };
+            match group_part.iter().find(|(g, _)| *g == x.group) {
+                Some(&(_, q0)) if q0 != q => {
+                    return Err(Error::new(format!(
+                        "partition: the tracks of tape {} are in different parts (keep a \
+                         crosstalk group's repro heads together)",
+                        x.group
+                    )));
+                }
+                Some(_) => {}
+                None => group_part.push((&x.group, q)),
+            }
+        }
+    }
     let mut titles = vec![Vec::new()];
     titles.extend(groups);
     Ok(Split {
@@ -637,6 +681,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         titles,
         remote,
         input_part,
+        control_part,
     })
 }
 

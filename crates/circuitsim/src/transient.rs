@@ -791,6 +791,12 @@ impl Dk {
     }
 }
 
+/// The tapes' crosstalk pairs of a circuit's media ([`crate::media::crosstalk_pairs`]).
+fn media_cross(mna: &Mna) -> Result<Vec<(usize, usize, usize)>, Error> {
+    let els: Vec<&crate::media::MediumElement> = mna.media.iter().map(|m| &m.element).collect();
+    crate::media::crosstalk_pairs(&els, mna.n_controls).map_err(Error::new)
+}
+
 /// A transient run in progress; `step` advances it one sample.
 #[derive(Debug)]
 pub struct Transient {
@@ -800,6 +806,9 @@ pub struct Transient {
     /// A medium's senses over the next step, given from outside (a multi-rate part's,
     /// `partition.rs`): taken by the step's media push instead of its own sense.
     media_batches: Vec<Option<Vec<f64>>>,
+    /// Tapes' crosstalk: (a head's output row, the medium whose cross EMF it adds, which
+    /// of its outputs) ([`crate::media::crosstalk_pairs`]).
+    media_cross: Vec<(usize, usize, usize)>,
     /// The thyratrons' event kernels ([`Mna::events`] order).
     events: Vec<crate::reset_events::EventRun>,
     opts: Options,
@@ -1004,7 +1013,9 @@ impl Transient {
             .map(|e| crate::reset_events::EventRun::new(&e.element, h))
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
+        let media_cross = media_cross(&mna)?;
         let mut tr = Transient {
+            media_cross,
             media_batches: vec![None; media.len()],
             media,
             events,
@@ -2176,6 +2187,7 @@ impl Transient {
         for (m, new) in self.media.iter_mut().zip(&mna.media) {
             m.update(&new.element).map_err(|_| changed())?;
         }
+        self.media_cross = media_cross(&mna)?;
         // Event kernels carry on (their state, their pending charges); new tables
         // start a kernel afresh.
         if mna.events.len() != self.events.len()
@@ -2399,6 +2411,10 @@ impl Transient {
                 self.ext1[row + j] = m.output(j);
             }
             row += m.outs();
+        }
+        // Tapes' crosstalk: each head reads its neighbours' tracks too.
+        for &(row, j, o) in &self.media_cross {
+            self.ext1[row] += self.media[j].cross(o);
         }
     }
 

@@ -552,7 +552,7 @@ const MACROS: [&str; 32] = [
 
 /// The macros that take one more, optional node (builder.py's `optional_nodes`): a stereo
 /// medium's `out_r`, an open-collector op-amp's `v_minus`.
-const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank", "opamp"];
+const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank", "opamp", "tape"];
 
 fn macro_of(kind: &str) -> Macro {
     use Kind::*;
@@ -714,6 +714,10 @@ fn macro_of(kind: &str) -> Macro {
                 .chain(std::iter::once(opt("reduction_bias", Raw)))
                 .chain(std::iter::once(opt("supply", Raw)))
                 .chain(std::iter::once(opt("supply_nominal_hz", Physical)))
+                .chain(std::iter::once(opt("crosstalk_group", Raw)))
+                .chain(std::iter::once(opt("crosstalk_track", Count)))
+                .chain(crate::tape::CROSSTALK.iter().map(|k| opt(k, Physical)))
+                .chain(std::iter::once(opt("sync_l_h", Physical)))
                 .collect(),
             false,
         ),
@@ -1409,6 +1413,71 @@ fn tape_part(
         (given > 0).then_some(&tr),
         supply.as_ref().map(|(n, hz)| (n.as_str(), *hz)),
     );
+    // Sel-Sync: the record head as a playback head, its EMF behind its coil to the 4th node.
+    if nodes.len() == 4 {
+        if a["sync_l_h"].is_null() {
+            return Err(ctx.fail(
+                &format!("{name}.sync_l_h"),
+                "required with a sync node (Sel-Sync)",
+            ));
+        }
+        if ctx.events && !a["reduction"].is_null() {
+            return Err(ctx.fail(
+                &format!("{name}.reduction"),
+                "Sel-Sync is the full medium's (not a reduced one's)",
+            ));
+        }
+        let l = ctx.float(&format!("{name}.sync_l_h"), &a["sync_l_h"])?;
+        let (y, coil) = crate::tape::sync_coil(name, &nodes[3], l, v[11]);
+        for e in &mut els {
+            if let Element::Tape(t) = e {
+                t.medium.sync = Some(circuitsim::tape_stream::TapeSync { h_per_a: v[12] });
+                t.sync_out = Some(y.clone());
+            }
+        }
+        els.extend(coil);
+    } else if !a["sync_l_h"].is_null() {
+        return Err(ctx.fail(
+            &format!("{name}.sync_l_h"),
+            "only with a sync node (the part's 4th)",
+        ));
+    }
+    // The track's crosstalk on a tape of several: all or none.
+    let keys = ["crosstalk_group", "crosstalk_track"]
+        .into_iter()
+        .chain(crate::tape::CROSSTALK);
+    let given_x = keys.clone().filter(|k| !a[*k].is_null()).count();
+    if given_x > 0 {
+        if let Some(k) = keys.clone().find(|k| a[*k].is_null()) {
+            return Err(ctx.fail(
+                &format!("{name}.{k}"),
+                "the crosstalk's values go all or none",
+            ));
+        }
+        let mut xv = [0.0; 4];
+        for (x, k) in xv.iter_mut().zip(crate::tape::CROSSTALK) {
+            *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
+        }
+        let x = circuitsim::tape_stream::TapeCrosstalk {
+            group: ctx.text(&format!("{name}.crosstalk_group"), &a["crosstalk_group"])?,
+            track: ctx.count(&format!("{name}.crosstalk_track"), &a["crosstalk_track"])? as usize,
+            pitch_m: xv[0],
+            unshielded: xv[1],
+            contour_width_m: xv[2],
+            core: xv[3],
+        };
+        if !a["reduction"].is_null() && ctx.events {
+            return Err(ctx.fail(
+                &format!("{name}.reduction"),
+                "crosstalk is the full medium's (not a reduced one's)",
+            ));
+        }
+        for e in &mut els {
+            if let Element::Tape(t) = e {
+                t.medium.crosstalk = Some(x.clone());
+            }
+        }
+    }
     if !a["reduction_bias"].is_null() && a["reduction"].is_null() {
         return Err(ctx.fail(&format!("{name}.reduction_bias"), "only with a reduction"));
     }

@@ -182,6 +182,101 @@ def head_hy_spectrum(head: HeadGeometry, k: np.ndarray, y: float) -> np.ndarray:
     return 1j * np.sign(k) * head_hx_spectrum(head, k, y)
 
 
+# --- Crosstalk: a head reading its neighbour's track (PERIOD_GEAR_BACKLOG.md PG1, MT3) ----
+
+
+@dataclass(frozen=True)
+class CrossPickup:
+    """What a head of a stack reads of the track beside its own, centre to centre pitch_m
+    (varimu.multitrack.crosstalk is the model and its fit to Ampex's measured curve): the
+    outer contour's field, which the interchannel shields don't screen, a fraction
+    `unshielded` of it, spread across the width as a strip contour_width_m wide
+    (`lateral_factor`); plus the cores' flat coupling ("stacked heads form a small
+    transformer", Ampex AI-14 p 10), a fraction `core` of what the neighbour's own head
+    reads. Both linear in the neighbour's magnetization, so the neighbour's stream computes
+    it (`cross_hx_spectrum`) and the heads beside it add it to their own EMF."""
+
+    pitch_m: float
+    unshielded: float
+    contour_width_m: float
+    core: float
+
+    def check(self) -> None:
+        if not (
+            self.pitch_m > self.contour_width_m > 0.0
+            and self.unshielded >= 0.0
+            and math.isfinite(self.core)
+        ):
+            raise ValueError("crosstalk: pitch > contour width > 0, unshielded >= 0")
+
+
+#: `lateral_factor`'s quadrature: the step in t and where it stops (the integrand below
+#: e^-LATERAL_DECAY of its scale). The integrand is analytic in |Im t| < pi / 2, so the
+#: trapezoidal rule's error is ~exp(-pi^2 / step), far below rounding.
+LATERAL_STEP = 0.1
+LATERAL_DECAY = 60.0
+
+
+def lateral_factor(k: np.ndarray, d_m: float, w_m: float) -> np.ndarray:
+    """L(k): the field of a strip contour w wide, read by a head at centre distance d > w
+    across the tape, relative to a track of infinite width (varimu.multitrack.crosstalk's
+    `lateral`: k / (pi w) integral of the triangle (w - |u - d|) times K0(k u)). With
+    K0(x) = integral_0^inf exp(-x cosh t) dt the triangle integrates in closed form, so
+
+        L(k) = k / (pi w) integral_0^inf e^{-a (d - w)} (1 - e^{-a w})^2 / a^2 dt,
+        a = k cosh t,
+
+    a double-exponentially decaying integrand: the trapezoidal rule from t = 0 (half its
+    weight there) at LATERAL_STEP, to the last t with a (d - w) <= LATERAL_DECAY. In the
+    same order of operations as circuitsim's port; L(0) = 0 (and k < 0 reads |k|)."""
+    if not d_m > w_m > 0.0:
+        raise ValueError("the strips overlap: crosstalk is for separate tracks")
+    k = np.abs(np.asarray(k, float))
+    out = np.zeros_like(k)
+    gap = d_m - w_m
+    for i, kk in np.ndenumerate(k):
+        if kk == 0.0:
+            continue
+        n = int(math.ceil(math.acosh(max(LATERAL_DECAY / (kk * gap), 1.0)) / LATERAL_STEP))
+        a = kk * np.cosh(LATERAL_STEP * np.arange(n + 1))
+        f = np.exp(-a * gap) * np.expm1(-a * w_m) ** 2 / (a * a)
+        acc = 0.5 * f[0]
+        for x in f[1:].tolist():
+            acc += x
+        out[i] = kk / (math.pi * w_m) * LATERAL_STEP * acc
+    return out
+
+
+def cross_hx_spectrum(
+    head: HeadGeometry, k: np.ndarray, y: float, x: CrossPickup, lat: np.ndarray | None = None
+) -> np.ndarray:
+    """`head_hx_spectrum` for a neighbouring head (`CrossPickup`): the contour's term times
+    unshielded L(k) (`lateral_factor`, or `lat` precomputed on k), and the cores' coupling
+    times the head's own bracket: g e^{-|k| y} [core sinc(k g / 2) - (unshielded L + core)
+    cos(k e_c) R(k)]."""
+    k = np.asarray(k, float)
+    g, p, r = head.gap_m, head.pole_m, head.relax_m
+    gap = np.sinc(k * g / (2.0 * math.pi))
+    ec = g / 2.0 + p + r / 2.0
+    relax = np.sinc(k * r / (2.0 * math.pi)) if r > 0 else 1.0
+    if lat is None:
+        lat = lateral_factor(k, x.pitch_m, x.contour_width_m)
+    bracket = x.core * gap - (x.unshielded * lat + x.core) * np.cos(k * ec) * relax
+    return g * np.exp(-np.abs(k) * y) * bracket
+
+
+_LATERAL_CACHE: dict[tuple, np.ndarray] = {}
+
+
+def _lateral_on(k: np.ndarray, x: CrossPickup) -> np.ndarray:
+    """`lateral_factor` on an FFT's bins, kept per (bins, spacing, pickup): a stream asks
+    for the same grid every block."""
+    key = (len(k), float(k[1]) if len(k) > 1 else 0.0, x.pitch_m, x.contour_width_m)
+    if key not in _LATERAL_CACHE:
+        _LATERAL_CACHE[key] = lateral_factor(k, x.pitch_m, x.contour_width_m)
+    return _LATERAL_CACHE[key]
+
+
 @dataclass(frozen=True)
 class Orientation:
     """The particles' easy axes in the x-y plane (along the tape and into the coating):
@@ -564,6 +659,7 @@ def flux_slope(
     head: HeadGeometry,
     k_max: float | None = None,
     m_y: np.ndarray | None = None,
+    cross: CrossPickup | None = None,
 ) -> np.ndarray:
     """G(s) = d/ds of sum_l integral m_l(s') Hx_l(s' - s) ds' / Hg on the cells' grid
     (s the repro gap's position; Hx_l the head's field at layer l's height), from the
@@ -571,17 +667,24 @@ def flux_slope(
     spectrum. k_max (rad/m) cuts the spectrum off smoothly above 0.8 k_max (to sample
     the EMF without aliasing); None keeps all of it. m_y: the cells' M_y / Ms, read through
     Hy (reciprocity: M . H), if any. F(s) = integral m(s') K(s' - s) ds' has the spectrum
-    m^(k) K^(-k): K^(k) for the even Hx, -K^(k) for the odd Hy."""
+    m^(k) K^(-k): K^(k) for the even Hx, -K^(k) for the odd Hy.
+
+    cross: the slope a neighbouring head reads (`cross_hx_spectrum`, Hy's i sgn(k) times
+    it as for the head's own)."""
     layers, cells = m.shape
     ext = int(math.ceil(4.0 * (head.gap_m / 2.0 + head.pole_m + head.relax_m) / slab.ds_m))
     n = 1 << int(math.ceil(math.log2(cells + 2 * ext)))
     k = 2.0 * math.pi * np.fft.rfftfreq(n, slab.ds_m)
     acc = np.zeros(len(k), complex)
+    lat = None if cross is None else _lateral_on(k, cross)
     for li, depth in enumerate(slab.depths_m):
-        spec = head_hx_spectrum(head, k, slab.spacing_m + depth)
+        if cross is None:
+            spec = head_hx_spectrum(head, k, slab.spacing_m + depth)
+        else:
+            spec = cross_hx_spectrum(head, k, slab.spacing_m + depth, cross, lat)
         acc += np.fft.rfft(m[li], n) * spec
         if m_y is not None:
-            acc -= np.fft.rfft(m_y[li], n) * head_hy_spectrum(head, k, slab.spacing_m + depth)
+            acc -= np.fft.rfft(m_y[li], n) * (1j * np.sign(k) * spec)
     # d/ds -> i k.
     acc *= 1j * k
     if k_max is not None:

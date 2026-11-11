@@ -62,6 +62,9 @@ struct InputHist {
     hist: Vec<f64>,
     hist0: usize,
     len: Option<usize>,
+    /// The control inputs' samples, indexed as `hist` (IR order), when a multi-rate part
+    /// holds audio controls (empty otherwise).
+    ctl: Vec<Vec<f64>>,
 }
 
 /// What the threads share.
@@ -217,6 +220,18 @@ impl Shared {
     /// takes it (`Stream::step_one`), once the samples it needs are in; None if stopped or
     /// the input has ended before it.
     fn input_window(&self, me: usize, n: usize, order: usize) -> Option<StepInput> {
+        self.window(me, n, order, None)
+    }
+
+    /// [`Shared::input_window`] for the input (`channel` None) or control `k` (Some(k):
+    /// an audio control a multi-rate part holds, read as the input is).
+    fn window(
+        &self,
+        me: usize,
+        n: usize,
+        order: usize,
+        channel: Option<usize>,
+    ) -> Option<StepInput> {
         let half = (order - 1) / 2;
         let t0 = Instant::now();
         let mut spins = 0u32;
@@ -236,17 +251,22 @@ impl Shared {
                     None => n + 1 + half,
                 };
                 if hi < known {
-                    let at = |k: usize| g.hist[k - g.hist0];
+                    let h = match channel {
+                        None => &g.hist,
+                        Some(k) => &g.ctl[k],
+                    };
+                    let at = |k: usize| h[k - g.hist0];
                     let inp = if order == 1 {
                         StepInput::linear(at(n), at(n + 1))
                     } else {
                         let lo = n.saturating_sub(half);
-                        let w = &g.hist[lo - g.hist0..=hi - g.hist0];
+                        let w = &h[lo - g.hist0..=hi - g.hist0];
                         StepInput::lagrange(w, lo as i32 - n as i32)
                     };
-                    // Samples no later step reads.
+                    // Samples no later step reads (the input's history keeps the controls'
+                    // while a part reads them: its windows come first).
                     let keep = n.saturating_sub(half + 1);
-                    if keep > g.hist0 + 4096 {
+                    if channel.is_none() && g.ctl.is_empty() && keep > g.hist0 + 4096 {
                         let d = keep - g.hist0;
                         g.hist.drain(..d);
                         g.hist0 = keep;
@@ -297,6 +317,10 @@ struct PartIo {
     feeds: Vec<MediaFeed>,
     /// A multi-rate part with the audio input: the input's interpolation order.
     input_order: Option<usize>,
+    /// A multi-rate part's audio controls (IR indices, in its own controls' order), read
+    /// as the input is at `ctl_order`.
+    ctl: Vec<usize>,
+    ctl_order: usize,
     /// A multi-rate part handing on its values through a [`Decimator`].
     decimate: bool,
     /// Samples late it reads the others (`Options::multirate_lag`; 0: lockstep).
@@ -317,6 +341,12 @@ struct Parts {
     media_feeds: Vec<MediaFeed>,
     /// A multi-rate part has the input: it reads the stream's input (`InputHist`).
     shares_input: bool,
+    /// A multi-rate part holds audio controls: it reads their samples from `InputHist`
+    /// (the first part trims that history, this many samples behind it: past where any
+    /// part can be, the rings keep them that close).
+    shares_controls: Option<usize>,
+    /// The first part's controls (IR indices, in its controls' order).
+    ctl0: Vec<usize>,
     /// The first partition's senses for tapes elsewhere (unknowns; None: ground),
     /// published after its couplings.
     senses: Vec<(Option<usize>, Option<usize>)>,
@@ -395,6 +425,14 @@ fn run_part(
             },
             None => StepInput::linear(0.0, 0.0),
         };
+        // Its audio controls over the sample, as the input.
+        let mut ctl = Vec::with_capacity(io.ctl.len());
+        for &k in &io.ctl {
+            match shared.window(p, n, io.ctl_order, Some(k)) {
+                Some(w) => ctl.push(w),
+                None => return,
+            }
+        }
         if substeps == 1 {
             tr.set_externals(&e0, &e1);
             if let Err(e) = tr.step_input(&inp) {
@@ -418,6 +456,14 @@ fn run_part(
                     eb[i] = e0[i] + (e1[i] - e0[i]) * fb;
                 }
                 tr.set_externals(&ea, &eb);
+                if !ctl.is_empty() {
+                    let w: Vec<(usize, StepInput)> = ctl
+                        .iter()
+                        .enumerate()
+                        .map(|(i, w)| (i, w.sub(j, substeps)))
+                        .collect();
+                    tr.set_audio_controls(&w);
+                }
                 if let Err(e) = tr.step_input(&inp.sub(j, substeps)) {
                     shared.fail(Error::new(format!("partition {titles:?}: {e}")));
                     return;
@@ -603,9 +649,10 @@ impl Stream {
         };
         let streams: Vec<&[f64]> = c0.iter().map(std::slice::from_ref).collect();
         crate::transient::check_controls(ir, &streams, 1)?;
-        // A transient on `mna` at the DC point with the controls at c0, then `ext`.
-        let start = |mna: Mna, ext: &[f64], u: f64| {
-            let mut all = c0.clone();
+        // A transient on `mna` at the DC point with its controls (IR indices `ctl`) at
+        // c0, then `ext`.
+        let start_with = |mna: Mna, ctl: &[usize], ext: &[f64], u: f64| {
+            let mut all: Vec<f64> = ctl.iter().map(|&k| c0[k]).collect();
             all.extend_from_slice(ext);
             if all.is_empty() {
                 Transient::new(mna, h, *opts, u)
@@ -642,13 +689,27 @@ impl Stream {
             out: Vec::new(),
             batch: Vec::new(),
         };
+        let all_ctl: Vec<usize> = (0..ir.controls.len()).collect();
         if groups(second).is_empty() && !ir.multirate() {
-            let tr = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
+            let tr = start_with(Mna::from_ir(ir, opts.gmin)?, &all_ctl, &[], u0)?;
             let sources = (0..names.len()).map(|j| (0, j)).collect();
             return Ok(base(tr, None, sources, 0));
         }
 
         let sp = split(ir, second)?;
+        // Each part's controls (IR indices, in its controls' order).
+        let part_ctl = |p: usize| -> Vec<usize> {
+            (0..ir.controls.len())
+                .filter(|&k| sp.control_part[k] == p)
+                .collect()
+        };
+        let start = |mna: Mna, ext: &[f64], u: f64| start_with(mna, &part_ctl(0), ext, u);
+        // A multi-rate part at its DC point: its controls at c0, then `ext`.
+        let start_part = |mna: Mna, p: usize, hp: f64, o: Options, u: f64, ext: &[f64]| {
+            let mut all: Vec<f64> = part_ctl(p).iter().map(|&k| c0[k]).collect();
+            all.extend_from_slice(ext);
+            Transient::with_externals(mna, hp, o, u, &all)
+        };
         // A harp's events go to the first part's transient (`Stream::queue_notes`).
         if let Some(e) = sp.parts[1..]
             .iter()
@@ -667,7 +728,7 @@ impl Stream {
         }
         let n_parts = sp.parts.len();
         // The shared nodes at the whole circuit's DC operating point.
-        let whole = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
+        let whole = start_with(Mna::from_ir(ir, opts.gmin)?, &all_ctl, &[], u0)?;
         let v_dc: Vec<f64> = sp
             .shared
             .iter()
@@ -737,7 +798,7 @@ impl Stream {
                     start(mna, &ext, u0)?
                 } else {
                     let u = if p == sp.input_part { u0 } else { 0.0 };
-                    Transient::with_externals(mna, h, *opts, u, &ext)?
+                    start_part(mna, p, h, *opts, u, &ext)?
                 };
                 let mut o: Vec<f64> = owned.iter().map(|&i| v_dc[i]).collect();
                 o.extend(br[owned.len()..].iter().map(|&b| tr.x()[b]));
@@ -772,6 +833,8 @@ impl Stream {
                 senses,
                 feeds: Vec::new(),
                 input_order: (p == sp.input_part && p > 0).then_some(opts.input_order.max(1)),
+                ctl: if p > 0 { part_ctl(p) } else { Vec::new() },
+                ctl_order: opts.input_order.max(1),
                 decimate: sp.decimate[p].is_some(),
                 lag: 0,
             };
@@ -818,7 +881,7 @@ impl Stream {
                         o.tube_tables = t;
                     }
                 }
-                Transient::with_externals(mna, h / sp.substeps[p] as f64, o, u, &ext)?
+                start_part(mna, p, h / sp.substeps[p] as f64, o, u, &ext)?
             };
             let mut o: Vec<f64> = tr.mna().outputs[..n_coupling]
                 .iter()
@@ -906,6 +969,11 @@ impl Stream {
                 hist: vec![u0],
                 hist0: 0,
                 len: None,
+                ctl: if sp.control_part.iter().any(|&q| q > 0) {
+                    c0.iter().map(|&c| vec![c]).collect()
+                } else {
+                    Vec::new()
+                },
             }),
             waited_ns: (0..n_parts).map(|_| AtomicU64::new(0)).collect(),
             created: Instant::now(),
@@ -946,6 +1014,12 @@ impl Stream {
             feeds: feeds[0].clone(),
             media_feeds: ios[0].feeds.clone(),
             shares_input: sp.input_part > 0,
+            shares_controls: sp
+                .control_part
+                .iter()
+                .any(|&q| q > 0)
+                .then_some(depth + 4096),
+            ctl0: part_ctl(0),
             senses: ios[0].senses.clone(),
             lagged,
         };
@@ -1058,20 +1132,37 @@ impl Stream {
         }
         self.hist.extend_from_slice(input);
         self.a.notes_known_until(self.hist0 + self.hist.len() - 1);
-        if let Some(s) = self.parts.as_ref().filter(|s| s.shares_input) {
-            s.shared
-                .input
-                .lock()
-                .expect("input")
-                .hist
-                .extend_from_slice(input);
-        }
         for (k, h) in self.chist.iter_mut().enumerate() {
             match controls.get(k) {
                 Some(c) => h.extend_from_slice(c),
                 None => {
                     let last = *h.last().expect("sample 0");
                     h.resize(h.len() + input.len(), last);
+                }
+            }
+        }
+        if let Some(s) = self
+            .parts
+            .as_ref()
+            .filter(|s| s.shares_input || s.shares_controls.is_some())
+        {
+            let mut g = s.shared.input.lock().expect("input");
+            // The controls first: a part waiting on the input's length reads them next.
+            let new = input.len();
+            for (c, h) in g.ctl.iter_mut().zip(&self.chist) {
+                c.extend_from_slice(&h[h.len() - new..]);
+            }
+            g.hist.extend_from_slice(input);
+            // A history the parts read the controls from: trimmed behind them.
+            if let Some(margin) = s.shares_controls {
+                let keep = self.n.saturating_sub(margin);
+                if keep > g.hist0 + 4096 {
+                    let d = keep - g.hist0;
+                    g.hist.drain(..d);
+                    for c in &mut g.ctl {
+                        c.drain(..d);
+                    }
+                    g.hist0 = keep;
                 }
             }
         }
@@ -1103,7 +1194,11 @@ impl Stream {
     pub fn finish(&mut self) -> Result<Vec<Vec<f64>>, Error> {
         let known = self.hist0 + self.hist.len();
         self.len = Some(known);
-        if let Some(s) = self.parts.as_ref().filter(|s| s.shares_input) {
+        if let Some(s) = self
+            .parts
+            .as_ref()
+            .filter(|s| s.shares_input || s.shares_controls.is_some())
+        {
             s.shared.input.lock().expect("input").len = Some(known);
         }
         self.run_until(known.saturating_sub(1))
@@ -1183,16 +1278,23 @@ impl Stream {
         // The control inputs over the step, as simulate's loop takes them.
         if !self.chist.is_empty() {
             let i = n - self.hist0;
-            let c0: Vec<f64> = self.chist.iter().map(|h| h[i]).collect();
-            let c1: Vec<f64> = self.chist.iter().map(|h| h[i + 1]).collect();
+            // The first part's controls (all of them unpartitioned; a multi-rate part's
+            // audio controls are its own).
+            let mine: Vec<usize> = match &self.parts {
+                Some(s) => s.ctl0.clone(),
+                None => (0..self.chist.len()).collect(),
+            };
+            let c0: Vec<f64> = mine.iter().map(|&k| self.chist[k][i]).collect();
+            let c1: Vec<f64> = mine.iter().map(|&k| self.chist[k][i + 1]).collect();
             self.a.set_controls(&c0, &c1);
             if !self.audio.is_empty() {
-                let w: Vec<(usize, StepInput)> = self
-                    .audio
+                let w: Vec<(usize, StepInput)> = mine
                     .iter()
-                    .map(|&k| {
+                    .enumerate()
+                    .filter(|(_, k)| self.audio.contains(k))
+                    .map(|(j, &k)| {
                         let x = &self.chist[k];
-                        (k, step_window(x, self.hist0, n, self.order, self.len))
+                        (j, step_window(x, self.hist0, n, self.order, self.len))
                     })
                     .collect();
                 self.a.set_audio_controls(&w);

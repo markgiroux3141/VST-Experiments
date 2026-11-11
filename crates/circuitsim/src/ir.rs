@@ -425,6 +425,11 @@ pub struct Tape {
     /// reads it. None: no varispeed, and no such key in the JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supply: Option<String>,
+    /// The record head's playback (Sel-Sync; the medium's `sync`): its EMF drives this node
+    /// to ground one sample after the step, as the repro head's drives `out` (the record
+    /// head's reading of the tape the repro head reads then). None: no such key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_out: Option<String>,
 }
 
 /// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `crate::harp`; `varimu.rhodes.harp` is the
@@ -1144,6 +1149,7 @@ impl Element {
             Element::Tape(e) => {
                 let mut v = vec![e.sense_pos.as_str(), &e.sense_neg, &e.out];
                 v.extend(e.supply.as_deref());
+                v.extend(e.sync_out.as_deref());
                 v
             }
             Element::Harp(e) => vec![&e.out],
@@ -1669,6 +1675,18 @@ impl CircuitIr {
                         return err(format!(
                             "{name}: its repro head drives {} (ground or the input)",
                             e.out
+                        ));
+                    }
+                    if e.sync_out.is_some() != e.medium.sync.is_some() {
+                        return err(format!(
+                            "{name}: a sync node and the medium's sync readout go together"
+                        ));
+                    }
+                    if let Some(y) = &e.sync_out
+                        && (y == GROUND || *y == self.input_node || *y == e.out)
+                    {
+                        return err(format!(
+                            "{name}: its record head drives {y} (ground, the input or out)"
                         ));
                     }
                     'V'
