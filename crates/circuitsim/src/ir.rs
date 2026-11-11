@@ -867,6 +867,7 @@ pub enum DeviceModel {
     Optocoupler(Optocoupler),
     Photocell(Photocell),
     Contact(Contact),
+    Carbon(Carbon),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -1059,6 +1060,21 @@ pub struct Contact {
     pub v_closed_v: f64,
 }
 
+/// `varimu.devices.carbon.Carbon`: granular carbon pressed by a force (a carbon button),
+/// pins (a, b, f, ref): the carbon from a to b, its conductance
+/// G_open + G0 (F_s / F0)^n at the force F = V(f, ref) newtons (F_s its softplus over
+/// `soft_n`). Port currents: the carbon's into a, out of b; none into f.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Carbon {
+    pub name: String,
+    pub g0_s: f64,
+    pub f0_n: f64,
+    pub exponent: f64,
+    pub g_open_s: f64,
+    pub soft_n: f64,
+}
+
 /// A BJT's polarity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1186,6 +1202,7 @@ impl DeviceModel {
             DeviceModel::Optocoupler(m) => &m.name,
             DeviceModel::Photocell(m) => &m.name,
             DeviceModel::Contact(m) => &m.name,
+            DeviceModel::Carbon(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Jfet(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
@@ -1203,6 +1220,7 @@ impl DeviceModel {
             DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
             DeviceModel::Photocell(_) => &["t", "tb", "s", "ra", "rb"],
             DeviceModel::Contact(_) => &["a", "b", "c", "ref"],
+            DeviceModel::Carbon(_) => &["a", "b", "f", "ref"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Jfet(_) => &["d", "g", "s"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
@@ -2157,6 +2175,15 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             if c.v_closed_v == c.v_open_v {
                 return err(format!("{name}: v_closed_v must differ from v_open_v"));
             }
+        }
+        DeviceModel::Carbon(c) => {
+            values.extend([
+                ("g0_s", c.g0_s),
+                ("f0_n", c.f0_n),
+                ("g_open_s", c.g_open_s),
+                ("soft_n", c.soft_n),
+            ]);
+            finite(&format!("{name}.exponent"), c.exponent)?;
         }
         DeviceModel::Photocell(p) => {
             values.extend([

@@ -683,6 +683,28 @@ fn table() -> Vec<SymbolDef> {
             (0.0, 6.35, 5.588, "left"),
         ),
         macro_sym(
+            "ReedKeys",
+            "reed_keys",
+            "RK",
+            "The Victorian synth's reed keyboard (docs/VICTORIAN_SYNTH_PLAN.md, varimu.victorian): pins 1 its local battery and 2 its line (sensed), 3 and 4 the keys' local and line currents (to ground), its keys played by note events; Value is its component version",
+            vec![
+                pin("1", "1", -7.62, 1.27, 0, 2.54),
+                pin("2", "2", -7.62, -1.27, 0, 2.54),
+                pin("3", "3", 7.62, 1.27, 180, 2.54),
+                pin("4", "4", 7.62, -1.27, 180, 2.54),
+            ],
+            vec![
+                rect(-5.08, -3.81, 5.08, 3.81),
+                poly(&[(-3.81, -2.54), (3.81, -2.54)]),
+                poly(&[(-3.81, 0.0), (3.81, 0.0)]),
+                poly(&[(-3.81, 2.54), (3.81, 2.54)]),
+            ],
+            Some("component"),
+            &["step_hz", "v_per_a"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
+        macro_sym(
             "Tape",
             "tape",
             "TP",

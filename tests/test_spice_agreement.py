@@ -189,6 +189,29 @@ def test_photocell_agrees():
         np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
 
 
+def test_carbon_agrees():
+    """A carbon button's current (into a, out of b; none into its force pin): pulled off,
+    through its softened zero force, and pressed."""
+    d = load_device("CARBON_BUTTON@1")
+    pts = [
+        (va, vb, f) for va in (-2.0, 0.3) for vb in (0.0, 1.5) for f in (-0.5, 0.0, 0.01, 0.3, 2.0)
+    ]
+    lines = [d.subckt()]
+    for k, (va, vb, f) in enumerate(pts):
+        lines += [
+            f"va{k} a{k} 0 dc {va}",
+            f"vb{k} b{k} 0 dc {vb}",
+            f"vf{k} f{k} 0 dc {f}",
+            f"x{k} a{k} b{k} f{k} 0 {d.subckt_name}",
+        ]
+    pins = ("va", "vb", "vf")
+    r = _op(lines, [f"i({p}{k})" for k in range(len(pts)) for p in pins])
+    want = np.array([d.currents(p) for p in pts])
+    got = -np.array([[r[f"i({p}{k})"] for p in pins] for k in range(len(pts))])
+    for j, what in enumerate(("a", "b", "force")):
+        np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
+
+
 @pytest.mark.parametrize("name", ["KEY_CONTACT@1", "KEY_BREAK@1"])
 def test_contact_agrees(name):
     """A contact's current (into a, out of b; none into its control pin): its springs both

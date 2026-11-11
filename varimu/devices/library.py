@@ -31,6 +31,7 @@ from varimu.devices.capsule import (
     capsule_from_data,
     dual_capsule_from_data,
 )
+from varimu.devices.carbon import Carbon, carbon_from_data
 from varimu.devices.contact import Contact, contact_from_data
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.fit import (
@@ -74,6 +75,7 @@ Device = (
     | Optocoupler
     | Photocell
     | Contact
+    | Carbon
 )
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
@@ -154,6 +156,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return photocell_from_data(d, name)
     if kind == "contact":
         return contact_from_data(d, name)
+    if kind == "carbon":
+        return carbon_from_data(d, name)
     if kind == "bjt":
         return bjt_from_data(d, name)
     if kind == "jfet":
@@ -1503,6 +1507,81 @@ def build_p12r() -> dict[str, Any]:
         },
         "fit_report": fit.report,
     }
+
+
+def _receiver(name: str, coil_ohm: float, coil_source: str) -> dict[str, Any]:
+    """A magneto telephone receiver of the 1880s (a permanent bar magnet, a coil on its pole,
+    a ferrotype-iron diaphragm 2 in free across) as a `speaker`-kind component: the moving
+    iron's small-signal equivalent (the coil, its iron's eddy-current pair, a force factor,
+    the diaphragm's fundamental and its second axisymmetric mode). A coil wound to `coil_ohm`
+    in the same window: its inductances scale with the resistance, its force factor with the
+    resistance's square root (the turns), from Bell's 40 ohm."""
+    k = coil_ohm / 40.0
+    plate = (
+        "web: https://archive.org/details/telephone00pree (Preece & Maier, The Telephone, "
+        "1889, p. 27: Bell's hand telephone, a steel bar magnet ~4.5 in, a boxwood reel wound "
+        "to ~40 ohm, a sheet-iron diaphragm 2 in free diameter and 1/100-1/200 in thick, "
+        "'the ferrotype plate used by photographers')"
+    )
+    # The clamped plate's fundamental: f = 0.469 (h / a^2) sqrt(E / rho (1 - nu^2)), 0.2 mm
+    # iron over a 25.4 mm radius ~770 Hz, lowered by the magnet's pull (a negative stiffness).
+    f0, m_eff, q = 700.0, 0.58e-3, 10.0
+    w0 = 2 * math.pi * f0
+    return {
+        "name": name,
+        "kind": "speaker",
+        "source": f"{plate}; the electromechanical values provisional (model knowledge) where "
+        "the sources give none (docs/VICTORIAN_SYNTH_PLAN.md, V2)",
+        "voice_coil": {
+            "re_ohm": coil_ohm,
+            "le_h": 0.05 * k,
+            "l2_h": 0.03 * k,
+            "r2_ohm": 200.0 * k,
+            "source": f"Re: {coil_source}; Le, L2 || R2 provisional: model knowledge (a "
+            "receiver coil on an iron pole piece, ~50 mH at 40 ohm, the iron's eddy currents "
+            "as the LR-2 pair; no period inductance found)",
+        },
+        "moving_system": {
+            "mms_kg": m_eff,
+            "cms_m_per_n": 1.0 / (m_eff * w0 * w0),
+            "rms_ns_per_m": w0 * m_eff / q,
+            "bl_tm": 5.8 * math.sqrt(k),
+            "sd_m2": 6.7e-4,
+            "source": f"{plate}: a 0.2 mm diaphragm 50.8 mm across. Its fundamental as a clamped "
+            "plate, 0.183 of its 3.2 g moving and a third of its area radiating; resonance "
+            "700 Hz (0.469 (h / a^2) sqrt(E / rho (1 - nu^2)) ~770 Hz, lowered by the "
+            "magnet's pull), Qms 10, the force factor 5.8 N/A at 40 ohm (Qes ~3: no period "
+            "figure found): provisional, model knowledge",
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": 0.25e-3, "f_hz": 3.89 * f0, "q": 15.0, "area_m2": -1.0e-4},
+            ],
+            "source": "provisional: model knowledge (the clamped plate's second axisymmetric "
+            "mode at 3.89 times its first, its radiating share small and of the other sign)",
+        },
+    }
+
+
+def build_bell_rx() -> dict[str, Any]:
+    """Bell's hand telephone as a receiver (40 ohm): the Victorian synth's loud-speaking end."""
+    return _receiver(
+        "BELL_RX",
+        40.0,
+        "web: https://archive.org/details/telephone00pree (Preece & Maier 1889, p. 27: ~40 ohm)",
+    )
+
+
+def build_ader_rx() -> dict[str, Any]:
+    """A 200 ohm receiver (the Ader system's, Preece & Maier 1889 p. ~50): the Victorian
+    synth's relay, its diaphragm on the carbon button, in the induction coil's 250 ohm
+    secondary circuit."""
+    return _receiver(
+        "ADER_RX",
+        200.0,
+        "web: https://archive.org/details/telephone00pree (Preece & Maier 1889, p. ~50: the "
+        "Ader system's 200 ohm receiver, with a 0.5 / 250 ohm induction coil)",
+    )
 
 
 # The decay curves' frequency grid: third octaves from 50 Hz to the plot's end (~14 kHz).
@@ -2911,6 +2990,35 @@ def build_key_contact() -> dict[str, Any]:
     }
 
 
+def build_carbon_button() -> dict[str, Any]:
+    """A carbon button (Edison's, 1877-78: lamp-black between platinum discs, pressed by a
+    telephone's diaphragm), the Victorian synth's relay (docs/VICTORIAN_SYNTH_PLAN.md, V2).
+    Its conductance proportional to the force (exponent 1, Du Moncel's account of Edison's
+    button); its size at the period's transmitters' tens of ohms."""
+    return {
+        "name": "CARBON_BUTTON",
+        "kind": "carbon",
+        "source": "web: https://archive.org/details/telephonemicroph00dumorich (Du Moncel, The "
+        "Telephone, the Microphone and the Phonograph, 1879, p. ~73: Edison's button changes "
+        "its resistance almost in the same proportion as the pressure); the size provisional",
+        "carbon": {
+            "g0_s": 1.0 / 20.0,
+            "f0_n": 0.5,
+            "exponent": 1.0,
+            "g_open_s": 1.0e-4,
+            "soft_n": 0.01,
+            "source": "provisional: model knowledge (a carbon transmitter of the 1880s, a few "
+            "tens of ohms at its working pressure, here 20 ohm at 0.5 N; the Blake "
+            "transmitter's induction coil had a 0.5 ohm primary for it, Miller, American "
+            "Telephone Practice, 1905, p. 79; loose grains ~10 kOhm). Exponent 1: web: Du "
+            "Moncel 1879 (see the source above); Holm's constriction law gives 1/3-1/2 for "
+            "one spot, ~1 as spots multiply (web: https://deringerney.com/wp-content/uploads/"
+            "2022/04/Ney-Contact-Manual-Revised-1st-Edition.pdf p. 9). soft_n: numerics (the "
+            "zero-force corner, 1% of a working force)",
+        },
+    }
+
+
 def build_key_break() -> dict[str, Any]:
     """A key's break contact: KEY_CONTACT's spring on its bus bar, closed with the key up
     (gate 0.25 V and below), opened as the key goes down (0.75 V and above): the
@@ -3185,6 +3293,8 @@ BUILDERS = {
     "6V6GT": build_6v6gt,
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
+    "BELL_RX": build_bell_rx,
+    "ADER_RX": build_ader_rx,
     "EMT140": build_emt140,
     "EMT240": build_emt240,
     "6K6GT": build_6k6gt,
@@ -3204,6 +3314,7 @@ BUILDERS = {
     "6W7G": build_6w7g,
     "2A3": build_2a3,
     "KEY_CONTACT": build_key_contact,
+    "CARBON_BUTTON": build_carbon_button,
     "KEY_BREAK": build_key_break,
     "REED_CONTACT": build_reed_contact,
     "REED_DRIVE": build_reed_drive,

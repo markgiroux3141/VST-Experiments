@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    Bjt, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode,
-    KorenTriode, Lamp, Optocoupler, Pentode, Photocell, PlateModel, Polarity, ScreenLaw, Thyratron,
-    Triode, VacuumDiode, VariMuTriode,
+    Bjt, Carbon, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode,
+    KorenPentode, KorenTriode, Lamp, Optocoupler, Pentode, Photocell, PlateModel, Polarity,
+    ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -53,6 +53,7 @@ pub struct Library {
     clav_strings: Mutex<HashMap<String, (String, String)>>,
     nova_keys: Mutex<HashMap<String, (String, String)>>,
     nickel_keys: Mutex<HashMap<String, (String, String)>>,
+    reed_keys: Mutex<HashMap<String, (String, String)>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
     /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
@@ -75,6 +76,7 @@ impl Library {
             clav_strings: Mutex::new(HashMap::new()),
             nova_keys: Mutex::new(HashMap::new()),
             nickel_keys: Mutex::new(HashMap::new()),
+            reed_keys: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
         }
@@ -339,6 +341,12 @@ impl Library {
             "the Nickel Organ's keys",
             &self.nickel_keys,
         )
+    }
+
+    /// The Victorian synth's reed keyboard `name` (kind `reed_keys`;
+    /// `varimu.victorian.compile`), as [`Library::nova_keys`] reads the Novachord's.
+    pub fn reed_keys(&self, name: &str) -> Result<(String, String), Error> {
+        self.json_data(name, "reed_keys", "the reed keyboard", &self.reed_keys)
     }
 
     /// A component of `kind` whose version names one data file by sha256 (`data.file`,
@@ -612,6 +620,18 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "carbon" => {
+            // carbon.py's carbon_from_data
+            let c = sub(d, "carbon", what)?;
+            DeviceModel::Carbon(Carbon {
+                name,
+                g0_s: num(c, "g0_s", what)?,
+                f0_n: num(c, "f0_n", what)?,
+                exponent: num(c, "exponent", what)?,
+                g_open_s: num(c, "g_open_s", what)?,
+                soft_n: num(c, "soft_n", what)?,
             })
         }
         "contact" => {

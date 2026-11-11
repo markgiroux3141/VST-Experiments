@@ -35,6 +35,7 @@ import numpy as np
 from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
 from varimu.devices.bjt import Bjt
+from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
@@ -84,6 +85,8 @@ _PCELL_TB = (-21.0, 0.0, 17.0)
 # sized); its control open, at both ends of the smoothstep, inside it and closed.
 _CONTACT_V = (-3.0, -0.5, 0.0, 0.4, 2.0)
 _CONTACT_C = (-1.0, 0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0, 2.0)
+# A carbon button pulled off (negative force), through its softened zero to pressed hard.
+_CARBON_F = (-0.5, -0.02, 0.0, 0.005, 0.02, 0.1, 0.5, 2.0)
 # A thyratron from reverse anode volts through the arc's drop to its strike, the grid from
 # deep cutoff past its floating potential, the state from below its range (held) through
 # the pre-breakdown densities and the arc to above its range (never on the range's edges).
@@ -132,6 +135,7 @@ def _models() -> list:
         dataclasses.replace(load_device("PDVP9203@1"), name="PDVP9203_40lux", lux=40.0),
         load_device("KEY_CONTACT@1"),
         load_device("KEY_BREAK@1"),
+        load_device("CARBON_BUTTON@1"),
         load_device("2D21@1"),
         load_device("884@1"),
         load_device("EF804S@1"),  # the e1 screen law (pentode.py)
@@ -194,6 +198,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
     elif isinstance(m, Photocell):
         grid = itertools.product(_PCELL_DT, _PCELL_TB, _OPTO_U, _OPTO_VR)
         ports = [(dt + tb, tb, u, vr) for dt, tb, u, vr in grid]
+        currents = np.array([m.currents(p) for p in ports])
+    elif isinstance(m, Carbon):
+        grid = itertools.product(_CONTACT_V, _CONTACT_V, _CARBON_F)
+        ports = [(float(a), float(b), float(c)) for a, b, c in grid]
         currents = np.array([m.currents(p) for p in ports])
     elif isinstance(m, Contact):
         grid = itertools.product(_CONTACT_V, _CONTACT_V, _CONTACT_C)

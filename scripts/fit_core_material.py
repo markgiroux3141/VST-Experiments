@@ -100,6 +100,8 @@ def fit(name: str) -> MagneticCore:
         if c.validate():
             return np.full(len(want), 10.0)
         got = figures(c, b_loss, h_rayleigh(name))
+        if not all(got[k] > 0 and math.isfinite(got[k]) for k in want):
+            return np.full(len(want), 10.0)  # a trial off the model's range
         return np.array([math.log(got[k] / want[k]) for k in want])
 
     # With a Rayleigh region to meet, start from a mostly reversible set: an almost all

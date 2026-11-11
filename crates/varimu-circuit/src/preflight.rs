@@ -171,6 +171,10 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                     .iter()
                     .map(|o| (o.clone(), format!("<keys {}>", k.name)))
                     .collect(),
+                Element::ReedKeys(k) => [&k.out_loc, &k.out_line]
+                    .into_iter()
+                    .map(|o| (o.clone(), format!("<keys {}>", k.name)))
+                    .collect(),
                 _ => Vec::new(),
             }
         }))
@@ -238,9 +242,12 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                 dc.join(&d.nodes[0], n);
             }
         }
-        // a contact leaks its insulation when open
+        // a contact leaks its insulation when open, a carbon button its loose grains
         if let Element::Device(d) = el
-            && matches!(models.get(d.model.as_str()), Some(DeviceModel::Contact(_)))
+            && matches!(
+                models.get(d.model.as_str()),
+                Some(DeviceModel::Contact(_) | DeviceModel::Carbon(_))
+            )
         {
             dc.join(&d.nodes[0], &d.nodes[1]);
         }

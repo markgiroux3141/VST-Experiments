@@ -1,0 +1,27 @@
+device: "Leclanche cell (porous pot), closed on 5 ohm"
+document: "Primary Batteries"
+author: "Henry S. Carhart"
+publisher: "Allyn and Bacon, Boston"
+date: "1891"
+scan_source: "web: https://archive.org/details/cu31924031227949"
+digitized_with: >-
+  read by eye from the page image (p. 122, scan leaf n137, printed rotated: the OCR is
+  unusable), the table "Closed Leclanche Cell", external resistance 5 ohm
+digitized_by: Claude Code (a research subagent's transcription, 2026-11-11)
+digitized_on: 2026-11-11
+files:
+  carhart_1891_leclanche.csv:
+    figure: "p. 122, the table; method in sec. 79, pp. 119-120"
+    columns: >-
+      t_s (seconds from closing the circuit; opened at 3600 s), closed (1 on 5 ohm, 0 open),
+      emf_v (E: the cell's EMF read on a brief open circuit), terminal_v (E': the terminal
+      voltage on 5 ohm), current_a (C = E' / 5), r_int_ohm (r, the internal resistance);
+      empty cells: not read at that time (the table alternates E and E' every 2 minutes)
+    method: >-
+      "E is the EMF read on brief open circuit, E' the terminal voltage, C = E'/5 the current, r
+      the internal resistance" (sec. 79); a standard cell of 1.443 V
+estimated_error: "the table's printed digits (1 mV); the cell is one of a factory's (others start at 0.8 ohm)"
+notes: >-
+  Carhart, pp. 123-124: a very rapid fall in the first 4 minutes, a steady decline to about 45
+  minutes; recovery equally rapid in its first 4 minutes and still about 0.25 V low after an
+  hour; the internal resistance falls by more than half.

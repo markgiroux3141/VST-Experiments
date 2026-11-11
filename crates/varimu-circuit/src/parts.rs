@@ -764,6 +764,16 @@ pub fn device_instance(
             c.name = s(name);
             Ok(DeviceModel::Contact(c))
         }
+        DeviceModel::Carbon(c) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: a carbon button takes no parallel, emission or area"
+                )));
+            }
+            let mut c = c.clone();
+            c.name = s(name);
+            Ok(DeviceModel::Carbon(c))
+        }
         DeviceModel::Photocell(p) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

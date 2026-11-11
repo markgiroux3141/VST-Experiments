@@ -15,6 +15,7 @@ use std::fmt;
 use crate::ir::DeviceModel;
 
 pub mod bjt;
+pub mod carbon;
 pub mod contact;
 pub mod core;
 pub mod diode;
@@ -29,6 +30,7 @@ pub mod triode_table;
 
 pub use self::core::MagneticCore;
 pub use bjt::Bjt;
+pub use carbon::Carbon;
 pub use contact::Contact;
 pub use diode::{JunctionDiode, VacuumDiode};
 pub use jfet::Jfet;
@@ -196,6 +198,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::Optocoupler(m) => Box::new(Optocoupler::new(m)),
         DeviceModel::Photocell(m) => Box::new(Photocell::new(m)),
         DeviceModel::Contact(m) => Box::new(Contact::new(m)),
+        DeviceModel::Carbon(m) => Box::new(Carbon::new(m)),
         DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
         DeviceModel::Bjt(m) => Box::new(Bjt::new(m)),
         DeviceModel::Jfet(m) => Box::new(Jfet::new(m)),

@@ -50,6 +50,7 @@ from typing import Any
 
 from varimu.devices import jfet as jfet_mod
 from varimu.devices.bjt import POLARITIES, Bjt
+from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
@@ -776,6 +777,7 @@ DeviceModel = (
     | Optocoupler
     | Photocell
     | Contact
+    | Carbon
 )
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -790,6 +792,7 @@ PINS: dict[type, tuple[str, ...]] = {
     Bjt: ("c", "b", "e"),
     jfet_mod.Jfet: ("d", "g", "s"),
     Contact: ("a", "b", "c", "ref"),
+    Carbon: ("a", "b", "f", "ref"),
 }
 
 
@@ -1366,6 +1369,14 @@ def _validate_model(m: DeviceModel) -> None:
         _finite(f"{m.name}.v_closed_v", m.v_closed_v)
         if m.v_closed_v == m.v_open_v:
             raise IRError(f"{m.name}: v_closed_v must differ from v_open_v")
+    elif isinstance(m, Carbon):
+        values += [
+            ("g0_s", m.g0_s),
+            ("f0_n", m.f0_n),
+            ("g_open_s", m.g_open_s),
+            ("soft_n", m.soft_n),
+        ]
+        _finite(f"{m.name}.exponent", m.exponent)
     elif isinstance(m, Optocoupler):
         values += [
             (w, getattr(m, w))
@@ -1486,6 +1497,7 @@ _MODEL_KINDS = {
     "optocoupler": Optocoupler,
     "photocell": Photocell,
     "contact": Contact,
+    "carbon": Carbon,
     "thyratron": Thyratron,
     "bjt": Bjt,
     "jfet": jfet_mod.Jfet,

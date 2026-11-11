@@ -497,7 +497,8 @@ impl Mna {
                         | DeviceModel::Lamp(_)
                         | DeviceModel::Optocoupler(_)
                         | DeviceModel::Photocell(_)
-                        | DeviceModel::Contact(_) => vec![],
+                        | DeviceModel::Contact(_)
+                        | DeviceModel::Carbon(_) => vec![],
                     };
                     for (a, b, cf) in caps {
                         if cf > 0.0 {

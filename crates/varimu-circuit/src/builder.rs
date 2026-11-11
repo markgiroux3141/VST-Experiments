@@ -515,7 +515,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 33] = [
+const MACROS: [&str; 34] = [
     "R",
     "C",
     "L",
@@ -548,6 +548,7 @@ const MACROS: [&str; 33] = [
     "clav_strings",
     "nova_keys",
     "nickel_keys",
+    "reed_keys",
     "opamp",
 ];
 
@@ -695,6 +696,15 @@ fn macro_of(kind: &str) -> Macro {
                 p("sustain", Number),
                 p("polarize", Number),
                 p("max_keys", Count),
+            ],
+            false,
+        ),
+        "reed_keys" => (
+            Some(4),
+            vec![
+                p("component", Raw),
+                p("step_hz", Physical),
+                p("v_per_a", Physical),
             ],
             false,
         ),
@@ -1214,6 +1224,7 @@ fn expand(
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         "nova_keys" => return nova_keys_part(ctx, name, conn, a),
         "nickel_keys" => return nickel_keys_part(ctx, name, nodes, a),
+        "reed_keys" => return reed_keys_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -1732,6 +1743,34 @@ fn nickel_keys_part(
         sustain,
         polarize,
         max_keys,
+    })])
+}
+
+/// The Victorian synth's reeds (docs/VICTORIAN_SYNTH_PLAN.md;
+/// `varimu.circuit.parts.reed_keys`): nodes loc, line, out_loc, out_line.
+fn reed_keys_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let (data, sha256) = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.reed_keys(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let step_hz = ctx.float(&format!("{name}.step_hz"), &a["step_hz"])?;
+    let v_per_a = ctx.float(&format!("{name}.v_per_a"), &a["v_per_a"])?;
+    Ok(vec![Element::ReedKeys(circuitsim::ir::ReedKeys {
+        name: format!("V{}", name.to_uppercase()),
+        data,
+        sha256,
+        step_hz,
+        v_per_a,
+        loc: nodes[0].clone(),
+        line: nodes[1].clone(),
+        out_loc: nodes[2].clone(),
+        out_line: nodes[3].clone(),
     })])
 }
 
