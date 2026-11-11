@@ -110,3 +110,5 @@ assets/songs/
 data/schematics/hammond_novachord/*.pdf
 data/schematics/hammond_novachord/*.txt
 data/schematics/hammond_novachord/*.png
+# AKG / Crown PZM30 D manual and cut sheet (cited by data/schematics/crown_pzm/README.md)
+data/schematics/crown_pzm/*.pdf

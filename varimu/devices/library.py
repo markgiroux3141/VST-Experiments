@@ -1041,6 +1041,27 @@ def build_bk4134() -> dict[str, Any]:
     }
 
 
+def build_pzm_capsule() -> dict[str, Any]:
+    """The Crown PZM-30D's subminiature electret capsule (docs/CHAINS_PLAN.md WP26): no
+    construction is published, so its dimensions are provisional and its tension, film
+    resistance and vent fitted by scripts/fit_pzm.py (published_points.yaml "PZM_CAPSULE"); the
+    lumped elements derived from them (varimu.devices.capsule.lumped). The electret's equivalent
+    polarization is the circuit's (config/circuits/crown_pzm.yaml)."""
+    from varimu.devices import capsule
+
+    pub = _published()["PZM_CAPSULE"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "PZM_CAPSULE",
+        "kind": "capsule",
+        "source": f"derived: varimu.devices.capsule.lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
+    }
+
+
 def _plain(x: Any) -> Any:
     """A geometry block with {value: ...} leaves as plain numbers."""
     if isinstance(x, dict):
@@ -3741,6 +3762,7 @@ BUILDERS = {
     "KEY_CONTACT": build_key_contact,
     "CARBON_BUTTON": build_carbon_button,
     "F1": build_f1,
+    "PZM_CAPSULE": build_pzm_capsule,
     "KEY_BREAK": build_key_break,
     "REED_CONTACT": build_reed_contact,
     "REED_DRIVE": build_reed_drive,

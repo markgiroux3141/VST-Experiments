@@ -60,6 +60,9 @@ JSON):
                                      # the chain, the prints summed: overdubs)
         free_field: false            # optional: true = no room for this mic (the direct
                                      # sound only: the room's surfaces and objects removed)
+        surface: floor               # optional: a boundary mic (floor | ceiling | wall N):
+        gap_m: 0.001                 # its position moved onto that surface, gap_m inside, aimed
+                                     # into the room (`surface_placement`; the PZM, WP26)
     settings:{quality: production, ism_s: 0.08, seed: 0, tail_s: null,
                wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
@@ -248,6 +251,11 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
     mics = []
     for m in d["mics"]:
         aim = m.get("aim", {})
+        pos = np.array(m["position_m"], float)
+        if m.get("surface") is not None:  # a boundary mic: on the surface, aimed into the room
+            pos, az, el = surface_placement(room, pos, str(m["surface"]),
+                                            float(m.get("gap_m", SURFACE_GAP_M)))  # fmt: skip
+            aim = {"azimuth_deg": az, "elevation_deg": el}
         passes = str(m.get("passes", "together"))
         if passes not in ("together", "separate"):
             raise ValueError(f"mic {m['name']}: passes is together or separate, not {passes!r}")
@@ -255,7 +263,7 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             MicSpec(
                 m["name"],
                 m["chain"],
-                np.array(m["position_m"], float),
+                pos,
                 float(aim.get("azimuth_deg", 0.0)),
                 float(aim.get("elevation_deg", 0.0)),
                 {k: float(v) for k, v in (m.get("set") or {}).items()},
@@ -549,6 +557,51 @@ def free_field_room(room) -> bool:
     """Whether a room is a free field: every face anechoic and nothing in it (objects would
     still occlude and diffract)."""
     return _anechoic(room) and not (isinstance(room, PolyRoom) and room.boxes)
+
+
+SURFACE_GAP_M = 0.001  # a boundary mic's capsule above its surface (a PZM's pressure zone)
+
+
+def surface_placement(room, p: np.ndarray, surface: str, gap_m: float = SURFACE_GAP_M):
+    """A mic on a room's surface (docs/CHAINS_PLAN.md WP26, the PZM): `p` moved onto `surface`
+    (`floor`, `ceiling`, or `wall N`, from the floor's corner N to N + 1 as the faces' materials;
+    a shoebox's corners counterclockwise from the origin, wall 0 along y = 0), `gap_m` inside it,
+    aimed along the surface's inward normal. Returns (position, azimuth_deg, elevation_deg).
+
+    The room's own reflection from that surface then arrives with the direct sound (2 gap_m cos
+    theta later: its first null above 80 kHz at 1 mm): the boundary's pressure doubling, the
+    hemispherical pattern and no comb, from the image sources, rays and the wave solver as they
+    are. A PolyRoom's ceiling must be flat."""
+    p = np.array(p, float)
+    if gap_m <= 0:
+        raise ValueError(f"surface gap {gap_m} m: a mic needs to be inside the room")
+    if surface == "floor":
+        return np.r_[p[:2], gap_m], 0.0, 90.0
+    if isinstance(room, PolyRoom):
+        corners = room.floor[::-1] if room._reversed else room.floor
+        if surface == "ceiling":
+            if room.ceiling != "flat":
+                raise ValueError(f"a mic on the ceiling needs a flat ceiling, not {room.ceiling}")
+            return np.r_[p[:2], room.height_m - gap_m], 0.0, -90.0
+    else:
+        lx, ly, lz = room.dims_m
+        corners = np.array([[0.0, 0.0], [lx, 0.0], [lx, ly], [0.0, ly]])
+        if surface == "ceiling":
+            return np.r_[p[:2], lz - gap_m], 0.0, -90.0
+    parts = surface.split()
+    if len(parts) != 2 or parts[0] != "wall" or not parts[1].isdigit():
+        raise ValueError(f"surface {surface!r}: 'floor', 'ceiling' or 'wall N'")
+    k = int(parts[1])
+    if k >= len(corners):
+        raise ValueError(f"surface {surface!r}: the floor has {len(corners)} walls")
+    a, b = corners[k], corners[(k + 1) % len(corners)]
+    t = b - a
+    u = float(np.clip(np.dot(p[:2] - a, t) / np.dot(t, t), 0.0, 1.0))
+    n = np.array([-t[1], t[0]]) / np.linalg.norm(t)  # inward for a counterclockwise floor
+    if isinstance(room, PolyRoom) and room._reversed:
+        n = -n
+    xy = a + u * t + gap_m * n
+    return np.r_[xy, p[2]], float(np.degrees(np.arctan2(n[1], n[0]))), 0.0
 
 
 def _check_inside(room, p: np.ndarray, what: str) -> None:

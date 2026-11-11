@@ -1,0 +1,111 @@
+# Crown PZM-30D boundary microphone (docs/CHAINS_PLAN.md WP26). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/crown_pzm/README.md has their provenance):
+#   "akg: ..."         AKG / Crown's PZM30 D manual (2015): the schematic (topology, no values),
+#                      the specifications, Fig. 1 (RISING / FLAT)
+#   "iec: ..."         IEC 61938's P48 phantom feed (the preamp's)
+#   "fit: ..."         scripts/fit_pzm.py, to the manual's figures
+#   "provisional: ..." model knowledge
+#
+# The topology is the manual's schematic; no value is printed, so every value is inferred (the
+# user's rule of 2026-11-10; WP26's Decisions). The capsule PZM_CAPSULE (an electret: its
+# equivalent polarization a value here) on the gate of Q1, a source follower in the capsule's can
+# (drain B+, source AUDIO with RSI to the capsule's ground GRAY); C1 into T1's primary, back
+# through RP7 to GRAY; R1 the source's load to pin 1; the RISING / FLAT switch a shunt C4 + R7
+# from AUDIO to GRAY (closed = FLAT); T1's secondary on pins 2 / 3, R4 / R5 across it, their
+# junction B+; R2 / R3 a divider from B+ to pin 1 (GRAY between them), C2 / C3 across them.
+#
+# The preamp's phantom feed and balanced input are drawn here as the Cloudlifter's
+# (cloudlifter.yaml): 48 V through 6.81k a leg, blocking capacitors, each leg loaded by half the
+# preamp's input, the legs' difference onto `out` (an ideal controlled source). The pressure at the
+# capsule on `in` (pascals as volts); on a boundary the room doubles it (a scene mic's `surface`).
+# No tolerance block: the nominal mic only.
+
+title: "Crown PZM-30D"
+input: in
+probes: [out, s, g, gray, bplus, p2, p3]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.5, source: "derived: akg: 7 mV/Pa x 20 Pa = 0.14 V peak, with headroom for a source close on a boundary (+6 dB)"}
+
+controls:
+  response: {value: 0, choices: [0, 1], unit: switch, source: "akg: the frequency-response select switch", notes: "0 RISING, 1 FLAT"}
+
+values:
+  capsule_model: {value: PZM_CAPSULE@1, source: "config/components/pzm_capsule/1.yaml (no construction is published: provisional dimensions, fitted by scripts/fit_pzm.py to the manual's Fig. 1)"}
+  electret_v: {value: 229.73, source: "fit: scripts/fit_pzm.py, the electret's equivalent polarization, to akg's 7 mV/Pa open circuit (1 kHz, FLAT)"}
+  r_gate_ohm: {value: 1.0e+9, source: "provisional: model knowledge (an electret capsule's gate leak, ~1 GOhm)"}
+  rsi_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the source resistor in the capsule's can)"}
+  r1_ohm: {value: 41029, source: "fit: scripts/fit_pzm.py, the source's load to pin 1, to akg's 1.1 mA current drain at 48 V"}
+  c1_f: {value: 47.0e-6, source: "provisional: model knowledge (an electrolytic into the transformer)"}
+  rp7_ohm: {value: 100.0, source: "provisional: model knowledge (the primary's series resistor, BLK to GRAY)"}
+  c4_f: {value: 9.2153e-08, source: "fit: scripts/fit_pzm.py, the FLAT shunt's capacitor, to Fig. 1's FLAT trace re RISING"}
+  r7_ohm: {value: 851.37, source: "fit: scripts/fit_pzm.py, the FLAT shunt's resistor, to Fig. 1's FLAT trace re RISING"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch contact, ~10 mOhm)"}
+  r2_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the upper leg of the capsule's supply divider)"}
+  r3_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the lower leg: GRAY at about half the supply)"}
+  c2_f: {value: 47.0e-6, source: "provisional: model knowledge (B+ to GRAY's decoupling)"}
+  c3_f: {value: 47.0e-6, source: "provisional: model knowledge (GRAY to pin 1's decoupling)"}
+  r4_ohm: {value: 2200.0, source: "provisional: model knowledge (the phantom's centre tap across the secondary, each half)"}
+  t_ratio: {value: 0.68406, source: "fit: scripts/fit_pzm.py, secondary : primary, to akg's 240 ohm"}
+  t_r_p_ohm: {value: 40.0, source: "provisional: model knowledge (a small output transformer's primary)"}
+  t_r_s_ohm: {value: 20.0, source: "provisional: model knowledge (its secondary)"}
+  t_core_material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer's nickel core)"}
+  t_core_area_m2: {value: 1.0e-5, source: "provisional: model knowledge (a ~3 mm square tongue: the transformer fits in the plate's 19 mm)"}
+  t_core_path_m: {value: 0.03, source: "provisional: model knowledge"}
+  t_turns: {value: 2000, source: "provisional: model knowledge (the primary)"}
+  t_gap_m: {value: 2.0e-6, source: "provisional: model knowledge (an interleaved core's joint gap)"}
+  t_leakage_h: {value: 0.002, source: "provisional: model knowledge (referred to the primary)"}
+  t_c_p_f: {value: 2.0e-10, source: "provisional: model knowledge (the primary's capacitance)"}
+  phantom_v: {value: 48.0, source: "iec: IEC 61938 P48, 48 V (the preamp's feed)"}
+  r_phantom_ohm: {value: 6810.0, source: "iec: IEC 61938 P48, 6.81 kOhm a leg"}
+  c_block_f: {value: 47.0e-6, source: "provisional: model knowledge (a phantom-powered preamp's DC-blocking capacitors)"}
+  r_pre_leg_ohm: {value: 5.0e+3, source: "derived: clean_pre.yaml's 10 kOhm input as across the pair: 5 kOhm a leg to ground (as cloudlifter.yaml)"}
+  diff_gm_s: {value: 1000.0, source: "numerics: the balanced input's difference as a controlled source (gm x r = 1, as cloudlifter.yaml)"}
+  r_ideal_ohm: {value: 1.0e-3, source: "numerics: the controlled source's load (as cloudlifter.yaml)"}
+
+devices:
+  QJ: {device: 2N3819@1, source: "provisional: model knowledge (an N-channel JFET of the 2N3819 class stands in for the electret capsule's FET)"}
+
+sections:
+  - title: capsule
+    parts:
+      K1: {capsule: [in, gray, g], component: capsule_model, polarization_v: electret_v}
+      RG: {R: [g, gray], r: r_gate_ohm, tolerance: none}
+      J1: {jfet: [bplus, g, s], model: QJ}
+      RSI: {R: [s, gray], r: rsi_ohm, tolerance: none}
+  - title: electronics
+    parts:
+      R1: {R: [s, "0"], r: r1_ohm, tolerance: none}
+      C1: {C: [s, tp], c: c1_f, tolerance: none}
+      SRESP:
+        switch: response
+        parts:
+          C4: {C: [s, sw], c: c4_f, tolerance: none, in: [1]}
+          R7: {R: [sw, gray], r: r7_ohm, tolerance: none, in: [1]}
+      T1:
+        transformer:
+          p: {nodes: [tp, tb], r: t_r_p_ohm, c: t_c_p_f}
+          s: {nodes: [p2, p3], ratio: t_ratio, r: t_r_s_ohm}
+        core: {material: t_core_material, area_m2: t_core_area_m2, path_m: t_core_path_m, gap_m: t_gap_m}
+        turns: t_turns
+        leakage_h: t_leakage_h
+      RP7: {R: [tb, gray], r: rp7_ohm, tolerance: none}
+      R4: {R: [p2, bplus], r: r4_ohm, tolerance: none}
+      R5: {R: [p3, bplus], r: r4_ohm, tolerance: none}
+      R2: {R: [bplus, gray], r: r2_ohm, tolerance: none}
+      R3: {R: [gray, "0"], r: r3_ohm, tolerance: none}
+      C2: {C: [bplus, gray], c: c2_f, tolerance: none}
+      C3: {C: [gray, "0"], c: c3_f, tolerance: none}
+  - title: phantom and the preamp's input
+    parts:
+      VPH: {V: [vph, "0"], v: phantom_v}
+      RPH2: {R: [vph, p2], r: r_phantom_ohm, tolerance: none}
+      RPH3: {R: [vph, p3], r: r_phantom_ohm, tolerance: none}
+      CBP: {C: [p2, dpb], c: c_block_f, tolerance: none}
+      CBN: {C: [p3, dnb], c: c_block_f, tolerance: none}
+      RPLP: {R: [dpb, "0"], r: r_pre_leg_ohm, tolerance: none}
+      RPLN: {R: [dnb, "0"], r: r_pre_leg_ohm, tolerance: none}
+      GD: {G: ["0", out, dpb, dnb], gm: diff_gm_s}
+      RGD: {R: [out, "0"], r: r_ideal_ohm, tolerance: none}

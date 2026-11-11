@@ -160,7 +160,7 @@
    "pan": 0.3,
    "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
    "rms_dbfs": -15.41,
-   "peak_dbfs": -4.82,
+   "peak_dbfs": -4.81,
    "hears": [
     "A"
    ],
@@ -273,6 +273,38 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "PZM on the floor into clean",
+   "file": "PZM_on_the_floor_into_clean.wav",
+   "chain": "pzm_clean",
+   "set": {},
+   "pan": -0.6,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.004, 'length_m': 0.01}",
+   "rms_dbfs": -26.73,
+   "peak_dbfs": -16.79,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "PZM on a wall into SSL",
+   "file": "PZM_on_a_wall_into_SSL.wav",
+   "chain": "pzm_ssl",
+   "set": {
+    "mic_gain_ssl": 0.5
+   },
+   "pan": 0.6,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.004, 'length_m': 0.01}",
+   "rms_dbfs": -22.6,
+   "peak_dbfs": -10.41,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -287,6 +319,6 @@
   8000,
   16000
  ],
- "wall_s": 6.2,
+ "wall_s": 94.3,
  "seconds": 8.999
 }

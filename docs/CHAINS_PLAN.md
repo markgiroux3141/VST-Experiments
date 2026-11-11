@@ -13,13 +13,13 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 46 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 48 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
   M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073, M49 -> V76, 44-BX / SM7 -> Cloudlifter ->
-  clean, carbon -> clean; `uv run python scripts/chain_status.py`).
+  clean, carbon -> clean, PZM -> clean, PZM -> SSL; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -64,11 +64,13 @@ runs**.
   known miss); WP29's Notes. WP27 (2026-11-11): the Cloudlifter CL-1 on LSK389A and three-stage
   chains in `compose_chain.py`; WP27's Notes. WP31 (2026-11-11): the Western Electric F1 carbon
   transmitter from Jones's BSTJ 1938 paper (`config/circuits/carbon_transmitter.yaml`, `F1@1` by
-  `scripts/fit_f1.py`); WP31's Notes.
-- **Next:** WP26 (the PZM): no
-  schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
-  scenes can be built first. Then WP30 (a crystal transducer kind); WP13 (RE20) waits on the N-entry room
-  generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
+  `scripts/fit_f1.py`); WP31's Notes. WP26 (2026-11-11): the Crown PZM-30D by inference on its
+  schematic (`config/circuits/crown_pzm.yaml`, `PZM_CAPSULE@1` by `scripts/fit_pzm.py`) and a scene
+  mic's `surface`; WP26's Notes.
+- **Next:** WP30 (a crystal transducer kind: a device model, so Python, SPICE, circuitsim and both
+  builders; the Green Bullet into the 5E3, an instrument). WP13 (RE20) waits on the N-entry room
+  generalization (its Decision). Open options inside done WPs: a `surface` control in the app's Room view
+  (WP26), the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U
   67's bass cut's shape (WP28's Notes), supercardioid halves for the dual capsules (the M 49's and U
@@ -89,7 +91,7 @@ runs**.
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
-  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean added to
+  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean, PZM -> clean / SSL added to
   `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
@@ -189,7 +191,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 23 | AKG C414 | C414 -> SSL, C414 -> clean | L | done 2026-11-10 (by inference) |
 | 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | done 2026-11-10 |
 | 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | done 2026-11-10 |
-| 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
+| 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | done 2026-11-11 (by inference) |
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | done 2026-11-11 (LSK389A) |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
 | 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | done 2026-11-11 (the M 49 c) |
@@ -1780,6 +1782,46 @@ rendered in `new_chains_check.yaml` at 0.3 m from the 90 dB source: -16.7 dBFS r
 Left out: the carbon's noise, packing drift and aging; the difference / sum asymmetry (a slow
 granular state would make it).
 
+### WP26. The Crown PZM; a mic placed on a surface
+
+Sources: `data/schematics/crown_pzm/README.md` (AKG / Crown's PZM30 D manual, 2015: the
+specifications, Fig. 1 RISING / FLAT, **the schematic**, topology only; the cut sheet).
+
+Steps (done 2026-11-11): Fig. 1 digitized (`data/datasheets/crown_pzm30d_response.csv`, provenance
+sidecar); the capsule `PZM_CAPSULE@1` (kind `capsule`, `build_pzm_capsule`) and the circuit
+`config/circuits/crown_pzm.yaml` fitted by `scripts/fit_pzm.py`; a scene mic's `surface`
+(`varimu/rooms/scene.py` `surface_placement`); the list's entry; `pzm_clean`, `pzm_ssl` composed and
+rendered in `new_chains_check.yaml`; `tests/test_crown_pzm.py`.
+
+Decisions (2026-11-11, Claude's, the user away):
+- By inference (the user's rule of 2026-11-10 for walled drawings: here the drawing has no values):
+  the schematic's topology, every value provisional or fitted. The capsule a subminiature electret
+  on the `capsule` kind (6 mm, FEP 12.5 um, 25 um gap: provisional), its electret an equivalent
+  polarization (a circuit value); Q1 the 2N3819@1 stand-in.
+- The preamp's phantom feed and balanced input are in the mic's file, as the Cloudlifter's (48 V
+  through 6.81k a leg, the legs' difference onto an ideal `out`): `drop: []`.
+- Placement: a scene mic's `surface` (floor | ceiling | wall N) and `gap_m` (1 mm): the position
+  moved onto the surface, aimed along its inward normal; the room's own reflection then gives the
+  boundary's +6 dB and no comb through the image sources, rays and wave solver as they are. The
+  PZM's own plate isn't modelled (the PZM lies on a large boundary, as the manual's "infinite"
+  boundary; its small-plate shelf F = 750 / D isn't). A PolyRoom's ceiling must be flat.
+- The capsule body for the room's entry table: its can (a 4 mm cylinder), aimed into the room.
+- Default gains: clean 40 dB, SSL 0.5 (44 dB).
+
+Notes (2026-11-11, done): the capsule: tension 146 N/m (membrane 12.5 kHz), film 1.47e8, vent 28 Hz;
+RISING re 1 kHz 1.06 dB rms (worst -2.1 at 4 kHz and -1.9 at 7.2 kHz: the sheet's dip at 5.3 kHz and
+peak at 7.2 kHz are the capsule's mounting, one resonance here). The circuit: R1 41.0 k for 1.1 mA,
+T1 0.684 (sec : pri) for 240 ohm, C4 92 nF / R7 851 ohm the FLAT shelf (0.50 dB rms re RISING; -0.85
+dB at 1 kHz), the electret 230 V equivalent for 7.0 mV/Pa open circuit (1 kHz, FLAT; the capsule was
+fitted at 206 V: the softening's difference is inside the tests' bounds). Positive pressure gives a
+positive output. **Known miss:** 3% THD at ~141.5 dB SPL against the manual's 150 (the follower
+starves into the transformer's reflected load, ~10 V peak at the gate; neither the source resistor
+nor the supply divider fixes it without moving the DC point: time-boxed). Tests
+`tests/test_crown_pzm.py` (6, with the boundary's doubling on image sources: the floor mic 3.1 dB
+over the comb's mean power at 0.5 m, no comb). Rendered: the floor PZM at 1.6 m -26.7 dBFS rms, the
+wall PZM into SSL at 3 m -22.6. **Open:** the app's Room view has no control for `surface` (scene
+files only); the plate on a stand (the PZM in free space) needs the plate as a body.
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1801,8 +1843,8 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes; 2026-11-10 (second session): `build_ribbon_m160`, `build_ribbon_r121` in
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
-passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1` in `varimu/devices/library.py`, every existing IR
-unchanged, the app fixtures re-exported, the agreement test passes): these
+passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1`, `build_pzm_capsule` in `varimu/devices/library.py`, every existing IR
+unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1931,3 +1973,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   (BSTJ 1938): Fig. 6's network as acoustic R / L / C driving the carbon in Fig. 5's 20.5 V / 513 ohm
   loop, fitted to Fig. 6's response (1.7 dB rms) and Fig. 7's intermodulation (3.9 dB rms); `F1@1`;
   carbon -> clean composed and rendered: 46 of 51.
+- 2026-11-11 (the user away): WP26 done: the Crown PZM-30D by inference on AKG / Crown's schematic
+  (no values; `PZM_CAPSULE@1` and the circuit fitted to Fig. 1, 7 mV/Pa, 240 ohm, 1.1 mA; 3% THD at
+  ~141.5 dB SPL a known miss) and a scene mic's `surface` (floor / ceiling / wall N: the boundary's
+  doubling from the room as it is); PZM -> clean / SSL composed and rendered: 48 of 51.

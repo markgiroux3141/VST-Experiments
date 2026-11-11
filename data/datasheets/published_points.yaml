@@ -1571,3 +1571,27 @@
       form: cylinder
       radius_m: {value: 0.03}       # provisional: model knowledge (the desk set's transmitter housing and mouthpiece, Jones Fig. 3, ~6 cm across)
       length_m: {value: 0.06}       # provisional: model knowledge (the housing's depth; the stand below it left out)
+"PZM_CAPSULE":
+  source: "data/schematics/crown_pzm/README.md (AKG / Crown's PZM30 D manual: 'a subminiature electret'; no construction is published: the dimensions provisional, the tension, film resistance and vent fitted by scripts/fit_pzm.py to the manual's Fig. 1, RISING)"
+  geometry:
+    diaphragm:
+      radius_m: {value: 2.3e-3}          # provisional: model knowledge (a 6 mm subminiature electret capsule's diaphragm)
+      thickness_m: {value: 12.5e-6}      # provisional: model knowledge (FEP electret film, 1/2 mil)
+      density_kg_m3: {value: 2150.0}     # provisional: model knowledge (FEP)
+      tension_n_m: {value: 145.81}        # fit: scripts/fit_pzm.py (the 7 kHz peak)
+    gap_m: {value: 25.0e-6}              # provisional: model knowledge (a subminiature electret's spacer)
+    backplate:
+      radius_m: {value: 2.1e-3}          # provisional: model knowledge
+      thickness_m: {value: 0.5e-3}       # provisional: model knowledge
+      holes: 4                           # provisional: model knowledge
+      hole_radius_m: {value: 0.3e-3}     # provisional: model knowledge
+    cavity_m3: {value: 2.0e-8}           # provisional: model knowledge (~20 mm^3 behind the backplate)
+    vent: {lf_3db_hz: {value: 28.188}}     # fit: scripts/fit_pzm.py (Fig. 1's -5 dB at 20 Hz)
+    stray_capacitance_f: {value: 1.5e-12}   # provisional: model knowledge (the capsule's can and the FET's gate)
+    film_resistance_pa_s_m3: {value: 1.4738e+08}   # fit: scripts/fit_pzm.py (the peak's height)
+    # The capsule in its housing on the plate, for the room's entry tables: a small cylinder (the
+    # plate itself is the room's boundary the PZM lies on: a scene mic's `surface`)
+    body:
+      form: cylinder
+      radius_m: {value: 4.0e-3}          # provisional: model knowledge (the capsule's can)
+      length_m: {value: 0.01}            # provisional: model knowledge

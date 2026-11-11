@@ -1,0 +1,17 @@
+device: Crown (AKG / Crown) PZM-30D boundary microphone (Pressure Zone Microphone)
+curve: Fig. 1, frequency response in dB (relative), RISING (solid) and FLAT (dashed), measured on an "infinite" boundary
+publisher: AKG Acoustics / Harman, PZM30 D operating manual (2015)
+documents:
+  manual:
+    title: "PZM30 D (AKG / Crown operating manual)"
+    scan_source: "web: https://support.harmanaudio.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dwe57280aa/pdfs/AKG_PZM30D_Manual.pdf"
+    sha256: 63850920091d6ca0e45893045768415e1c3fe4ad0128341af67d92037e42dc00
+    page: "p. 1, Fig. 1"
+local_copy: "data/schematics/crown_pzm/akg_pzm30d_manual.pdf (git-ignored)"
+digitized_with: >-
+  By eye from a 500 dpi render (PyMuPDF) on the figure's rules: frequency log, 20 Hz to 20 kHz (100,
+  1k, 10k rules); level rules every 5 dB, 0 dB the 1 kHz level. The traces' corners read (the curves
+  are drawn as straight segments between them); about +-0.5 dB. The RISING and FLAT traces coincide
+  below ~1.5 kHz; the low end (-5 dB at 20 Hz) is the same for both.
+digitized_by: Claude Code
+digitized_on: 2026-11-11

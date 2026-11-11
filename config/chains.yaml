@@ -289,7 +289,18 @@ circuits:
         label: C414 pad
         choices: [[0, "off"], [10, "-10 dB"], [20, "-20 dB"]]
         default: 0
-  crown_pzm: {kind: mic, tag: pzm, label: Crown PZM, wp: 26}
+  crown_pzm:                        # the PZM-30D (inferred on its schematic), the preamp's
+    kind: mic                       # phantom feed in its file; place it with a scene mic's
+    tag: pzm                        # `surface` (varimu/rooms/scene.py)
+    label: Crown PZM
+    output: out
+    drop: []
+    pattern: omni
+    settings:
+      - key: response
+        label: PZM response
+        choices: [[0, rising], [1, flat]]
+        default: 0
   shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}
   carbon_transmitter:               # the Western Electric F1 (Jones, BSTJ 1938) in its 20.5 V loop
     kind: mic
@@ -762,13 +773,13 @@ chains:
     pre: clean_pre
     use: "Inside a piano lid, on a wall or floor as a room mic"
     needs: [jfet]
-    needs_note: and a mic placed on a surface in scenes (WP26)
+    defaults: {gain_db_clean: 40}
   - id: pzm_ssl
     mic: crown_pzm
     pre: ssl_4000e
     use: "1980s drum rooms, a boundary mic on the floor or wall"
     needs: [jfet]
-    needs_note: and a mic placed on a surface in scenes (WP26)
+    defaults: {mic_gain_ssl: 0.5}
 
   # --- lo-fi wildcards ---
   - id: bullet_f5e3

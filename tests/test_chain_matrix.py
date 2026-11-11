@@ -66,7 +66,7 @@ def test_each_chain_builds_as_one_netlist(chain):
         for part in stage.drop:
             assert f"{part}_{stage.tag.upper()}" not in names
     has_rear = any(k.name == "p_rear" for k in ir.controls)
-    pressure = ("omni_4134", "carbon_transmitter")  # a pressure transducer has one entry
+    pressure = ("omni_4134", "carbon_transmitter", "crown_pzm")  # a pressure transducer: one entry
     assert has_rear == (chain.mic.name not in pressure)
     assert _capsule_geometry(chain.id, {}).get("body")  # the room's entry tables need a body
     q = spec.resolve(c, {})
