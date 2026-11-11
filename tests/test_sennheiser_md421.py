@@ -93,3 +93,17 @@ def test_circuit_builds_and_matches_the_cartridge():
     got = ac.transfer(ir, f, "out", drives={"p_rear": np.zeros(3, complex)})
     want = _response(f, 0.0)
     assert abs(got[1]) == pytest.approx(abs(want[1]), rel=0.5)
+
+
+def test_bass_switch_follows_the_sheets_traces():
+    """The four roll-off positions (shunt L-R networks fitted by scripts/fit_md421_switch.py)
+    against the sheet's traces re M."""
+    import sys
+
+    sys.path.insert(0, str(CONFIG_DIR.parent / "scripts"))
+    import fit_md421_switch as fs
+
+    c = spec.load_circuit(CONFIG_DIR / "circuits" / "sennheiser_md421.yaml")
+    for n, (f, d) in fs.targets().items():
+        e = fs.response_db(c, {"bass": n}, f) - fs.response_db(c, {}, f) - d
+        assert np.sqrt(np.mean(e**2)) < 0.9 and np.abs(e).max() < 2.3, n

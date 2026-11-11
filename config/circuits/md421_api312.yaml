@@ -25,6 +25,17 @@ full_scale:
     source: 'derived: +24 dBu peak, the same scale as ssl_4000e.yaml''s and telefunken_v76.yaml''s outputs
       so the chains print comparably'
 controls:
+  bass_md421:
+    value: 0
+    choices:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    unit: position
+    source: 'web: the sheet''s five-position bass roll-off switch (M = music, flat)'
+    notes: 0 M (flat), 1-4 the roll-offs, deepest at 4
   gain_api312:
     value: 0.6
     min: 0.0
@@ -49,6 +60,30 @@ controls:
     source: 'api: the 312 cut sheet (3:1 output transformer tap selection)'
     notes: 0 the full 1:3 secondary (Fig. 2), 1 the 1:1 tap (-8.4 dB into 600 ohm)
 values:
+  lb1_h_md421:
+    value: 0.08594
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  rb1_ohm_md421:
+    value: 999.6
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  lb2_h_md421:
+    value: 0.04173
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  rb2_ohm_md421:
+    value: 424.3
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  lb3_h_md421:
+    value: 0.07179
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  rb3_ohm_md421:
+    value: 223.5
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  lb4_h_md421:
+    value: 0.07232
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
+  rb4_ohm_md421:
+    value: 103.8
+    source: 'fit: scripts/fit_md421_switch.py, to the sheet''s trace of this position re M'
   cartridge_model_md421:
     value: R_MD421@1
     source: 'config/components/r_md421/1.yaml (the MD 421''s cartridge: no construction is published,
@@ -359,6 +394,69 @@ sections:
       - ia_api312
       - '0'
       component: cartridge_model_md421
+    SBASS_md421:
+      switch: bass_md421
+      parts:
+        LB1_md421:
+          L:
+          - ia_api312
+          - lb1_md421
+          l: lb1_h_md421
+          in:
+          - 1
+        RB1_md421:
+          R:
+          - lb1_md421
+          - '0'
+          r: rb1_ohm_md421
+          tolerance: none
+          in:
+          - 1
+        LB2_md421:
+          L:
+          - ia_api312
+          - lb2_md421
+          l: lb2_h_md421
+          in:
+          - 2
+        RB2_md421:
+          R:
+          - lb2_md421
+          - '0'
+          r: rb2_ohm_md421
+          tolerance: none
+          in:
+          - 2
+        LB3_md421:
+          L:
+          - ia_api312
+          - lb3_md421
+          l: lb3_h_md421
+          in:
+          - 3
+        RB3_md421:
+          R:
+          - lb3_md421
+          - '0'
+          r: rb3_ohm_md421
+          tolerance: none
+          in:
+          - 3
+        LB4_md421:
+          L:
+          - ia_api312
+          - lb4_md421
+          l: lb4_h_md421
+          in:
+          - 4
+        RB4_md421:
+          R:
+          - lb4_md421
+          - '0'
+          r: rb4_ohm_md421
+          tolerance: none
+          in:
+          - 4
 - title: cable
   parts:
     CCABLE:

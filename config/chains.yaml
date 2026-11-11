@@ -148,7 +148,11 @@ circuits:
     output: out
     drop: [RLOAD]
     pattern: cardioid
-    settings: []
+    settings:
+      - key: bass                   # the five-position bass roll-off (fitted networks)
+        label: MD421 bass
+        choices: [[0, "M"], [1, "1"], [2, "2"], [3, "3"], [4, "4 (S)"]]
+        default: 0
   shure_sm7:                        # the bass roll-off and presence switches (fitted networks)
     kind: mic
     tag: sm7

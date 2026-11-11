@@ -11,9 +11,9 @@
 # at its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). The MD 421
 # is transformerless: the coil's two ends are the XLR's pins 2 and 3 (`out`, and the measuring
 # ground); the output is open circuit, as the sheet's 2 mV/Pa, and a chain replaces RLOAD with
-# the preamp's input. The five-position bass roll-off switch (M = flat) is not modelled yet
-# (CHAINS_PLAN.md WP14 step 4: its network is fitted to the sheet's four dips); the circuit is
-# the M position.
+# the preamp's input. The five-position bass roll-off switch (M = flat; Sennheiser's network
+# isn't published): positions 1-4 a shunt L-R across the coil each, fitted to the sheet's four
+# traces re M by scripts/fit_md421_switch.py (provisional topology; CHAINS_PLAN.md WP14).
 
 title: "Sennheiser MD 421-II"
 input: in
@@ -26,7 +26,18 @@ full_scale:
   input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
   output_volts_peak: {value: 0.1, source: "provisional: model knowledge (sennheiser: 2 mV/Pa x 20 Pa = 40 mV peak, with headroom for the presence peak and proximity)"}
 
+controls:
+  bass: {value: 0, choices: [0, 1, 2, 3, 4], unit: position, source: "web: the sheet's five-position bass roll-off switch (M = music, flat)", notes: "0 M (flat), 1-4 the roll-offs, deepest at 4"}
+
 values:
+  lb1_h: {value: 0.08594, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  rb1_ohm: {value: 999.6, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  lb2_h: {value: 0.04173, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  rb2_ohm: {value: 424.3, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  lb3_h: {value: 0.07179, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  rb3_ohm: {value: 223.5, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  lb4_h: {value: 0.07232, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
+  rb4_ohm: {value: 103.8, source: "fit: scripts/fit_md421_switch.py, to the sheet's trace of this position re M"}
   cartridge_model: {value: R_MD421@1, source: "config/components/r_md421/1.yaml (the MD 421's cartridge: no construction is published, the geometry bounded and fitted by scripts/fit_md421.py to Sennheiser's figures: data/schematics/sennheiser_md421/README.md)"}
   load_ohm: {value: 1.0e+6, source: "sennheiser: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
 
@@ -38,4 +49,15 @@ sections:
       MC:
         moving_coil: [in, p_rear, out, "0"]
         component: cartridge_model
+      SBASS:
+        switch: bass
+        parts:
+          LB1: {L: [out, lb1], l: lb1_h, in: [1]}
+          RB1: {R: [lb1, "0"], r: rb1_ohm, tolerance: none, in: [1]}
+          LB2: {L: [out, lb2], l: lb2_h, in: [2]}
+          RB2: {R: [lb2, "0"], r: rb2_ohm, tolerance: none, in: [2]}
+          LB3: {L: [out, lb3], l: lb3_h, in: [3]}
+          RB3: {R: [lb3, "0"], r: rb3_ohm, tolerance: none, in: [3]}
+          LB4: {L: [out, lb4], l: lb4_h, in: [4]}
+          RB4: {R: [lb4, "0"], r: rb4_ohm, tolerance: none, in: [4]}
       RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}
