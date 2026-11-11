@@ -64,7 +64,13 @@ runs**.
   known miss); WP29's Notes. WP27 (2026-11-11): the Cloudlifter CL-1 on LSK389A and three-stage
   chains in `compose_chain.py`; WP27's Notes.
 - **Next:** WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1 transmitter found,
-  `data/schematics/carbon_transmitter/README.md` has its figures and a plan). WP26 (the PZM): no
+  `data/schematics/carbon_transmitter/README.md` has its figures and a plan). What it needs (read
+  2026-11-11): the room pipeline finds a mic's entries from a `capsule_model*` / `cartridge_model*`
+  / `ribbon_model*` component's `geometry` (`varimu/rooms/scene.py` `_capsule_geometry`), so the F1
+  wants a component with a body; Fig. 6's acoustic network (no values printed) as R / L / C fitted to
+  its pressure response (`varimu/measure/ac.py`, the SM7 switches' method), the diaphragm's
+  displacement as the force on `CARBON_BUTTON`'s pin through the carbon's stiffness (a capacitor's
+  voltage in the impedance analogy) on a static preload source; the telephone loop's 48 V feed. WP26 (the PZM): no
   schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
   scenes can be built first. Then WP30 (a crystal transducer kind); WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
