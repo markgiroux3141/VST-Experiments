@@ -12,11 +12,11 @@
 # overall feedback from line b into the gate through R2 220M || C2 18p and R3 100M || C3 33p (a
 # charge amplifier: the gain is the capsule's capacitance over the feedback's ~11.6 pF); T4 servos
 # the DC (line b's, through Ü1's primary and R13 / C8) onto T2's base. -10 dB: S1 shorts R2 || C2
-# (the feedback C3 alone). Supply: 48 V phantom (DIN 45596, 0.5 mA) through the preamp's 6.8k
+# (the feedback C3 alone); its second pole shorts R4. Bass cut: S2 puts R4 68M + R5 33M from line b
+# to the gate (resistive feedback: a first-order cut, ~135 Hz with the feedback's 11.6 pF). Supply: 48 V phantom (DIN 45596, 0.5 mA) through the preamp's 6.8k
 # pair, then R18 / R19 to T7 (a filtered follower: +43 V) and R20 / R21, R16, R8 to line a. The
 # secondary (ground at VI, through R22 / R23 to the pins) into RLOAD (cat's 1 kohm rated load,
-# dropped in a chain). Not modelled: the bass cut S2 (R4 68M, R5 33M), the -6 dB secondary switch
-# S3, C12 / C13 (RF), the phantom resistors as a load across the output beyond R18 / R19.
+# dropped in a chain). Not modelled: the -6 dB secondary switch S3, C12 / C13 (RF), the phantom resistors as a load across the output beyond R18 / R19.
 
 title: "Neumann U 47 fet"
 input: in
@@ -28,6 +28,7 @@ full_scale:
   output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u87.yaml"}
 controls:
   pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: S1 (-10dB)", notes: "0 off, 1 -10 dB"}
+  bass_cut: {value: 0, choices: [0, 1], unit: switch, source: "sch: S2 (the bass cut symbol); the manual (U 47 fet i, 1983): it suppresses frequencies below 200 Hz", notes: "0 off, 1 bass cut"}
 values:
   capsule_model: {value: K47@3, source: "derived: neumann_u47.yaml's (the U 47 fet keeps the U 47's K47 capsule; sch: 72p)"}
   pol_front_v: {value: 46.5, source: "sch: +46,5V (line a through R16 / R8, no DC load: the backplate's polarization, the front diaphragm at ground)"}
@@ -45,6 +46,8 @@ values:
   r2_ohm: {value: 220.0e+6, source: "sch: R2 220M"}
   c2_f: {value: 18.0e-12, source: "sch: C2 18p"}
   r3_ohm: {value: 100.0e+6, source: "sch: R3 100M"}
+  r4_ohm: {value: 68.0e+6, source: "sch: R4 68M"}
+  r5_ohm: {value: 33.0e+6, source: "sch: R5 33M"}
   c3_f: {value: 33.0e-12, source: "sch: C3 33p"}
   r17_ohm: {value: 100.0e+3, source: "sch: R17 100k"}
   r15_ohm: {value: 47.0e+3, source: "sch: R15 47k"}
@@ -120,6 +123,16 @@ sections:
         switch: pad
         parts:
           RS1: {R: [b, n2], r: contact_ohm, tolerance: none, in: [1]}
+      SBASS:
+        switch: bass_cut
+        parts:
+          R4: {R: [b, n45], r: r4_ohm, tolerance: none, in: [1]}
+          R5: {R: [n45, n1], r: r5_ohm, tolerance: none, in: [1]}
+          SPAD2:
+            switch: pad
+            in: [1]
+            parts:
+              RS1B: {R: [b, n45], r: contact_ohm, tolerance: none, in: [1]}
       R3: {R: [n2, n1], r: r3_ohm}
       C3: {C: [n2, n1], c: c3_f}
   - title: amplifier

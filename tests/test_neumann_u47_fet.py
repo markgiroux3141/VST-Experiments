@@ -82,3 +82,33 @@ def test_sensitivity_impedance_max_spl_and_pad(level):
     assert 20 * np.log10(pad / a) == pytest.approx(-9.0, abs=0.5)
     back, _ = level({}, angle_deg=180.0)
     assert 20 * np.log10(back / a) < -15.0
+
+
+def test_bass_cut(u47f):
+    """S2 (R4 68M + R5 33M from line b to the gate) against the manual's dashed trace (U 47 fet i,
+    1983, p. 9, read re the normal trace): -4.7 dB at 100 Hz, -11.5 at 50 Hz, -0.8 at 200 Hz (the
+    trace drawn as a straight ~6 dB/oct line; the circuit's first-order cut is gentler at 50 Hz)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    s = TransientSettings.from_sim_settings(engine="circuitsim")
+    fs = s.sample_rate
+    f = np.array([50.0, 100.0, 200.0, 1000.0])
+    t = np.arange(int(0.6 * fs)) / fs
+    x = 0.05 * np.sin(2 * np.pi * f[:, None] * t).sum(0) * np.minimum(1, t / 0.1)
+    n = int(0.3 * fs)
+
+    def amps(over):
+        ir = builder.build(u47f, over).ir
+        y = fast.run_transient(ir, x, settings=s, controls={"p_rear": np.zeros_like(x)})
+        yy, tt = y.vectors["v(out)"][-n:], t[-n:]
+        return np.array([abs(np.mean(yy * np.exp(-2j * np.pi * fk * tt))) for fk in f])
+
+    rel = 20 * np.log10(amps({"bass_cut": 1}) / amps({}))
+    rel -= rel[-1]
+    assert rel[1] == pytest.approx(-4.7, abs=1.0)
+    assert -13.0 < rel[0] < -7.5
+    assert -2.5 < rel[2] < -0.5
+    padded = 20 * np.log10(amps({"bass_cut": 1, "pad": 1}) / amps({"pad": 1}))
+    assert padded[1] - padded[-1] < -3.0  # S1's second pole: R5 alone, the cut stays

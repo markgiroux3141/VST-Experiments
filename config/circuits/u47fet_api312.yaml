@@ -44,6 +44,15 @@ controls:
     unit: switch
     source: 'sch: S1 (-10dB)'
     notes: 0 off, 1 -10 dB
+  bass_cut_u47fet:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'sch: S2 (the bass cut symbol); the manual (U 47 fet i, 1983): it suppresses frequencies below
+      200 Hz'
+    notes: 0 off, 1 bass cut
   gain_api312:
     value: 0.6
     min: 0.0
@@ -117,6 +126,12 @@ values:
   r3_ohm_u47fet:
     value: 100000000.0
     source: 'sch: R3 100M'
+  r4_ohm_u47fet:
+    value: 68000000.0
+    source: 'sch: R4 68M'
+  r5_ohm_u47fet:
+    value: 33000000.0
+    source: 'sch: R5 33M'
   c3_f_u47fet:
     value: 3.3e-11
     source: 'sch: C3 33p'
@@ -671,6 +686,38 @@ sections:
           tolerance: none
           in:
           - 1
+    SBASS_u47fet:
+      switch: bass_cut_u47fet
+      parts:
+        R4_u47fet:
+          R:
+          - b_u47fet
+          - n45_u47fet
+          r: r4_ohm_u47fet
+          tolerance: none
+          in:
+          - 1
+        R5_u47fet:
+          R:
+          - n45_u47fet
+          - n1_u47fet
+          r: r5_ohm_u47fet
+          tolerance: none
+          in:
+          - 1
+        SPAD2_u47fet:
+          switch: pad_u47fet
+          in:
+          - 1
+          parts:
+            RS1B_u47fet:
+              R:
+              - b_u47fet
+              - n45_u47fet
+              r: contact_ohm_u47fet
+              tolerance: none
+              in:
+              - 1
     R3_u47fet:
       R:
       - n2_u47fet

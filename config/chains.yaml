@@ -261,6 +261,10 @@ circuits:
         label: U47 fet pad
         choices: [[0, "off"], [1, "-10 dB"]]
         default: 0
+      - key: bass_cut
+        label: U47 fet bass cut
+        choices: [[0, "off"], [1, "on"]]
+        default: 0
   neumann_km84:                     # the KK 84 cardioid; -10 dB pad
     kind: mic
     tag: km84

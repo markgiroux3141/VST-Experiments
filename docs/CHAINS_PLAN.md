@@ -73,7 +73,7 @@ runs**.
   generalization (its Decision). Open options inside done WPs: a `surface` control in the app's Room view
   (WP26), the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
-  vector paths), the TG's channel past Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U
+  vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
   67's bass cut's shape (WP28's Notes), supercardioid halves for the dual capsules (the M 49's and U
   67's pattern sensitivities: WP29's Notes). The user fetches login-walled files on request: each URL
   alone in a code block.
@@ -1538,6 +1538,15 @@ printed voltage (line b 20.8 V against 21.5). Ü1's ratio fitted to 8 mV/Pa: 0.1
 **Not modelled:** S2's bass cut, S3's -6 dB, C12 / C13. `tests/test_neumann_u47_fet.py` (4);
 `u47fet_api312` composed and rendered.
 
+S2, the bass cut (2026-11-11): read on the drawing contact by contact: S2 puts R4 68M + R5 33M in series
+from line b to the gate (resistive feedback around the charge amplifier: a first-order cut at ~135
+Hz), and S1's second pole shorts R4 (padded, R5 alone): the control `bass_cut` (the pad's pole nested
+in it), printed values, nothing fitted. Against the manual's dashed trace (1983, p. 9, re the normal
+trace): -5.3 dB at 100 Hz (-4.7), -8.8 at 50 (-11.5), -2.2 at 200 (-0.8): the trace is drawn as a
+straight ~6 dB/oct line. The default and padded builds are bit for bit as before. The Room view's
+"U47 fet bass cut"; `tests/test_neumann_u47_fet.py` (5). Still not modelled: S3's -6 dB (it splits
+the secondary: the default build would change), C12 / C13.
+
 ### WP17. The beyerdynamic M 160
 
 Sources: `data/schematics/beyer_m160/README.md` (beyer's product data and information, the
@@ -2000,3 +2009,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-11: WP30 started: Shure's 1959 catalog has the 520 "Green Bullet" as controlled magnetic (the R5),
   not crystal, so it goes on `moving_coil`; its response curve is bot-blocked (URLs for the user in its
   README); still 48 of 51.
+- 2026-11-11: WP25's S2: the U 47 fet's bass cut read on the drawing (R4 + R5 as resistive feedback; S1's
+  second pole), its default and padded builds unchanged; still 48 of 51.
