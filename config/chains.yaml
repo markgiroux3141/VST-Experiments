@@ -189,7 +189,18 @@ circuits:
         label: Pattern
         choices: [[0, omni], [1, cardioid], [2, figure-8]]
         default: 1
-  neumann_m49: {kind: mic, tag: m49, label: Neumann M49, wp: 29}
+  neumann_m49:                      # the KK49 on the supply's pattern potential (nine positions,
+    kind: mic                       # 14.5 V apart); the head's strap
+    tag: m49
+    label: Neumann M49
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern
+        label: Pattern
+        choices: [[0, omni], [1, wide omni], [2, wide cardioid], [3, broad cardioid], [4, cardioid], [5, supercardioid], [6, hypercardioid], [7, narrow figure-8], [8, figure-8]]
+        default: 4
   neumann_u67:                      # the K67 at its three patterns; the pre-attenuation; the
     kind: mic                       # 100 Hz bass cut (S1)
     tag: u67
@@ -271,7 +282,13 @@ circuits:
   carbon_transmitter: {kind: mic, tag: carbon, label: Carbon transmitter, wp: 31}
 
   # --- boosters ---
-  cloudlifter: {kind: booster, tag: cl, label: Cloudlifter, wp: 27}
+  cloudlifter:                      # the CL-1 on LSK389A, its output the preamp's phantom-fed,
+    kind: booster                   # AC-coupled balanced input; no settings
+    tag: cl
+    label: Cloudlifter
+    input: ia
+    output: out
+    drop: [RSRC]
 
   # --- preamps ---
   telefunken_v76:
@@ -530,6 +547,7 @@ chains:
     pre: clean_pre
     use: "Today's home-studio ribbon: the ribbon into a high impedance"
     needs: [ribbon, jfet]
+    defaults: {gain_db_clean: 20}     # the CL-1's ~27 dB ahead: the check scene's -8 dBFS rms at 30
   - id: r77_a351
     mic: rca_77dx
     pre: ampex_351_record
@@ -667,6 +685,7 @@ chains:
     pre: telefunken_v76
     use: "Strings, choir, orchestra: the German radio studio"
     needs: [ac701]
+    defaults: {gain_db_v76: 46}       # the M 49's 6 mV/Pa: 12 dB above the U47's chains' 34
   - id: u67_redd47
     mic: neumann_u67
     pre: emi_redd47

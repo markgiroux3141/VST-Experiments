@@ -1,4 +1,4 @@
-# A check scene for the chains built 2026-11-10 and 2026-11-11 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP19, WP22, WP24, ..., WP28): one
+# A check scene for the chains built 2026-11-10 and 2026-11-11 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP19, WP22, WP24, ..., WP29, WP27): one
 # source, the new chains as spots, rendered once at draft.
 #
 #   uv run --extra fast python scripts/room_print.py config/scenes/new_chains_check.yaml --quality draft
@@ -76,3 +76,18 @@ mics:
     position_m: [2.35, 2.35, 1.5]
     aim: {azimuth_deg: 150}
     pan: 0.3
+  - name: M49 into V76
+    chain: m49_v76
+    position_m: [2.35, 2.75, 1.5]
+    aim: {azimuth_deg: -150}
+    pan: -0.2
+  - name: 44-BX into Cloudlifter into clean
+    chain: r44_cl_clean
+    position_m: [1.75, 2.75, 1.3]
+    aim: {azimuth_deg: -30}
+    pan: 0.45
+  - name: SM7 into Cloudlifter into clean
+    chain: sm7_cl_clean
+    position_m: [2.0, 2.3, 1.45]
+    aim: {azimuth_deg: 90}
+    pan: -0.45

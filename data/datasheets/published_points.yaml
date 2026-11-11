@@ -700,6 +700,43 @@
     sensitivity_mv_pa: [11.0, 20.0, 14.0]   # spec: 1.1 / 2.0 / 1.4 mV/ub omni / cardioid / figure-8 across 1000 ohm
     capacitance_pf: [50.0, 50.0]        # spec: 1 x 50 pF (cardioid), 2 x 50 pF (omni, figure-8)
 
+# --- Neumann M 49 c (CHAINS_PLAN.md WP29) ---
+"KK49":
+  source: "data/schematics/neumann_m49/README.md: the M 49 c drawing (KK 49, 2 x 78...83 pF) and RecordingHacks (the M 49's capsule the K 47's twin); no Neumann drawing of the capsule: K47@3's geometry (published_points.yaml \"K47\") as the start, its network fitted to the M 49 c's curves (pd p. 7-8) through the circuit by scripts/fit_kk49.py (value: ..., the bounds in its comment)"
+  polarization_v: 58.0     # sch (M 49 c): the backplate's ca. +58 V over the grid at 0 V
+  geometry:
+    diaphragm:
+      radius_m: {value: 12.5e-3}      # web (K47_THEORY.md: an M7's gold area 25.4 mm, makers / forums)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (forum lore: ~6 um PET for the polyester capsule; Neumann: PVC in the M 7, polyester later)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 49.29}      # provisional: fitted (bounds 12-200 N/m; K47_THEORY.md: ~8-60 N/m, the M7 tuned to ~800-950 Hz)
+    gap_m: {value: 50.0e-6}           # derived: the 2 x 78-83 pF (sch) with the backplate's radius, less ~3 pF stray: eps0 pi b^2 / 77 pF
+    backplate:
+      radius_m: {value: 11.8e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping)
+      thickness_m: {value: 5.65e-3}   # web (K47_THEORY.md: an M7 measured 5.73 mm, its through holes 5.65 mm long)
+      through:
+        holes: {value: 40}            # provisional: model knowledge (part of the ~153 holes (a Science Museum label, README) go through; the split is unknown)
+        radius_m: {value: 0.4e-3}     # web (K47_THEORY.md: 0.8 mm through holes, makers / forums)
+      blind:
+        holes: {value: 69.99}            # provisional: fitted (bounds 15-140 per side)
+        radius_m: {value: 0.54e-3}    # web (K47_THEORY.md: ~1.07-1.09 mm blind holes, makers / forums)
+        depth_m: {value: 0.0045}      # provisional: fitted (bounds 0.5-4.5 mm; K47_THEORY.md: ~4 mm, a replica's)
+    film_resistance_pa_s_m3: {value: 4.932e+06}       # provisional: fitted (the film into the blind holes, bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 2.601e+07}    # provisional: fitted (the gradient resistance, Torio & Segota's R_a, bounds 1e6-3e9)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 2.0e-12}   # provisional: fitted (bounds 2-40 pF; the electrode's leads and insulator)
+    # The capsule as a rigid body of revolution for its entries' diffraction (varimu/mics/bor.py;
+    # K47@2 had a fitted sphere in its place, 10.98 mm)
+    body:
+      radius_m: {value: 14.9e-3}          # web (K47_THEORY.md 1.6: an M 7 measured 29.85 mm without the middle rim, GroupDIY)
+      rim_radius_m: {value: 16.5e-3}      # web (README.md: the K 47 33 mm outer diameter, GroupDIY)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (the middle rim's width; no source)
+      spacing_m: {value: 0.00575}         # provisional: grid: (scripts/fit_k47.py --spacing-mm; the backplate's 5.65 mm plus the two gaps, the diaphragms on its faces; an M 7 measured 5.73 mm thick)
+      ring_proud_m: {value: 0.0005}          # provisional: grid: (scripts/fit_k47.py --proud-mm; the clamping rings' faces ahead of the diaphragms, unknown)
+  published:
+    sensitivity_mv_pa: [4.5, 6.0, 8.0]    # pd: 0.45 / 0.6 / 0.8 mV/ub omni / cardioid / figure-8 into 1000 ohm
+    capacitance_pf: [80.0, 80.0]        # pd: app. 2 x 80 pF; sch: 2 x 78...83 pF
+
 # --- Neumann KM 84 (CHAINS_PLAN.md WP24) ---
 "KK84":
   source: "data/schematics/neumann_km84/README.md: RecordingHacks (the KK 64 / KK 84, a 20 mm capsule, a crossed-slit backplate), Neumann's catalog cata0120 (the KM 84: ~34 pF); no Neumann drawing of the capsule. A single-diaphragm cardioid modelled in the dual-diaphragm form at the cardioid setting (the rear half unpolarized standing in for the crossed-slit backplate's rear network), fitted to the KM 84 i's curves (KM84-manual.pdf p. 16, the text's 135 deg figure) by scripts/fit_kk84.py (value: ..., the bounds in its comment)"

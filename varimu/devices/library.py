@@ -597,6 +597,29 @@ def build_2n3819() -> dict[str, Any]:
     )
 
 
+def build_lsk389a() -> dict[str, Any]:
+    """One half of Linear Systems' LSK389A dual N-channel JFET (the Cloudlifter CL-1's: two
+    LSK389, docs/CHAINS_PLAN.md WP27; the A grade by the traced CL-1's simulated gain)."""
+    return _jfet_component(
+        "LSK389A",
+        "njf",
+        {
+            "vto_v": -0.39,
+            "beta_a_per_v2": 0.024,
+            "lambda_per_v": 0.046,
+            "is_a": 2.0e-14,
+            "pb_v": 1.2,
+        },  # fmt: skip
+        {"rd_ohm": 8.0, "rs_ohm": 5.5, "cgs_f": 25.0e-12, "cgd_f": 16.8e-12},
+        "Linear Systems' LSK389A SPICE model (data/datasheets/transistors/README.md: "
+        "linearsystems_lsk389_models.pdf, 12/10/2020, fitted by Linear Systems to a B device "
+        "measured 12/09/2020 with a 100 ohm drain load); the card's N 1, FC 0.5, KF, AF aren't in "
+        "the level-1 model",
+        "web: https://www.linearsystems.com/_files/ugd/7e8069_9af1b6d022d14a17931a81b775eb9ed0.pdf "
+        "(LSK389A: BETA 0.024, VTO -0.39, LAMBDA 0.046, IS 2E-14, PB 1.2)",
+    )
+
+
 def build_pn4092() -> dict[str, Any]:
     """The PN4092 N-channel switching JFET (the 50 ohm chopper class; the Minimoog
     oscillator's reset switch, an E112, stands on it: docs/MINIMOOG_PLAN.md MM3)."""
@@ -1102,6 +1125,26 @@ def build_k67() -> dict[str, Any]:
     geom = _plain(pub["geometry"])
     return {
         "name": "K67",
+        "kind": "capsule",
+        "form": "dual",
+        "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.dual_lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (dual_lumped's "
+        "docstring) on the geometry; air at 20 C",
+    }
+
+
+def build_kk49() -> dict[str, Any]:
+    """Neumann's KK 49 dual-diaphragm capsule (the M 49 c's; docs/CHAINS_PLAN.md WP29): K47@3's
+    form (published_points.yaml "KK49": the network fitted to the M 49 c's curves through the
+    circuit by scripts/fit_kk49.py), the lumped network derived from it as the K 47's."""
+    from varimu.devices import capsule
+
+    pub = _published()["KK49"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "KK49",
         "kind": "capsule",
         "form": "dual",
         "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
@@ -3610,6 +3653,7 @@ BUILDERS = {
     "J175": build_j175,
     "2N3819": build_2n3819,
     "PN4092": build_pn4092,
+    "LSK389A": build_lsk389a,
     "2N5457": build_2n5457,
     "2N3707": build_2n3707,
     "2N3053": build_2n3053,
@@ -3639,6 +3683,7 @@ BUILDERS = {
     "EF86": build_ef86,
     "AC701": build_ac701,
     "KK84": build_kk84,
+    "KK49": build_kk49,
     "R57": build_r57,
     "R59": build_r59,
     "R_D112": build_r_d112,

@@ -1,0 +1,37 @@
+{
+ "best": {
+  "diaphragm/tension_n_m": 49.28561462703558,
+  "through_resistance_pa_s_m3": 26006253.926571816,
+  "film_resistance_pa_s_m3": 4931681.117929989,
+  "backplate/blind/depth_m": 0.004499999994794763,
+  "backplate/blind/holes": 69.98650314682065,
+  "stray_capacitance_f": 2.000000000229042e-12,
+  "body/radius_m": 0.0149,
+  "body/rim_radius_m": 0.0165,
+  "body/rim_thickness_m": 0.0015,
+  "body/spacing_m": 0.00575,
+  "body/ring_proud_m": 0.0005,
+  "cardioid_mv_pa_at_backplate": 3.4,
+  "omni_mv_pa_at_backplate": 3.462,
+  "figure8_mv_pa_at_backplate": 3.354,
+  "target_mv_pa": 3.581,
+  "omni_0_rms_db": 1.24,
+  "omni_0_max_db": 3.41,
+  "omni_0_max_db_at_hz": 7962.1,
+  "cardioid_0_rms_db": 0.63,
+  "cardioid_0_max_db": 1.55,
+  "cardioid_0_max_db_at_hz": 15886.6,
+  "cardioid_180_rms_db": 5.31,
+  "cardioid_180_max_db": 6.32,
+  "cardioid_180_max_db_at_hz": 5000.0,
+  "c0_pf": 77.5,
+  "electrostatic_softening": 0.103,
+  "membrane_resonance_in_vacuo_hz": 2397.5,
+  "rms_weighted_db": 1.07,
+  "target_mv_pa_at_electrode": {
+   "omni": 2.697,
+   "cardioid": 3.581,
+   "figure8": 4.754
+  }
+ }
+}

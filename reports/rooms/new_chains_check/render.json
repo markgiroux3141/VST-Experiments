@@ -160,7 +160,7 @@
    "pan": 0.3,
    "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
    "rms_dbfs": -15.41,
-   "peak_dbfs": -4.81,
+   "peak_dbfs": -4.82,
    "hears": [
     "A"
    ],
@@ -211,6 +211,51 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "M49 into V76",
+   "file": "M49_into_V76.wav",
+   "chain": "m49_v76",
+   "set": {},
+   "pan": -0.2,
+   "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
+   "rms_dbfs": -32.61,
+   "peak_dbfs": -22.97,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "44-BX into Cloudlifter into clean",
+   "file": "44-BX_into_Cloudlifter_into_clean.wav",
+   "chain": "r44_cl_clean",
+   "set": {},
+   "pan": 0.45,
+   "entries": "body {'form': 'baffle', 'radius_m': 0.02026, 'depth_m': 0.01339}",
+   "rms_dbfs": -8.06,
+   "peak_dbfs": -2.74,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "SM7 into Cloudlifter into clean",
+   "file": "SM7_into_Cloudlifter_into_clean.wav",
+   "chain": "sm7_cl_clean",
+   "set": {},
+   "pan": -0.45,
+   "entries": "body {'form': 'dynamic', 'face_radius_m': 0.019, 'ports_m': [0.012, 0.035], 'cartridge_length_m': 0.055, 'head_radius_m': 0.032, 'head_length_m': 0.1, 'taper_length_m': 0.07, 'end_radius_m': 0.012, 'end_length_m': 0.045}",
+   "rms_dbfs": -12.95,
+   "peak_dbfs": -4.25,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -225,6 +270,6 @@
   8000,
   16000
  ],
- "wall_s": 10.4,
+ "wall_s": 48.9,
  "seconds": 8.999
 }

@@ -29,3 +29,20 @@ Cloud Microphones' own figures (web: https://www.cloudmicrophones.com/cloudlifte
 phantom supply; retailers: two gain stages of four hand-matched JFETs, a 3k input load. The
 traced schematic's simulated 29.9 dB is per output against ground; balanced, into a preamp's
 input, the gain depends on that input's load: to be checked when built.
+
+## The JFETs (found 2026-11-11)
+
+GroupDIY's teardown and repair threads (web: https://groupdiy.com/threads/cloudlifter-cl-1repair.78404,
+https://groupdiy.com/goto/post?id=1123031): two Linear Systems LSK389 duals (the first with a 33k
+and a capacitor at the input). Linear Systems' cards for the four grades:
+data/datasheets/transistors/linearsystems_lsk389_models.pdf (its README row). The grade isn't
+known: the A grade gives the traced schematic's simulated gain (28.3 dB per output unloaded
+against its 29.9; B 31.3, C 32.5, D 33.4 by the card's square law), `LSK389A@1`.
+
+## Built (config/circuits/cloudlifter.yaml)
+
+The traced left (original) version on LSK389A; the mic's floating output as +-v / 2 on the gates
+(controlled sources; the legs' 66k / 1.65 nF in series as the mic's load); the downstream preamp's
+phantom feed (IEC 61938 P48, 6.81 k a leg), 47 uF blocking capacitors, each leg loaded by half the
+clean preamp's 10 k, the output the legs' difference. 1.40 mA a leg, 26.8 dB into the 10 k (Cloud:
+"up to +25 dB"), 0.1% THD at 50 mV peak in, 1% at 100 mV.

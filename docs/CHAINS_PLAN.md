@@ -13,12 +13,13 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 42 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 45 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
-  M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073; `uv run python scripts/chain_status.py`).
+  M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073, M49 -> V76, 44-BX / SM7 -> Cloudlifter ->
+  clean; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -58,21 +59,21 @@ runs**.
   `RIBBON_M160@1` by `scripts/fit_m160.py`), WP16 (the Royer R-121, `RIBBON_R121@1` by
   `scripts/fit_r121.py`); each WP's Notes. WP28 (2026-11-11): the EF86 and E88CC fits (`EF86@1`,
   `E88CC@1`), the Neumann U 67 from Neumann's drawing (`K67@1` by `scripts/fit_k67.py`) and the EMI
-  REDD.47 from EMI's REDD.47/C1/1 and REDD.M47; WP28's Notes.
-- **Next:** **WP29's M 49** (the AC701 fit done; Neumann's M49c drawing supplied by the user
-  2026-11-11: `data/schematics/neumann_m49/README.md`, its first reading there) and **WP27's
-  Cloudlifter** (a traced CL-1 schematic and its simulated response supplied by the user:
-  `data/schematics/cloudlifter/README.md`; then three-stage chains in `compose_chain.py`).
-  Then WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1
-  transmitter found, `data/schematics/carbon_transmitter/README.md` has its figures and a plan).
-  WP26 (the PZM): no schematic is open (Crown's service archive doesn't list the PZM-30D); the
-  surface placement in scenes can be built first. Then WP30 (a crystal transducer kind), WP31 (a
-  carbon kind); WP15's switches and WP14's bass switch (their curves digitized; WP14's network
-  unread); WP13 (RE20) waits on the N-entry room generalization (its Decision). Open options inside
-  done WPs: the Helios EQ (the IA-H9's EQUALIZER, VTB9043 / VTB9042 as the inductors), a
-  CK12-family refit to the C414 ULS's curves (its sheet's p.2, vector paths), the TG's channel past
-  Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U 67's bass cut's shape (WP28's
-  Notes). The user fetches login-walled files on request: each URL alone in a code block.
+  REDD.47 from EMI's REDD.47/C1/1 and REDD.M47; WP28's Notes. WP29 (2026-11-11): the Neumann M 49 c
+  from Neumann's drawing M49c-930-00 (`KK49@1` by `scripts/fit_kk49.py`; the pattern sensitivities a
+  known miss); WP29's Notes. WP27 (2026-11-11): the Cloudlifter CL-1 on LSK389A and three-stage
+  chains in `compose_chain.py`; WP27's Notes.
+- **Next:** WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1 transmitter found,
+  `data/schematics/carbon_transmitter/README.md` has its figures and a plan). WP26 (the PZM): no
+  schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
+  scenes can be built first. Then WP30 (a crystal transducer kind); WP15's switches and WP14's bass
+  switch (their curves digitized; WP14's network unread); WP13 (RE20) waits on the N-entry room
+  generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
+  VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
+  vector paths), the TG's channel past Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U
+  67's bass cut's shape (WP28's Notes), supercardioid halves for the dual capsules (the M 49's and U
+  67's pattern sensitivities: WP29's Notes). The user fetches login-walled files on request: each URL
+  alone in a code block.
 - **The user's decisions (2026-11-10):** the IA-H9 files (Iron Age Audioworks) are OK to use for
   WP19. The C414 GroupDIY thread and a legible ELA M 251 drawing can't be had (the links are
   dead): don't ask for them again. Build those by inference, every value sourced as provisional
@@ -88,8 +89,8 @@ runs**.
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
-  and the 2026-11-11 ones (U67 -> REDD.47 added to `config/scenes/new_chains_check.yaml`, which
-  renders one of each) in the Room view (optional). One call
+  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean added to
+  `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
   material (moves every render).
@@ -189,9 +190,9 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | done 2026-11-10 |
 | 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | done 2026-11-10 |
 | 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
-| 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | |
+| 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | done 2026-11-11 (LSK389A) |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
-| 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | the AC701 fit done 2026-11-11; the M 49 next (its drawing supplied) |
+| 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | done 2026-11-11 (the M 49 c) |
 | 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | |
 | 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | |
 
@@ -1641,6 +1642,63 @@ curves win). In the SPICE agreement test, the device fixtures and `table.py`'s g
 49 c from Neumann's drawing M49c-930-00 (supplied by the user; its first reading in the README;
 the spec sheets give the curves and the N 49 b supply).
 
+Decisions (2026-11-11, Claude's):
+- The M 49 c (the drawing supplied), not the M 49 b: the product description's figures are the
+  M 49 c's.
+- R7 is 2.2 k, not the printed "22 kOhm": the drawing's own +1.6 V at 0.73 mA (and the redraw).
+- The pattern potentiometer (continuous) as nine positions, 14.5 V apart on pin 6, the C12's nine
+  names; the head's strap S2 a switch (`strap`, closed by default).
+- BV 11 has no published data: BV 8's construction (the U 47's) stands in, its ratio fitted to the
+  product description's 200 ohm (`scripts/m49_trim.py`: 0.197); C4, the part selected on test,
+  fitted to the amplifier's 0 dB at the calibrating input: 13.6 pF against the drawing's "ca. 8 pF"
+  (the gap: the AC 701 fit's gain or the KK 49's capacitance; left).
+- The calibrating input is a sine source in series with R4 (at 0 V the circuit is the drawing's).
+- The KK 49 is K47@3's geometry (the K 47's twin, RecordingHacks; the same 2 x 78...83 pF), the
+  network refitted through the circuit (`scripts/fit_kk49.py`, fit_k67's method); the pattern
+  sensitivities are a known miss (Notes).
+
+Notes (2026-11-11, done): **the M 49 c** (`config/circuits/neumann_m49.yaml`; the curves digitized by
+a subagent, `scripts/digitize_neumann_m49.py` -> `data/datasheets/neumann_m49_response.csv`, the
+cardioid's 90 / 180 deg read from the polars by eye; `KK49@1` by `scripts/fit_kk49.py`,
+`reports/mics/kk49_fit.{json,png}`, the circuit's correction `reports/mics/kk49_correction.json`):
+idles at the anode 42.3 V (printed ca. 43), the cathode 1.62 (1.6), the backplate 58.0 (ca. 58); 5.8 /
+5.7 / 5.6 mV/Pa omni / cardioid / figure-8 into 1000 ohm (the sheet 4.5 / 6 / 8: the cardioid -0.5
+dB, the omni +2.2, the figure-8 -3.1: the dual form's equal, near-cardioid halves give omni ~
+figure-8 at 1 kHz, where the sheet's 4.5 : 8 and its polar's -8.1 dB at 90 deg say supercardioid
+halves; wider bounds and the 90 deg data in the fit didn't move it, the U 67's fit had the same
+limit), 197 ohm, 0.14% THD at 125 dB SPL (<= 0.5%), the cardioid's rear -22.9 dB at 1 kHz (the polar
+reads -16.7: its 180 deg rms 5.3 dB over the five polar frequencies), on axis rms 1.2 / 0.6 dB omni /
+cardioid (worst 3.4 dB, the omni at 8 kHz); the strap open is a cardioid whatever pin 6, 1.9 dB
+louder (the M 49 b's text says 4 dB quieter: open). Tests `tests/test_neumann_m49.py` (6).
+`m49_v76` composed (V76 at 46 dB by default), rendered in `new_chains_check.yaml` (-32.6 dBFS rms at
+the V76's own 34 dB).
+
+### WP27. The Cloudlifter CL-1; three-stage chains
+
+Sources: `data/schematics/cloudlifter/README.md` (a traced CL-1 and its simulated response,
+supplied by the user; the JFETs from GroupDIY's teardown threads, two LSK389;
+Linear Systems' cards, `data/datasheets/transistors/linearsystems_lsk389_models.pdf`).
+
+Decisions (2026-11-11, Claude's):
+- The LSK389's grade is unknown: the A grade (`LSK389A@1`, Linear Systems' card as numbers, as the
+  Central JFETs) gives the traced schematic's simulated 29.9 dB per output (28.3 dB; B-D 31-33).
+- The chains are single-ended, the CL-1 balanced: the mic's floating output drives the pair, the
+  gates held at +-v / 2 by their symmetric legs; modelled exactly so (two controlled sources, the
+  legs in series as the mic's load) rather than grounding the cold leg (which would keep the even
+  harmonics a balanced pair cancels).
+- The output: the downstream preamp's phantom feed (IEC 61938 P48: 48 V, 6.81 k a leg; the trace's
+  6k8), 47 uF blocking capacitors (provisional), each leg loaded by half the clean preamp's 10 k, and
+  the legs' difference into the preamp's input node (a controlled source: the balanced input).
+- `compose_chain.py --booster` (and `--all`): the mic's output is the booster's input node (the
+  cable there), the booster's output the preamp's input; its test generator dropped, its tolerance
+  classes in bands of their own; two-stage chains byte-identical.
+
+Notes (2026-11-11, done): `config/circuits/cloudlifter.yaml` idles at 1.40 mA a leg (drains 38.4 V;
+the input JFET at Vds 0.24 V under its cascode), 26.8 dB into the 10 k (Cloud: "up to +25 dB"), 0.1%
+THD at 50 mV peak in, 1% at 100 mV. `r44_cl_clean` (clean at 20 dB by default) and `sm7_cl_clean`
+composed and rendered in `new_chains_check.yaml` (-8.1 / -13.0 dBFS rms at clean's own 30 dB).
+Tests `tests/test_cloudlifter.py` (4). The app's Room view already reads boosters (room::load_chains).
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1662,7 +1720,8 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes; 2026-11-10 (second session): `build_ribbon_m160`, `build_ribbon_r121` in
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
-passes): these
+passes; 2026-11-11: `build_kk49`, `build_lsk389a` in `varimu/devices/library.py`, every existing IR
+unchanged, the app fixtures re-exported, the agreement test passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1776,3 +1835,9 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-11: the user supplied the M 49 c drawing and a traced Cloudlifter CL-1 (with its
   simulated response); filed with READMEs (`neumann_m49`, `cloudlifter`; an unidentified MZA14
   drawing in `mza14`); WP29's M 49 and WP27 unblocked.
+- 2026-11-11 (the user away): WP29 done: the Neumann M 49 c from Neumann's M49c-930-00 (the curves
+  and polars digitized by a subagent; BV 11's ratio and C4 fitted to the sheet's 200 ohm and 0 dB;
+  `KK49@1` on K47@3's geometry through the circuit, the omni / figure-8 sensitivities a known miss);
+  WP27 done: the Cloudlifter CL-1 (the JFETs found: LSK389, Linear Systems' cards; the A grade by
+  the trace's gain), the floating input and the phantom-fed balanced output, three-stage chains in
+  `compose_chain.py`; M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean composed: 45 of 51.

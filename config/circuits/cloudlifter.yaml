@@ -1,0 +1,93 @@
+# The Cloudlifter CL-1 (docs/CHAINS_PLAN.md WP27), from a traced CL-1 schematic (GroupDIY,
+# supplied by the user; data/schematics/cloudlifter/README.md) on Linear Systems' LSK389 (the
+# teardown threads: two LSK389 duals). Values cite "tr: <part>" (the traced schematic's left,
+# original version), "web:" Cloud's figures, "iec:" IEC 61938's P48 phantom feed.
+#
+# Per leg a cascode: the input JFET (J1 / J3) common source, R1 / R2 22 ohm into the shared R3 39
+# ohm; above it a second JFET (J4 / J2) whose gate is the input JFET's source; its drain is the
+# output pin, powered by the downstream preamp's phantom feed (48 V through 6.81k a leg) and
+# AC-coupled into that preamp's input. The chains are single-ended (every mic's output is a node
+# against ground), the CL-1 is balanced: the mic's floating output winding drives the pair, which
+# the gates' symmetric 33k / 3n3 legs hold at +-v / 2 about ground. Modelled exactly that way: the
+# input node `ia` (the mic's output) loaded by the two legs in series (66k with 1.65 nF), and each
+# gate driven at +-v(ia) / 2 by a controlled source (G with 1 ohm: the legs' 33k / 3n3 then load
+# nothing). The output `out` is the difference of the two legs after the blocking capacitors, as
+# the preamp's balanced input takes it (a G with 1 ohm), each leg loaded by its half of the
+# preamp's input impedance. RSRC (a dynamic mic's source impedance) is the test generator,
+# dropped in a chain.
+
+title: "Cloudlifter CL-1"
+input: in
+probes: [out, ia, dp, dn, m1, m2, s1, sc]
+full_scale:
+  input_volts_peak: {value: 0.1096, source: "derived: -20 dBu peak, a loud dynamic or ribbon microphone's level"}
+  output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak (the booster's +25 dB with headroom)"}
+
+values:
+  source_impedance_ohm: {value: 200.0, source: "provisional: model knowledge (a test generator at a dynamic or ribbon microphone's 150-300 ohm)"}
+  r_in_leg_ohm: {value: 33.0e+3, source: "tr: R4 / R5 33K"}
+  c_in_leg_f: {value: 3.3e-9, source: "tr: C1 / C2 3n3"}
+  r_in_pair_ohm: {value: 66.0e+3, source: "derived: tr: R4 + R5, the two legs in series across the floating source"}
+  c_in_pair_f: {value: 1.65e-9, source: "derived: tr: C1 and C2 in series across the floating source"}
+  half_gm_s: {value: 0.5, source: "numerical: the gate drive's controlled source (v(ia) / 2 into 1 ohm: the floating source's symmetric half, not a part)"}
+  diff_gm_s: {value: 1.0, source: "numerical: the preamp's balanced input as a difference (into 1 ohm: not a part)"}
+  r_ideal_ohm: {value: 1.0, source: "numerical: the controlled sources' load (not a part)"}
+  r1_ohm: {value: 22.0, source: "tr: R1 22R"}
+  r2_ohm: {value: 22.0, source: "tr: R2 22R"}
+  r3_ohm: {value: 39.0, source: "tr: R3 39R"}
+  phantom_v: {value: 48.0, source: "iec: IEC 61938 P48, 48 V (tr: V1 48V)"}
+  r_phantom_ohm: {value: 6810.0, source: "iec: IEC 61938 P48, 6.81 kOhm a leg (tr: R6 / R7 6K8)"}
+  c_block_f: {value: 47.0e-6, source: "provisional: model knowledge (a phantom-powered preamp's DC-blocking capacitors)"}
+  r_pre_leg_ohm: {value: 5.0e+3, source: "derived: clean_pre.yaml's 10 kOhm input as across the pair: 5 kOhm a leg to ground"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 1.0, source: "provisional: model knowledge (SMD thick film, 1%)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (ceramic / electrolytic)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r1: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r1: [RINP, R1, R2, R3, R6, R7, RPLP, RPLN]
+    cap: [CINP, CBP, CBN]
+
+devices:
+  FJ1: {device: LSK389A@1}
+  FJ2: {device: LSK389A@1}
+  FJ3: {device: LSK389A@1}
+  FJ4: {device: LSK389A@1}
+
+sections:
+  - title: input
+    parts:
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      RINP: {R: [ia, "0"], r: r_in_pair_ohm}
+      CINP: {C: [ia, "0"], c: c_in_pair_f}
+      GP: {G: ["0", gp, ia, "0"], gm: half_gm_s}
+      RGP: {R: [gp, "0"], r: r_ideal_ohm, tolerance: none}
+      GN: {G: [gn, "0", ia, "0"], gm: half_gm_s}
+      RGN: {R: [gn, "0"], r: r_ideal_ohm, tolerance: none}
+  - title: amplifier
+    parts:
+      J1: {jfet: [m1, gp, s1], model: FJ1}
+      J4: {jfet: [dp, s1, m1], model: FJ4}
+      R1: {R: [s1, sc], r: r1_ohm}
+      J3: {jfet: [m2, gn, s2], model: FJ3}
+      J2: {jfet: [dn, s2, m2], model: FJ2}
+      R2: {R: [s2, sc], r: r2_ohm}
+      R3: {R: [sc, "0"], r: r3_ohm}
+  - title: phantom and the preamp's input
+    parts:
+      VPH: {V: [vph, "0"], v: phantom_v}
+      R6: {R: [vph, dp], r: r_phantom_ohm}
+      R7: {R: [vph, dn], r: r_phantom_ohm}
+      CBP: {C: [dp, dpb], c: c_block_f}
+      CBN: {C: [dn, dnb], c: c_block_f}
+      RPLP: {R: [dpb, "0"], r: r_pre_leg_ohm}
+      RPLN: {R: [dnb, "0"], r: r_pre_leg_ohm}
+      GD: {G: ["0", out, dpb, dnb], gm: diff_gm_s}
+      RGD: {R: [out, "0"], r: r_ideal_ohm, tolerance: none}

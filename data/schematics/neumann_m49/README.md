@@ -38,17 +38,24 @@ https://groupdiy.com/threads/m49c-circuit-details-questions.80237
 https://www.radiomuseum.org/r/neumann_kondensator_mikrofon_m49b.html
 ```
 
-## sch: (first reading, 2026-11-11)
+## sch: the trace (2026-11-11; config/circuits/neumann_m49.yaml)
 
-- The capsule KK49 (2 x 78...83 pF; RecordingHacks: the K47's twin): the backplate at ca. +58 V
-  through R2 100M from the B+ line's R8 / R9 divider (1M / 1M from +116 V); one diaphragm to the
-  grid (g) with R5 150M to the A- line; the other diaphragm through R1 150M and R11 100M from pin 6,
-  "adjustable capsule polarizing voltage 0...116 V" (the N 49 c's remote pattern control), C7 0.01u;
-  C1 1000p and S2 (on the head) with C4 "ca. 8 pF abgleichen / selected" from the anode: a
-  feedback / compensation path selected on test; R3 5M, C2 / C3 0.01u, R4 200 ohm, R12 2M, C8 0.01u,
-  pin 8 the calibration input.
-- Rö1 AC 701k: the anode at ca. 43 V (0.73 mA) on R10 100k from +116 V (0.79 mA total), C6 800 pF;
-  the cathode at +1.6 V on R7 22k with C9 25 uF / 6 V; the filament from +H (3.8...4.2 V, 100 mA,
-  pin 4) to the A- line.
-- C5 1u into Ü1 (BV 11), S1 the 200 / 50 ohm strap, out on pins 1 / 2.
-- Not yet read wire by wire: C4 / S2's ends, R3's and R12's nodes, the A- / B- return.
+- The capsule KK 49 (2 x 78...83 pF): the front diaphragm is the grid (R5 150M to the ground line,
+  pin 3); the backplate at ca. +58 V through R2 100M from the R8 / R9 divider (1M / 1M from +116 V,
+  pin 5), returned through C2 0.01u and C3 0.01u to the cal line (pin 8; R4 200 ohm to the ground
+  line, C8 0.01u to +H); R3 5M from the output (the transformer's primary, after C5) into C2 / C3:
+  the bass feedback (man D.12: removing R3 makes the response flat to 20 cps).
+- The rear diaphragm through R1 150M from C7 0.01u, R11 100M from pin 6 (the pattern potential,
+  0...116 V; R12 2M from pin 6 to the cal line), and at AC onto the grid through C1 1000p and the
+  head's strap S2 (man D.13: opened, a fixed cardioid).
+- C4 "ca. 8 pF abgleichen / selected" from the grid to the anode (the wire labelled "ca. 43 V").
+- Rö1 AC 701 k: the anode at ca. 43 V on R10 100k from +116 V (0.73 mA), C6 800 pF anode to
+  ground; the cathode at +1,6 V on R7 printed "22 kOhm" (2.2 k: 1.6 V / 0.73 mA; the Eagle redraw
+  reads 2k2) with C9 25 uF / 6 V; the filament f1 on +H (pin 4), f2 on the ground line.
+- C5 1 uF into Ü1 (BV 11): the primary's two halves in series (bl to bl), its cold end (rt) on the
+  ground line; the secondaries strapped by S1 (200 / 50 ohm) onto pins 1 / 2.
+
+Specification (pd p. 5, the M 49 c): 0.45 / 0.6 / 0.8 mV/ub omni / cardioid / figure-8 into 1000
+ohm; 200 (50) ohm +-20%; 2 x 80 pF; 0.5% THD at >= 125 dB SPL (40 cps, 1 and 5 kcps); amplifier gain
+at 1 kc/s 0 dB. Curves: pd p. 7 (on axis per pattern), p. 8 (polars at 100 Hz - 15 kHz), digitized
+by scripts/digitize_neumann_m49.py (data/datasheets/neumann_m49.provenance.yaml).

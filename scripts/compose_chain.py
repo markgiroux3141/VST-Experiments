@@ -2,6 +2,7 @@
 preamp are one netlist").
 
     uv run python scripts/compose_chain.py --mic neumann_u47 --pre telefunken_v76 [--check]
+    uv run python scripts/compose_chain.py --mic rca_44bx --booster cloudlifter --pre clean_pre
     uv run python scripts/compose_chain.py --all [--check]   # every available chain of the list
 
 Writes config/circuits/<mic>_<pre>.yaml from the two circuit files: every parameter key,
@@ -38,7 +39,12 @@ from varimu.config import CONFIG_DIR
 # (behind its generator's resistance) and the generator's parts.
 CHAINS = chain_list.load()
 PORTS = {
-    c.name: {"tag": c.tag, PORT[c.kind]: getattr(c, PORT[c.kind]), "drop": list(c.drop)}
+    c.name: {
+        "tag": c.tag,
+        PORT[c.kind]: getattr(c, PORT[c.kind]),
+        **({"output": c.output} if c.kind == "booster" else {}),
+        "drop": list(c.drop),
+    }
     for c in CHAINS.circuits.values()
     if c.built
 }
@@ -121,18 +127,30 @@ def _suffix_block(block: dict | None, tag: str) -> dict:
     return {f"{k}_{tag}": v for k, v in (block or {}).items()}
 
 
-def compose(mic_name: str, pre_name: str) -> dict:
+def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> dict:
+    """The chain's circuit file as a dict: the mic, an optional booster (CHAINS_PLAN.md WP27:
+    the mic's output its input, its output the preamp's input, its test generator dropped;
+    the cable at the mic's output), the preamp."""
     mic = yaml.safe_load(spec.circuit_path(mic_name).read_text(encoding="utf-8"))
     pre = yaml.safe_load(spec.circuit_path(pre_name).read_text(encoding="utf-8"))
     pm, pp = PORTS[mic_name], PORTS[pre_name]
     tm, tp = pm["tag"], pp["tag"]
     joint = f"{pp['input']}_{tp}"
+    mid: list[tuple[Renamer, dict, list[str]]] = []
+    if booster_name is not None:
+        bst = yaml.safe_load(spec.circuit_path(booster_name).read_text(encoding="utf-8"))
+        pb = PORTS[booster_name]
+        tb = pb["tag"]
+        rb = Renamer(bst, tb, node_map={pb["output"]: joint})
+        joint = f"{pb['input']}_{tb}"  # the mic's output: the booster's input
+        mid = [(rb, bst, pb["drop"])]
     mic_keep = [mic["input"], *(mic.get("cv_inputs") or {}).values()]
     rm = Renamer(mic, tm, keep_nodes=mic_keep, node_map={pm["output"]: joint})
     rp = Renamer(pre, tp, node_map={"out": "out"})
+    stages = [(rm, mic, pm["drop"]), *mid, (rp, pre, pp["drop"])]
 
     out: dict[str, Any] = {
-        "title": f"{mic['title']} into the {pre['title']}",
+        "title": " into the ".join(c["title"] for _, c, _ in stages),
         "input": mic["input"],
     }
     if mic.get("cv_inputs"):
@@ -140,6 +158,8 @@ def compose(mic_name: str, pre_name: str) -> dict:
     out["probes"] = ["out", joint] + [
         rm.node(n) for n in mic.get("probes", []) if n != pm["output"]
     ]
+    for r, c, _ in mid:
+        out["probes"] += [r.node(n) for n in c.get("probes", [])]
     out["probes"] += [rp.node(n) for n in pre.get("probes", []) if n != "out"]
     out["probes"] = list(dict.fromkeys(out["probes"]))  # the joint may be the pre's probe too
     out["full_scale"] = {
@@ -147,7 +167,10 @@ def compose(mic_name: str, pre_name: str) -> dict:
         "output_volts_peak": pre["full_scale"]["output_volts_peak"],
     }
     for block in ("controls", "values", "device_params"):
-        merged = {**_suffix_block(mic.get(block), tm), **_suffix_block(pre.get(block), tp)}
+        merged = {**_suffix_block(mic.get(block), tm)}
+        for r, c, _ in mid:
+            merged.update(_suffix_block(c.get(block), r.tag))
+        merged.update(_suffix_block(pre.get(block), tp))
         if block == "values":
             merged.update(CABLE)
         if merged:
@@ -179,9 +202,17 @@ def compose(mic_name: str, pre_name: str) -> dict:
     for b, v in (mt.get("classes") or {}).items():
         names = [rm.part_name(p) for p in v if p not in pm["drop"]]
         tol["classes"][f"{b}_{tm}"] = names
+    for r, c, drop in mid:
+        bt = c.get("tolerance") or {}
+        for b, v in (bt.get("bands") or {}).items():
+            tol["bands"][f"{b}_{r.tag}"] = (
+                [r.key(x) for x in v] if isinstance(v, list) else r.key(v)
+            )
+        for b, v in (bt.get("classes") or {}).items():
+            tol["classes"][f"{b}_{r.tag}"] = [r.part_name(p) for p in v if p not in drop]
     out["tolerance"] = tol
     devices = {}
-    for r, c in ((rm, mic), (rp, pre)):
+    for r, c, _ in stages:
         for k, d in (c.get("devices") or {}).items():
             d = dict(d)
             d["device"] = r.param(d["device"])
@@ -191,7 +222,7 @@ def compose(mic_name: str, pre_name: str) -> dict:
             devices[f"{k}_{r.tag}"] = d
     out["devices"] = devices
     sections = []
-    for r, c, drop in ((rm, mic, pm["drop"]), (rp, pre, pp["drop"])):
+    for r, c, drop in stages:
         for s in c["sections"]:
             parts = {r.part_name(n): r.part(p) for n, p in s["parts"].items() if n not in drop}
             sections.append({"title": f"{c['title']}: {s['title']}", "parts": parts})
@@ -213,44 +244,55 @@ HEADER = """# GENERATED by scripts/compose_chain.py from config/circuits/{mic}.y
 # input node, the cable across it.
 
 """
+HEADER3 = """# GENERATED by scripts/compose_chain.py from config/circuits/{mic}.yaml,
+# {booster}.yaml and {pre}.yaml: don't edit; edit those and rerun (`uv run python
+# scripts/compose_chain.py --mic {mic} --booster {booster} --pre {pre}`). The {mic} into
+# the {booster} into the {pre} as one netlist (MIC_ROOM_PLAN.md): every key, part and node
+# of each carries its circuit's suffix; the mic's output is the booster's input node, the
+# cable across it; the booster's output is the preamp's input node.
+
+"""
 
 
-def render(mic: str, pre: str) -> str:
-    body = yaml.safe_dump(compose(mic, pre), sort_keys=False, width=100, allow_unicode=True)
-    return HEADER.format(mic=mic, pre=pre) + body
+def render(mic: str, pre: str, booster: str | None = None) -> str:
+    body = yaml.safe_dump(
+        compose(mic, pre, booster), sort_keys=False, width=100, allow_unicode=True
+    )
+    if booster is None:
+        return HEADER.format(mic=mic, pre=pre) + body
+    return HEADER3.format(mic=mic, booster=booster, pre=pre) + body
 
 
-def chain_name(mic: str, pre: str) -> str:
-    return f"{PORTS[mic]['tag']}_{PORTS[pre]['tag']}"
+def chain_name(mic: str, pre: str, booster: str | None = None) -> str:
+    names = [mic, *([booster] if booster else []), pre]
+    return "_".join(PORTS[n]["tag"] for n in names)
 
 
-def listed_pairs() -> list[tuple[str, str]]:
-    """The (mic, pre) of every available chain of the list."""
-    pairs = []
-    for c in CHAINS.available():
-        if c.booster is not None:  # three-stage chains: CHAINS_PLAN.md WP27
-            raise NotImplementedError(f"{c.id}: a chain with a booster")
-        pairs.append((c.mic.name, c.pre.name))
-    return pairs
+def listed_pairs() -> list[tuple[str, str, str | None]]:
+    """The (mic, pre, booster or None) of every available chain of the list."""
+    return [
+        (c.mic.name, c.pre.name, c.booster.name if c.booster else None) for c in CHAINS.available()
+    ]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--mic")
     ap.add_argument("--pre")
+    ap.add_argument("--booster")
     ap.add_argument("--all", action="store_true", help="every available chain of the list")
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
     if args.all:
         pairs = listed_pairs()
     elif args.mic and args.pre:
-        pairs = [(args.mic, args.pre)]
+        pairs = [(args.mic, args.pre, args.booster)]
     else:
         ap.error("--mic and --pre, or --all")
     stale = []
-    for mic, pre in pairs:
-        text = render(mic, pre)
-        path = CONFIG_DIR / "circuits" / f"{chain_name(mic, pre)}.yaml"
+    for mic, pre, booster in pairs:
+        text = render(mic, pre, booster)
+        path = CONFIG_DIR / "circuits" / f"{chain_name(mic, pre, booster)}.yaml"
         if args.check:
             if not (path.exists() and path.read_text(encoding="utf-8") == text):
                 stale.append(path)

@@ -1,0 +1,51 @@
+device: "M 49 c"
+curve: free-field frequency responses on axis (omni, cardioid, figure-8) and the cardioid at 90 and 180 deg (from its polar diagram)
+publisher: Georg Neumann GmbH, Berlin
+documents:
+  m49_m50:
+    title: "M 49 - M 50 (product description, 910-02-01)"
+    scan_source: "web: http://recordinghacks.com/pdf/neumann/M49-M50.pdf"
+    sha256: e3826ac9ba1e14f539e44ffbaf6f510e81d9403a2bae2ee34d2364f42019c1cc
+    pages: >-
+      PDF p. 7 (frequency responses: a 1-bit CCITT scan, 2416 x 3464 px, printed sideways, turned
+      upright 90 deg clockwise) and p. 8 (polar diagrams, the same format, read as extracted)
+local_copy: "data/schematics/neumann_m49/M49-M50.pdf"
+digitized_with: >-
+  scripts/digitize_neumann_m49.py. Responses: per chart (the scan is skewed ~0.1 deg) log frequency
+  fitted to the rules at 20 (frame), 50, 100, 200, 500, 1k, 2k, 5k, 10k, 20 kHz (frame), ~877 px a
+  decade, residuals <= 5 px (the 200 Hz rule ~1.3% low); the rule labelled "15" sits at 15.8 kHz on
+  that fit and is not used. The five 5 dB rules (+10 ... -10) of each chart traced column by column
+  on their thin runs and fitted as lines (3-6 px fall across the chart), the dB of a point
+  interpolated between them at its column (their spacing alternates 104-112 px, ~21.7 px a dB). The
+  bold curves survive a 5 x 5 erosion (rules 2-3 px), each column's run nearest the last point,
+  walking from 1 kHz outwards. Polars: rings 0 / 5 / 10 / 15 / 20 dB down, linear in dB (circle
+  fits about the cardioid chart's centre (1828.6, 2632) px: radii 396.5 / 317.5 / 238.3 / 160.0 /
+  81.7, 15.9 px a dB); the cardioid's curves identified by line style on zoomed crops by eye, their
+  crossings with the 90, 180 and 270 deg rays measured on the pixels (stroke centres just off the
+  drawn axis, or a line fitted across it) and converted between the rings measured along the same
+  ray; 90 deg is the mean of the 90 and 270 deg rays. Every trace and read point overlaid on the
+  page and checked by eye.
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  neumann_m49_response.csv:
+    columns: pattern (omni | cardioid | figure8), angle_deg (0 | 90 | 180), freq_hz, db_re_1k
+    coverage: >-
+      on axis ~30 Hz - ~17 kHz, the drawn range of each curve (rows at the 61-point log grid 20 Hz -
+      20 kHz inside it: 31.7 Hz - 15.9 kHz); the cardioid at 180 deg at 100, 1000, 5000, 10000,
+      15000 Hz and at 90 deg at 100, 1000, 5000, 10000 Hz, each re the cardioid's on-axis 1 kHz
+      (on-axis(f) re 1 kHz + the polar's dB at that angle re that frequency's 0 deg). Not given:
+      the cardioid at 90 deg at 15 kHz and the figure-8 at 90 deg (inside the 20 dB ring, the
+      chart's centre); the omni's and figure-8's other angles; the M 50's chart.
+estimated_error: >-
+  +-0.15 dB on the bold response curves (a stroke ~8 px wide, its centre), +-0.4 dB from the uneven
+  rule spacing if the pen's own scale was linear; across ~1.6-1.9 kHz the cardioid's curve is drawn
+  broken and thin (interpolated between its pieces, +-0.3 dB); frequency +-1.5% (the rules'
+  placement). Polar readings +-0.3 dB (+-0.5 dB at 180 deg for 100 Hz and 15 kHz, whose strokes
+  touch there: r 109.5 / 107.5 px, +-1.5 px); the line-style identification of 5 kHz (dash-dot,
+  single dots: the outer rear lobe) vs 15 kHz (dash-dot-dot: the narrow front lobe and the small
+  rear lobe inside the 15 dB ring) was by eye.
+notes: >-
+  Each on-axis curve is given re its own value at 1 kHz: the chart draws each pattern's 0 dB at its
+  own level. The rear lobes are not small at high frequencies: at 5 kHz the cardioid is 7.5 dB down
+  at 180 deg but 10.7 dB at 90 deg (a null near 130 deg), at 10 kHz 12.4 / 17.2 dB.
