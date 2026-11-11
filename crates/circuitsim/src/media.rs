@@ -1,10 +1,11 @@
 //! Media beside the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`; a Rhodes
-//! harp, `crate::harp`; a Clavinet's strings, `crate::clavinet`): each senses a voltage in
+//! harp, `crate::harp`; a Clavinet's strings, `crate::clavinet`; the Nickel Organ's keys,
+//! `crate::nickel`): each senses a voltage in
 //! the circuit after every sample (the keyboards' media sense nothing: their keys are note
 //! events) and drives its outputs' nodes at the next one, like control inputs
 //! ([`crate::mna::Mna::media`]); most have one output, `out`.
 
-use crate::ir::{ClavStrings, Harp, NovaKeys, Plate, Spring, Tape};
+use crate::ir::{ClavStrings, Harp, NickelKeys, NovaKeys, Plate, Spring, Tape};
 
 /// A medium's element in the IR.
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +16,7 @@ pub enum MediumElement {
     Harp(Harp),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
+    NickelKeys(NickelKeys),
 }
 
 /// A keyboard's event for a medium played by keys (a harp): queued for the step it lands at
@@ -49,6 +51,7 @@ impl MediumElement {
             MediumElement::Harp(h) => &h.name,
             MediumElement::ClavStrings(c) => &c.name,
             MediumElement::NovaKeys(k) => &k.name,
+            MediumElement::NickelKeys(k) => &k.name,
         }
     }
 
@@ -63,6 +66,7 @@ impl MediumElement {
             MediumElement::Harp(h) => vec![&h.out],
             MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
             MediumElement::NovaKeys(k) => k.outs.iter().map(String::as_str).collect(),
+            MediumElement::NickelKeys(k) => vec![&k.out],
         }
     }
 
@@ -73,7 +77,8 @@ impl MediumElement {
             | MediumElement::Spring(_)
             | MediumElement::Harp(_)
             | MediumElement::ClavStrings(_)
-            | MediumElement::NovaKeys(_) => None,
+            | MediumElement::NovaKeys(_)
+            | MediumElement::NickelKeys(_) => None,
             MediumElement::Tape(t) => t.supply.as_deref(),
         }
     }
@@ -84,9 +89,10 @@ impl MediumElement {
             MediumElement::Plate(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Spring(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
-            MediumElement::Harp(_) | MediumElement::ClavStrings(_) | MediumElement::NovaKeys(_) => {
-                (crate::ir::GROUND, crate::ir::GROUND)
-            }
+            MediumElement::Harp(_)
+            | MediumElement::ClavStrings(_)
+            | MediumElement::NovaKeys(_)
+            | MediumElement::NickelKeys(_) => (crate::ir::GROUND, crate::ir::GROUND),
         }
     }
 
@@ -234,6 +240,7 @@ pub enum Medium {
     Harp(Box<crate::harp::Medium>),
     Clav(Box<ClavMedium>),
     Nova(Box<crate::novachord::Medium>),
+    Nickel(Box<crate::nickel::Medium>),
 }
 
 /// A Clavinet's strings and their last outputs (centre, bridge, bridge negated).
@@ -276,6 +283,9 @@ impl Medium {
             MediumElement::NovaKeys(k) => {
                 Medium::Nova(Box::new(crate::novachord::Medium::new(k, fs)?))
             }
+            MediumElement::NickelKeys(k) => {
+                Medium::Nickel(Box::new(crate::nickel::Medium::new(k, fs, noise_seed)?))
+            }
         })
     }
 
@@ -313,6 +323,7 @@ impl Medium {
             }
             Medium::Harp(m) => m.push(),
             Medium::Clav(m) => m.push(),
+            Medium::Nickel(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense many nodes: push_senses"),
         }
     }
@@ -367,7 +378,8 @@ impl Medium {
             | Medium::Spring(_)
             | Medium::Harp(_)
             | Medium::Clav(_)
-            | Medium::Nova(_) => 1,
+            | Medium::Nova(_)
+            | Medium::Nickel(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -381,6 +393,7 @@ impl Medium {
             Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
             Medium::Harp(m) => m.push(),
             Medium::Clav(m) => m.push(),
+            Medium::Nickel(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense their own part"),
         }
     }
@@ -392,6 +405,7 @@ impl Medium {
             Medium::Harp(m) => m.queue(at, ev),
             Medium::Clav(m) => m.strings.queue(at, ev),
             Medium::Nova(m) => m.queue(at, ev),
+            Medium::Nickel(m) => m.queue(at, ev),
             _ => {}
         }
     }
@@ -402,13 +416,18 @@ impl Medium {
         match self {
             Medium::Harp(m) => m.known_until(at),
             Medium::Clav(m) => m.strings.known_until(at),
+            Medium::Nickel(m) => m.known_until(at),
             _ => {}
         }
     }
 
-    /// Whether it is played by keys (a harp, a Clavinet's strings).
+    /// Whether it is played by keys (a harp, a Clavinet's strings, the Novachord's or
+    /// the Nickel Organ's keys).
     pub fn has_keys(&self) -> bool {
-        matches!(self, Medium::Harp(_) | Medium::Clav(_) | Medium::Nova(_))
+        matches!(
+            self,
+            Medium::Harp(_) | Medium::Clav(_) | Medium::Nova(_) | Medium::Nickel(_)
+        )
     }
 
     /// New values mid-run. A plate keeps ringing; tape with the same medium keeps its
@@ -450,6 +469,13 @@ impl Medium {
             }
             // The keys play on through MELLOW; anything else is another instrument.
             (Medium::Nova(m), MediumElement::NovaKeys(k)) => {
+                if !m.same(k) {
+                    return Err("the keys changed".into());
+                }
+                m.update(k);
+            }
+            // SUSTAIN and POLARIZE play on; anything else is another organ.
+            (Medium::Nickel(m), MediumElement::NickelKeys(k)) => {
                 if !m.same(k) {
                     return Err("the keys changed".into());
                 }

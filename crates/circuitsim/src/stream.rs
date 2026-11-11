@@ -717,7 +717,10 @@ impl Stream {
             .find(|e| {
                 matches!(
                     e,
-                    Element::Harp(_) | Element::ClavStrings(_) | Element::NovaKeys(_)
+                    Element::Harp(_)
+                        | Element::ClavStrings(_)
+                        | Element::NovaKeys(_)
+                        | Element::NickelKeys(_)
                 )
             })
         {

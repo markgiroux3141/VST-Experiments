@@ -179,10 +179,13 @@ zero-bias sub-octave, remanence hears but can't sustain, JA's strike memory is a
 Open: the user listens; the shared yoke, Preisach strips are the next options. **The Rust voice
 (2026-11-06):** `crates/circuitsim/src/nickel.rs`, `voice.py` step for step (-250 dB vs Python,
 `crates/circuitsim/tests/nickel.rs`), ~0.1x real time per key, keys on worker threads; its data
-`config/nickel/organ.live.json` by `scripts/compile_nickel_organ.py [--check]`; in the app a bare
-instrument beside the Sampler (`varimu_app::nickel`, Play's Nickel Organ). Making it a real device
-(a keyed medium like the Clavinet's: source, monitor, Render, chain end, event takes) is backlogged
-in [docs/NICKEL_ORGAN_DEVICE_PLAN.md](docs/NICKEL_ORGAN_DEVICE_PLAN.md).
+the component `NICKEL_ORGAN@N` (kind `nickel_keys`, `varimu/nickel/compile.py`) saved by
+`scripts/compile_nickel_organ.py [--check]`. **A device since 2026-11-10**
+([docs/NICKEL_ORGAN_DEVICE_PLAN.md](docs/NICKEL_ORGAN_DEVICE_PLAN.md) "Status"): the keys are
+circuitsim's keyed medium (IR `NickelKeys`, part `nickel_keys: [out]` in both builders, its cap
+`max_keys` via `keyed::Medium::set_max_awake`), `config/circuits/nickel_organ.yaml`, the app's
+`nickel_organ` (draft-2x; source, monitor, Render, chain end, event takes as every keyed
+instrument; 12 keys live without dropouts at a 50 ms buffer); the bare instrument is gone.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

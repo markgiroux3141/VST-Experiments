@@ -666,6 +666,23 @@ fn table() -> Vec<SymbolDef> {
             (0.0, 6.35, 5.588, "left"),
         ),
         macro_sym(
+            "NickelKeys",
+            "nickel_keys",
+            "NK",
+            "The Nickel Organ's keys (docs/NICKEL_ORGAN_DEVICE_PLAN.md, varimu.nickel): pin 1 the keys' summed line outs (to ground), its keys played by note events; Value is its component version",
+            vec![pin("1", "1", 7.62, 0.0, 180, 2.54)],
+            vec![
+                rect(-5.08, -3.81, 5.08, 3.81),
+                poly(&[(-3.81, -2.54), (3.81, -2.54)]),
+                poly(&[(-3.81, 0.0), (2.54, 0.0)]),
+                poly(&[(-3.81, 2.54), (1.27, 2.54)]),
+            ],
+            Some("component"),
+            &["rate_hz", "step_hz", "sustain", "polarize", "max_keys"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
+        macro_sym(
             "Tape",
             "tape",
             "TP",

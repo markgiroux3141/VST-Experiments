@@ -515,7 +515,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 32] = [
+const MACROS: [&str; 33] = [
     "R",
     "C",
     "L",
@@ -547,6 +547,7 @@ const MACROS: [&str; 32] = [
     "harp",
     "clav_strings",
     "nova_keys",
+    "nickel_keys",
     "opamp",
 ];
 
@@ -683,6 +684,18 @@ fn macro_of(kind: &str) -> Macro {
             .into_iter()
             .chain(CLAV_WEAR.iter().map(|k| opt(k, Physical)))
             .collect(),
+            false,
+        ),
+        "nickel_keys" => (
+            Some(1),
+            vec![
+                p("component", Raw),
+                p("rate_hz", Physical),
+                p("step_hz", Physical),
+                p("sustain", Number),
+                p("polarize", Number),
+                p("max_keys", Count),
+            ],
             false,
         ),
         "nova_keys" => (
@@ -1200,6 +1213,7 @@ fn expand(
         "harp" => return harp_part(ctx, name, nodes, a),
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         "nova_keys" => return nova_keys_part(ctx, name, conn, a),
+        "nickel_keys" => return nickel_keys_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -1673,6 +1687,51 @@ fn clav_strings_part(
         data,
         sha256,
         wear,
+    })])
+}
+
+/// The Nickel Organ's keys (docs/NICKEL_ORGAN_DEVICE_PLAN.md;
+/// `varimu.circuit.parts.nickel_keys`): the keys' summed line outs on the one node.
+fn nickel_keys_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let (data, sha256) = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.nickel_keys(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
+    let step_hz = ctx.float(&format!("{name}.step_hz"), &a["step_hz"])?;
+    let sustain = ctx.float(&format!("{name}.sustain"), &a["sustain"])?;
+    let polarize = ctx.float(&format!("{name}.polarize"), &a["polarize"])?;
+    for (what, x) in [("sustain", sustain), ("polarize", polarize)] {
+        if !(0.0..=1.0).contains(&x) {
+            return Err(ctx.fail(
+                &format!("{name}.{what}"),
+                format!("{} (0-1)", crate::yaml::py_float_repr(x)),
+            ));
+        }
+    }
+    let max_keys = a["max_keys"].as_f64().unwrap_or(0.0);
+    if !(1.0..=128.0).contains(&max_keys) {
+        return Err(ctx.fail(
+            &format!("{name}.max_keys"),
+            format!("{} (1-128)", max_keys as i64),
+        ));
+    }
+    Ok(vec![Element::NickelKeys(circuitsim::ir::NickelKeys {
+        name: format!("V{}", name.to_uppercase()),
+        out: nodes[0].clone(),
+        data,
+        sha256,
+        rate_hz,
+        step_hz,
+        sustain,
+        polarize,
+        max_keys,
     })])
 }
 

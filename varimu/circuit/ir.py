@@ -498,6 +498,32 @@ class NovaKeys:
 
 
 @dataclass(frozen=True)
+class NickelKeys:
+    """The Nickel Organ's keys (docs/NICKEL_ORGAN_DEVICE_PLAN.md; varimu/nickel/voice.py is the
+    reference, circuitsim's nickel.rs the port): each key its brass bar with a nickel strip in
+    its coil, the bridge, its own tube loop and #327 lamp, struck, held and released by note
+    events; the keys' line outs, each through its mixing gain, summed onto `out` (to ground)
+    one sample after the step that rendered them (the keys sense nothing). The voices give
+    their line outs at the least whole multiple of the step rate at or above `rate_hz` and
+    step their physics at the least whole multiple of that at or above `step_hz`. `sustain`
+    and `polarize` (0-1) are the panel's SUSTAIN and POLARIZE (a change plays on); at most
+    `max_keys` keys sound at once: another struck silences one, a released one first, else
+    the one struck longest ago. `data` is the compiled organ (a component version of kind
+    nickel_keys: varimu.nickel.compile), a path relative to the repository's root, `sha256`
+    its hash. SPICE has no keys: ngspice sees `out` held at 0 V."""
+
+    name: str
+    out: str
+    data: str
+    sha256: str
+    rate_hz: float
+    step_hz: float
+    sustain: float
+    polarize: float
+    max_keys: int
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -697,6 +723,7 @@ Element = (
     | Harp
     | ClavStrings
     | NovaKeys
+    | NickelKeys
     | ThyratronEvents
     | ResetEvents
     | EdgeEvents
@@ -754,6 +781,7 @@ _PREFIX = {
     Harp: "V",
     ClavStrings: "V",
     NovaKeys: "V",
+    NickelKeys: "V",
     ThyratronEvents: "X",
     ResetEvents: "X",
     EdgeEvents: "X",
@@ -794,6 +822,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return el.outs
     if isinstance(el, NovaKeys):
         return (*el.senses, *el.outs)
+    if isinstance(el, NickelKeys):
+        return (el.out,)
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
     if isinstance(el, ResetEvents):
@@ -1044,6 +1074,8 @@ class CircuitIR:
                 _validate_clav_strings(el, self.input_node)
             elif isinstance(el, NovaKeys):
                 _validate_nova_keys(el, self.input_node)
+            elif isinstance(el, NickelKeys):
+                _validate_nickel_keys(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
             elif isinstance(el, ResetEvents):
@@ -1398,6 +1430,7 @@ _ELEMENT_KINDS = {
     "harp": Harp,
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
+    "nickel_keys": NickelKeys,
     "thyratron_events": ThyratronEvents,
     "reset_events": ResetEvents,
     "edge_events": EdgeEvents,
@@ -1535,6 +1568,8 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         )
     if cls is NovaKeys:
         return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
+    if cls is NickelKeys:
+        return _fields(cls, d, tagged=True, max_keys=_count)
     if cls is ThyratronEvents:
 
         def grid(v):
@@ -1666,6 +1701,22 @@ def _validate_nova_keys(el: NovaKeys, input_node: str) -> None:
             raise IRError(f"{el.name}: it drives {o} (ground, the input or twice)")
         if o in el.senses:
             raise IRError(f"{el.name}: it drives {o}, which it senses")
+
+
+def _validate_nickel_keys(el: NickelKeys, input_node: str) -> None:
+    """The Rust IR's checks for the Nickel Organ's keys (its data is checked on loading)."""
+    _positive(f"{el.name}.rate_hz", el.rate_hz)
+    _positive(f"{el.name}.step_hz", el.step_hz)
+    for what in ("sustain", "polarize"):
+        if not 0.0 <= getattr(el, what) <= 1.0:
+            raise IRError(f"{el.name}: {what} {getattr(el, what)} (0-1)")
+    if not 1 <= el.max_keys <= 128:
+        raise IRError(f"{el.name}: max_keys {el.max_keys} (a whole number, 1-128)")
+    hexdigits = set("0123456789abcdefABCDEF")
+    if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
+        raise IRError(f"{el.name}: data names the compiled organ, sha256 its hash")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its keys drive {el.out} (ground or the input)")
 
 
 def _validate_thyratron_events(el: ThyratronEvents) -> None:

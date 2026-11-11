@@ -45,6 +45,7 @@ from varimu.circuit.ir import (
     Element,
     Harp,
     Inductor,
+    NickelKeys,
     NovaKeys,
     Plate,
     Resistor,
@@ -1191,6 +1192,34 @@ def clav_strings(
             data,
             sha256,
             w,
+        )
+    ]
+
+
+def nickel_keys(
+    name: str,
+    out: str,
+    data: str,
+    sha256: str,
+    rate_hz: float,
+    step_hz: float,
+    sustain: float,
+    polarize: float,
+    max_keys: int,
+) -> list[Element]:
+    """The Nickel Organ's keys (docs/NICKEL_ORGAN_DEVICE_PLAN.md) as circuitsim's medium
+    V<NAME>: the keys' summed line outs on `out` (to ground)."""
+    return [
+        NickelKeys(
+            f"V{name.upper()}",
+            out,
+            data,
+            sha256,
+            rate_hz,
+            step_hz,
+            sustain,
+            polarize,
+            max_keys,
         )
     ]
 

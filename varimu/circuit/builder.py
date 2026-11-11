@@ -110,6 +110,13 @@ Macro parts (connection; params, * = required):
                 v_per_a* (each output's volts per ampere of
                 its lead's plate current): the keys as circuitsim's medium, played by note
                 events (docs/NOVACHORD_PLAN.md NV4; varimu.circuit.parts.nova_keys)
+    nickel_keys [out]; component* (a Nickel Organ component version, NAME@N, or a
+                parameter naming one: kind nickel_keys, varimu.nickel.compile),
+                rate_hz* and step_hz* (numerics: the line outs' and the physics' rate
+                floors), sustain*, polarize* (0-1: the panel), max_keys* (keys sounding
+                at once): the keys' summed line outs on out (to ground), played by
+                note events (docs/NICKEL_ORGAN_DEVICE_PLAN.md;
+                varimu.circuit.parts.nickel_keys)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -974,6 +981,33 @@ def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Ele
     return parts.clav_strings(name, *conn, data, sha, a["rate_hz"], a["contact_rate_hz"], wear)
 
 
+def _nickel_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.nickel import compile as nickel_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data, sha = nickel_compile.ir_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    for what in ("sustain", "polarize"):
+        if not 0.0 <= a[what] <= 1.0:
+            raise ctx.fail(f"{name}.{what}", f"{a[what]} (0-1)")
+    if not 1 <= a["max_keys"] <= 128:
+        raise ctx.fail(f"{name}.max_keys", f"{a['max_keys']} (1-128)")
+    return parts.nickel_keys(
+        name,
+        *conn,
+        data,
+        sha,
+        a["rate_hz"],
+        a["step_hz"],
+        float(a["sustain"]),
+        float(a["polarize"]),
+        a["max_keys"],
+    )
+
+
 def _nova_keys(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     from varimu.novachord import compile as nova_compile
 
@@ -1274,6 +1308,18 @@ for _name, _macro in {
             "normal_vibrato": Param("number"),
             "small_vibrato": Param("number"),
             "v_per_a": _P,
+        },
+    ),
+    "nickel_keys": Macro(
+        _nickel_keys,
+        1,
+        {
+            "component": Param("raw"),
+            "rate_hz": _P,
+            "step_hz": _P,
+            "sustain": Param("number"),
+            "polarize": Param("number"),
+            "max_keys": Param("count"),
         },
     ),
     "clav_strings": Macro(

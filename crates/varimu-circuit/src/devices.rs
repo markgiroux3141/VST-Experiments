@@ -52,6 +52,7 @@ pub struct Library {
     harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
     clav_strings: Mutex<HashMap<String, (String, String)>>,
     nova_keys: Mutex<HashMap<String, (String, String)>>,
+    nickel_keys: Mutex<HashMap<String, (String, String)>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
     /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
@@ -73,6 +74,7 @@ impl Library {
             harps: Mutex::new(HashMap::new()),
             clav_strings: Mutex::new(HashMap::new()),
             nova_keys: Mutex::new(HashMap::new()),
+            nickel_keys: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
         }
@@ -325,10 +327,34 @@ impl Library {
     /// else absolute; the data's sha256), the file checked against the sha256 its version
     /// gives (`compile.ir_data`).
     pub fn nova_keys(&self, name: &str) -> Result<(String, String), Error> {
+        self.json_data(name, "nova_keys", "the Novachord's keys", &self.nova_keys)
+    }
+
+    /// The Nickel Organ's component `name` (kind `nickel_keys`; `varimu.nickel.compile`), as
+    /// [`Library::nova_keys`] reads the Novachord's.
+    pub fn nickel_keys(&self, name: &str) -> Result<(String, String), Error> {
+        self.json_data(
+            name,
+            "nickel_keys",
+            "the Nickel Organ's keys",
+            &self.nickel_keys,
+        )
+    }
+
+    /// A component of `kind` whose version names one data file by sha256 (`data.file`,
+    /// `data.sha256`): (its path relative to the repository when it is inside it, forward
+    /// slashes, else absolute; the sha256), the file checked against it once per version.
+    fn json_data(
+        &self,
+        name: &str,
+        kind_wanted: &str,
+        what: &str,
+        cache: &Mutex<HashMap<String, (String, String)>>,
+    ) -> Result<(String, String), Error> {
         let root = self.components_dir();
         let r = versions::resolve(&root, &versions::parse(name)?)?;
         let key = format!("{}@{}", r.folder(), r.version.unwrap());
-        if let Some(c) = self.nova_keys.lock().unwrap().get(&key) {
+        if let Some(c) = cache.lock().unwrap().get(&key) {
             return Ok(c.clone());
         }
         let (_, text) = versions::read_text(&root, &r)?;
@@ -337,10 +363,8 @@ impl Library {
             .as_map()
             .ok_or_else(|| Error(format!("{r}: not a mapping")))?;
         let kind = d.get("kind").and_then(Value::as_str);
-        if kind != Some("nova_keys") {
-            return Err(Error(format!(
-                "{r} is not the Novachord's keys (kind {kind:?})"
-            )));
+        if kind != Some(kind_wanted) {
+            return Err(Error(format!("{r} is not {what} (kind {kind:?})")));
         }
         let field = |k: &str| {
             d.get("data")
@@ -372,7 +396,7 @@ impl Library {
             _ => path.to_string_lossy().into_owned(),
         };
         let out = (rel, sha);
-        self.nova_keys.lock().unwrap().insert(key, out.clone());
+        cache.lock().unwrap().insert(key, out.clone());
         Ok(out)
     }
 

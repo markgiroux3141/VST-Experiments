@@ -22,7 +22,8 @@ use crate::media::NoteEvent;
 
 /// Base samples rendered at a time when the events are known that far.
 pub const CHUNK: usize = 256;
-/// Voices awake (or struck) up to which a chunk renders on the calling thread alone.
+/// Voices awake (or struck) up to which a chunk renders on the calling thread alone, by
+/// default ([`Medium::set_inline_voices`]).
 const INLINE_VOICES: usize = 4;
 
 /// One key's voice.
@@ -36,6 +37,9 @@ pub trait KeyVoice: Send + 'static {
     /// Add internal samples `from..to` of its outputs into `buf`: channel c's sample i at
     /// `c * n + i`.
     fn render(&mut self, buf: &mut [f64], n: usize, from: usize, to: usize, ctx: &Self::Ctx);
+    /// Stop sounding at once (asleep from now on), for another voice: a medium with a cap
+    /// on its voices awake ([`Medium::set_max_awake`]). Nothing by default.
+    fn silence(&mut self) {}
 }
 
 /// A voice and the internal samples it rendered in the chunk (`silent`: none, asleep).
@@ -190,6 +194,14 @@ pub struct Medium<V: KeyVoice> {
     chunk: Vec<f64>,
     /// Every internal sample rendered, per channel (tests: `keep_raw`).
     raw: Option<Vec<Vec<f64>>>,
+    /// At most this many voices awake ([`Medium::set_max_awake`]); per voice whether its
+    /// key is down and when it was last struck (a count of strikes), from the events.
+    max_awake: Option<usize>,
+    /// Voices awake (or struck) up to which a chunk renders on the calling thread alone.
+    inline_voices: usize,
+    held: Vec<bool>,
+    struck_at: Vec<u64>,
+    strikes: u64,
 }
 
 impl<V: KeyVoice> std::fmt::Debug for Medium<V> {
@@ -219,7 +231,8 @@ impl<V: KeyVoice> Medium<V> {
         for (i, (note, _)) in voices.iter().enumerate() {
             by_note[*note as usize] = Some(i);
         }
-        let notes = voices.iter().map(|(n, _)| *n).collect();
+        let notes: Vec<u8> = voices.iter().map(|(n, _)| *n).collect();
+        let n_voices = notes.len();
         let shared = Arc::new(Shared {
             slots: voices
                 .into_iter()
@@ -274,6 +287,74 @@ impl<V: KeyVoice> Medium<V> {
             ring_at: 0,
             chunk: Vec::new(),
             raw: None,
+            max_awake: None,
+            inline_voices: INLINE_VOICES,
+            held: vec![false; n_voices],
+            struck_at: vec![0; n_voices],
+            strikes: 0,
+        }
+    }
+
+    /// At most `n` voices awake (None: no cap): a chunk whose strikes would wake more
+    /// silences ([`KeyVoice::silence`]) as many of the others at its start, keys up before
+    /// keys down, each the one struck longest ago. Decided on the calling thread from the
+    /// voices' state and the events, so the same on any number of threads.
+    pub fn set_max_awake(&mut self, n: Option<usize>) {
+        self.max_awake = n;
+    }
+
+    /// Render a chunk on the calling thread alone while at most `n` voices are awake or
+    /// struck in it (4 by default: cheap voices; a costly voice wants 1). The result is the
+    /// same either way.
+    pub fn set_inline_voices(&mut self, n: usize) {
+        self.inline_voices = n;
+    }
+
+    /// The cap on the voices awake: silence the ones a chunk's strikes `evs` push over it,
+    /// then note the chunk's keys down and up.
+    fn steal(&mut self, evs: &[(usize, NoteEvent)]) {
+        let Some(cap) = self.max_awake else { return };
+        let sh = &self.shared;
+        let n = sh.slots.len();
+        let mut struck = vec![false; n];
+        for (_, ev) in evs {
+            if let NoteEvent::On { note, .. } = *ev
+                && let Some(i) = self.voice_of(note)
+            {
+                struck[i] = true;
+            }
+        }
+        if struck.iter().any(|&s| s) {
+            let awake: Vec<bool> = sh
+                .slots
+                .iter()
+                .map(|s| !s.lock().expect("voice").voice.asleep())
+                .collect();
+            let total = (0..n).filter(|&i| awake[i] || struck[i]).count();
+            if total > cap {
+                let mut others: Vec<usize> = (0..n).filter(|&i| awake[i] && !struck[i]).collect();
+                others.sort_by_key(|&i| (self.held[i], self.struck_at[i]));
+                for &i in others.iter().take(total - cap) {
+                    sh.slots[i].lock().expect("voice").voice.silence();
+                }
+            }
+        }
+        for (_, ev) in evs {
+            match *ev {
+                NoteEvent::On { note, .. } => {
+                    if let Some(i) = self.voice_of(note) {
+                        self.strikes += 1;
+                        self.held[i] = true;
+                        self.struck_at[i] = self.strikes;
+                    }
+                }
+                NoteEvent::Off { note } => {
+                    if let Some(i) = self.voice_of(note) {
+                        self.held[i] = false;
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
@@ -348,6 +429,7 @@ impl<V: KeyVoice> Medium<V> {
             self.events.pop_front();
             evs.push((at.saturating_sub(start) * k, ev));
         }
+        self.steal(&evs);
         let struck = evs
             .iter()
             .filter(|e| matches!(e.1, NoteEvent::On { .. }))
@@ -358,7 +440,7 @@ impl<V: KeyVoice> Medium<V> {
             n,
             events: Arc::new(evs),
         };
-        if self.threads.is_empty() || self.awake + struck <= INLINE_VOICES {
+        if self.threads.is_empty() || self.awake + struck <= self.inline_voices {
             for i in 0..sh.slots.len() {
                 sh.render_slot(i, &job);
             }

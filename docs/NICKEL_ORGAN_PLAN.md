@@ -90,18 +90,18 @@ each key's mixing gain, the sounding keys on worker threads.
 - **Speed.** ~0.1x real time per sounding key, the Python's ~100x. 8 keys play at ~0.8x
   real time on 4 threads (`cargo run --release -p circuitsim --example nickel_bench --
   KEYS SECONDS SUSTAIN THREADS`). The 11x was interpreter overhead.
-- **Its data.** `config/nickel/organ.live.json`, written by `scripts/compile_nickel_organ.py
-  [--check]`: the circuit's values, the idle point, the lamp's table, and per key its bar's
+- **Its data.** The component `NICKEL_ORGAN` (kind `nickel_keys`:
+  `config/components/nickel_organ/<N>.yaml` naming `<N>.organ.json` by sha256;
+  `varimu/nickel/compile.py`), saved by `scripts/compile_nickel_organ.py [--check]` when the
+  data changed: the circuit's values, the idle point, the lamp's table, and per key its bar's
   modes, trim and mix. The first run voices every key missing from cache/nickel/voicing.json,
-  ~10 s a key.
-- **In the app.** Play view, device menu, Instruments, **Nickel Organ** (`--device
-  nickel_organ`): played from a MIDI keyboard, with SUSTAIN, POLARIZE and LEVEL. It records
-  audio in the Session view, as the Sampler does. `examples/nickel.rs` drives it with
-  simulated keys (`--wav F` offline).
-- **Not yet a device.** It has none of a device's rows: source, monitor, Render, chain end,
-  event takes. Making it a keyed medium like the Clavinet's is backlogged in
-  docs/NICKEL_ORGAN_DEVICE_PLAN.md, with the real-time fixes it owes: power-on off the audio
-  thread, and a voice cap of ~8 instead of 12.
+  ~10 s a key. (Before 2026-11-10: `config/nickel/organ.live.json`, now `NICKEL_ORGAN@1`
+  byte for byte.)
+- **In the app: a device** (2026-11-10, docs/NICKEL_ORGAN_DEVICE_PLAN.md "Status"): Play
+  view, Instruments, **Nickel Organ** (`--device nickel_organ`), the circuit
+  `config/circuits/nickel_organ.yaml` with the keys as circuitsim's keyed medium: the rows
+  every device has (source, monitor, Render, chain end) and MIDI event takes in the Session
+  view. `examples/nickel.rs` drives it with simulated keys (`--wav F` offline).
 
 **The first experiment's findings** (A4, SUSTAIN 0.75, velocity 100; summary.json,
 study.png):

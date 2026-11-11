@@ -1,26 +1,32 @@
-//! The Nickel Organ's live tier (docs/NICKEL_ORGAN_PLAN.md, "The Rust voice"): `varimu/nickel/
-//! voice.py` ported step for step, so a key is the same coupled system the Python reference
-//! solves, at the same step (192 kHz: 2x the project's 96 kHz), only compiled.
+//! The Nickel Organ's live tier (docs/NICKEL_ORGAN_PLAN.md, "The Rust voice"; as a device,
+//! docs/NICKEL_ORGAN_DEVICE_PLAN.md): `varimu/nickel/voice.py` ported step for step, so a key
+//! is the same coupled system the Python reference solves, at the same step (192 kHz: 2x the
+//! project's 96 kHz), only compiled.
 //!
-//! A [`Model`] is the organ's values as `scripts/compile_nickel_organ.py` writes them
-//! (`config/nickel/organ.live.json`): the circuit's numbers, the amplifier's idle point, the
-//! #327's table, and per key its bar's modes and voicing. A [`Voice`] is one key: its bar, the
-//! coil and its dead twin, both strips' Jiles-Atherton magnetizations with the magnetoelastic
-//! coupling, the bridge, the tube loop (V1a, V1b, V3, the triode-connected 6V6GT, the output
-//! transformer), the lamp, the hammer and the damper. An [`Organ`] is the keyboard: a voice
-//! per key made at its first strike, running from the strike until released and quiet, summed
-//! through each key's mixing gain, with SUSTAIN and POLARIZE as the panel.
+//! A [`Model`] is the organ's values as `scripts/compile_nickel_organ.py` writes them (the
+//! component `NICKEL_ORGAN`, kind `nickel_keys`: `varimu/nickel/compile.py`): the circuit's
+//! numbers, the amplifier's idle point, the #327's table, and per key its bar's modes and
+//! voicing. A [`Voice`] is one key: its bar, the coil and its dead twin, both strips'
+//! Jiles-Atherton magnetizations with the magnetoelastic coupling, the bridge, the tube loop
+//! (V1a, V1b, V3, the triode-connected 6V6GT, the output transformer), the lamp, the hammer
+//! and the damper. A [`Medium`] is the keyboard, the IR's [`NickelKeys`] beside a circuit:
+//! a [`Keyed`] key per note on [`crate::keyed`]'s machinery, every key powered on when it is made,
+//! running from its strike until released and quiet, summed through each key's mixing gain,
+//! with SUSTAIN and POLARIZE as the panel.
 //!
-//! Not a circuitsim circuit: like the harp and the clavinet it is a model with its own
-//! stepping, no IR. Noise is the Python's Johnson noise at the input transformer's secondary
-//! (a generator of its own here: the Python's numpy stream isn't reproduced; tests turn it off).
+//! Noise is the Python's Johnson noise at the input transformer's secondary (a generator of
+//! its own here: the Python's numpy stream isn't reproduced), on when the circuit's noise is.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Deserialize;
 
 use crate::devices::core::{DEN_FLOOR, MU0, dlangevin, langevin};
 use crate::fastmath;
+use crate::ir::NickelKeys;
+use crate::media::NoteEvent;
 
 const K_BOLTZMANN: f64 = 1.380649e-23;
 /// A released key below this (rms over [`QUIET_S`]) stops running.
@@ -30,8 +36,6 @@ pub const QUIET_S: f64 = 0.02;
 pub const POWER_ON_S: (f64, f64) = (0.03, 0.02);
 /// A POLARIZE change reaching a key that is already made ramps over this long (s).
 pub const POLARIZE_RAMP_S: f64 = 0.02;
-/// Keys sounding at once (the oldest released one, else the oldest, stops for a new one).
-pub const MAX_RUNNING: usize = 12;
 
 // --- the model as data -----------------------------------------------------------------
 
@@ -357,7 +361,8 @@ impl Gauss {
 pub struct Voice {
     model: Arc<Model>,
     key: usize,
-    /// The step (s) and the steps per 96 kHz output sample.
+    /// The line out's rate (Hz), the physics' step (s) and its steps per output sample.
+    out_rate: f64,
     h: f64,
     os: usize,
     /// The key's voicing trim (the wiper's share past SUSTAIN).
@@ -401,17 +406,31 @@ pub struct Voice {
 }
 
 impl Voice {
-    /// The key for `note` (None outside the compass), at `oversample` x 96 kHz.
+    /// The key for `note` (None outside the compass), its line out at the model's rate
+    /// (96 kHz), stepped at `oversample` x that (the reference's 2: 192 kHz).
     pub fn new(
         model: &Arc<Model>,
         note: u8,
         oversample: usize,
         noise_seed: Option<u64>,
     ) -> Option<Voice> {
+        Voice::at_rate(model, note, model.fs_hz, oversample, noise_seed)
+    }
+
+    /// The key for `note` with its line out at `out_rate` (Hz), stepped `oversample` times
+    /// per output sample. [`Voice::new`] is the reference's rates; at others the physics is
+    /// the same, its explicit loop delay a step of the other rate.
+    pub fn at_rate(
+        model: &Arc<Model>,
+        note: u8,
+        out_rate: f64,
+        oversample: usize,
+        noise_seed: Option<u64>,
+    ) -> Option<Voice> {
         let key = model.keys.iter().position(|k| k.note == note)?;
         let kd = &model.keys[key];
         let p = &model.params;
-        let h = 1.0 / (model.fs_hz * oversample as f64);
+        let h = 1.0 / (out_rate * oversample as f64);
         let nm = kd.freq_hz.len();
         let om: Vec<f64> = kd
             .freq_hz
@@ -434,6 +453,7 @@ impl Voice {
         Some(Voice {
             model: model.clone(),
             key,
+            out_rate,
             h,
             os: oversample,
             trim: kd.trim,
@@ -517,13 +537,18 @@ impl Voice {
 
     /// Power on: POLARIZE ramped up from zero, then settling, out of the timeline.
     pub fn power_on(&mut self, polarize: f64) {
-        let mut buf = vec![0.0; (POWER_ON_S.0 * self.model.fs_hz) as usize];
+        let mut buf = vec![0.0; (POWER_ON_S.0 * self.out_rate) as usize];
         self.run(&mut buf, 0.0, polarize, POWER_ON_S.0);
-        let mut buf = vec![0.0; (POWER_ON_S.1 * self.model.fs_hz) as usize];
+        let mut buf = vec![0.0; (POWER_ON_S.1 * self.out_rate) as usize];
         self.run(&mut buf, 0.0, polarize, 0.0);
     }
 
-    /// `out.len()` samples at 96 kHz of the line out (V1b's plate, AC, volts). POLARIZE moves
+    /// The line out's rate (Hz).
+    pub fn out_rate(&self) -> f64 {
+        self.out_rate
+    }
+
+    /// `out.len()` samples of the line out (V1b's plate, AC, volts). POLARIZE moves
     /// from its present MMF to the knob's over `ramp_s` (0: at once); a ramp longer than the
     /// call carries on in the next.
     pub fn run(&mut self, out: &mut [f64], sustain: f64, polarize: f64, ramp_s: f64) {
@@ -820,20 +845,100 @@ impl Voice {
 
 // --- the keyboard ----------------------------------------------------------------------
 
-struct Slot {
+/// The compiled organ the IR element names, loaded once per process (by its path and
+/// sha256; the builders check the file against the sha256 its component version gives).
+pub fn load(el: &NickelKeys) -> Result<Arc<Model>, String> {
+    type Loaded = Mutex<HashMap<(String, String), Arc<Model>>>;
+    static LOADED: OnceLock<Loaded> = OnceLock::new();
+    let cache = LOADED.get_or_init(Default::default);
+    let id = (el.data.clone(), el.sha256.clone());
+    if let Some(m) = cache.lock().expect("organ").get(&id) {
+        return Ok(m.clone());
+    }
+    let path = {
+        let p = std::path::Path::new(&el.data);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            crate::clavinet::data_root().join(p)
+        }
+    };
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("{}: {}: {e}", el.name, path.display()))?;
+    let m = Arc::new(Model::from_json(&raw).map_err(|e| format!("{}: {e}", el.name))?);
+    if m.keys.is_empty() {
+        return Err(format!("{}: {}: no keys", el.name, path.display()));
+    }
+    Ok(cache.lock().expect("organ").entry(id).or_insert(m).clone())
+}
+
+/// What every key reads: the panel, set between chunks ([`Medium::update`]).
+#[derive(Debug)]
+pub struct Knobs {
+    sustain: AtomicU64,
+    polarize: AtomicU64,
+}
+
+impl Knobs {
+    fn new(sustain: f64, polarize: f64) -> Knobs {
+        Knobs {
+            sustain: AtomicU64::new(sustain.to_bits()),
+            polarize: AtomicU64::new(polarize.to_bits()),
+        }
+    }
+
+    fn get(&self) -> (f64, f64) {
+        (
+            f64::from_bits(self.sustain.load(Ordering::Relaxed)),
+            f64::from_bits(self.polarize.load(Ordering::Relaxed)),
+        )
+    }
+
+    fn set(&self, sustain: f64, polarize: f64) {
+        self.sustain.store(sustain.to_bits(), Ordering::Relaxed);
+        self.polarize.store(polarize.to_bits(), Ordering::Relaxed);
+    }
+}
+
+/// One key on the keyboard ([`crate::keyed`]): its voice, powered on when the medium is
+/// made, running from its strike until it is released and quiet (or silenced for another:
+/// `max_keys`), frozen between notes as in the reference (`varimu/nickel/organ.py`).
+#[derive(Debug, Clone)]
+pub struct Keyed {
     voice: Voice,
+    /// The key's mixing gain into the line.
+    mix: f64,
     /// The POLARIZE it last ran at (a change reaches a frozen key when it next runs).
     pol_of: f64,
     running: bool,
     released: bool,
-    age: u64,
     /// The line out's squares over the last [`QUIET_S`] (a ring and its sum).
     ring: Vec<f64>,
     ring_at: usize,
     ring_sum: f64,
+    scratch: Vec<f64>,
 }
 
-impl Slot {
+impl Keyed {
+    fn new(voice: Voice, mix: f64, polarize: f64) -> Keyed {
+        let n = ((QUIET_S * voice.out_rate()) as usize).max(1);
+        Keyed {
+            voice,
+            mix,
+            pol_of: polarize,
+            running: false,
+            released: false,
+            ring: vec![0.0; n],
+            ring_at: 0,
+            ring_sum: 0.0,
+            scratch: Vec::new(),
+        }
+    }
+
+    pub fn voice(&self) -> &Voice {
+        &self.voice
+    }
+
     /// Run the key over `buf` and decide whether a released key has gone quiet.
     fn advance(&mut self, buf: &mut [f64], sustain: f64, polarize: f64) {
         let ramp = if self.pol_of != polarize {
@@ -856,229 +961,281 @@ impl Slot {
     }
 }
 
-/// A key's block handed to a worker and back.
-struct Job {
-    index: usize,
-    slot: Box<Slot>,
-    buf: Vec<f64>,
-    sustain: f64,
-    polarize: f64,
-}
+impl crate::keyed::KeyVoice for Keyed {
+    type Ctx = Knobs;
 
-/// Worker threads for the keys: every key is independent within a block, so the blocks run
-/// in parallel and are summed in key order (the same bits on any number of threads).
-struct Pool {
-    jobs: Option<std::sync::mpsc::Sender<Job>>,
-    done: std::sync::mpsc::Receiver<Job>,
-    handles: Vec<std::thread::JoinHandle<()>>,
-}
-
-impl Pool {
-    fn new(threads: usize) -> Pool {
-        use std::sync::{Mutex, mpsc};
-        let (jobs, rx) = mpsc::channel::<Job>();
-        let (tx_done, done) = mpsc::channel::<Job>();
-        let rx = Arc::new(Mutex::new(rx));
-        let handles = (0..threads)
-            .map(|k| {
-                let (rx, tx) = (rx.clone(), tx_done.clone());
-                std::thread::Builder::new()
-                    .name(format!("nickel {k}"))
-                    .spawn(move || {
-                        loop {
-                            let job = rx.lock().expect("jobs").recv();
-                            let Ok(mut j) = job else { return };
-                            j.slot.advance(&mut j.buf, j.sustain, j.polarize);
-                            if tx.send(j).is_err() {
-                                return;
-                            }
-                        }
-                    })
-                    .expect("thread")
-            })
-            .collect();
-        Pool {
-            jobs: Some(jobs),
-            done,
-            handles,
-        }
-    }
-}
-
-impl Drop for Pool {
-    fn drop(&mut self) {
-        self.jobs = None;
-        for h in self.handles.drain(..) {
-            let _ = h.join();
-        }
-    }
-}
-
-/// The keyboard: voices made at their first strike, run until released and quiet, summed
-/// through each key's mixing gain.
-pub struct Organ {
-    model: Arc<Model>,
-    slots: Vec<Option<Box<Slot>>>,
-    oversample: usize,
-    noise_seed: Option<u64>,
-    pub sustain: f64,
-    pub polarize: f64,
-    clock: u64,
-    pool: Option<Pool>,
-    spare: Vec<Vec<f64>>,
-}
-
-impl Organ {
-    /// `threads` workers run the sounding keys (0: on the caller's thread).
-    pub fn new(
-        model: Arc<Model>,
-        oversample: usize,
-        noise_seed: Option<u64>,
-        threads: usize,
-    ) -> Organ {
-        let n = model.highest() as usize + 1 - model.lowest() as usize;
-        Organ {
-            sustain: model.panel.sustain,
-            polarize: model.panel.polarize,
-            slots: (0..n).map(|_| None).collect(),
-            model,
-            oversample,
-            noise_seed,
-            clock: 0,
-            pool: (threads > 0).then(|| Pool::new(threads)),
-            spare: Vec::new(),
-        }
+    fn asleep(&self) -> bool {
+        !self.running
     }
 
-    pub fn model(&self) -> &Arc<Model> {
-        &self.model
-    }
-
-    fn index(&self, note: u8) -> Option<usize> {
-        let lo = self.model.lowest();
-        (note >= lo && note <= self.model.highest()).then(|| (note - lo) as usize)
-    }
-
-    /// Keys sounding now.
-    pub fn running(&self) -> usize {
-        self.slots.iter().flatten().filter(|s| s.running).count()
-    }
-
-    pub fn note_on(&mut self, note: u8, velocity: u8) {
-        let Some(i) = self.index(note) else { return };
-        // a voice's first strike: it powers on at the knob, out of the timeline
-        if self.slots[i].is_none() {
-            let Some(mut v) = Voice::new(&self.model, note, self.oversample, self.noise_seed)
-            else {
-                return;
-            };
-            v.power_on(self.polarize);
-            let n = (QUIET_S * self.model.fs_hz) as usize;
-            self.slots[i] = Some(Box::new(Slot {
-                voice: v,
-                pol_of: self.polarize,
-                running: false,
-                released: false,
-                age: 0,
-                ring: vec![0.0; n],
-                ring_at: 0,
-                ring_sum: 0.0,
-            }));
-        }
-        // stop one for this if too many sound: a released one first, the oldest
-        if !self.slots[i].as_ref().is_some_and(|s| s.running) && self.running() >= MAX_RUNNING {
-            let pick = self
-                .slots
-                .iter()
-                .enumerate()
-                .filter_map(|(k, s)| s.as_ref().filter(|s| s.running).map(|s| (k, s)))
-                .min_by_key(|(_, s)| (!s.released, s.age))
-                .map(|(k, _)| k);
-            if let Some(k) = pick
-                && let Some(s) = self.slots[k].as_mut()
-            {
-                s.running = false;
-                s.voice.release();
+    fn event(&mut self, ev: NoteEvent, ctx: &Knobs) {
+        match ev {
+            NoteEvent::On { velocity, .. } => {
+                let (sustain, polarize) = ctx.get();
+                // POLARIZE turned while it was frozen: ramped there out of the timeline.
+                if self.pol_of != polarize {
+                    let n = (POLARIZE_RAMP_S * self.voice.out_rate()) as usize;
+                    self.scratch.clear();
+                    self.scratch.resize(n, 0.0);
+                    self.voice
+                        .run(&mut self.scratch, sustain, polarize, POLARIZE_RAMP_S);
+                    self.pol_of = polarize;
+                }
+                self.voice.strike(velocity);
+                self.running = true;
+                self.released = false;
             }
-        }
-        let (sustain, polarize) = (self.sustain, self.polarize);
-        self.clock += 1;
-        let age = self.clock;
-        let s = self.slots[i].as_mut().expect("slot");
-        if s.pol_of != polarize {
-            let mut buf = vec![0.0; (POLARIZE_RAMP_S * self.model.fs_hz) as usize];
-            s.voice.run(&mut buf, sustain, polarize, POLARIZE_RAMP_S);
-            s.pol_of = polarize;
-        }
-        s.voice.strike(velocity);
-        s.running = true;
-        s.released = false;
-        s.age = age;
-    }
-
-    pub fn note_off(&mut self, note: u8) {
-        if let Some(i) = self.index(note)
-            && let Some(s) = self.slots[i].as_mut()
-        {
-            s.voice.release();
-            s.released = true;
+            NoteEvent::Off { .. } => {
+                self.voice.release();
+                self.released = true;
+            }
+            NoteEvent::Pedal { .. } | NoteEvent::Pressure { .. } => {}
         }
     }
 
-    /// The summed line out for the next `out.len()` samples at 96 kHz.
-    pub fn render(&mut self, out: &mut [f64]) {
-        out.fill(0.0);
-        let (sustain, polarize) = (self.sustain, self.polarize);
-        let n = out.len();
-        let lo = self.model.lowest();
-        let running: Vec<usize> = (0..self.slots.len())
-            .filter(|&i| self.slots[i].as_ref().is_some_and(|s| s.running))
-            .collect();
-        if running.is_empty() {
+    fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &Knobs) {
+        if !self.running || to <= from {
             return;
         }
-        let mut results: Vec<(usize, Vec<f64>)> = Vec::with_capacity(running.len());
-        match &self.pool {
-            Some(pool) if running.len() > 1 => {
-                let tx = pool.jobs.as_ref().expect("jobs");
-                for &i in &running {
-                    let mut buf = self.spare.pop().unwrap_or_default();
-                    buf.resize(n, 0.0);
-                    let slot = self.slots[i].take().expect("slot");
-                    let job = Job {
-                        index: i,
-                        slot,
-                        buf,
-                        sustain,
-                        polarize,
-                    };
-                    tx.send(job).expect("workers");
-                }
-                for _ in 0..running.len() {
-                    let j = pool.done.recv().expect("workers");
-                    self.slots[j.index] = Some(j.slot);
-                    results.push((j.index, j.buf));
-                }
-                results.sort_by_key(|r| r.0);
-            }
-            _ => {
-                for &i in &running {
-                    let mut buf = self.spare.pop().unwrap_or_default();
-                    buf.resize(n, 0.0);
-                    self.slots[i]
-                        .as_mut()
-                        .expect("slot")
-                        .advance(&mut buf, sustain, polarize);
-                    results.push((i, buf));
-                }
-            }
+        let (sustain, polarize) = ctx.get();
+        let mut y = std::mem::take(&mut self.scratch);
+        y.clear();
+        y.resize(to - from, 0.0);
+        self.advance(&mut y, sustain, polarize);
+        for (o, v) in buf[from..to].iter_mut().zip(&y) {
+            *o += self.mix * v;
         }
-        for (i, buf) in results {
-            let mix = self.model.key(lo + i as u8).map_or(1.0, |k| k.mix);
-            for (o, y) in out.iter_mut().zip(&buf) {
-                *o += mix * y;
-            }
-            self.spare.push(buf);
-        }
+        self.scratch = y;
     }
+
+    fn silence(&mut self) {
+        self.voice.release();
+        self.running = false;
+    }
+}
+
+/// The keys powered on, kept per (data, rates, POLARIZE, noise seed): a stream restarted
+/// (a change of structure) makes its medium without the power-on's compute.
+type Powered = Mutex<Vec<(String, Arc<Vec<(u8, Keyed)>>)>>;
+
+/// Every key of `model` with its line out at `out_rate` and `os` steps a sample, powered
+/// on at the element's POLARIZE (keys in parallel), noise from `noise_seed`.
+fn powered_keys(
+    el: &NickelKeys,
+    model: &Arc<Model>,
+    out_rate: f64,
+    os: usize,
+    noise_seed: Option<u64>,
+) -> Arc<Vec<(u8, Keyed)>> {
+    static POWERED: OnceLock<Powered> = OnceLock::new();
+    /// Keyboards kept (each 61 voices' modes and state).
+    const KEEP: usize = 3;
+    let id = format!(
+        "{} {} {:x} {os} {:x} {noise_seed:?}",
+        el.data,
+        el.sha256,
+        out_rate.to_bits(),
+        el.polarize.to_bits()
+    );
+    let cache = POWERED.get_or_init(Default::default);
+    if let Some((_, k)) = cache.lock().expect("keys").iter().find(|(i, _)| *i == id) {
+        return k.clone();
+    }
+    let notes: Vec<u8> = model.keys.iter().map(|k| k.note).collect();
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .clamp(1, notes.len());
+    let per = notes.len().div_ceil(threads);
+    let polarize = el.polarize;
+    let mut keys: Vec<(u8, Keyed)> = Vec::with_capacity(notes.len());
+    std::thread::scope(|s| {
+        let hs: Vec<_> = notes
+            .chunks(per)
+            .map(|chunk| {
+                s.spawn(move || {
+                    chunk
+                        .iter()
+                        .filter_map(|&n| {
+                            let mut v = Voice::at_rate(model, n, out_rate, os, noise_seed)?;
+                            v.power_on(polarize);
+                            let mix = model.key(n).map_or(1.0, |k| k.mix);
+                            Some((n, Keyed::new(v, mix, polarize)))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        for h in hs {
+            keys.extend(h.join().expect("power-on"));
+        }
+    });
+    let keys = Arc::new(keys);
+    let mut all = cache.lock().expect("keys");
+    all.push((id, keys.clone()));
+    if all.len() > KEEP {
+        all.remove(0);
+    }
+    keys
+}
+
+/// The keyboard beside the circuit at step rate `fs`: a [`Keyed`] per note on
+/// [`crate::keyed`]'s machinery, their line outs (each through its mixing gain) summed in
+/// key order onto the element's `out`. The voices give their line outs at `k` per step
+/// (decimated by `keyed`'s filter when k > 1; at k = 1 the line out is the voice's own
+/// sample, taken every `substeps` physics steps as `voice.py` does).
+pub struct Medium {
+    pub el: NickelKeys,
+    pub model: Arc<Model>,
+    /// Line-out samples per step and physics steps per line-out sample.
+    pub k: usize,
+    pub substeps: usize,
+    keys: crate::keyed::Medium<Keyed>,
+}
+
+impl std::fmt::Debug for Medium {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("nickel::Medium")
+            .field("el", &self.el.name)
+            .field("k", &self.k)
+            .field("substeps", &self.substeps)
+            .field("keys", &self.keys)
+            .finish()
+    }
+}
+
+/// Worker threads beside the calling one: a key costs ~0.4 of a core, more than the other
+/// keyed media's voices ([`crate::keyed::workers`]), so up to five, leaving three logical
+/// cores to the circuit (a line-out load) and the rest of the app.
+pub fn workers() -> usize {
+    std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .saturating_sub(3)
+        .min(5)
+}
+
+impl Medium {
+    /// The keys at step rate `fs`; `noise_seed`: the circuit's, if its noise is on (each
+    /// key's Johnson noise at its input transformer's secondary).
+    pub fn new(el: &NickelKeys, fs: f64, noise_seed: Option<u64>) -> Result<Medium, String> {
+        Medium::with_workers(el, fs, noise_seed, workers())
+    }
+
+    /// (line-out samples per step, physics steps per line-out sample) at step rate `fs`.
+    pub fn rates(el: &NickelKeys, fs: f64) -> (usize, usize) {
+        let k = ((el.rate_hz / fs) - 1e-9).ceil().max(1.0) as usize;
+        let s = ((el.step_hz / (fs * k as f64)) - 1e-9).ceil().max(1.0) as usize;
+        (k, s)
+    }
+
+    /// [`Medium::new`] with `n` worker threads (the result is the same with any number).
+    pub fn with_workers(
+        el: &NickelKeys,
+        fs: f64,
+        noise_seed: Option<u64>,
+        n: usize,
+    ) -> Result<Medium, String> {
+        let model = load(el)?;
+        let (k, s) = Medium::rates(el, fs);
+        let keys = powered_keys(el, &model, fs * k as f64, s, noise_seed);
+        let mut keys = crate::keyed::Medium::new(
+            (*keys).clone(),
+            Knobs::new(el.sustain, el.polarize),
+            fs,
+            k,
+            1,
+            n,
+        );
+        keys.set_max_awake(Some(el.max_keys as usize));
+        // A key costs ~0.4 of a core: two awake already go to the workers.
+        keys.set_inline_voices(1);
+        Ok(Medium {
+            el: el.clone(),
+            model,
+            k,
+            substeps: s,
+            keys,
+        })
+    }
+
+    /// Keep every internal sample rendered from now on ([`Medium::raw`]; tests).
+    pub fn keep_raw(&mut self) {
+        self.keys.keep_raw();
+    }
+
+    /// The line out's internal samples kept.
+    pub fn raw(&self) -> &[f64] {
+        self.keys.raw(0)
+    }
+
+    pub fn delay_steps(&self) -> f64 {
+        self.keys.delay_steps()
+    }
+
+    pub fn position(&self) -> usize {
+        self.keys.position()
+    }
+
+    pub fn queue(&mut self, at: usize, ev: NoteEvent) {
+        self.keys.queue(at, ev);
+    }
+
+    pub fn known_until(&mut self, at: usize) {
+        self.keys.known_until(at);
+    }
+
+    /// The summed line out at the next step (the push at step p gives step p + 1's).
+    pub fn push(&mut self) -> f64 {
+        let mut y = [0.0];
+        self.keys.push_into(&mut y);
+        y[0]
+    }
+
+    /// Keys sounding after the last chunk.
+    pub fn sounding(&self) -> usize {
+        self.keys.sounding()
+    }
+
+    /// Whether `el` keeps this keyboard playing (all but the panel the same).
+    pub fn same(&self, el: &NickelKeys) -> bool {
+        NickelKeys {
+            sustain: self.el.sustain,
+            polarize: self.el.polarize,
+            ..el.clone()
+        } == self.el
+    }
+
+    /// New knobs (SUSTAIN at once; POLARIZE ramped over [`POLARIZE_RAMP_S`] in a sounding
+    /// key, at its next strike in a frozen one), from the first step not yet rendered.
+    pub fn update(&mut self, el: &NickelKeys) {
+        self.el.sustain = el.sustain;
+        self.el.polarize = el.polarize;
+        self.keys.ctx().set(el.sustain, el.polarize);
+    }
+
+    pub fn fs(&self) -> f64 {
+        self.keys.fs()
+    }
+}
+
+/// The keys alone: `n` steps at `fs` from rest (powered on), `events` (step, event) in
+/// order; the summed line out at every step (sample 0 the rest's).
+pub fn render(
+    el: &NickelKeys,
+    fs: f64,
+    n: usize,
+    events: &[(usize, NoteEvent)],
+    noise_seed: Option<u64>,
+    workers: usize,
+) -> Result<Vec<f64>, String> {
+    let mut m = Medium::with_workers(el, fs, noise_seed, workers)?;
+    for &(at, ev) in events {
+        m.queue(at, ev);
+    }
+    m.known_until(usize::MAX);
+    let mut out = Vec::with_capacity(n);
+    out.push(0.0);
+    for _ in 1..n {
+        out.push(m.push());
+    }
+    Ok(out)
 }

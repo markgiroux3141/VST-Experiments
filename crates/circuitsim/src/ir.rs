@@ -223,6 +223,7 @@ pub enum Element {
     Harp(Harp),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
+    NickelKeys(NickelKeys),
     ThyratronEvents(ThyratronEvents),
     ResetEvents(ResetEvents),
     EdgeEvents(EdgeEvents),
@@ -586,6 +587,64 @@ impl NovaKeys {
             if self.senses().contains(&o.as_str()) {
                 return Err(format!("it drives {o}, which it senses"));
             }
+        }
+        Ok(())
+    }
+}
+
+/// The Nickel Organ's keys (docs/NICKEL_ORGAN_DEVICE_PLAN.md; [`crate::nickel`];
+/// `varimu/nickel/voice.py` is the reference): each key its brass bar with a nickel strip in
+/// its coil, the bridge, its own tube loop and #327 lamp, struck, held and released by note
+/// events; the keys' line outs, each through its mixing gain, summed onto `out` (to ground)
+/// one sample after the step that rendered them (the keys sense nothing). The voices give
+/// their line outs at the least whole multiple of the step rate at or above `rate_hz` and
+/// step their physics at the least whole multiple of that at or above `step_hz`. `sustain`
+/// and `polarize` (0-1) are the panel's SUSTAIN and POLARIZE (a change plays on); at most
+/// `max_keys` (a whole number) keys sound at once: another struck silences one, a released
+/// one first, else the one struck longest ago. `data` is the compiled organ (a component
+/// version of kind `nickel_keys`: `varimu.nickel.compile`), a path relative to the
+/// repository's root or absolute, its sha256 `sha256`. SPICE has no keys: ngspice sees
+/// `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NickelKeys {
+    pub name: String,
+    pub out: String,
+    pub data: String,
+    pub sha256: String,
+    pub rate_hz: f64,
+    pub step_hz: f64,
+    pub sustain: f64,
+    pub polarize: f64,
+    pub max_keys: f64,
+}
+
+impl NickelKeys {
+    fn check(&self, input: &str) -> Result<(), String> {
+        for (what, x) in [("rate_hz", self.rate_hz), ("step_hz", self.step_hz)] {
+            if !(x.is_finite() && x > 0.0) {
+                return Err(format!("{what} = {x} must be finite and > 0"));
+            }
+        }
+        for (what, x) in [("sustain", self.sustain), ("polarize", self.polarize)] {
+            if !(0.0..=1.0).contains(&x) {
+                return Err(format!("{what} {x} (0-1)"));
+            }
+        }
+        if !(self.max_keys >= 1.0 && self.max_keys.fract() == 0.0 && self.max_keys <= 128.0) {
+            return Err(format!(
+                "max_keys {} (a whole number, 1-128)",
+                self.max_keys
+            ));
+        }
+        if self.data.is_empty()
+            || self.sha256.len() != 64
+            || !self.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("data names the compiled organ, sha256 its hash".into());
+        }
+        if self.out == GROUND || self.out == input {
+            return Err(format!("its keys drive {} (ground or the input)", self.out));
         }
         Ok(())
     }
@@ -1124,6 +1183,7 @@ impl Element {
             Element::Harp(e) => &e.name,
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
+            Element::NickelKeys(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
             Element::ResetEvents(e) => &e.name,
             Element::EdgeEvents(e) => &e.name,
@@ -1159,6 +1219,7 @@ impl Element {
                 v.extend(e.outs.iter().map(String::as_str));
                 v
             }
+            Element::NickelKeys(e) => vec![&e.out],
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
             Element::ResetEvents(e) => vec![&e.sense, &e.src, &e.dst],
             Element::EdgeEvents(e) => vec![&e.plus, &e.minus, &e.src, &e.dst],
@@ -1731,6 +1792,12 @@ impl CircuitIr {
                     'V'
                 }
                 Element::NovaKeys(e) => {
+                    if let Err(m) = e.check(&self.input_node) {
+                        return err(format!("{name}: {m}"));
+                    }
+                    'V'
+                }
+                Element::NickelKeys(e) => {
                     if let Err(m) = e.check(&self.input_node) {
                         return err(format!("{name}: {m}"));
                     }

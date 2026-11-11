@@ -349,6 +349,7 @@ impl Mna {
                     Some(crate::media::MediumElement::ClavStrings(c.clone()))
                 }
                 Element::NovaKeys(k) => Some(crate::media::MediumElement::NovaKeys(k.clone())),
+                Element::NickelKeys(k) => Some(crate::media::MediumElement::NickelKeys(k.clone())),
                 _ => None,
             })
             .collect();
@@ -574,7 +575,8 @@ impl Mna {
                 | Element::Tape(_)
                 | Element::Harp(_)
                 | Element::ClavStrings(_)
-                | Element::NovaKeys(_) => {}
+                | Element::NovaKeys(_)
+                | Element::NickelKeys(_) => {}
             }
         }
         for el in ir.elements() {

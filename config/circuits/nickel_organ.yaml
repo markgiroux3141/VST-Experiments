@@ -1,0 +1,47 @@
+# The Nickel Organ as a device (docs/NICKEL_ORGAN_DEVICE_PLAN.md): an invented
+# magnetostrictive bar organ (docs/NICKEL_ORGAN_PLAN.md, docs/INVENTED_DEVICES.md I1). Its 61
+# keys are circuitsim's keys medium (the component NICKEL_ORGAN: crates/circuitsim/src/
+# nickel.rs, varimu/nickel/voice.py the reference), played by note events: each key one
+# coupled system, a brass bar with a nickel strip at its root in a coil and the coil's dead
+# twin in a bridge, its own tube loop (12AX7 x2, SUSTAIN, a per-key RC ladder, a 12AU7
+# driver, a triode-connected 6V6GT) and the #327 lamp as its AGC. The keys' line outs (V1b's
+# plate through 0.1 uF into the console's 470k, inside each voice) sum through each key's
+# mixing gain onto `out`.
+#
+# The panel: SUSTAIN (the loop's gain: below ~0.6 a struck bell, above it the note sustains
+# and blooms as the lamp catches the level) and POLARIZE (the strips' bias: growly and loud
+# low, clean mid, quiet and pure high). A turn plays on: SUSTAIN at once, POLARIZE ramped
+# over 20 ms in a sounding key and at its next strike in a frozen one, as in the reference.
+
+title: "Nickel Organ (61 magnetostrictive bar keys, each with its tube loop and lamp)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 20.0, source: "provisional: model knowledge (one key's line out peaks 5-12 V with the lamp hot; a chord sums through the mixing gains: the bare instrument's 20 V at 0 dBFS, NICKEL_ORGAN_PLAN.md)"}
+
+controls:
+  sustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "config/nickel/organ.yaml panel.sustain (design: below the voicing threshold, 0.6, a struck bell with a longer ring; above it the loop sustains)"}
+  polarize: {value: 0.35, min: 0.0, max: 1.0, unit: rotation, source: "config/nickel/organ.yaml panel.polarize (design: the default bias, a fraction of mmf_max_a; set by the first experiment)"}
+
+values:
+  organ_model: {value: NICKEL_ORGAN@1, source: "config/components/nickel_organ/1.yaml (the 61 keys from config/nickel/organ.yaml through varimu/nickel/, compiled by scripts/compile_nickel_organ.py)"}
+  organ_rate_hz: {value: 96000.0, source: "numerical: the keys' line outs at the project's 96 kHz (varimu/nickel/voice.py's FS_HZ), or a whole multiple of a slower step"}
+  organ_step_hz: {value: 192000.0, source: "numerical: each key's physics stepped at 192 kHz, the reference's (voice.py: oversample 2; its explicit loop delay is one step)"}
+  organ_max_keys: {value: 12, source: "numerical: keys sounding at once (a key costs ~0.4 of a core on one of six threads: 12 cost what 8 do, 0.8x real time, and play live without dropouts at a 50 ms buffer on the dev desktop, NICKEL_ORGAN_DEVICE_PLAN.md; another struck silences a released one, else the one struck longest ago; the same in renders)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 470.0e+3, source: "numerical: a DC path on the line (the console input's 470k is inside each key's line out: config/nickel/organ.yaml out_load_ohm)"}
+
+# Noise (device builder B5): each key's Johnson noise at its input transformer's secondary
+# (the reference renders with it: a key's own hiss, ~7.5 mV at the line), and the loads'.
+noise:
+  seed: 1
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the keys: their summed line outs on out (to ground), played by note events
+      KEYS: {nickel_keys: [out], component: organ_model, rate_hz: organ_rate_hz, step_hz: organ_step_hz, sustain: sustain, polarize: polarize, max_keys: organ_max_keys}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

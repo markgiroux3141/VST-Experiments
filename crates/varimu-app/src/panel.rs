@@ -576,7 +576,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 31] = [
+pub const DEVICES: [Device; 32] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1303,6 +1303,37 @@ pub const DEVICES: [Device; 31] = [
         live_speaker_v: Some(NOVACHORD_SPEAKER_V),
         newton: None,
         method: Some("trap"),
+    },
+    Device {
+        id: "nickel_organ",
+        label: "Nickel Organ",
+        short: "Nickel",
+        about: "An invented magnetostrictive bar organ: 61 brass bars, each with a nickel \
+            strip at its root in a coil, driven and heard by that coil through its own tube \
+            loop with a lamp as its AGC",
+        group: Group::Instruments,
+        // The keys are circuitsim's medium (docs/NICKEL_ORGAN_DEVICE_PLAN.md): each key one
+        // coupled system at 192 kHz, on worker threads; the circuit is the line.
+        circuit: "nickel_organ",
+        panel: Some(&["sustain", "polarize"]),
+        ahead_s: 0.25,
+        // At 96 kHz the keys' line out is the reference's own sample (voice.py), no
+        // decimation filter.
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys strike the bars (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
     },
     Device {
         id: "foil_reverb",
@@ -2554,6 +2585,7 @@ mod tests {
                         "rhodes_suitcase",
                         "clavinet_d6",
                         "novachord",
+                        "nickel_organ",
                         "minimoog_filter_board",
                         "minimoog_vco",
                         "minimoog_voice"

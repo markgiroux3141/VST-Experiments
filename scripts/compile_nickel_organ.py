@@ -1,5 +1,6 @@
-"""Compile the Nickel Organ for circuitsim's live tier: `config/nickel/organ.live.json`
-(docs/NICKEL_ORGAN_PLAN.md, "The Rust voice").
+"""Compile the Nickel Organ for circuitsim's live tier: the component NICKEL_ORGAN's next
+version, `config/components/nickel_organ/<N>.yaml` and its `<N>.organ.json`
+(docs/NICKEL_ORGAN_PLAN.md, "The Rust voice"; varimu/nickel/compile.py).
 
 The Python reference (varimu/nickel/voice.py) builds a key's bar by finite elements and
 voices every key by striking it twice; neither belongs in the app. This writes what the Rust
@@ -10,8 +11,10 @@ ladder capacitor, voicing trim and mixing gain.
 
     uv run python scripts/compile_nickel_organ.py [--check] [--notes LO HI]
 
-The first run voices every key that isn't in cache/nickel/voicing.json (~10 s a key).
-`--check` exits 1 when the file on disk differs from what the config and the code give now.
+The first run voices every key that isn't in cache/nickel/voicing.json (~10 s a key). A
+version is saved only when the data changed; moving the circuit
+(config/circuits/nickel_organ.yaml's `organ_model`) to it is an explicit edit. `--check`
+exits 1 when the latest version differs from what the config and the code give now.
 """
 
 from __future__ import annotations
@@ -26,11 +29,10 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from varimu.nickel import bar as nbar  # noqa: E402
+from varimu.nickel import compile as ncompile  # noqa: E402
 from varimu.nickel import organ as norgan  # noqa: E402
 from varimu.nickel import spec as nspec  # noqa: E402
 from varimu.nickel import voice as nvoice  # noqa: E402
-
-OUT = REPO / "config" / "nickel" / "organ.live.json"
 
 
 def _triode(t: nvoice.Triode) -> dict:
@@ -130,13 +132,16 @@ def main() -> int:
     a = ap.parse_args()
     lo, hi = a.notes if a.notes else (None, None)
     data = compile_organ(lo, hi, progress=True)
-    text = json.dumps(data, separators=(",", ":"))
     if a.check:
-        same = OUT.exists() and OUT.read_text() == text
-        print("up to date" if same else "stale: rerun without --check")
+        have = ncompile.latest()
+        same = have is not None and ncompile.load(have) == json.loads(ncompile.dump(data))
+        print(f"{have} up to date" if same else "stale: rerun without --check")
         return 0 if same else 1
-    OUT.write_text(text)
-    print(f"wrote {OUT} ({len(text) / 1e3:.0f} kB, {len(data['keys'])} keys)")
+    ref = ncompile.save(data)
+    if ref is None:
+        print(f"unchanged: {ncompile.latest()}")
+    else:
+        print(f"saved {ref} ({len(data['keys'])} keys)")
     return 0
 
 

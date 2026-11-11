@@ -22,7 +22,6 @@ use eframe::egui::{self, Color32, RichText, Stroke};
 use varimu_app::audio;
 use varimu_app::live::Circuit;
 use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Touch, Wave};
-use varimu_app::nickel::NickelPanel;
 use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
     AHEAD_S, END_MIX, EndDevice, INPUT_BUFFER_S, InputDevice, Playback, Player, ProxyStart, Source,
@@ -219,10 +218,6 @@ pub struct PlayView {
     /// its kit and browser.
     sampler_on: bool,
     kit: SamplerPanel,
-    /// With `sampler_on` (an instrument with no circuit): the instrument is the Nickel Organ
-    /// (`varimu_app::nickel`), not the sampler; its panel.
-    nickel_on: bool,
-    nickel: Arc<NickelPanel>,
     /// The Components view's A / B: a fixed trim (dB) on the device's output, measured
     /// offline, with the running compensation off while it is set (it would undo the
     /// difference the trim matches).
@@ -296,7 +291,6 @@ impl PlayView {
             |r| r.join("data").join("clips"),
         );
         let settings = Settings::load(&config_dir, Quality::Draft1x);
-        let nickel = Arc::new(NickelPanel::new(&config_dir));
         let repo = config_dir
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
@@ -358,8 +352,6 @@ impl PlayView {
             end_mix: END_MIX,
             sampler_on: false,
             kit: SamplerPanel::new(&repo),
-            nickel_on: false,
-            nickel,
             ab_trim_db: None,
             proxy_on: false,
             proxy_tables: None,
@@ -370,7 +362,6 @@ impl PlayView {
             match DEVICES.iter().position(|d| d.id == id.as_str()) {
                 Some(i) => v.device = i,
                 None if id == "sampler" => v.sampler_on = true,
-                None if id == "nickel_organ" => (v.sampler_on, v.nickel_on) = (true, true),
                 None => v.error = Some(format!("unknown device {id}")),
             }
         }
@@ -557,9 +548,6 @@ impl PlayView {
 
     /// The device's name and id (for files).
     fn device_names(&self) -> (String, String) {
-        if self.nickel_on {
-            return ("Nickel Organ".into(), "nickel_organ".into());
-        }
         if self.sampler_on {
             return ("Sampler".into(), "sampler".into());
         }
@@ -894,9 +882,6 @@ impl PlayView {
         self.adopted = false;
         self.playing = None;
         self.playback = None;
-        if self.nickel_on {
-            return self.start_nickel();
-        }
         if self.sampler_on {
             return self.start_sampler();
         }
@@ -1098,150 +1083,6 @@ impl PlayView {
         }
     }
 
-    /// Play the Nickel Organ from the chosen MIDI keyboard.
-    fn start_nickel(&mut self) {
-        self.keyboard = None;
-        let s = match &self.settings {
-            Ok(s) => s.clone(),
-            Err(e) => {
-                self.error = Some(e.clone());
-                return;
-            }
-        };
-        if self.midi_ports.is_empty() {
-            self.midi_ports = midi::ports().unwrap_or_default();
-        }
-        let mut error = None;
-        let kb =
-            self.midi_ports
-                .get(self.midi_port)
-                .and_then(|port| match Keyboard::open(Some(port)) {
-                    Ok(kb) => Some(kb),
-                    Err(e) => {
-                        error = Some(format!("{e}: no keyboard, nothing to play"));
-                        None
-                    }
-                });
-        if let Some(kb) = &kb {
-            kb.keys.set_touch(self.touch());
-        }
-        let keys = kb.as_ref().map(|k| k.keys.clone());
-        let buffer = self.input_buffer_ms / 1000.0;
-        match Player::start_nickel(self.nickel.clone(), keys, s, buffer) {
-            Ok(p) => {
-                self.player = Some(p);
-                self.keyboard = kb;
-                self.error = error;
-            }
-            Err(e) => self.error = Some(e),
-        }
-    }
-
-    /// The Nickel Organ's knobs (the left column) and what they do.
-    fn nickel_panel_ui(&mut self, ui: &mut egui::Ui) {
-        Self::heading(ui, "PANEL");
-        if let Err(e) = &self.nickel.model {
-            ui.colored_label(theme::FAULT, e);
-            return;
-        }
-        let (mut sustain, mut polarize, mut level) = (
-            self.nickel.sustain(),
-            self.nickel.polarize(),
-            self.nickel.level_db(),
-        );
-        let on_sustain = ui
-            .add(egui::Slider::new(&mut sustain, 0.0..=1.0).text("SUSTAIN"))
-            .on_hover_text(
-                "The loop's gain. Below ~0.6 a struck bell with a longer ring; above it the \
-                 note sustains like an organ, blooming as the #327 lamp catches the level",
-            );
-        let on_polarize = ui
-            .add(egui::Slider::new(&mut polarize, 0.0..=1.0).text("POLARIZE"))
-            .on_hover_text(
-                "The strips' bias (a DC winding on the yoke). 0.05-0.25: loud and growly, a \
-                 strong 2nd harmonic; 0.35 (default): clean; high: quieter and purer; 0: \
-                 silent. A key takes a new setting when it is next struck",
-            );
-        let on_level = ui
-            .add(egui::Slider::new(&mut level, -24.0..=12.0).text("LEVEL dB"))
-            .on_hover_text("The monitor's level (0 dB: 20 V of line out is full scale)");
-        if on_sustain.changed() {
-            self.nickel.set_sustain(sustain);
-        }
-        if on_polarize.changed() {
-            self.nickel.set_polarize(polarize);
-        }
-        if on_level.changed() {
-            self.nickel.set_level_db(level);
-        }
-        if ui.small_button("Reset").clicked() {
-            if let Ok(m) = &self.nickel.model {
-                self.nickel.set_sustain(m.panel.sustain);
-                self.nickel.set_polarize(m.panel.polarize);
-            }
-            self.nickel.set_level_db(0.0);
-        }
-    }
-
-    /// The main area with the Nickel Organ chosen: start / stop and its load.
-    fn nickel_main(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if self.player.is_none() || self.adopted {
-                let go =
-                    egui::Button::new(RichText::new("▶  Play").strong().color(theme::ACCENT_INK))
-                        .fill(theme::ACCENT)
-                        .min_size(egui::vec2(96.0, 30.0));
-                if ui
-                    .add(go)
-                    .on_hover_text("Play the organ from the MIDI keyboard")
-                    .clicked()
-                {
-                    self.start();
-                }
-            } else if ui
-                .add(egui::Button::new("■  Stop").min_size(egui::vec2(96.0, 30.0)))
-                .clicked()
-            {
-                self.stop();
-            }
-            ui.add_space(12.0);
-            let line = match self.player.as_ref().filter(|_| !self.adopted) {
-                Some(p) => {
-                    let st = p.status();
-                    let kb = self
-                        .keyboard
-                        .as_ref()
-                        .map_or("no keyboard".to_string(), |k| k.name.clone());
-                    format!(
-                        "{kb} · {} keys sounding · load {:.0}% · out {:.0} dBFS peak · key to ear {:.0} ms · dropouts {}",
-                        self.nickel.running(),
-                        self.nickel.load() * 100.0,
-                        st.meter.out_dbfs,
-                        st.latency_s.unwrap_or(0.0) * 1000.0,
-                        p.dropouts()
-                    )
-                }
-                None => "stopped".into(),
-            };
-            ui.label(RichText::new(line).color(theme::MUTED));
-        });
-        ui.add_space(6.0);
-        ui.label(
-            RichText::new(
-                "An invented magnetostrictive bar organ (docs/NICKEL_ORGAN_PLAN.md): 61 brass \
-                 bars, a nickel strip at each root in a coil, driven and heard by the same coil \
-                 through a tube loop with a lamp as its AGC. Each sounding key is solved at \
-                 192 kHz as one coupled system (up to 12 at once; a held key costs about a \
-                 tenth of a core). Select a track in the Session view and press R to record it.",
-            )
-            .small()
-            .color(theme::FAINT),
-        );
-        if let Some(e) = &self.error {
-            ui.colored_label(theme::FAULT, e);
-        }
-    }
-
     /// The sampler's player running (a preview or a pad asked for a sound).
     fn ensure_sampler(&mut self) {
         if self.sampler_on && (self.player.is_none() || self.adopted) {
@@ -1295,9 +1136,6 @@ impl PlayView {
         {
             self.start();
         }
-        if self.nickel_on {
-            return self.nickel_panel_ui(ui);
-        }
         Self::heading(ui, "KIT");
         let mut wants = Wants::default();
         self.kit.slots_ui(ui, &mut wants);
@@ -1308,9 +1146,6 @@ impl PlayView {
 
     /// The main area with the sampler chosen: start / stop, its levels, the browser.
     fn sampler_main(&mut self, ui: &mut egui::Ui) {
-        if self.nickel_on {
-            return self.nickel_main(ui);
-        }
         ui.horizontal(|ui| {
             if self.player.is_none() || self.adopted {
                 let go =
@@ -1913,7 +1748,7 @@ impl PlayView {
     /// The left column: device, file, front panel.
     fn side(&mut self, ui: &mut egui::Ui) {
         Self::heading(ui, "DEVICE");
-        let before = (self.device, self.sampler_on, self.nickel_on);
+        let before = (self.device, self.sampler_on);
         let (shown, _) = self.device_names();
         let drawing_title = self
             .drawing
@@ -1933,32 +1768,20 @@ impl PlayView {
                             .on_hover_text(d.about)
                             .clicked()
                         {
-                            (self.device, self.sampler_on, self.nickel_on) = (i, false, false);
+                            (self.device, self.sampler_on) = (i, false);
                         }
                     }
                     // The sampler is an instrument with no circuit.
                     if group == panel::Group::Instruments
                         && ui
-                            .selectable_label(self.sampler_on && !self.nickel_on, "Sampler")
+                            .selectable_label(self.sampler_on, "Sampler")
                             .on_hover_text(
                                 "A kit of sounds, one per key of an octave, and a browser of \
                                  samples/",
                             )
                             .clicked()
                     {
-                        (self.sampler_on, self.nickel_on) = (true, false);
-                    }
-                    if group == panel::Group::Instruments
-                        && ui
-                            .selectable_label(self.nickel_on, "Nickel Organ")
-                            .on_hover_text(
-                                "An invented magnetostrictive bar organ: brass bars with \
-                                 nickel strips, a tube loop and a lamp \
-                                 (docs/NICKEL_ORGAN_PLAN.md)",
-                            )
-                            .clicked()
-                    {
-                        (self.sampler_on, self.nickel_on) = (true, true);
+                        self.sampler_on = true;
                     }
                 }
                 if let Some(t) = drawing_title {
@@ -1968,12 +1791,11 @@ impl PlayView {
                         .on_hover_text("As it is now: edits are heard as they are made")
                         .clicked()
                     {
-                        (self.device, self.sampler_on, self.nickel_on) =
-                            (DEVICES.len(), false, false);
+                        (self.device, self.sampler_on) = (DEVICES.len(), false);
                     }
                 }
             });
-        if (self.device, self.sampler_on, self.nickel_on) != before {
+        if (self.device, self.sampler_on) != before {
             if self.sampler_on {
                 self.start();
             } else {

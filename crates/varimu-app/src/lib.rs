@@ -40,7 +40,6 @@ pub mod loop_render;
 pub mod loopback;
 pub mod midi;
 pub mod monitor;
-pub mod nickel;
 pub mod panel;
 pub mod performance;
 pub mod player;

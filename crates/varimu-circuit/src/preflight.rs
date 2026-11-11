@@ -156,6 +156,7 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
             Element::Spring(p) => Some((p.out.clone(), format!("<spring {}>", p.name))),
             Element::Tape(t) => Some((t.out.clone(), format!("<tape {}>", t.name))),
             Element::Harp(h) => Some((h.out.clone(), format!("<harp {}>", h.name))),
+            Element::NickelKeys(k) => Some((k.out.clone(), format!("<keys {}>", k.name))),
             _ => None,
         }))
         // A Clavinet's strings drive their three pickup nodes.

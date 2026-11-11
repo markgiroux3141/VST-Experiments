@@ -1,7 +1,64 @@
-# The Nickel Organ as a device (backlog)
+# The Nickel Organ as a device
 
-Backlogged 2026-11-06 at the user's call. Nothing in this doc is built yet. It picks up from
-the Rust voice in docs/NICKEL_ORGAN_PLAN.md ("The Rust voice").
+Backlogged 2026-11-06 at the user's call; **built 2026-11-10** (the user's ask: "make sure
+it works just like the others"; "Status" below). It picks up from the Rust voice in
+docs/NICKEL_ORGAN_PLAN.md ("The Rust voice").
+
+## Status (2026-11-10): built
+
+The organ is the device `nickel_organ` (Play view, Instruments), a circuit with its keys as
+circuitsim's keyed medium, so it has every row the Rhodes and the Clavinet have: the SOURCE
+row and touch, the monitor, Render, CHAIN END, and MIDI event takes in the Session view
+(nothing in the app names it: those paths serve any circuit with a medium played by keys).
+
+- **The medium** (`crates/circuitsim/src/nickel.rs`): a key (`Keyed`) is the voice plus the
+  reference's keyboard logic (a strike's POLARIZE catch-up, running until released and
+  quiet), on `keyed.rs`'s workers and summing order. `nickel::Organ` and its `Pool` are gone.
+  `Voice::at_rate` steps a key at any rate (`Voice::new`: the reference's 96 / 192 kHz).
+  The rates are the element's: line outs at the least multiple of the step rate at or above
+  `rate_hz` (96 kHz), physics at the least multiple of that at or above `step_hz` (192 kHz).
+  - **The filter question** (step 1): at 96 kHz, the device's draft-2x, k = 1 and the line
+    out is the reference's own sample, every second physics step, as `voice.py` takes it: the
+    medium is the reference voice bit for bit (`tests/nickel.rs`), and the whole circuit is
+    within -100 dB of the Python voice (`tests/test_nickel_organ_device.py`). At 48 kHz
+    (draft-1x) `keyed.rs` decimates from 96 kHz with its filter; production steps at 192 kHz,
+    one physics step a sample.
+  - **Power-on at load** (step 6): every key powered on when the medium is made, in parallel
+    (~110 ms for 61 keys), and the powered keyboard kept per (data, rates, POLARIZE, noise
+    seed), so a restarted stream costs nothing. The catch-up ramp of a frozen key struck after
+    POLARIZE moved (~7 ms) still runs at its strike, on a worker thread when other keys sound.
+  - **The cap** (step 6): the element's `max_keys`, 12 in the circuit (the same in renders):
+    `keyed::Medium::set_max_awake` silences a released key first, else the one struck longest
+    ago, decided on the calling thread (the same on any number of threads). 12 keys cost what
+    8 do (two rounds over six threads: `nickel::workers` is five beside the caller; the other
+    keyed media's three were too few). `keyed::Medium::set_inline_voices(1)`: the default 4
+    rendered four organ keys on one thread (1.5x real time).
+  - Knobs: SUSTAIN and POLARIZE reach the keys through `Medium::update` (a shared `Knobs`), from
+    the first step not yet rendered (a stream renders the keys at most a few steps past the
+    run, so within a few samples).
+- **The IR and the part** (step 2): `NickelKeys` (name, `out`, `data`, `sha256`, `rate_hz`,
+  `step_hz`, `sustain`, `polarize`, `max_keys`) and the part `nickel_keys: [out]` in both
+  builders, SPICE holding `out` at 0 V, both pre-flights, a symbol (`NK`) in both tables; the
+  fixtures regenerated (only `nickel_organ.json` new: no other circuit's IR moved).
+- **The component** (step 2): `NICKEL_ORGAN@1` (kind `nickel_keys`, `varimu/nickel/compile.py`),
+  `config/nickel/organ.live.json`'s bytes; `scripts/compile_nickel_organ.py` saves versions,
+  `--check` against the latest (up to date).
+- **The circuit** (step 4): `config/circuits/nickel_organ.yaml`: the keys on `out`, a 470k
+  line load, the unused input loaded, SUSTAIN and POLARIZE as controls, full scale 20 V, and a
+  `noise` block (each key's hiss follows the circuit's noise, the Play view's Noise switch).
+- **The app** (step 5): `panel::DEVICES`' `nickel_organ` at draft-2x (`own_oscillator`); its
+  touch spans the hammer's law, 21.9 dB (`live::key_velocity_span_db`); the bare instrument
+  removed (`varimu-app/src/nickel.rs`, `Source::Nickel`, `work_nickel`, the Play view's
+  branches); `examples/nickel.rs` plays the device (`--mute`, `--wav F` the medium offline).
+- **Measured live** (`examples/nickel.rs --chord-keys 8 --mute`, a 50 ms buffer, the chord
+  and a run over it up to 12 keys): 0 dropouts, worst blocks 86-94%. The bench
+  (`nickel_bench`): 1-6 keys ~0.4x real time, 8-12 keys ~0.8x. Step 7 (a cheaper voice) was
+  not needed.
+- **Tests:** `crates/circuitsim/tests/nickel.rs` (the reference, the medium bit for bit, any
+  number of threads, quiet after release, the cap, the panel), `tests/test_nickel_organ_
+  device.py`, `crates/varimu-app/tests/live.rs` (`the_nickel_organ_plays_from_note_events`).
+
+Open: the user plays it.
 
 ## Why
 
