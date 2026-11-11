@@ -1595,3 +1595,34 @@
       form: cylinder
       radius_m: {value: 4.0e-3}          # provisional: model knowledge (the capsule's can)
       length_m: {value: 0.01}            # provisional: model knowledge
+
+# --- Shure 520D "Green Bullet", controlled magnetic (CHAINS_PLAN.md WP30) ---
+"R_520":
+  source: "data/schematics/shure_green_bullet/README.md (no construction published: Shure's 520D data sheet (1980): controlled magnetic, omnidirectional, -56.0 dB re 1 V/ubar high impedance open circuit (15.85 mV/Pa) with the case's 39k across the cartridge, 150 ohm (160 actual) on the low tap at -73.0 dB, Figure 1's response): a balanced armature on the moving_coil kind (the armature's EMF, like a coil's, is a transduction coefficient times the diaphragm's velocity: a gyrator; the coil stands still, so the moving mass is given, not built from a wire); a front chamber behind the perforated grille, a sealed back; geometry provisional and bounded, fitted by scripts/fit_520d.py"
+  geometry:
+    diaphragm:
+      radius_m: {value: 12.7e-3}         # provisional: model knowledge (a ~1 in aluminium diaphragm in the R5 / R44D element; not fitted: the body's entry table depends on it)
+      moving_mass_kg: {value: 0.00027724}    # provisional: the diaphragm, its drive pin and the armature referred to the diaphragm, fitted (bounds 30 mg - 2 g)
+      resonance_hz: {value: 428.44}       # provisional: the armature's stiffness against the magnet's negative stiffness, fitted to Figure 1's broad peak (bounds 150-1800 Hz)
+      q: {value: 0.43276}                    # provisional: fitted (bounds 0.3-10)
+      # one diaphragm mode, fitted to Figure 1's dip and sharp peak at 2.2-2.9 kHz (bounds f 1.5-7 kHz, q 0.7-20, mass 0.5-50%, area 5-60%)
+      modes:
+        - {name: dome, f_hz: {value: 1839.7}, q: {value: 2.7863}, mass_fraction: {value: 0.015659}, area_fraction: {value: 0.22604}}
+    coil:
+      bl_tm: {value: 82.533}               # provisional: the armature's transduction coefficient, fitted to 15.85 mV/Pa through the 39k (bounds 1-1000)
+      re_ohm: {value: 700.0}             # provisional: the high-impedance winding's DC resistance, not fitted (the 1 kHz impedance is the inductance's): the low tap's ~100 ohm of wire (under its 160 ohm at 1 kHz) x the turns ratio 7.08, the same wire throughout
+      le_h: {value: 1.3666}                 # provisional: the winding's blocked inductance, fitted to its 1 kHz impedance and the top octave (bounds 0.2-5 H)
+    network:
+      - {name: grille, kind: acoustic, a: front, b: g, r_pa_s_m3: {value: 1.3581e+06}, m_kg_m4: {value: 42.465}}   # provisional: the perforated grille's holes and the felt behind them, fitted (bounds r 1e3-1e8, m 10-1e4: Figure 1's peak at ~4 kHz with the chamber)
+      - {name: chamber, kind: cavity, a: g, volume_m3: {value: 3.123e-06}}   # provisional: the air between the grille and the diaphragm, fitted (bounds 0.1-40 cm^3)
+      - {name: dia, kind: diaphragm, a: g, b: u}
+      - {name: back, kind: cavity, a: u, volume_m3: {value: 9.4239e-06}}   # provisional: the sealed case behind the element, fitted (bounds 1-100 cm^3)
+    body:
+      form: cylinder
+      radius_m: {value: 31.35e-3}        # shure: 62.7 mm diameter
+      length_m: {value: 82.6e-3}         # shure: 82.6 mm long
+  published:
+    sensitivity_v_per_pa: 15.85e-3       # shure: -56.0 dB re 1 V/ubar (1.6 mV) high impedance, open circuit, 1 kHz, the case's 39k across
+    load_ohm: 39.0e+3                    # shure: Figure 2, the 39K across the high-impedance terminals
+    cable_c_f: 610.0e-12                 # provisional: model knowledge (the attached 6.1 m (20 ft) two-conductor shielded cord at ~100 pF/m, the high lead to its shield; the sheet's response and level taken as the mic's as shipped, at the cord's end)
+    impedance_ohm: 8020.0                # derived: the low tap's 160 ohm actual x the turns ratio squared, 10^((73.0 - 56.0) / 20) = 7.08 (the open-circuit levels): 160 x 50.1

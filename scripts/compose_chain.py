@@ -44,6 +44,7 @@ PORTS = {
         PORT[c.kind]: getattr(c, PORT[c.kind]),
         **({"output": c.output} if c.kind == "booster" else {}),
         "drop": list(c.drop),
+        **({"cable": c.cable} if c.cable else {}),
     }
     for c in CHAINS.circuits.values()
     if c.built
@@ -162,16 +163,22 @@ def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> di
         out["probes"] += [r.node(n) for n in c.get("probes", [])]
     out["probes"] += [rp.node(n) for n in pre.get("probes", []) if n != "out"]
     out["probes"] = list(dict.fromkeys(out["probes"]))  # the joint may be the pre's probe too
+    # a preamp's output is volts; an amplifier's (the 5E3: CHAINS_PLAN.md WP30) its speaker's
+    # pressure
+    out_key = "output_volts_peak"
+    if "output_pascals_peak" in pre["full_scale"]:
+        out_key = "output_pascals_peak"
     out["full_scale"] = {
         "input_volts_peak": mic["full_scale"]["input_volts_peak"],
-        "output_volts_peak": pre["full_scale"]["output_volts_peak"],
+        out_key: pre["full_scale"][out_key],
     }
+    attached = pm.get("cable") == "attached"  # the mic's own cord is in its file
     for block in ("controls", "values", "device_params"):
         merged = {**_suffix_block(mic.get(block), tm)}
         for r, c, _ in mid:
             merged.update(_suffix_block(c.get(block), r.tag))
         merged.update(_suffix_block(pre.get(block), tp))
-        if block == "values":
+        if block == "values" and not attached:
             merged.update(CABLE)
         if merged:
             out[block] = merged
@@ -226,13 +233,14 @@ def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> di
         for s in c["sections"]:
             parts = {r.part_name(n): r.part(p) for n, p in s["parts"].items() if n not in drop}
             sections.append({"title": f"{c['title']}: {s['title']}", "parts": parts})
-    sections.insert(
-        len(mic["sections"]),
-        {
-            "title": "cable",
-            "parts": {"CCABLE": {"C": [joint, GROUND], "c": "cable_c_f", "tolerance": "none"}},
-        },
-    )
+    if not attached:
+        sections.insert(
+            len(mic["sections"]),
+            {
+                "title": "cable",
+                "parts": {"CCABLE": {"C": [joint, GROUND], "c": "cable_c_f", "tolerance": "none"}},
+            },
+        )
     out["sections"] = sections
     return out
 
@@ -259,7 +267,10 @@ def render(mic: str, pre: str, booster: str | None = None) -> str:
         compose(mic, pre, booster), sort_keys=False, width=100, allow_unicode=True
     )
     if booster is None:
-        return HEADER.format(mic=mic, pre=pre) + body
+        head = HEADER.format(mic=mic, pre=pre)
+        if PORTS[mic].get("cable") == "attached":
+            head = head.replace("the cable across it.", "its own cord across it.")
+        return head + body
     return HEADER3.format(mic=mic, booster=booster, pre=pre) + body
 
 

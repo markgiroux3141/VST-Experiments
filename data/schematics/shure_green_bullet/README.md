@@ -40,3 +40,14 @@ crystal: WP30's Decisions.
 
 The 1959 catalog's 520 (100-9,000 cps, -52.5 dB) and the 1980 520D (100-5,000 Hz, -56.0 dB high)
 differ: the 520D's data sheet is the one with a curve, so WP30 fits to it.
+
+## Built (2026-11-11)
+
+- Figure 1 digitized from the scan: `scripts/digitize_shure_520d.py` ->
+  `data/datasheets/shure_520d_response.csv` (provenance `shure_520d.provenance.yaml`).
+- The element `R_520@1` (`config/components/r_520/1.yaml`; geometry in
+  `data/datasheets/published_points.yaml` "R_520", every value provisional or fitted by
+  `scripts/fit_520d.py`): a balanced armature on the `moving_coil` kind.
+- The mic `config/circuits/shure_green_bullet.yaml` (the high-impedance lead, the 39K, the
+  attached cord) and the chain `config/circuits/bullet_f5e3.yaml` (into the Fender 5E3's bright
+  input 1). CHAINS_PLAN.md WP30 has the decisions and numbers.

@@ -1,0 +1,37 @@
+{
+ "values": {
+  "coil/bl_tm": 82.53335227689388,
+  "coil/le_h": 1.366624058140341,
+  "diaphragm/moving_mass_kg": 0.00027724080762472165,
+  "diaphragm/resonance_hz": 428.43708308867883,
+  "diaphragm/q": 0.43275912565326446,
+  "diaphragm/modes/0/f_hz": 1839.684824723972,
+  "diaphragm/modes/0/q": 2.7863271413032438,
+  "diaphragm/modes/0/mass_fraction": 0.015658667548116827,
+  "diaphragm/modes/0/area_fraction": 0.2260409466632857,
+  "grille/r_pa_s_m3": 1358086.6701253145,
+  "grille/m_kg_m4": 42.46534905062343,
+  "chamber/volume_m3": 3.123004105428552e-06,
+  "back/volume_m3": 9.423897241761578e-06
+ },
+ "sensitivity_v_per_pa": 0.015849941415830026,
+ "impedance_1k_ohm": 8056.3471325650935,
+ "response_rms_db": 0.8433361883789646,
+ "response_worst_db": [
+  6137.1,
+  2.2758914764109814
+ ],
+ "off_axis_db_at_1k_4k": {
+  "90": [
+   -1.98,
+   -8.98
+  ],
+  "180": [
+   -1.28,
+   -7.78
+  ]
+ },
+ "resonance_hz": 428.43708308867883,
+ "cost": 26.677538990291517,
+ "at_bounds": []
+}

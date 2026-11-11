@@ -1,0 +1,25 @@
+device: "Shure Model 520D \"Green Bullet\" (controlled magnetic, omnidirectional)"
+curve: typical frequency response on axis (Figure 1), relative dB
+publisher: Shure Brothers Inc.
+documents:
+  datasheet:
+    title: "Model 520D Controlled Magnetic Microphone, Data Sheet (27A1633)"
+    date: "1980 (its copyright line)"
+    scan_source: "supplied by the user (2026-11-11): a page scan, 1237 x 1600 px"
+    sha256: 332b0e02ebd0e1e744690274b5275324b962c56f6c4dc5dd51d79a98374216a3
+    page: "p. 1, Figure 1 (TYPICAL FREQUENCY RESPONSE)"
+local_copy: "data/schematics/shure_green_bullet/shure_520d_data_sheet_1980_p1.png"
+digitized_with: >-
+  scripts/digitize_shure_520d.py from the scan's pixels: the chart's frame x 143-541 px (20 Hz -
+  20 kHz), y 594.5-771.5 px (+20 / -20 dB, 5 dB rules every 22.1 px); the decade rules 100 / 1000 /
+  10000 Hz at x 236 / 368 / 501 (x = 236 + 132.5 log10(f / 100)). Per pixel column the trace's dark
+  run off the horizontal rules, its mean row; columns on a vertical rule skipped; the steep fall
+  past 5.5 kHz read per row. Resampled to twelfth octaves, 85 Hz to 6.5 kHz (the trace's last
+  ~0.6 kHz, -11.6 to -14.5 dB, isn't read: rules crowd it). About +-0.5 dB; up to ~0.7 dB low where
+  the trace lies on a horizontal rule (the 0 dB rule at ~4 kHz, its rows excluded). The step at 200
+  Hz is the chart's (a pen or paper joint), kept as drawn.
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  shure_520d_response.csv:
+    columns: freq_hz, db (as plotted, 0 dB the chart's)

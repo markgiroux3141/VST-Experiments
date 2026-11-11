@@ -12,7 +12,8 @@
 #   parts and nodes get in a chain (and the chain's id is its stages' tags joined by "_");
 #   label: its name in a chain's label. A built circuit has its ports: a mic's `output`
 #   node, a preamp's (or booster's) `input` node (behind its generator), the parts that
-#   are only its measuring setup (`drop`); and the settings the Room view offers (keys of
+#   are only its measuring setup (`drop`; a mic whose cord is attached and in its own file
+#   says `cable: attached`, and a chain adds no cable); and the settings the Room view offers (keys of
 #   its circuit file, unsuffixed; choices [value, label]). A built mic's `pattern` is how
 #   the Room view draws it: a pattern name (cardioid, omni, figure-8, ...: varimu/chains.py
 #   PATTERNS, first-order figures), or {setting: KEY}, the label of that setting's choice.
@@ -33,7 +34,6 @@ needs:
   jfet: {what: "the JFET device model", wp: 21}
   ef86: {what: "the EF86 pentode fit", wp: 28}
   ac701: {what: "the AC701 triode fit", wp: 29}
-  crystal: {what: "the crystal (piezoelectric) transducer kind", wp: 30}
   carbon: {what: "the carbon-granule transducer kind", wp: 31}
 
 circuits:
@@ -305,7 +305,15 @@ circuits:
         label: PZM response
         choices: [[0, rising], [1, flat]]
         default: 0
-  shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}
+  shure_green_bullet:               # the 520D, controlled magnetic (a balanced armature on the
+    kind: mic                       # moving_coil kind: CHAINS_PLAN.md WP30), its 20 ft cord
+    tag: bullet                     # attached: a chain adds no cable
+    label: Shure Green Bullet
+    output: out
+    drop: [RLOAD]
+    cable: attached
+    pattern: omni
+    settings: []
   carbon_transmitter:               # the Western Electric F1 (Jones, BSTJ 1938) in its 20.5 V loop
     kind: mic
     tag: carbon
@@ -507,8 +515,29 @@ circuits:
         label: REDD.47 rumble filter
         choices: [[0, "out"], [1, "in"]]
         default: 0
-  fender_5e3: {kind: pre, tag: f5e3, label: Fender 5E3, wp: 30}   # the file exists; its
-                                    # input port as a chain's stage comes with WP30
+  fender_5e3:                       # an amplifier as a chain's last stage (CHAINS_PLAN.md
+    kind: pre                       # WP30): the mic on its input jack (ideal before: no
+    tag: f5e3                       # generator part), its output the speaker's pressure
+    label: Fender 5E3
+    input: in
+    drop: []
+    settings:
+      - key: input_jack
+        label: 5E3 input
+        choices: [[1, "Bright 1"], [2, "Bright 2"], [3, "Normal 1"], [4, "Normal 2"]]
+        default: 1
+      - key: volume_bright
+        label: 5E3 bright volume
+        choices: [[0.2, "2.5"], [0.35, "4"], [0.5, "6.5"], [0.7, "8.5"], [0.85, "10"], [1.0, "12"]]
+        default: 0.5
+      - key: volume_normal
+        label: 5E3 normal volume
+        choices: [[0.0, "0"], [0.2, "2.5"], [0.5, "6.5"], [1.0, "12"]]
+        default: 0.0
+      - key: tone
+        label: 5E3 tone
+        choices: [[0.0, "1"], [0.25, "4"], [0.5, "6.5"], [0.75, "9"], [1.0, "12"]]
+        default: 0.5
 
 chains:
   # --- built (the first matrix) ---
@@ -790,8 +819,10 @@ chains:
     mic: shure_green_bullet
     pre: fender_5e3
     use: "Chicago blues harmonica: the mic into an amp, the amp then miked in the room"
-    needs: [crystal]
-    needs_note: an instrument, not a recording chain (its output is the speaker's pressure)
+    needs: [data]
+    needs_note: >-
+      an instrument, not a recording chain (its output is the speaker's pressure); the list
+      named a crystal element, the 520 is controlled magnetic (CHAINS_PLAN.md WP30)
   - id: carbon_clean
     mic: carbon_transmitter
     pre: clean_pre

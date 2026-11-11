@@ -13,13 +13,13 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 48 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 49 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
   M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073, M49 -> V76, 44-BX / SM7 -> Cloudlifter ->
-  clean, carbon -> clean, PZM -> clean, PZM -> SSL; `uv run python scripts/chain_status.py`).
+  clean, carbon -> clean, PZM -> clean, PZM -> SSL, Green Bullet -> 5E3; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -66,16 +66,19 @@ runs**.
   transmitter from Jones's BSTJ 1938 paper (`config/circuits/carbon_transmitter.yaml`, `F1@1` by
   `scripts/fit_f1.py`); WP31's Notes. WP26 (2026-11-11): the Crown PZM-30D by inference on its
   schematic (`config/circuits/crown_pzm.yaml`, `PZM_CAPSULE@1` by `scripts/fit_pzm.py`) and a scene
-  mic's `surface`; WP26's Notes.
-- **Next:** WP30, its sources now in (the user supplied Shure's 1980 520D data sheet with its
-  response curve, and the 520DX's): digitize the 520D's Figure 1, then WP30's Notes' next steps. The
-  Green Bullet is controlled magnetic, so it needs no crystal kind (WP30's Decision). WP13 (RE20) waits on the N-entry room
-  generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
+  mic's `surface`; WP26's Notes. WP30 (2026-11-11): the Shure 520D Green Bullet, controlled magnetic
+  (`config/circuits/shure_green_bullet.yaml`, `R_520@1` by `scripts/fit_520d.py`), into the 5E3
+  (`bullet_f5e3`, the amplifier as a chain's stage; a mic's `cable: attached`); WP30's Notes.
+- **Next:** WP13 (RE20), the last two chains: it needs the N-entry generalization of the room
+  pipeline (its Decision: a plan file of its own first, `docs/RE20_PLAN.md`, then the `slotted_line`
+  network kind and N rear entries through `EntryTable`, the image sources / rays / wave solver,
+  `scene.py`, `balance.py`, `mic_print.py`, `networks.py`, `ac.py` and both builders). Open options
+  inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
   67's bass cut's shape (WP28's Notes), supercardioid halves for the dual capsules (the M 49's and U
-  67's pattern sensitivities: WP29's Notes). The user fetches login-walled files on request: each URL
-  alone in a code block.
+  67's pattern sensitivities: WP29's Notes), the Green Bullet's low-impedance tap (WP30). The user
+  fetches login-walled files on request: each URL alone in a code block.
 - **The user's decisions (2026-11-10):** the IA-H9 files (Iron Age Audioworks) are OK to use for
   WP19. The C414 GroupDIY thread and a legible ELA M 251 drawing can't be had (the links are
   dead): don't ask for them again. Build those by inference, every value sourced as provisional
@@ -91,7 +94,7 @@ runs**.
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
-  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean, PZM -> clean / SSL added to
+  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean, PZM -> clean / SSL, Green Bullet -> 5E3 added to
   `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
@@ -195,7 +198,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | done 2026-11-11 (LSK389A) |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
 | 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | done 2026-11-11 (the M 49 c) |
-| 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | started 2026-11-11 (controlled magnetic, not crystal: waits on a response curve) |
+| 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | done 2026-11-11 (controlled magnetic, not crystal: the 520D on `moving_coil`) |
 | 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | done 2026-11-11 (the WE F1) |
 
 ### WP0. The list as data
@@ -1804,13 +1807,39 @@ is dropped when it is built. The chain is an instrument: the mic into the 5E3's 
 leak), its output the speaker's pressure (`fender_5e3`'s `out`); a print of it is then a source in a
 scene.
 
-Notes (2026-11-11, started): the user supplied Shure's 1980 520D data sheet (Figure 1, the typical
-response; -56.0 dB re 1 V/ubar high impedance, 16 mV/Pa; 100 k recommended load; a 39k across the
-cartridge; the R44D cartridge) and the 1997 520DX sheet (a reference): the README. Next: digitize the
-520D's Figure 1, then `R_520@1` on
-`fit_md421.py`'s method (the coil's inductance and resistance from the high impedance: provisional,
-bounded), `config/circuits/shure_green_bullet.yaml` (its 7 ft cable's capacitance), the 5E3's port in
-the list (its input node behind its generator), `bullet_f5e3` composed.
+Decisions (2026-11-11, second session, Claude's, the user away):
+- The 520D of the 1980 data sheet is built (the sheet with a curve; the 1959 catalog's 520 and the
+  1997 520DX are references only). Only the high-impedance lead (the whole winding, BLACK to BLUE /
+  shield, the 39K across it) is built, as shipped; the low-impedance tap (WHITE) isn't.
+- The element on `moving_coil` with its moving mass given (`diaphragm.moving_mass_kg`: a balanced
+  armature's winding stands still), a front chamber behind the grille (`acoustic` + `cavity`), one
+  diaphragm mode, a sealed back (`cavity`; the part's rear port on ground, no `p_rear`: an omni like
+  the PZM), on its case as a `cylinder` body (62.7 x 82.6 mm, Shure's).
+- The winding's DC resistance isn't fitted (the fit drove it to its lower bound): 700 ohm provisional
+  (the low tap's ~100 ohm of wire x the turns ratio 7.08); its 1 kHz impedance, 8.02 kOhm, is derived
+  from the low tap's 160 ohm x 7.08^2 (the sheet's -73.0 / -56.0 dB) and is a fit target.
+- The attached 20 ft cord (610 pF provisional, ~100 pF/m) is the mic's: in its circuit file, and in
+  the fit (Shure's response and level taken as the mic's as shipped). `config/chains.yaml`'s new
+  `cable: attached` (varimu/chains.py, compose_chain.py): a chain then adds no CCABLE.
+- The 5E3 joins the list as a chain's last stage: `input: in`, `drop: []` (its input is ideal, no
+  generator part), settings INPUT jack, both volumes and TONE; compose_chain.py carries an
+  amplifier's `output_pascals_peak` (the speaker's pressure) into the chain's full scale.
+- The list's `crystal` need is dropped (no chain needs it); bullet_f5e3 needs `data`.
+
+Notes (2026-11-11, done): Figure 1 digitized from the scan's pixels
+(`scripts/digitize_shure_520d.py` -> `data/datasheets/shure_520d_response.csv`, 85 Hz-6.5 kHz,
+provenance sidecar `shure_520d.provenance.yaml`; +-0.5 dB, up to 0.7 dB low on the 0 dB rule). `R_520@1`
+by `scripts/fit_520d.py` (reports/mics/r_520_fit.{json,png}): 0.84 dB rms over 85 Hz-6.5 kHz, worst
++2.3 dB at 6.1 kHz (the steep fall a little late) and -1.8 dB at 100 Hz (the chart's step at 200 Hz),
+15.85 mV/Pa, 8.06 kOhm at 1 kHz, nothing at its bounds: armature resonance 428 Hz, Q 0.43, moving mass
+0.28 g, transduction 82.5 T m, winding 1.37 H; the mode at 1.84 kHz (Q 2.8) makes the 2.2 kHz dip and
+the 2.9 kHz peak, the grille's mass on the 3.1 cm^3 chamber the ~4 kHz shoulder. On its case the side
+is -2.0 dB at 1 kHz and -9.0 dB at 4 kHz (the sheet says omni, no polars). `bullet_f5e3` composed and
+in `config/scenes/new_chains_check.yaml` (15 cm from the source, draft): -24.2 dBFS rms of 50 Pa at the
+speaker (bright input 1, volume 6.5). Tests `tests/test_shure_green_bullet.py` (6),
+`test_chain_matrix.py` (its drop check had compared upper-case suffixes, which never exist: fixed, all
+52 pass). **Open:** the user plays a harmonica through it (the print is a source for a scene);
+the cord with the winding resonates near 5 kHz into the 5E3's 1 M (physics, kept).
 
 ### WP26. The Crown PZM; a mic placed on a surface
 
@@ -1876,7 +1905,7 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
 passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1`, `build_pzm_capsule` in `varimu/devices/library.py`, every existing IR
-unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key): these
+unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key; 2026-11-11 (WP30): `build_r_520` there, likewise, the two new circuits' app fixtures exported, the agreement test passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `cargo clippy -p varimu-app --all-targets -- -D warnings` fails on two findings in the
 multitrack deck's code (`deck.rs` type_complexity, `session_view.rs` collapsible_if; not the chains'),
@@ -2020,3 +2049,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   stale `chain_list_reads` assertion fixed (`r121_api312` is built); still 48 of 51.
 - 2026-11-11: the user supplied Shure's 520D (1980) and 520DX (1997) sheets; filed in
   `data/schematics/shure_green_bullet/`; WP30 unblocked.
+- 2026-11-11: WP30 done: the 520D's Figure 1 digitized, `R_520@1` (a balanced armature on
+  `moving_coil`, 0.84 dB rms) in `shure_green_bullet.yaml`, the 5E3 as a chain stage, a mic's
+  `cable: attached`; `bullet_f5e3` composed and rendered; 49 of 51.

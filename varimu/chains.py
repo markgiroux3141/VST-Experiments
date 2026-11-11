@@ -60,6 +60,7 @@ class Circuit:
     settings: tuple[Setting, ...] = ()
     pattern: str | dict | None = None  # a mic's: a PATTERNS name, or {setting: KEY}
     wp: int | None = None
+    cable: str | None = None  # a mic's "attached": its file has its own cord, a chain adds none
 
     @property
     def path(self) -> Path:
@@ -184,7 +185,10 @@ def load(path: Path = CHAINS_PATH) -> ChainList:
             settings=tuple(_setting(s) for s in d.get("settings") or ()),
             pattern=d.get("pattern"),
             wp=d.get("wp"),
+            cable=d.get("cable"),
         )
+        if c.cable not in (None, "attached"):
+            raise ValueError(f"{name}: cable {c.cable!r} (only 'attached')")
         if getattr(c, PORT[c.kind]) is None and c.wp is None:
             raise ValueError(f"{name}: neither its {PORT[c.kind]} port nor the WP building it")
         _check_pattern(c)

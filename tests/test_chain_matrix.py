@@ -61,12 +61,13 @@ def test_each_chain_builds_as_one_netlist(chain):
     c = spec.load_circuit(chain.path)
     ir = builder.build(c, {}).ir
     names = {e.name for e in ir.elements()}
-    assert "CCABLE" in names
+    # a mic with its cord attached (the Green Bullet) carries its own; the chain adds none
+    assert ("CCABLE" in names) == (chain.mic.cable != "attached")
     for stage in chain.stages:
         for part in stage.drop:
-            assert f"{part}_{stage.tag.upper()}" not in names
+            assert f"{part}_{stage.tag}" not in names
     has_rear = any(k.name == "p_rear" for k in ir.controls)
-    pressure = ("omni_4134", "carbon_transmitter", "crown_pzm")  # a pressure transducer: one entry
+    pressure = ("omni_4134", "carbon_transmitter", "crown_pzm", "shure_green_bullet")  # one entry
     assert has_rear == (chain.mic.name not in pressure)
     assert _capsule_geometry(chain.id, {}).get("body")  # the room's entry tables need a body
     q = spec.resolve(c, {})

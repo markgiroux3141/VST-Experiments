@@ -1,0 +1,47 @@
+# Shure 520D "Green Bullet" controlled-magnetic microphone (docs/CHAINS_PLAN.md WP30). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/shure_green_bullet/README.md has their provenance):
+#   "shure: ..."       Shure's Model 520D data sheet (27A1633, 1980): controlled magnetic,
+#                      omnidirectional, -56.0 dB re 1 V/ubar (15.85 mV/Pa) high impedance open
+#                      circuit, 100 k recommended load, Figure 1's response, Figure 2's wiring
+#                      (the 39K across the high-impedance lead), the attached 20 ft cord
+#   "provisional: ..." model knowledge
+#
+# The element R_520 (config/components/r_520/): a balanced armature on the moving_coil kind,
+# fitted by scripts/fit_520d.py to Figure 1 and the level through the 39K and the cord. The
+# pressure at its front entry on `in` (pascals as volts); the back is sealed (an omni: no rear
+# entry, its rear port on ground and unused). Only the high-impedance lead (BLACK to BLUE /
+# shield, the whole winding) is built, as shipped: the low-impedance tap (WHITE, 160 ohm) isn't.
+# The cord is the mic's own (attached): a chain adds no cable (config/chains.yaml `cable:
+# attached`). RLOAD is the measuring load (open circuit, as the sheet's level); a chain
+# replaces it with the amplifier's input.
+
+title: "Shure 520D Green Bullet"
+input: in
+probes: [out]
+# 0 dBFS in = 20 Pa peak at the capsule (117 dB SPL for a sine, as the U47's); out = volts at
+# the cord's end.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 1.0, source: "provisional: model knowledge (shure: 15.85 mV/Pa x 20 Pa = 0.32 V peak, with headroom for a harmonica cupped against the grille)"}
+
+values:
+  cartridge_model: {value: R_520@1, source: "config/components/r_520/1.yaml (the 520D's controlled-magnetic element: no construction is published, the geometry bounded and fitted by scripts/fit_520d.py to Shure's figures: data/schematics/shure_green_bullet/README.md)"}
+  r_case_ohm: {value: 39.0e+3, source: "shure: Figure 2, the 39K across the high-impedance terminals inside the case"}
+  cord_c_f: {value: 610.0e-12, source: "provisional: model knowledge (the attached 6.1 m (20 ft) two-conductor shielded cord at ~100 pF/m, the high lead to its shield; the same value as the fit's: published_points.yaml R_520)"}
+  load_ohm: {value: 10.0e+6, source: "shure: the level is open-circuit voltage (a chain replaces the load with the amplifier's input)"}
+
+# No tolerance block: the nominal mic only (docs/SM57_PLAN.md Decisions 5).
+
+sections:
+  - title: element
+    parts:
+      MC:
+        moving_coil: [in, "0", out, "0"]
+        component: cartridge_model
+      R39K: {R: [out, "0"], r: r_case_ohm, tolerance: none}
+  - title: cord
+    parts:
+      CCORD: {C: [out, "0"], c: cord_c_f, tolerance: none}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

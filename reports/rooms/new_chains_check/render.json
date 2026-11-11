@@ -305,6 +305,21 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "Green Bullet into 5E3",
+   "file": "Green_Bullet_into_5E3.wav",
+   "chain": "bullet_f5e3",
+   "set": {},
+   "pan": -0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.03135, 'length_m': 0.0826}",
+   "rms_dbfs": -24.21,
+   "peak_dbfs": -10.37,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -319,6 +334,6 @@
   8000,
   16000
  ],
- "wall_s": 94.3,
+ "wall_s": 437.0,
  "seconds": 8.999
 }
