@@ -291,7 +291,14 @@ circuits:
         default: 0
   crown_pzm: {kind: mic, tag: pzm, label: Crown PZM, wp: 26}
   shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}
-  carbon_transmitter: {kind: mic, tag: carbon, label: Carbon transmitter, wp: 31}
+  carbon_transmitter:               # the Western Electric F1 (Jones, BSTJ 1938) in its 20.5 V loop
+    kind: mic
+    tag: carbon
+    label: Carbon transmitter
+    output: out
+    drop: [RLOAD]
+    pattern: omni
+    settings: []
 
   # --- boosters ---
   cloudlifter:                      # the CL-1 on LSK389A, its output the preamp's phantom-fed,
@@ -775,3 +782,4 @@ chains:
     pre: clean_pre
     use: "The telephone voice; 1920s-30s radio"
     needs: [carbon]
+    defaults: {gain_db_clean: 20}

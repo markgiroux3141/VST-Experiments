@@ -13,13 +13,13 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 45 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 46 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
   M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073, M49 -> V76, 44-BX / SM7 -> Cloudlifter ->
-  clean; `uv run python scripts/chain_status.py`).
+  clean, carbon -> clean; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -62,15 +62,10 @@ runs**.
   REDD.47 from EMI's REDD.47/C1/1 and REDD.M47; WP28's Notes. WP29 (2026-11-11): the Neumann M 49 c
   from Neumann's drawing M49c-930-00 (`KK49@1` by `scripts/fit_kk49.py`; the pattern sensitivities a
   known miss); WP29's Notes. WP27 (2026-11-11): the Cloudlifter CL-1 on LSK389A and three-stage
-  chains in `compose_chain.py`; WP27's Notes.
-- **Next:** WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1 transmitter found,
-  `data/schematics/carbon_transmitter/README.md` has its figures and a plan). What it needs (read
-  2026-11-11): the room pipeline finds a mic's entries from a `capsule_model*` / `cartridge_model*`
-  / `ribbon_model*` component's `geometry` (`varimu/rooms/scene.py` `_capsule_geometry`), so the F1
-  wants a component with a body; Fig. 6's acoustic network (no values printed) as R / L / C fitted to
-  its pressure response (`varimu/measure/ac.py`, the SM7 switches' method), the diaphragm's
-  displacement as the force on `CARBON_BUTTON`'s pin through the carbon's stiffness (a capacitor's
-  voltage in the impedance analogy) on a static preload source; the telephone loop's 48 V feed. WP26 (the PZM): no
+  chains in `compose_chain.py`; WP27's Notes. WP31 (2026-11-11): the Western Electric F1 carbon
+  transmitter from Jones's BSTJ 1938 paper (`config/circuits/carbon_transmitter.yaml`, `F1@1` by
+  `scripts/fit_f1.py`); WP31's Notes.
+- **Next:** WP26 (the PZM): no
   schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
   scenes can be built first. Then WP30 (a crystal transducer kind); WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
@@ -94,7 +89,7 @@ runs**.
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
-  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean added to
+  and the 2026-11-11 ones (U67 -> REDD.47, M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean, carbon -> clean added to
   `config/scenes/new_chains_check.yaml`, which renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
@@ -199,7 +194,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
 | 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | done 2026-11-11 (the M 49 c) |
 | 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | |
-| 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | |
+| 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | done 2026-11-11 (the WE F1) |
 
 ### WP0. The list as data
 
@@ -1722,6 +1717,69 @@ THD at 50 mV peak in, 1% at 100 mV. `r44_cl_clean` (clean at 20 dB by default) a
 composed and rendered in `new_chains_check.yaml` (-8.1 / -13.0 dBFS rms at clean's own 30 dB).
 Tests `tests/test_cloudlifter.py` (4). The app's Room view already reads boosters (room::load_chains).
 
+### WP31. The carbon transmitter (the Western Electric F1)
+
+Sources: `data/schematics/carbon_transmitter/README.md` (Jones, BSTJ 17, 1938: the F1 handset
+transmitter unit of the 302 set; its Fig. 5 transmitter circuit, Fig. 6 network and pressure
+response, Fig. 7 sum and difference components).
+
+Steps:
+1. Fig. 6's measured pressure response and Fig. 7's new-type sum / difference components
+   digitized (`data/datasheets/we_f1_{response,intermod}.csv`, provenance sidecar).
+2. `scripts/fit_f1.py`: Fig. 6's network in the impedance analogy (pressure as volts, volume
+   velocity as amperes): the second grid (m0 r0), the cavity s0, the moisture membrane (m1 r1),
+   the cavity s1, the diaphragm lumped (below 3500 cycles, Jones) with the paper books s4 and
+   the carbon's stiffness s5 in series, the back cavity s3, the equalizing hole (m3 r3) from
+   the diaphragm's front into s3; the force on the carbon s5 x (S times the voltage on s5). One
+   figure per unknown: r3 / m3 the low end (the 90 Hz point, the bump at ~280), the diaphragm's
+   mass and resistance the 2000-cycle peak's frequency and height, the membrane's mass the fall
+   to 5000, the preload the level at 500 (-38.5 dB re 1 V/bar open circuit, in Fig. 5's 20.5 V
+   / 513 ohm), the carbon's exponent n Fig. 7's rise (1.5-3 bars), its knee (the softplus
+   scale) Fig. 7's plateau (6-50 bars), G0 the resistance (Fig. 5's new type at two years'
+   aging, the unit Fig. 6 measured).
+3. The component `F1@1` (kind `carbon`, the fitted law, and a `geometry` for the room: the
+   diaphragm's radius, the desk set's housing as a `cylinder` body), `build_f1` in
+   `varimu/devices/library.py`.
+4. `config/circuits/carbon_transmitter.yaml` (the network, a `G` part making the force, the
+   preload on the carbon's ref pin, Fig. 5's loop, a blocking capacitor onto `out`), the
+   list's entry, `tests/test_carbon_transmitter.py` (the response vs the fit, the resistance,
+   Fig. 7's products through the circuit), `carbon_clean` composed and rendered in
+   `new_chains_check.yaml`.
+
+Decisions (2026-11-11, Claude's, the user away):
+- The unit modelled is the one Fig. 6 measured, aged two years' equivalent: R0 63 ohm (Fig. 5's
+  new type at "2"; new it reads 30 ohm). Its loop is Jones's Fig. 5 (20.5 V through 513 ohm), not a
+  302 set's induction coil (not sourced); the output the transmitter's voltage through 2 uF, bled to
+  ground by 100 k (the chain's joint needs a DC path once the measuring load goes).
+- "Volts open circuit" in Fig. 6 is read as the transmitter's EMF, I0 dR (across the transmitter
+  in the loop it is 1.0 dB less).
+- The acoustics are plain R / L / C parts in the circuit file (acoustic SI units), not a new
+  component kind: the component `F1@1` (kind `carbon`) holds the law and a `geometry` for the
+  room, so the scene finds it as a `capsule_model`. Dimensions not in Jones are provisional (the
+  diaphragm 21 mm radius, cavities 0.5 / 2 / 1.5 cm^3, books 2e4 N/m, carbon 5e4 N/m, the second
+  grid's 20 holes of 1.5 mm).
+- The law's knee s = F_p (fitted, it ran to its bound with little gain: Fig. 7 rms 3.9 dB at 1,
+  3.6 at 10); n and the zero-force resistance R_open fitted to Fig. 7 (the plateau needs R_open:
+  with loose grains' 10 kOhm the carbon lifts off and its products reach -2 dB at 8 bars).
+- The chain's clean preamp at 20 dB (the list's `defaults`; ~0.12 V/Pa at 1 kHz).
+
+Notes (2026-11-11, done): Fig. 6 and Fig. 7 digitized by eye from a 300 dpi render
+(`data/datasheets/we_f1_{response,intermod}.csv`, `we_f1.provenance.yaml`). `scripts/fit_f1.py
+[--write] [--plot]` (-> `reports/carbon_transmitter/fit_f1.png`): the response 1.74 dB rms (worst
++4.2 at 90 Hz and -3.3 at 135, the low end's slope steeper than the hole's second order; -2.5 at
+1500, -1.8 at 3000: the single diaphragm mass; Jones's own circuit misses by ~1.6), the diaphragm
+0.6 g; the carbon n 0.197 (Holm's single spot 1/3-1/2), R_open 130 ohm, preload 0.37 mN; Fig. 7 rms
+3.9 dB, the model's components equal where Jones's difference runs ~7 dB above the sum (his "a
+property of the carbon itself": a known miss), the plateau 11-16 dB below from ~10 to 50 bars.
+EMF 131 mV/Pa at 1 kHz (-37.6 dB re 1 V/bar). `F1@1` saved by `varimu fit-devices --only F1` from
+published_points.yaml "F1" (`build_f1`). Tests `tests/test_carbon_transmitter.py` (9): the idle
+resistance, the circuit's response within 0.3 dB of the fit at 300 Hz-4 kHz, Fig. 7's products
+through the circuit within 1 dB of the fit's calculation, the chain's operating point and level.
+`test_chain_matrix.py` takes the carbon as a pressure transducer (no `p_rear`). `carbon_clean`
+rendered in `new_chains_check.yaml` at 0.3 m from the 90 dB source: -16.7 dBFS rms, peaks -2.8.
+Left out: the carbon's noise, packing drift and aging; the difference / sum asymmetry (a slow
+granular state would make it).
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1743,7 +1801,7 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes; 2026-11-10 (second session): `build_ribbon_m160`, `build_ribbon_r121` in
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
-passes; 2026-11-11: `build_kk49`, `build_lsk389a` in `varimu/devices/library.py`, every existing IR
+passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1` in `varimu/devices/library.py`, every existing IR
 unchanged, the app fixtures re-exported, the agreement test passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
@@ -1869,3 +1927,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   Room view; still 45 of 51.
 - 2026-11-11: WP14 done: the MD 421's five-position bass switch, a shunt L-R per position fitted to
   the sheet's four traces (`scripts/fit_md421_switch.py`, 0.48-0.74 dB rms); still 45 of 51.
+- 2026-11-11 (the user away): WP31 done: the Western Electric F1 carbon transmitter from Jones
+  (BSTJ 1938): Fig. 6's network as acoustic R / L / C driving the carbon in Fig. 5's 20.5 V / 513 ohm
+  loop, fitted to Fig. 6's response (1.7 dB rms) and Fig. 7's intermodulation (3.9 dB rms); `F1@1`;
+  carbon -> clean composed and rendered: 46 of 51.

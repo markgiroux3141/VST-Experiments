@@ -3421,6 +3421,22 @@ def build_carbon_button() -> dict[str, Any]:
     }
 
 
+def build_f1() -> dict[str, Any]:
+    """The Western Electric F1 carbon transmitter unit (docs/CHAINS_PLAN.md WP31; Jones, BSTJ
+    17, 1938): the carbon law fitted by scripts/fit_f1.py (published_points.yaml "F1"), and a
+    geometry for the room's entries (a pressure capsule on its housing). Its acoustic network is
+    in its circuit (config/circuits/carbon_transmitter.yaml), fitted by the same script."""
+    pub = _published()["F1"]
+    law = _plain(pub["carbon"])
+    return {
+        "name": "F1",
+        "kind": "carbon",
+        "source": pub["source"],
+        "carbon": {**law, "source": "fit: scripts/fit_f1.py (published_points.yaml F1)"},
+        "geometry": _plain(pub["geometry"]),
+    }
+
+
 def build_key_break() -> dict[str, Any]:
     """A key's break contact: KEY_CONTACT's spring on its bus bar, closed with the key up
     (gate 0.25 V and below), opened as the key goes down (0.75 V and above): the
@@ -3724,6 +3740,7 @@ BUILDERS = {
     "2A3": build_2a3,
     "KEY_CONTACT": build_key_contact,
     "CARBON_BUTTON": build_carbon_button,
+    "F1": build_f1,
     "KEY_BREAK": build_key_break,
     "REED_CONTACT": build_reed_contact,
     "REED_DRIVE": build_reed_drive,

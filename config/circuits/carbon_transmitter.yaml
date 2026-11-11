@@ -1,0 +1,92 @@
+# The Western Electric F1 carbon transmitter unit, the 302 set's (docs/CHAINS_PLAN.md WP31). Built
+# by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/carbon_transmitter/README.md has their provenance):
+#   "jones: ..."       W. C. Jones, "Instruments for the New Telephone Sets", BSTJ 17 (1938):
+#                      Fig. 5 (the transmitter circuit, the resistances), Fig. 6 (the equivalent
+#                      circuit, no values printed; the pressure response), Fig. 7 (the sum and
+#                      difference components)
+#   "fit: ..."         scripts/fit_f1.py, to those figures (data/datasheets/we_f1_*.csv)
+#   "provisional: ..." model knowledge
+#
+# The acoustics are Jones's Fig. 6 network in the impedance analogy, the pressure at the face on
+# `in` (pascals as volts, volume velocity as amperes: acoustic masses kg/m^4 as henries,
+# compliances m^5/N as farads, resistances Pa s/m^3 as ohms): the second grid's holes, the cavity
+# s0, the moisture membrane, the cavity s1, the diaphragm (one mass below 3500 cycles: Jones) with
+# the paper books' stiffness and the carbon's in series, the back cavity s3, the equalizing hole
+# from the diaphragm's front into s3. The force on the carbon is its stiffness times the
+# diaphragm's displacement: the area times the voltage on C5, made by GF on fx (1 V = 1 N); the
+# carbon F1@1 (varimu.devices.carbon) sees it plus the preload (its ref pin at -preload). It is
+# fed as Jones's Fig. 5: 20.5 V through 513 ohm; the output is the transmitter's voltage through a
+# blocking capacitor onto `out`, bled to ground by RBL (RLOAD a measuring load, dropped in a chain).
+#
+# A pressure transducer: no rear entry. No tolerance block: the nominal unit only. Left out: the
+# carbon's noise (its "frying"), packing and aging drift, heating; the diaphragm's higher modes
+# (above 3500 cycles Jones's three masses; the response is fitted to 5000).
+
+title: "Western Electric F1 carbon transmitter"
+input: in
+probes: [out, t, fx]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 2.0, source: "derived: the carbon's swing in its loop (20.5 V through 513 ohm onto 63 ohm, 2.24 V; at R_open 130 ohm 4.1 V): +1.9 V at the most"}
+
+values:
+  capsule_model: {value: F1@1, source: "config/components/f1/1.yaml (the carbon law fitted by scripts/fit_f1.py; the geometry for the room's entries)"}
+  area_m2: {value: 0.0013854, source: "derived: pi r^2, the diaphragm's radius 21 mm (provisional: model knowledge, the F1 unit ~2 in across; scripts/fit_f1.py RADIUS_M)"}
+  grid_m: {value: 111.57, source: "derived: the second grid's holes' mass with end corrections (provisional: 20 holes of 1.5 mm in 2 mm of insulating material; scripts/fit_f1.py; jones: p. 349)"}
+  grid_r: {value: 14591, source: "derived: the second grid's holes, Poiseuille (as grid_m)"}
+  cav0_c: {value: 3.5257e-12, source: "derived: V / rho c^2, 0.5 cm^3 between the grid and the membrane (provisional: model knowledge; jones: s0)"}
+  mem_m: {value: 102.47, source: "fit: scripts/fit_f1.py, the moisture membrane's mass (jones: m1) to Fig. 6's fall to 5000 cycles"}
+  mem_r: {value: 1.0e+05, source: "provisional: model knowledge (the membrane's loss, small; jones: r1)"}
+  cav1_c: {value: 1.4103e-11, source: "derived: V / rho c^2, 2 cm^3 between the membrane and the diaphragm's cone (provisional: model knowledge; jones: s1)"}
+  dia_m: {value: 314.24, source: "fit: scripts/fit_f1.py, the diaphragm with the electrode and the carbon's mass (jones: m2 m4 m5 lumped) to Fig. 6's 2000-cycle peak"}
+  dia_r: {value: 4.4861e+06, source: "fit: scripts/fit_f1.py, the diaphragm's, books' and carbon's resistances (jones: r2 r4 r5 r6 lumped) to the peak's height"}
+  books_c: {value: 9.5973e-11, source: "derived: S^2 / s4, the paper books' stiffness 2e4 N/m (provisional: model knowledge; jones: s4)"}
+  carbon_c: {value: 3.8389e-11, source: "derived: S^2 / s5, the carbon chamber's stiffness 5e4 N/m (provisional: model knowledge; jones: s5)"}
+  back_c: {value: 1.0577e-11, source: "derived: V / rho c^2, 1.5 cm^3 behind the diaphragm (provisional: model knowledge; jones: s3, the controlling stiffness)"}
+  hole_m: {value: 11815, source: "fit: scripts/fit_f1.py, the equalizing hole's mass (jones: m3) to Fig. 6's low end"}
+  hole_r: {value: 9.8461e+06, source: "fit: scripts/fit_f1.py, the equalizing hole's resistance (jones: r3) to Fig. 6's low end"}
+  carbon_leak_ohm: {value: 1.0e+15, source: "numerics: a DC path for the node between the books' and the carbon's stiffness (its corner ~1e-5 Hz)"}
+  force_r_ohm: {value: 1.0, source: "numerics: GF's current onto fx as newtons (1 V = 1 N)"}
+  preload_n: {value: 0.00037148, source: "fit: scripts/fit_f1.py, the carbon's working force, to Fig. 6's level (with the law's exponent and zero-force resistance)"}
+  battery_v: {value: 20.5, source: "jones: Fig. 5, the transmitter circuit's battery"}
+  loop_r_ohm: {value: 513.0, source: "jones: Fig. 5, the transmitter circuit's resistance (the central office's feed and the line)"}
+  c_out_f: {value: 2.0e-6, source: "provisional: model knowledge (a telephone set's 2 uF condenser, blocking the loop's DC from the next stage)"}
+  bleed_ohm: {value: 1.0e+5, source: "provisional: model knowledge (a bleed on the blocking capacitor's far side: the output's DC path when a preamp's input capacitor follows; 10x the clean preamp's 10 kOhm)"}
+  load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a measuring load; a chain replaces it with its preamp)"}
+
+devices:
+  XC:
+    device: capsule_model
+
+sections:
+  - title: acoustics
+    parts:
+      LG: {L: [in, g1], l: grid_m}
+      RG: {R: [g1, n0], r: grid_r, tolerance: none}
+      C0: {C: [n0, "0"], c: cav0_c, tolerance: none}
+      LM: {L: [n0, m1], l: mem_m}
+      RM: {R: [m1, n1], r: mem_r, tolerance: none}
+      C1: {C: [n1, "0"], c: cav1_c, tolerance: none}
+      LD: {L: [n1, d1], l: dia_m}
+      RD: {R: [d1, nd], r: dia_r, tolerance: none}
+      C4: {C: [nd, nc], c: books_c, tolerance: none}
+      C5: {C: [nc, nb], c: carbon_c, tolerance: none}
+      R5: {R: [nc, nb], r: carbon_leak_ohm, tolerance: none}
+      C3: {C: [nb, "0"], c: back_c, tolerance: none}
+      LH: {L: [n1, h1], l: hole_m}
+      RH: {R: [h1, nb], r: hole_r, tolerance: none}
+  - title: carbon
+    parts:
+      GF: {G: ["0", fx, nc, nb], gm: area_m2}
+      RF: {R: [fx, "0"], r: force_r_ohm, tolerance: none}
+      VPRE: {V: ["0", fref], v: preload_n}
+      XCB: {device: [t, "0", fx, fref], model: XC}
+  - title: loop
+    parts:
+      VB: {V: [bat, "0"], v: battery_v}
+      RS: {R: [bat, t], r: loop_r_ohm, tolerance: none}
+      CO: {C: [t, out], c: c_out_f, tolerance: none}
+      RBL: {R: [out, "0"], r: bleed_ohm, tolerance: none}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

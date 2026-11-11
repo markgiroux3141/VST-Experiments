@@ -1556,3 +1556,18 @@
   heater: {v: 4.0, a: 0.100, note: "indirectly heated, for d.c. heating (G-Heizung), parallel supply"}
   pins: "subminiature, flying leads: 1 heater -f, 2 cathode, 3 heater +f, 4 anode (red point); grid on a separate lead out of the bulb's top"
   dimensions: "max. 10.1 mm diameter, bulb 38.1 mm, leads 38.1 mm; weight max. 5 g"
+"F1":
+  source: "data/schematics/carbon_transmitter/README.md (W. C. Jones, BSTJ 17, 1938: the Western Electric F1 handset transmitter unit); the law fitted by scripts/fit_f1.py to Fig. 7 and Fig. 5's resistance, its level to Fig. 6"
+  carbon:
+    g0_s: {value: 0.00817052}        # fit: 1 / R0 - g_open_s, R0 63 ohm (Jones Fig. 5: the new type after two years' equivalent aging, the unit of Fig. 6)
+    f0_n: {value: 0.000487851}       # derived: F_s at the preload (fit: the level of Fig. 6's response at the face, 20.5 V through 513 ohm, Fig. 5)
+    exponent: {value: 0.196781}      # fit: Fig. 7's sum and difference components (1500 + 1700 cycles, 1.5-100 bars); Holm's single constriction gives 1/3-1/2
+    g_open_s: {value: 0.0077025}    # fit: Fig. 7's plateau (6-50 bars): the conductance with no force from the diaphragm, the granules' own weight and packing
+    soft_n: {value: 0.00037148}     # Claude's call (WP31's Decisions): the knee as wide as the working force (fitted, it ran to its bound with little gain)
+  geometry:
+    diaphragm:
+      radius_m: {value: 0.021}      # provisional: model knowledge (the F1 unit ~2 in across; scripts/fit_f1.py RADIUS_M)
+    body:
+      form: cylinder
+      radius_m: {value: 0.03}       # provisional: model knowledge (the desk set's transmitter housing and mouthpiece, Jones Fig. 3, ~6 cm across)
+      length_m: {value: 0.06}       # provisional: model knowledge (the housing's depth; the stand below it left out)

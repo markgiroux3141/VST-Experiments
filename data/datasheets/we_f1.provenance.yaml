@@ -1,0 +1,23 @@
+device: Western Electric F1 handset transmitter unit (carbon, "direct action"), new type of 1938
+curve: >-
+  Fig. 6 (upper): pressure response, decibels re 1 volt open circuit per bar (1 bar = 1 dyne/cm^2 =
+  0.1 Pa), constant pressure at the grid, a unit aged the equivalent of two years; measured (circles)
+  and calculated from the equivalent circuit (crosses). Fig. 7: the new type's sum and difference
+  components (1500 + 1700 cycles) in decibels below the fundamental, against the pressure in bars.
+publisher: W. C. Jones, "Instruments for the New Telephone Sets", Bell System Technical Journal 17
+  (July 1938), pp. 338-357
+documents:
+  bstj:
+    title: "Bell System Technical Journal, vol. 17 no. 3 (July 1938)"
+    scan_source: "web: https://www.worldradiohistory.com/Archive-Bell-System-Technical-Journal/30s/Bell-1938c.o.pdf"
+    sha256: 444e5412ee3c31d75399d841a4e4c4207bc18e4e0c3232f8b509712b3d736022
+    page: "the article's p. 348 (Fig. 6) and p. 350 (Fig. 7); the extract's PDF pp. 11 and 13"
+local_copy: "data/schematics/carbon_transmitter/bstj17_1938_jones_instruments.pdf (git-ignored; sha256 in its README)"
+digitized_with: >-
+  By eye from a 300 dpi render of the scan (PyMuPDF), on the figures' rules. Fig. 6: frequency
+  linear, rules every 500 cycles (0 at the left edge), level rules every 10 dB (-20 to -60); the
+  measured curve's circles read at their centres, plus one point on the steep rise between the
+  first two circles (135 cycles, read on the line); about +-0.5 dB and +-10 cycles. Fig. 7: pressure
+  log, 1-100 bars; the solid new-type traces read at their corners; about +-0.5 dB.
+digitized_by: Claude Code
+digitized_on: 2026-11-11

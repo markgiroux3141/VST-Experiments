@@ -256,6 +256,23 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "Carbon transmitter into clean",
+   "file": "Carbon_transmitter_into_clean.wav",
+   "chain": "carbon_clean",
+   "set": {
+    "gain_db_clean": 20.0
+   },
+   "pan": 0.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.03, 'length_m': 0.06}",
+   "rms_dbfs": -16.72,
+   "peak_dbfs": -2.75,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -270,6 +287,6 @@
   8000,
   16000
  ],
- "wall_s": 48.9,
+ "wall_s": 6.2,
  "seconds": 8.999
 }
