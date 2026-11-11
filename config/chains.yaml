@@ -149,14 +149,22 @@ circuits:
     drop: [RLOAD]
     pattern: cardioid
     settings: []
-  shure_sm7:                        # the flat setting (the switches not modelled)
+  shure_sm7:                        # the bass roll-off and presence switches (fitted networks)
     kind: mic
     tag: sm7
     label: Shure SM7
     output: out
     drop: [RLOAD]
     pattern: cardioid
-    settings: []
+    settings:
+      - key: bass_rolloff
+        label: SM7 bass
+        choices: [[0, "flat"], [1, "roll-off"]]
+        default: 0
+      - key: presence
+        label: SM7 presence
+        choices: [[0, "flat"], [1, "presence"]]
+        default: 0
   akg_d112:
     kind: mic
     tag: d112

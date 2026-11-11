@@ -10,8 +10,11 @@
 # its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). The coil's
 # two ends are the XLR's pins 2 and 3 (`out`, and the measuring ground); the output is open
 # circuit, as the sheet's 1.12 mV/Pa, and a chain replaces RLOAD with the preamp's input. The
-# bass roll-off and presence switches are not modelled yet (their curves are digitized:
-# data/datasheets/shure_sm7_response.csv); the circuit is the flat setting.
+# switches (shure: bass roll-off, mid-range emphasis): Shure's network isn't published, so each is
+# a passive network of the simplest form that makes its curve, fitted to the sheet's traces
+# (data/datasheets/shure_sm7_response.csv) by scripts/fit_sm7_switches.py: the roll-off a shunt
+# L-R across the coil, the presence a series R parallel to a series L-C into a shunt R (a passive
+# emphasis: it cuts the rest; the sheet draws the curves re one another).
 
 title: "Shure SM7"
 input: in
@@ -22,14 +25,38 @@ full_scale:
   input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
   output_volts_peak: {value: 0.05, source: "provisional: model knowledge (shure: 1.12 mV/Pa x 20 Pa = 22 mV peak, with headroom for proximity)"}
 
+controls:
+  bass_rolloff: {value: 0, choices: [0, 1], unit: switch, source: "shure: the bass roll-off switch", notes: "0 flat, 1 roll-off"}
+  presence: {value: 0, choices: [0, 1], unit: switch, source: "shure: the mid-range emphasis (presence boost) switch", notes: "0 flat, 1 presence"}
+
 values:
   cartridge_model: {value: R_SM7@1, source: "config/components/r_sm7/1.yaml (no construction is published: the geometry bounded and fitted by scripts/fit_sm7.py to Shure's figures: data/schematics/shure_sm7/README.md)"}
+  lb_h: {value: 0.1913, source: "fit: scripts/fit_sm7_switches.py, to the sheet's roll-off trace"}
+  rb_ohm: {value: 182, source: "fit: scripts/fit_sm7_switches.py, to the sheet's roll-off trace"}
+  rp_ohm: {value: 1393, source: "fit: scripts/fit_sm7_switches.py, to the sheet's presence trace (against rsh_ohm)"}
+  lp_h: {value: 0.007177, source: "fit: scripts/fit_sm7_switches.py, to the sheet's presence trace (against rsh_ohm)"}
+  cp_f: {value: 2.53e-07, source: "fit: scripts/fit_sm7_switches.py, to the sheet's presence trace (against rsh_ohm)"}
+  rsh_ohm: {value: 1000.0, source: "provisional: model knowledge (the emphasis network's shunt, ~ a few times the 150 ohm rated impedance; the series parts fitted against it)"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch's contact, ~10 mOhm)"}
   load_ohm: {value: 1.0e+6, source: "shure: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
 
 sections:
   - title: cartridge
     parts:
       MC:
-        moving_coil: [in, p_rear, out, "0"]
+        moving_coil: [in, p_rear, c, "0"]
         component: cartridge_model
+      SBASS:
+        switch: bass_rolloff
+        parts:
+          LB: {L: [c, lbm], l: lb_h, in: [1]}
+          RB: {R: [lbm, "0"], r: rb_ohm, tolerance: none, in: [1]}
+      SPRES:
+        switch: presence
+        parts:
+          RS0: {R: [c, out], r: contact_ohm, tolerance: none, in: [0]}
+          RP: {R: [c, out], r: rp_ohm, tolerance: none, in: [1]}
+          LP: {L: [c, pm], l: lp_h, in: [1]}
+          CP: {C: [pm, out], c: cp_f, tolerance: none, in: [1]}
+          RSH: {R: [out, "0"], r: rsh_ohm, tolerance: none, in: [1]}
       RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

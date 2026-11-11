@@ -89,3 +89,22 @@ def test_circuit_builds_and_matches_the_cartridge():
     got = ac.transfer(ir, f, "out", drives={"p_rear": np.zeros(3, complex)})
     want = _response(f, 0.0)
     assert abs(got[1]) == pytest.approx(abs(want[1]), rel=0.5)
+
+
+def test_switches_follow_the_sheets_traces():
+    """The bass roll-off and presence networks (fitted by scripts/fit_sm7_switches.py) against the
+    sheet's traces re the flat one: the roll-off absolutely, the presence up to a constant."""
+    import sys
+
+    sys.path.insert(0, str(CONFIG_DIR.parent / "scripts"))
+    import fit_sm7_switches as fs
+
+    c = spec.load_circuit(CONFIG_DIR / "circuits" / "shure_sm7.yaml")
+    tg = fs.targets()
+    f, d = tg["rolloff"]
+    e = fs.response_db(c, {"bass_rolloff": 1}, f) - fs.response_db(c, {}, f) - d
+    assert np.sqrt(np.mean(e**2)) < 0.7 and np.abs(e).max() < 1.6
+    f, d = tg["presence"]
+    e = fs.response_db(c, {"presence": 1}, f) - fs.response_db(c, {}, f) - d
+    e = e - e.mean()
+    assert np.sqrt(np.mean(e**2)) < 0.7 and np.abs(e).max() < 1.5

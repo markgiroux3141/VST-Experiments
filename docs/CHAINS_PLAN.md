@@ -52,7 +52,7 @@ runs**.
   curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes. WP24 (2026-11-10):
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
   Notes. WP15 (2026-11-10): the Shure SM7 (`config/circuits/shure_sm7.yaml`, `R_SM7@1` fitted to
-  the SM7B sheet; the switches not modelled); WP15's Notes. The second session of 2026-11-10: WP19 (the Helios,
+  the SM7B sheet; its switches 2026-11-11, fitted networks); WP15's Notes. The second session of 2026-11-10: WP19 (the Helios,
   `config/circuits/helios.yaml`, traced from the IA-H9 rev 1; the EQ isn't built), WP18 (the ELA M
   251 E by inference), WP23 (the C414 B-ULS by inference), WP20 (the TG12345's mic input by
   inference), WP25 (the U 47 fet from Neumann's drawing), WP17 (the beyerdynamic M 160,
@@ -66,8 +66,8 @@ runs**.
 - **Next:** WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1 transmitter found,
   `data/schematics/carbon_transmitter/README.md` has its figures and a plan). WP26 (the PZM): no
   schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
-  scenes can be built first. Then WP30 (a crystal transducer kind); WP15's switches and WP14's bass
-  switch (their curves digitized; WP14's network unread); WP13 (RE20) waits on the N-entry room
+  scenes can be built first. Then WP30 (a crystal transducer kind); WP14's bass switch (its curves
+  digitized; its network unread: fit_sm7_switches.py's method); WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U
@@ -178,7 +178,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 12 | API 312 (the 2520) | SM57 -> API | L | done 2026-11-10 |
 | 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |
 | 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | |
-| 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the flat setting; switches to do) |
+| 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the switches 2026-11-11) |
 | 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | done 2026-11-10 |
 | 17 | Beyer M160 (two ribbons, hypercardioid) | M160 -> 1073 | M | done 2026-11-10 |
 | 18 | Telefunken ELA M 251 (the C12's capsule, its own electronics) | 251 -> 1073 | M | done 2026-11-10 (by inference) |
@@ -1276,6 +1276,16 @@ circuit), the list's entry, `tests/test_shure_sm7.py` (5), `sm7_n1073` composed:
 **Not done:** the bass roll-off and presence switches (their traces are digitized: a passive
 network each, fitted to them).
 
+The switches (2026-11-11, Claude's calls): Shure's network isn't published, so each is the simplest
+passive form that makes its curve, `bass_rolloff` a shunt L-R across the coil, `presence` a series R
+parallel to a series L-C into a shunt R (`rsh_ohm` 1 k provisional, the series parts fitted against
+it), fitted by `scripts/fit_sm7_switches.py` (small-signal AC on the whole microphone, the motional
+impedance included; the roll-off against its trace re the flat, the presence up to a constant): the
+roll-off 0.19 H with 182 ohm, 0.49 dB rms / 1.39 max over 50-356 Hz; the presence 1393 ohm with 7.18
+mH + 253 nF (3.7 kHz), 0.43 dB rms / 1.23 max over 0.7-10 kHz, and it costs 3.2 dB at 1 kHz (a passive
+emphasis). The flat setting gains a 10 mOhm contact (`RS0`, renders move negligibly). The Room view
+offers both (chains.yaml); `sm7_n1073`, `sm7_cl_clean` recomposed; `tests/test_shure_sm7.py` (6).
+
 ### WP12. The API 312 (the 2520)
 
 API's 500-series mic preamp: a bespoke input transformer (AP2516 now; the 512C used a
@@ -1841,3 +1851,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   WP27 done: the Cloudlifter CL-1 (the JFETs found: LSK389, Linear Systems' cards; the A grade by
   the trace's gain), the floating input and the phantom-fed balanced output, three-stage chains in
   `compose_chain.py`; M49 -> V76, 44-BX / SM7 -> Cloudlifter -> clean composed: 45 of 51.
+- 2026-11-11: WP15's switches: the SM7's bass roll-off and presence as passive networks fitted to the
+  sheet's traces by AC analysis (`scripts/fit_sm7_switches.py`, 0.49 / 0.43 dB rms); offered in the
+  Room view; still 45 of 51.

@@ -30,6 +30,22 @@ full_scale:
     source: 'derived: +24 dBu peak, the same scale as telefunken_v76.yaml''s output so the two chains
       print comparably (this stage clips at ~+-13 V)'
 controls:
+  bass_rolloff_sm7:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'shure: the bass roll-off switch'
+    notes: 0 flat, 1 roll-off
+  presence_sm7:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'shure: the mid-range emphasis (presence boost) switch'
+    notes: 0 flat, 1 presence
   gain_db_clean:
     value: 40
     choices:
@@ -45,6 +61,28 @@ values:
     value: R_SM7@1
     source: 'config/components/r_sm7/1.yaml (no construction is published: the geometry bounded and fitted
       by scripts/fit_sm7.py to Shure''s figures: data/schematics/shure_sm7/README.md)'
+  lb_h_sm7:
+    value: 0.1913
+    source: 'fit: scripts/fit_sm7_switches.py, to the sheet''s roll-off trace'
+  rb_ohm_sm7:
+    value: 182
+    source: 'fit: scripts/fit_sm7_switches.py, to the sheet''s roll-off trace'
+  rp_ohm_sm7:
+    value: 1393
+    source: 'fit: scripts/fit_sm7_switches.py, to the sheet''s presence trace (against rsh_ohm)'
+  lp_h_sm7:
+    value: 0.007177
+    source: 'fit: scripts/fit_sm7_switches.py, to the sheet''s presence trace (against rsh_ohm)'
+  cp_f_sm7:
+    value: 2.53e-07
+    source: 'fit: scripts/fit_sm7_switches.py, to the sheet''s presence trace (against rsh_ohm)'
+  rsh_ohm_sm7:
+    value: 1000.0
+    source: 'provisional: model knowledge (the emphasis network''s shunt, ~ a few times the 150 ohm rated
+      impedance; the series parts fitted against it)'
+  contact_ohm_sm7:
+    value: 0.01
+    source: 'provisional: model knowledge (a switch''s contact, ~10 mOhm)'
   load_ohm_sm7:
     value: 1000000.0
     source: 'shure: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)'
@@ -236,9 +274,69 @@ sections:
       moving_coil:
       - in
       - p_rear
-      - ia_cl
+      - c_sm7
       - '0'
       component: cartridge_model_sm7
+    SBASS_sm7:
+      switch: bass_rolloff_sm7
+      parts:
+        LB_sm7:
+          L:
+          - c_sm7
+          - lbm_sm7
+          l: lb_h_sm7
+          in:
+          - 1
+        RB_sm7:
+          R:
+          - lbm_sm7
+          - '0'
+          r: rb_ohm_sm7
+          tolerance: none
+          in:
+          - 1
+    SPRES_sm7:
+      switch: presence_sm7
+      parts:
+        RS0_sm7:
+          R:
+          - c_sm7
+          - ia_cl
+          r: contact_ohm_sm7
+          tolerance: none
+          in:
+          - 0
+        RP_sm7:
+          R:
+          - c_sm7
+          - ia_cl
+          r: rp_ohm_sm7
+          tolerance: none
+          in:
+          - 1
+        LP_sm7:
+          L:
+          - c_sm7
+          - pm_sm7
+          l: lp_h_sm7
+          in:
+          - 1
+        CP_sm7:
+          C:
+          - pm_sm7
+          - ia_cl
+          c: cp_f_sm7
+          tolerance: none
+          in:
+          - 1
+        RSH_sm7:
+          R:
+          - ia_cl
+          - '0'
+          r: rsh_ohm_sm7
+          tolerance: none
+          in:
+          - 1
 - title: cable
   parts:
     CCABLE:

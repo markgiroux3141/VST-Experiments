@@ -13,3 +13,10 @@
   (`scripts/fit_sm7.py`'s POLAR).
 - No construction of the cartridge is published: R_SM7 starts from the MD 421's network form and
   is fitted (CHAINS_PLAN.md WP15's Notes).
+
+## The switches (2026-11-11)
+
+Shure doesn't publish the switch network: config/circuits/shure_sm7.yaml has the simplest passive
+forms (the roll-off a shunt L-R across the coil, the presence a series R parallel to a series L-C
+into a shunt R), their values fitted to the sheet's traces by scripts/fit_sm7_switches.py
+(provisional topologies; CHAINS_PLAN.md WP15).
