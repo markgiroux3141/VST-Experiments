@@ -66,8 +66,7 @@ runs**.
 - **Next:** WP31 (the carbon kind exists; Jones's BSTJ 1938 paper on the F1 transmitter found,
   `data/schematics/carbon_transmitter/README.md` has its figures and a plan). WP26 (the PZM): no
   schematic is open (Crown's service archive doesn't list the PZM-30D); the surface placement in
-  scenes can be built first. Then WP30 (a crystal transducer kind); WP14's bass switch (its curves
-  digitized; its network unread: fit_sm7_switches.py's method); WP13 (RE20) waits on the N-entry room
+  scenes can be built first. Then WP30 (a crystal transducer kind); WP13 (RE20) waits on the N-entry room
   generalization (its Decision). Open options inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U
@@ -177,7 +176,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | done 2026-11-10 (the mic path; the EQ is B13's rest) |
 | 12 | API 312 (the 2520) | SM57 -> API | L | done 2026-11-10 |
 | 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |
-| 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | |
+| 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | done 2026-11-11 (the patent lookup skipped) |
 | 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the switches 2026-11-11) |
 | 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | done 2026-11-10 |
 | 17 | Beyer M160 (two ribbons, hypercardioid) | M160 -> 1073 | M | done 2026-11-10 |
@@ -1430,6 +1429,14 @@ Notes (2026-11-06, started): step 1 done. The curves: M flat -54 dBV (2.0 mV/Pa)
 kHz, +7 dB at 5-7 kHz; the four dips at 50 Hz: -3 / -6 / -15 / -15 dB re M (by rank).
 Step 3 done (2026-11-06): `R_MD421@1` (`config/components/r_md421/1.yaml`; geometry block `R_MD421` in `published_points.yaml`, builder `build_r_md421`), fitted by `scripts/fit_md421.py` (the D112's method; a 49 mm head body): 2.000 mV/Pa, on axis rms 0.83 dB / max 1.7 dB over 40 Hz-8 kHz, the 90 deg side within 1 dB at 125 Hz-2 kHz. **Known misses:** the 4 kHz side (-4.3 vs the sheet's -10.4 dB) and the 8 kHz rear (-10.1 vs -16.7), above 8 kHz not fitted; bounds hit: B l 20 T m, resonance 110 Hz, the washer, the chamber's volume 400 cm^3, the dome's mass 2% (a heavy moving system, as the D112). `config/circuits/sennheiser_md421.yaml` (the M position, open circuit), the list's entry (output out, drop RLOAD, cardioid), `tests/test_sennheiser_md421.py` (5) and `test_chain_matrix.py` pass. **Not done:** the patent lookup (step 2) and the five-position bass switch's network (step 4: fitted to the four dips: -3 / -6 / -15 / -15 dB at 50 Hz by rank); no new chain opens until WP12 builds the API 312 (md421_api312).
 
+Step 4's switch (2026-11-11, Claude's calls): Sennheiser's network isn't published; per position a
+shunt L-R across the coil (the simplest passive form; the SM7's method), fitted by
+`scripts/fit_md421_switch.py` (AC analysis of the whole microphone, each position re M against its
+trace re M, 50 Hz-16 kHz): 1: 86 mH / 1000 ohm, 0.48 dB rms; 2: 42 mH / 424 ohm, 0.68; 3: 72 mH / 224
+ohm, 0.74; 4: 72 mH / 104 ohm, 0.57 (the worst points at 50 Hz, the traces' end, 1.4-2.0 dB). The
+control `bass` (0 M ... 4), the Room view's "MD421 bass"; `md421_api312` recomposed;
+`tests/test_sennheiser_md421.py` (6). Step 2 (the patent) skipped: the fit needs no bounds from it.
+
 ### WP19. The Helios
 
 Sources: `data/schematics/helios_ia_h9/README.md` (Iron Age Audioworks' IA-H9 files, the user's;
@@ -1854,3 +1861,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-11: WP15's switches: the SM7's bass roll-off and presence as passive networks fitted to the
   sheet's traces by AC analysis (`scripts/fit_sm7_switches.py`, 0.49 / 0.43 dB rms); offered in the
   Room view; still 45 of 51.
+- 2026-11-11: WP14 done: the MD 421's five-position bass switch, a shunt L-R per position fitted to
+  the sheet's four traces (`scripts/fit_md421_switch.py`, 0.48-0.74 dB rms); still 45 of 51.
