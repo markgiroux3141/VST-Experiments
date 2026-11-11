@@ -137,8 +137,20 @@ def test_noise_is_opt_in():
         if c.noise is not None:
             continue
         x = builder.build_ir(c, spec.resolve(c))
-        assert x.noise is None and "noise" not in x.to_dict(), path.stem
-        assert not any(isinstance(e, ir.NoiseCurrent | ir.TubeNoise) for e in x.elements())
+        # A `noise_source` part is a signal source, in every build (the builder's Noise
+        # docstring): its NoiseCurrent and the bare noise block it needs, nothing else.
+        sources = {
+            name
+            for sec in c.sections
+            for name, part in sec["parts"].items()
+            if isinstance(part, dict) and "noise_source" in part
+        }
+        noise = [e for e in x.elements() if isinstance(e, ir.NoiseCurrent | ir.TubeNoise)]
+        assert all(isinstance(e, ir.NoiseCurrent) and e.name in sources for e in noise), path.stem
+        if noise:
+            assert x.noise is not None and x.noise.mains_rms == 0.0, path.stem
+        else:
+            assert x.noise is None and "noise" not in x.to_dict(), path.stem
 
 
 def test_noise_elements_follow_their_parts_and_round_trip():
