@@ -665,6 +665,41 @@
     sensitivity_mv_pa: 8.0              # cat: ~0.8 mV/ubar, at the microphone's output into >= 1000 ohm
     capacitance_pf: [50.0, 50.0]        # cat: 2 x ~50 pF
 
+# --- Neumann U 67 (CHAINS_PLAN.md WP28) ---
+"K67":
+  source: "data/schematics/neumann_u67/README.md: the 1966 specification sheets (capsule approx. 1 x 50 pF cardioid, 2 x 50 pF omni / figure-8); the K 67 is taken to be the K 87's form (provisional: model knowledge, the K 87's predecessor, a 34 mm dual-diaphragm capsule; its sizes and spacer as the K87 entry's; the backplate's 50 pF a side as spec's), no Neumann drawing of it: the network starts from K87@2's and is fitted to the U 67's curves (1966 p. 7) through the circuit by scripts/fit_k67.py (value: ..., the bounds in its comment)"
+  polarization_v: 60.7     # sch (U 67): the backplate's +59 V less the grid's -1.7 V
+  geometry:
+    diaphragm:
+      radius_m: {value: 13.0e-3}      # web (RecordingHacks: 26 mm diaphragms)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (the K87's PET film, ~6 um)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 61.25}      # provisional: fitted (bounds 5-150 N/m)
+    gap_m: {value: 4.0e-05}           # web (RecordingHacks: a 40 um plastic spacer)
+    backplate:
+      radius_m: {value: 8.48e-3}      # derived: cat's 2 x ~50 pF as each side's capacitance (c0) at the published 40 um gap (K87@1 had the CK12's 12.2 mm: 103.5 pF a side)
+      thickness_m: {value: 4.0e-3}    # provisional: model knowledge (a 34 mm dual-backplate capsule's ~4 mm backplates, as the CK12's)
+      through:
+        holes: {value: 24}            # provisional: model knowledge (as the CK12's)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge
+      blind:
+        holes: {value: 250.0}            # provisional: fitted (bounds 10-250 per side)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge (~1 mm drilled holes)
+        depth_m: {value: 0.0019}      # provisional: fitted (bounds 0.3-1.9 mm)
+    film_resistance_pa_s_m3: {value: 2.895e+06}       # provisional: fitted (bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 1.935e+07}    # provisional: fitted (bounds 1e6-3e9)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 2.0e-12}   # provisional: fitted (bounds 2-40 pF)
+    body:
+      radius_m: {value: 15.5e-3}          # provisional: model knowledge (as the CK12's: the same 34 mm form)
+      rim_radius_m: {value: 17.0e-3}      # web (RecordingHacks: a 34 mm capsule)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (as the CK12's)
+      spacing_m: {value: 0.0041}          # provisional: model knowledge (the backplates' ~4 mm plus the gaps, as the CK12's)
+      ring_proud_m: {value: 0.0}          # provisional: model knowledge (as the CK12's)
+  published:
+    sensitivity_mv_pa: [11.0, 20.0, 14.0]   # spec: 1.1 / 2.0 / 1.4 mV/ub omni / cardioid / figure-8 across 1000 ohm
+    capacitance_pf: [50.0, 50.0]        # spec: 1 x 50 pF (cardioid), 2 x 50 pF (omni, figure-8)
+
 # --- Neumann KM 84 (CHAINS_PLAN.md WP24) ---
 "KK84":
   source: "data/schematics/neumann_km84/README.md: RecordingHacks (the KK 64 / KK 84, a 20 mm capsule, a crossed-slit backplate), Neumann's catalog cata0120 (the KM 84: ~34 pF); no Neumann drawing of the capsule. A single-diaphragm cardioid modelled in the dual-diaphragm form at the cardioid setting (the rear half unpolarized standing in for the crossed-slit backplate's rear network), fitted to the KM 84 i's curves (KM84-manual.pdf p. 16, the text's 135 deg figure) by scripts/fit_kk84.py (value: ..., the bounds in its comment)"
@@ -1258,3 +1293,169 @@
   published:
     sensitivity_v_per_pa: 1.12e-3        # shure: open circuit -59.0 dB (1.12 mV) re 1 V/Pa at 1 kHz
     resistance_ohm: 150.0                # shure: 150 ohm
+
+# --- EF86, the U 67's and the REDD.47's (CHAINS_PLAN.md WP28) ---
+"EF86":
+  source: "Philips Electronic Tube Handbook EF86, text pages 4.4.1956 (p.1-5), local copy sources/philips_ef86_1956.pdf (web: https://frank.pocnet.net/sheets/030/e/EF86.pdf); Tesla EF86 data sheet 2.3.1959 (p.1-5, 16), local copy sources/tesla_ef86_1959.pdf (web: https://frank.pocnet.net/sheets/183/e/EF86.pdf)"
+  class_a1:           # Philips p.1 'Typical characteristics' (Tesla p.1 the same, except Ig2 0.5 mA)
+    vp_v: 250
+    vg3_v: 0
+    vg2_v: 140
+    vg1_v: -2.0
+    ip_a: 3.0e-3
+    ig2_a: 0.6e-3     # Tesla p.1: 0.5 mA
+    gm_s: 2.0e-3
+    rp_ohm: 2.5e+6
+    mu_g2g1: 38
+    req_max_ohm: 0.1e+6   # Philips 'Req < 0,1 MOhm'; not in Tesla
+  cutoff: {vp_v: 250, vg3_v: 0, vg2_v: 140, vg1_v: -5.0, ip_max_a: 0.1e-3}   # Tesla p.1 'Iaz < 0,1 mA (Ug1 = -5 V)'; not in Philips
+  grid_current_onset: {vg1_max_v: -1.3, ig1_max_a: 0.3e-6}   # Tesla p.5: bias for the onset of grid current (Ig1 <= 0.3 uA) max -1.3 V
+  # Triode connection (g2 to the anode, g3 to the cathode): neither sheet prints a characteristics
+  # point. Tesla p.16 plots S, -Ug1, Ri and mu against Ia at Ua 200 V; read from the figure
+  # (grid fitted, curves read at these currents, +-2% of full scale; Ri at 1.5 mA and 6 mA lies at
+  # a crossing with the -Ug1 curve, +-1 kOhm):
+  triode_tesla_p16:
+    va_v: 200
+    rows:   # ia_a (anode + screen), vg1_v, gm_s, rp_ohm, mu
+      - {ia_a: 0.5e-3, vg1_v: -5.8,  gm_s: 0.69e-3, mu: 32.1}            # Ri off the top of the scale (> 44 kOhm)
+      - {ia_a: 0.6e-3, rp_ohm: 38.5e+3, mu: 32.4}
+      - {ia_a: 1.0e-3, vg1_v: -5.18, gm_s: 1.17e-3, rp_ohm: 29.0e+3, mu: 33.5}
+      - {ia_a: 1.5e-3, vg1_v: -4.78, gm_s: 1.48e-3, rp_ohm: 24.0e+3, mu: 34.6}
+      - {ia_a: 2.0e-3, vg1_v: -4.42, gm_s: 1.74e-3, rp_ohm: 21.0e+3, mu: 35.4}
+      - {ia_a: 3.0e-3, vg1_v: -3.88, gm_s: 2.13e-3, rp_ohm: 17.4e+3, mu: 36.6}
+      - {ia_a: 4.0e-3, vg1_v: -3.45, gm_s: 2.45e-3, rp_ohm: 15.4e+3, mu: 37.5}
+      - {ia_a: 6.0e-3, vg1_v: -2.69, gm_s: 2.90e-3, rp_ohm: 13.3e+3, mu: 38.4}
+      - {ia_a: 8.0e-3, vg1_v: -2.02, gm_s: 3.22e-3, rp_ohm: 12.0e+3, mu: 39.1}
+      - {ia_a: 10.0e-3, vg1_v: -1.38, gm_s: 3.50e-3, rp_ohm: 11.4e+3, mu: 39.7}
+      - {ia_a: 11.8e-3, vg1_v: -0.85, gm_s: 3.70e-3}
+    # checks: mu / gm = 20.3 kOhm at 2 mA (Ri read 21.0), 12.1 kOhm at 8 mA (12.0)
+  capacitances_f:
+    input: 3.8e-12        # Philips p.1 Cg1 (arrow-marked as changed); Tesla p.1: 3.5 pF, measured without a shield can
+    output: 5.3e-12       # Philips Ca (arrow-marked); Tesla: 5 pF
+    ag1_max: 0.05e-12     # both
+    g1f_max: 0.0025e-12   # Philips; Tesla < 0.003 pF
+  max_ratings: {va0_v: 550, va_v: 300, pa_w: 1.0, vg20_v: 550, vg2_v: 200, pg2_w: 0.2, ik_a: 6.0e-3, rg1_ohm_pa_lt_0_2w: 10.0e+6, rg1_ohm_pa_ge_0_2w: 3.0e+6, rg1_ohm_grid_current_bias: 22.0e+6, vkf_k_pos_v: 100, vkf_k_neg_v: 50, rkf_ohm: 20.0e+3, rkf_phase_inverter_ohm: 120.0e+3}   # Philips p.4-5 = Tesla p.4-5
+  heater: {v: 6.3, a: 0.200}   # Philips p.1 (A.C. or D.C., series or parallel); Tesla 0.2 A
+  pins: "1 g2, 2 s (internal shield), 3 k, 4 f, 5 f, 6 a, 7 s, 8 g3, 9 g1 (noval; Philips p.1 base drawing, Tesla p.5 the same)"
+  noise: "equivalent noise voltage on g1 approx. 2 uV, 25-10,000 c/s, Vb 250 V, Ra 100 kOhm (Philips p.5)"
+  hum: "< 5 uV with Zg1 <= 0.5 MOhm (50 c/s) and Rk bypassed by >= 100 uF (Philips p.4); Tesla p.4: at Ua 250 V, Ra 100k, Rg2 400k, Rk 1k, Ck 100 uF, Rg1 0.5 MOhm"
+  microphony: "0.5 mV input for 50 mW output permissible where 50 mW in the loudspeaker gives < 0.015 g above 500 c/s, < 0.06 g below (Philips p.4)"
+  # Philips p.2 'Operating characteristics as A.F. amplifier' (pentode, cathode bias, Rk bypassed 50 uF,
+  # g2 decoupled 0.5 uF, Rg1' = next stage's grid leak); dtot = 5% at the Vo given; gain measured at
+  # small input; Ik = Ia + Ig2. derived_vk_v = Ik Rk (arithmetic, not printed).
+  rc_amplifier:
+    - {vb_v: 400, ra_ohm: 100.0e+3, rg2_ohm: 0.39e+6, rk_ohm: 1000, rg1_next_ohm: 330.0e+3, ik_a: 3.3e-3, gain: 124, vout_vrms: 87, thd_pct: 5, derived_vk_v: 3.3}
+    - {vb_v: 350, ra_ohm: 100.0e+3, rg2_ohm: 0.39e+6, rk_ohm: 1000, rg1_next_ohm: 330.0e+3, ik_a: 2.9e-3, gain: 120, vout_vrms: 75, thd_pct: 5, derived_vk_v: 2.9}
+    - {vb_v: 300, ra_ohm: 100.0e+3, rg2_ohm: 0.39e+6, rk_ohm: 1000, rg1_next_ohm: 330.0e+3, ik_a: 2.5e-3, gain: 116, vout_vrms: 64, thd_pct: 5, derived_vk_v: 2.5}
+    - {vb_v: 250, ra_ohm: 100.0e+3, rg2_ohm: 0.39e+6, rk_ohm: 1000, rg1_next_ohm: 330.0e+3, ik_a: 2.1e-3, gain: 112, vout_vrms: 50, thd_pct: 5, derived_vk_v: 2.1}
+    - {vb_v: 200, ra_ohm: 100.0e+3, rg2_ohm: 0.39e+6, rk_ohm: 1000, rg1_next_ohm: 330.0e+3, ik_a: 1.7e-3, gain: 106, vout_vrms: 40, thd_pct: 5, derived_vk_v: 1.7}
+    - {vb_v: 100, ra_ohm: 100.0e+3, rg2_ohm: 0.47e+6, rk_ohm: 1500, rg1_next_ohm: 330.0e+3, ik_a: 1.0e-3, gain: 95,  vout_vrms: 22, thd_pct: 5, derived_vk_v: 1.5}
+    - {vb_v: 400, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, rg1_next_ohm: 680.0e+3, ik_a: 1.6e-3, gain: 200, vout_vrms: 73,   thd_pct: 5, derived_vk_v: 3.52}
+    - {vb_v: 350, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, rg1_next_ohm: 680.0e+3, ik_a: 1.4e-3, gain: 196, vout_vrms: 63,   thd_pct: 5, derived_vk_v: 3.08}
+    - {vb_v: 300, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, rg1_next_ohm: 680.0e+3, ik_a: 1.1e-3, gain: 188, vout_vrms: 54,   thd_pct: 5, derived_vk_v: 2.42}
+    - {vb_v: 250, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, rg1_next_ohm: 680.0e+3, ik_a: 0.9e-3, gain: 180, vout_vrms: 46,   thd_pct: 5, derived_vk_v: 1.98}
+    - {vb_v: 200, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, rg1_next_ohm: 680.0e+3, ik_a: 0.8e-3, gain: 170, vout_vrms: 36,   thd_pct: 5, derived_vk_v: 1.76}
+    - {vb_v: 100, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2700, rg1_next_ohm: 680.0e+3, ik_a: 0.6e-3, gain: 150, vout_vrms: 24.5, thd_pct: 5, derived_vk_v: 1.62}   # Rk printed '°2,7' (a speck before 2,7)
+  # Tesla p.3: the same two tables with Rg2 400 kOhm (not 390), Rg1 1 MOhm, Rg1' 320 / 640 kOhm, and
+  # the bias printed (Ug1 = -Ik Rk to within 0.05 V in every column):
+  rc_amplifier_tesla_p3:
+    - {vb_v: 100, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1500, vg1_v: -1.7,  ik_a: 1.13e-3, gain: 95,  vout_vrms: 22, thd_pct: 5}
+    - {vb_v: 200, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1000, vg1_v: -1.7,  ik_a: 1.7e-3,  gain: 106, vout_vrms: 40, thd_pct: 5}
+    - {vb_v: 250, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1000, vg1_v: -2.1,  ik_a: 2.1e-3,  gain: 112, vout_vrms: 50, thd_pct: 5}
+    - {vb_v: 300, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1000, vg1_v: -2.5,  ik_a: 2.5e-3,  gain: 116, vout_vrms: 64, thd_pct: 5}
+    - {vb_v: 350, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1000, vg1_v: -2.9,  ik_a: 2.9e-3,  gain: 120, vout_vrms: 75, thd_pct: 5}
+    - {vb_v: 400, ra_ohm: 100.0e+3, rg2_ohm: 400.0e+3, rk_ohm: 1000, vg1_v: -3.3,  ik_a: 3.3e-3,  gain: 124, vout_vrms: 87, thd_pct: 5}
+    - {vb_v: 100, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2700, vg1_v: -1.6,  ik_a: 0.6e-3, gain: 150, vout_vrms: 24.5, thd_pct: 5}
+    - {vb_v: 200, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, vg1_v: -1.75, ik_a: 0.8e-3, gain: 170, vout_vrms: 36, thd_pct: 5}
+    - {vb_v: 250, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, vg1_v: -2.0,  ik_a: 0.9e-3, gain: 180, vout_vrms: 46, thd_pct: 5}
+    - {vb_v: 300, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, vg1_v: -2.4,  ik_a: 1.1e-3, gain: 188, vout_vrms: 54, thd_pct: 5}
+    - {vb_v: 350, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, vg1_v: -3.1,  ik_a: 1.4e-3, gain: 196, vout_vrms: 63, thd_pct: 5}
+    - {vb_v: 400, ra_ohm: 220.0e+3, rg2_ohm: 1.0e+6, rk_ohm: 2200, vg1_v: -3.5,  ik_a: 1.6e-3, gain: 200, vout_vrms: 73, thd_pct: 5}
+  # Tesla p.2: high-gain pentode stages with Ua, Ug2, Ia, Ig2 all printed (Rg1 = Rg1' = 1 MOhm, cathode
+  # bias); thd at the output voltages given. The printed values aren't all self-consistent: derived_*
+  # are Vb - Ia Ra, Vb - Ig2 Rg2 and (Ia + Ig2) Rk (arithmetic, not printed).
+  rc_amplifier_tesla_p2:
+    - {vb_v: 100, ra_ohm: 200.0e+3, va_v: 42, rg2_ohm: 1.0e+6,  vg2_v: 45, rk_ohm: 3000, vg1_v: -1.03, ip_a: 0.20e-3, ig2_a: 0.055e-3, gain: 120, thd_pct: {"4": 1.1, "8": 1.6, "12": 2.5}, derived_va_v: 60.0, derived_vg2_v: 45.0, derived_vk_v: 0.77}
+    - {vb_v: 100, ra_ohm: 320.0e+3, va_v: 37, rg2_ohm: 1.25e+6, vg2_v: 46, rk_ohm: 5000, vg1_v: -1.25, ip_a: 0.21e-3, ig2_a: 0.045e-3, gain: 125, thd_pct: {"4": 1.1, "8": 1.7, "12": 2.6}, derived_va_v: 32.8, derived_vg2_v: 43.8, derived_vk_v: 1.28}
+    - {vb_v: 250, ra_ohm: 200.0e+3, va_v: 76, rg2_ohm: 1.0e+6,  vg2_v: 90, rk_ohm: 1500, vg1_v: -1.55, ip_a: 0.87e-3, ig2_a: 0.16e-3,  gain: 175, thd_pct: {"4": 0.5, "8": 0.7, "12": 1.0, "40": 3.2}, derived_va_v: 76.0, derived_vg2_v: 90.0, derived_vk_v: 1.55}
+    - {vb_v: 250, ra_ohm: 320.0e+3, va_v: 67, rg2_ohm: 1.6e+6,  vg2_v: 85, rk_ohm: 2000, vg1_v: -1.4,  ip_a: 0.61e-3, ig2_a: 0.11e-3,  gain: 210, thd_pct: {"4": 0.6, "8": 0.9, "12": 1.2, "40": 3.25}, derived_va_v: 54.8, derived_vg2_v: 74.0, derived_vk_v: 1.44}
+    # thd_pct keys: Eo rms output volts. Column 3 is consistent throughout; columns 1, 2 and 4 are not (as printed).
+  # Tesla p.2-3: grid-current bias (Rk = 0, Rg1 10 MOhm), Ra 200 kOhm, Rg2 1.25 MOhm, Rg1' 0.64 MOhm
+  rc_amplifier_tesla_grid_leak:
+    - {vb_v: 100, ra_ohm: 200.0e+3, rg2_ohm: 1.25e+6, rg1_ohm: 10.0e+6, ip_a: 0.3e-3, ig2_a: 0.06e-3, gain: 120, thd_pct_max: {"4": 1.2, "8": 1.8, "12": 3.0}}
+    - {vb_v: 250, ra_ohm: 200.0e+3, rg2_ohm: 1.25e+6, rg1_ohm: 10.0e+6, ip_a: 0.9e-3, ig2_a: 0.17e-3, gain: 190, thd_pct_max: {"4": 1.0, "8": 1.0, "12": 1.0}}
+  # Philips p.3: triode-connected R.C. stage (g2 to anode, g3 to cathode); Vo and dtot at the start
+  # of grid current (distortion ~ proportional to Vo below it); derived_vk_v = Ia Rk.
+  rc_amplifier_triode:
+    - {table: A, ra_ohm: 47.0e+3, rg1_next_ohm: 0.15e+6, rk_ohm: 1200, rows: [{vb_v: 400, ia_a: 3.7e-3, gain: 24.5, vout_vrms: 64, thd_pct: 4.5}, {vb_v: 350, ia_a: 3.2e-3, gain: 24.5, vout_vrms: 53, thd_pct: 4.0}, {vb_v: 300, ia_a: 2.7e-3, gain: 24, vout_vrms: 43, thd_pct: 3.8}, {vb_v: 250, ia_a: 2.3e-3, gain: 23.5, vout_vrms: 32, thd_pct: 3.5}, {vb_v: 200, ia_a: 1.9e-3, gain: 23.5, vout_vrms: 22, thd_pct: 3.1}]}
+    - {table: B, ra_ohm: 0.1e+6, rg1_next_ohm: 0.33e+6, rk_ohm: 2200, rows: [{vb_v: 400, ia_a: 2.0e-3, gain: 28.5, vout_vrms: 73, thd_pct: 4.0}, {vb_v: 350, ia_a: 1.7e-3, gain: 28.5, vout_vrms: 62, thd_pct: 4.0}, {vb_v: 300, ia_a: 1.5e-3, gain: 28.5, vout_vrms: 50, thd_pct: 3.8}, {vb_v: 250, ia_a: 1.3e-3, gain: 28, vout_vrms: 39, thd_pct: 3.7}, {vb_v: 200, ia_a: 1.0e-3, gain: 27.5, vout_vrms: 27.5, thd_pct: 3.3}]}
+    - {table: C, ra_ohm: 0.22e+6, rg1_next_ohm: 0.68e+6, rk_ohm: 3900, rows: [{vb_v: 400, ia_a: 1.1e-3, gain: 32, vout_vrms: 74, thd_pct: 3.8}, {vb_v: 350, ia_a: 0.9e-3, gain: 31.5, vout_vrms: 62, thd_pct: 3.7}, {vb_v: 300, ia_a: 0.8e-3, gain: 31, vout_vrms: 51, thd_pct: 3.7}, {vb_v: 250, ia_a: 0.7e-3, gain: 30.5, vout_vrms: 39, thd_pct: 3.5}, {vb_v: 200, ia_a: 0.5e-3, gain: 30.5, vout_vrms: 28, thd_pct: 3.1}]}
+  # Tesla p.4: triode-connected stage (g2 to a), Rg1 = Rg1' = 1 MOhm; current printed as Ia+g2.
+  # derived_va_v = Vb - I Ra (anode to ground), derived_vk_v = I Rk (arithmetic, not printed).
+  rc_amplifier_triode_tesla:
+    - {vb_v: 100, ra_ohm: 100.0e+3, rk_ohm: 2500, vg1_v: -1.3,   ia_a: 0.48e-3, gain: 26, derived_va_v: 52.0, derived_vk_v: 1.20}
+    - {vb_v: 100, ra_ohm: 200.0e+3, rk_ohm: 4500, vg1_v: -1.26,  ia_a: 0.28e-3, gain: 27, derived_va_v: 44.0, derived_vk_v: 1.26}
+    - {vb_v: 250, ra_ohm: 100.0e+3, rk_ohm: 1200, vg1_v: -1.9,   ia_a: 1.5e-3,  gain: 29, derived_va_v: 100.0, derived_vk_v: 1.80}
+    - {vb_v: 250, ra_ohm: 200.0e+3, rk_ohm: 1500, vg1_v: -1.275, ia_a: 0.85e-3, gain: 31, derived_va_v: 80.0, derived_vk_v: 1.275}
+  # Not transcribed: Philips p.8 (sheet C, gain and Ik vs Vb for the two pentode tables) and p.9
+  # (sheet D, Vi and distortion vs Vo at Vb 250 V): curves of the tabulated stages.
+
+# --- E88CC, the REDD.47's output valve (CHAINS_PLAN.md WP28) ---
+"E88CC":
+  source: "Philips Data handbook E88CC (6922) S.Q. tube, Dec. 1968, p.1-7; local copy sources/philips_e88cc.pdf (web: https://frank.pocnet.net/sheets/009/e/E88CC.pdf)"
+  class_a1:   # each section; p.2 column I (nominal). The grid is biased positive through the cathode resistor:
+              # Vk = 15 mA x 680 ohm = 10.2 V, so the tube sits at Va-k ~89.8 V, Vg-k ~-1.2 V
+    vba_v: 100
+    vbg_v: 9          # "+Vbg", grid supply (positive)
+    rk_ohm: 680
+    ip_a: 15.0e-3     # range 14.2-15.8 mA (II), end of life min 13.5 mA (III)
+    gm_s: 12.5e-3     # range 10.5-15 mA/V (II), end of life min 9 mA/V (III)
+    mu: 33
+    rp_ohm: null      # not tabulated; mu / S = 2640 ohm; p.10's curve (Va 90 V) reads ~2.65 kOhm at 15 mA
+  class_a1_other:     # p.2, second block (no grid supply)
+    - {vba_v: 90, rk_ohm: 120, ip_a: 12.0e-3, gm_s: 11.5e-3}   # Vk = 1.44 V: Va-k ~88.6 V, Vg-k ~-1.44 V
+  va90_curves:        # p.10 upper graph (7Z01689, Va = 90 V), read off its fitted grid by Claude; a figure, not a table
+    - {ip_a: 15.0e-3, vg_v: -1.23, gm_s: 12.5e-3, mu: 33.2, rp_ohm: 2650}
+    - {ip_a: 12.0e-3, vg_v: -1.49, gm_s: 11.4e-3, mu: 32.6, rp_ohm: 2900}
+    - {ip_a: 5.0e-3, vg_v: -2.25, gm_s: 6.9e-3, mu: 30.6, rp_ohm: 4500}
+  grid_current:       # p.2: negative grid current at Va 90 V, Ia 15 mA
+    ig_max_a: {initial: 0.1e-6, end_of_life: 1.0e-6}
+  cutoff:             # p.3: "Cut-off voltage -Vg 6.5 V (range 5-8.5 V)" at Va 150 V, Ia 0.1 mA
+    vp_v: 150
+    vg_v: -6.5
+    vg_range_v: [-8.5, -5.0]
+    ip_a: 0.1e-3
+  capacitances_f:     # p.4, "both sections if applicable"; no external shield; column I nominal (II range in comments)
+    gp: 1.4e-12                 # Cag (1.2-1.6)
+    input: 3.3e-12              # Cg/kfs = Cg/kf (2.7-3.9), each 3.3 pF: with or without the internal screen pin 9
+    output: 0.5e-12             # Ca/kf, section I (0.4-0.6); section II Ca'/k'f 0.4 pF (0.3-0.5)
+    output_with_screen: 1.75e-12   # Ca/kfs, section I (1.55-1.95); section II 1.65 pF (1.45-1.85)
+    ak: 0.18e-12                # Cak (0.14-0.22)
+    hk: {section_1: 2.6e-12, section_2: 2.7e-12}   # Ckf, Ck'f
+    a_screen: 1.3e-12           # Cas (1.1-1.5)
+    grounded_grid_output: {section_1: 3.0e-12, section_2: 2.9e-12}   # Ca/gfs (2.7-3.3), Ca'/g'fs (2.6-3.2)
+    grounded_grid_input: 6.0e-12   # Ck/gfs (5.1-6.9)
+    between_sections_max: {aa: 0.045e-12, gg: 0.005e-12, ag: 0.005e-12, gk: 0.005e-12}
+    telefunken: "Cg/k+f(+s) 3.1 +-0.6 pF, Cg/a 1.4, Ca/k+f+s 1.75 / 1.65, Ca/k+f 0.5 / 0.4, Ca/k 0.18, Cf/k 2.6 / 2.7, Ca/s 1.3, Ca/g+f+s 3.0 / 2.9, Ck/g+f+s 6.0 pF; Caa' < 0.045 (mean 0.030) pF"
+  max_ratings:        # p.5-6, design centre system, each section
+    vp_v: 220                   # Va max; 250 V when Wa <= 0.8 W; 550 V cold (Va0); 400 V at zero cathode current
+    pd_w: 1.5                   # 1.8 W with both sections together <= 2 W
+    pg_w: 0.03
+    ik_a: 20.0e-3               # peak 100 mA (200 us, duty 0.1)
+    vg_min_v: -100              # peak -200 V (200 us, duty 0.1)
+    vhk_v: {cathode_positive: 150, cathode_negative: 100}
+    rg_max_ohm: 1.0e6           # at Ia < 5 mA (Telefunken: fixed bias only at Ia <= 5 mA)
+    t_bulb_c: 170
+    telefunken_rhk_max_ohm: 20000
+  heater: {v: 6.3, a: 0.300, a_range: [0.285, 0.315], note: "indirect, a.c. or d.c., parallel supply; 6.0-6.6 V keeps life"}
+  pins: "1 anode 2 (a'), 2 grid 2 (g'), 3 cathode 2 (k'), 4-5 heater, 6 anode 1 (a), 7 grid 1 (g), 8 cathode 1 (k), 9 internal screen (s)"
+  telefunken_class_a1:  # Telefunken sheet 147 (local copy sources/telefunken_e88cc.pdf, web: https://frank.pocnet.net/sheets/128/e/E88CC.pdf)
+    source: "Telefunken E88CC / 6922 / CCa, sheet 147 (010164), Messwerte a) and b)"
+    vba_v: 100
+    vbg_v: 9
+    rk_ohm: 680
+    ip_a: 15.0e-3       # +-0.8 mA
+    gm_s: 12.5e-3       # +2.4 / -2 mA/V
+    mu: 33
+    circuit_b: {ub_v: 150, ra_ohm: 2500, rg_ohm: 0.3e6, vg_for_0p1ma_v: [-8.5, -5.0], ip_at_vg0_a: 33.0e-3, ip_at_vg0_tol_a: 5.0e-3, ip_at_vg_m15_max_a: 5.0e-6, ip_at_ub60_vg0_min_a: 9.0e-3}
+    end_of_life: {ip_min_a: 13.5e-3, gm_min_s: 9.0e-3, ig_max_a: 1.0e-6}

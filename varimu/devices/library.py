@@ -871,6 +871,88 @@ def build_ef804s() -> dict[str, Any]:
     }
 
 
+def build_ef86() -> dict[str, Any]:
+    """The EF86, the U 67's V1 (triode-connected) and the REDD.47's V1 (docs/CHAINS_PLAN.md
+    WP28): a Koren pentode with the e1 screen law (the EF804S's, its sister), fitted jointly to
+    Philips' plate and transfer curves, Tesla's screen curves (Vg2 <= 200 V, the rating: the
+    250 V curve's foot is far from the rest) and Philips' triode-connection curves (the anode
+    and screen currents together), the exponent held >= 1 (Newton at cutoff)."""
+    from scipy.optimize import least_squares
+
+    from varimu.devices.pentode import KorenPentode
+
+    pub = _published()["EF86"]
+    plate = _pentode_plate_points("philips_ef86")  # vg1, vg2, vp, ip
+    sc = load_csv("tesla_ef86_screen.csv")  # va, vg1, vg2, ig2
+    sc = sc[sc[:, 2] <= pub["max_ratings"]["vg2_v"]]
+    screen = np.c_[sc[:, 1], sc[:, 2], sc[:, 3]]
+    tri = load_csv("philips_ef86_triode_plate.csv")  # vg1, va, ia + ig2
+    ps = np.hypot(0.02 * plate[:, 3], 0.03e-3)
+    ss = np.hypot(0.05 * screen[:, 2], 0.01e-3)
+    ts = np.hypot(0.03 * tri[:, 2], 0.03e-3)
+
+    def make(x):
+        e = np.exp(x)
+        e[1] += 1.0  # ex >= 1
+        return KorenPentode(*e, "e1")
+
+    def total(m, vg1, va):
+        return m.ip(vg1, va, va) + m.ig2(vg1, va)
+
+    def resid(x):
+        m = make(x)
+        return np.r_[
+            (m.ip(plate[:, 0], plate[:, 1], plate[:, 2]) - plate[:, 3]) / ps,
+            (m.ig2(screen[:, 0], screen[:, 1]) - screen[:, 2]) / ss,
+            (total(m, tri[:, 0], tri[:, 1]) - tri[:, 2]) / ts,
+        ]
+
+    best = None
+    for x0 in (
+        [38.0, 0.35, 1400.0, 2500.0, 200.0, 5.0],
+        [25.0, 0.35, 3000.0, 20000.0, 100.0, 20.0],
+        [38.0, 0.5, 800.0, 4000.0, 300.0, 10.0],
+    ):
+        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+        if best is None or sol.cost < best.cost:
+            best = sol
+    m = make(best.x)
+    rp = curve_report(m.ip(plate[:, 0], plate[:, 1], plate[:, 2]), plate[:, 3], ps)
+    rs = curve_report(m.ig2(screen[:, 0], screen[:, 1]), screen[:, 2], ss)
+    rt = curve_report(total(m, tri[:, 0], tri[:, 1]), tri[:, 2], ts)
+    caps = pub["capacitances_f"]
+    return {
+        "name": "EF86",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares on the Philips EF86 (1956) plate and transfer "
+        "curves and triode-connection curves (data/datasheets/philips_ef86.provenance.yaml) and "
+        "the Tesla EF86 (1959) screen curves at Vg2 <= 200 V (tesla_ef86.provenance.yaml), "
+        "jointly; screen law 'e1' (the plate's E1, as the EF804S); the exponent held >= 1",
+        "model": {
+            "mu": m.mu,
+            "ex": m.ex,
+            "kg1": m.kg1,
+            "kg2": m.kg2,
+            "kp": m.kp,
+            "kvb": m.kvb,
+            "screen": "e1",
+        },
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1_max"],
+            "pk": caps["output"],
+            "source": f"{pub['source']}; Philips p.1 (input, output; g1p the printed maximum)",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "triode_connection": rt.as_dict(),
+            "sigma": "plate hypot(2%, 30 uA), screen hypot(5%, 10 uA), triode hypot(3%, 30 uA)",
+        },
+    }
+
+
 def build_e83f() -> dict[str, Any]:
     """The E83F, the V76's output tube V4: a Koren pentode fit to Philips' transfer, plate
     and screen curves."""
@@ -1000,6 +1082,26 @@ def build_k87() -> dict[str, Any]:
     geom = _plain(pub["geometry"])
     return {
         "name": "K87",
+        "kind": "capsule",
+        "form": "dual",
+        "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.dual_lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (dual_lumped's "
+        "docstring) on the geometry; air at 20 C",
+    }
+
+
+def build_k67() -> dict[str, Any]:
+    """Neumann's K 67 dual-diaphragm capsule (the U 67's; docs/CHAINS_PLAN.md WP28): the K 87's
+    form (published_points.yaml "K67": the network fitted to the U 67's curves through the
+    circuit by scripts/fit_k67.py), the lumped network derived from it as the CK12's."""
+    from varimu.devices import capsule
+
+    pub = _published()["K67"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "K67",
         "kind": "capsule",
         "form": "dual",
         "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
@@ -1330,6 +1432,8 @@ V6_TRANSFER_SIGMA = {"rel": 0.02, "abs_": 0.3e-3, "sigma_x": 0.15}  # V of Vg1
 V6_SCREEN_SIGMA = {"rel": 0.03, "abs_": 0.03e-3, "sigma_x": 0.15}
 # The 12AY7's fit lands in a poor minimum (Kvb -> 0) from the default starts.
 AY7_STARTS = ([40.0, 1.35, 1000.0, 300.0, 300.0], [40.0, 1.4, 500.0, 100.0, 30.0])
+# The E88CC from a 6DJ8-like start (mu ~33, a steep tube: small Kg1) and the 12AY7's.
+E88CC_STARTS = ([33.0, 1.35, 300.0, 300.0, 30.0], *AY7_STARTS)
 
 
 def load_12ay7() -> tuple[np.ndarray, np.ndarray]:
@@ -1369,6 +1473,43 @@ def build_12ay7() -> dict[str, Any]:
             "sigma": "2% of Ip + 30 uA, with the curve's slope times 1 V of Vp",
             "tungsol_plate_rms_a": float(np.sqrt(np.mean(ts_err**2))),
             "tungsol_plate_max_a": float(np.max(np.abs(ts_err))),
+        },
+    }
+
+
+def build_e88cc() -> dict[str, Any]:
+    """The REDD.47's V2 (docs/CHAINS_PLAN.md WP28): a Koren triode fit to Philips' plate curves
+    (grid 0..-10 V), Telefunken's as a cross-check. The curves' slope gives S ~10% under the
+    printed 12.5 mA/V at 15 mA (both sheets' curves alike: the provenance's notes)."""
+    pub = _published()["E88CC"]
+    d = load_csv("philips_e88cc_plate.csv")
+    tf = load_csv("telefunken_e88cc_plate.csv")
+    vg, vp, ip = d.T
+    m, rep = fit_koren_triode(
+        vg, vp, ip, effective_sigma(vp, ip, vg, 8.0, **AY7_SIGMA), starts=E88CC_STARTS
+    )
+    tf_err = m.ip(tf[:, 0], tf[:, 1]) - tf[:, 2]
+    caps = pub["capacitances_f"]
+    return {
+        "name": "E88CC",
+        "kind": "triode",
+        "source": "fit: Koren triode, least squares (effective variance) on the Philips E88CC "
+        "(Dec. 1968) plate curves, grid 0..-10 V, digitized: "
+        "data/datasheets/philips_e88cc.provenance.yaml",
+        "plate": {"model": "koren", "mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["input"],
+            "gp": caps["gp"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (each section, no external shield: Cg/kf -> gk, Ca/kf "
+            "-> pk); Telefunken's sheet prints the same",
+        },
+        "fit_report": {
+            "plate": rep.as_dict(),
+            "sigma": "2% of Ip + 30 uA, with the curve's slope times 1 V of Vp",
+            "telefunken_plate_rms_a": float(np.sqrt(np.mean(tf_err**2))),
+            "telefunken_plate_max_a": float(np.max(np.abs(tf_err))),
         },
     }
 
@@ -3458,6 +3599,9 @@ BUILDERS = {
     "K47": build_k47,
     "CK12": build_ck12,
     "K87": build_k87,
+    "K67": build_k67,
+    "E88CC": build_e88cc,
+    "EF86": build_ef86,
     "KK84": build_kk84,
     "R57": build_r57,
     "R59": build_r59,

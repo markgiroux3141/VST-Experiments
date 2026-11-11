@@ -111,6 +111,12 @@ def _tg_law_db(coarse: float) -> float:
     return float(20 * np.log10(3.16) + 25.0 - coarse)
 
 
+def _redd47_law_db(gain: float) -> float:
+    """REDD.47: S1's labels, the gain from the input terminals into 200 ohm (emi_redd47.yaml;
+    REDD.M47 p. 2)."""
+    return float(gain)
+
+
 PREAMPS = {
     "ssl_4000e": Preamp(
         circuit="ssl_4000e",
@@ -195,6 +201,18 @@ PREAMPS = {
         published_source="web: the IA-H9 schematic's GAIN labels 20-70 and the pad's 1:1 tap "
         "of the Sowter 7490 (1:10; data/schematics/helios_ia_h9/README.md)",
         pad_key="pad",
+    ),
+    "emi_redd47": Preamp(
+        circuit="emi_redd47",
+        nominal={"gain": 40, "rumble": 0},
+        nominal_gain_db=40.0,
+        gain_key="gain",
+        gain_points=(34, 40, 46),  # least gain first
+        law_db=_redd47_law_db,
+        load_key="r_load_ohm",
+        published={"min_gain_db": 34.0, "max_gain_db": 46.0},
+        published_source="txt: REDD.M47 (34 / 40 / 46 dB into 200 ohm; 0 dBm matched, +6 dBm "
+        "into 200 ohm, +14 dBm on overload peaks; data/schematics/emi_redd47/README.md)",
     ),
 }
 

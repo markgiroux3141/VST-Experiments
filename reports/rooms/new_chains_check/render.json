@@ -160,7 +160,7 @@
    "pan": 0.3,
    "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
    "rms_dbfs": -15.41,
-   "peak_dbfs": -4.82,
+   "peak_dbfs": -4.81,
    "hears": [
     "A"
    ],
@@ -196,6 +196,21 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "U67 into REDD.47",
+   "file": "U67_into_REDD_47.wav",
+   "chain": "u67_redd47",
+   "set": {},
+   "pan": 0.3,
+   "entries": "body {'radius_m': 0.0155, 'rim_radius_m': 0.017, 'rim_thickness_m': 0.0015, 'spacing_m': 0.0041, 'ring_proud_m': 0.0}",
+   "rms_dbfs": -16.68,
+   "peak_dbfs": -6.72,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -210,6 +225,6 @@
   8000,
   16000
  ],
- "wall_s": 327.7,
+ "wall_s": 10.4,
  "seconds": 8.999
 }

@@ -1,4 +1,4 @@
-# A check scene for the chains built 2026-11-10 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP19, WP22, WP24, ...): one
+# A check scene for the chains built 2026-11-10 and 2026-11-11 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP19, WP22, WP24, ..., WP28): one
 # source, the new chains as spots, rendered once at draft.
 #
 #   uv run --extra fast python scripts/room_print.py config/scenes/new_chains_check.yaml --quality draft
@@ -71,3 +71,8 @@ mics:
     position_m: [2.2, 2.3, 1.2]
     aim: {azimuth_deg: 120}
     pan: 0.2
+  - name: U67 into REDD.47
+    chain: u67_redd47
+    position_m: [2.35, 2.35, 1.5]
+    aim: {azimuth_deg: 150}
+    pan: 0.3

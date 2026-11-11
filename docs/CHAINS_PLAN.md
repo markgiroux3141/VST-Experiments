@@ -13,12 +13,12 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 40 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 42 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
-  M160 -> 1073, R-121 -> API 312; `uv run python scripts/chain_status.py`).
+  M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -56,17 +56,40 @@ runs**.
   251 E by inference), WP23 (the C414 B-ULS by inference), WP20 (the TG12345's mic input by
   inference), WP25 (the U 47 fet from Neumann's drawing), WP17 (the beyerdynamic M 160,
   `RIBBON_M160@1` by `scripts/fit_m160.py`), WP16 (the Royer R-121, `RIBBON_R121@1` by
-  `scripts/fit_r121.py`); each WP's Notes.
-- **Next:** WP28 (U67 / REDD.47: an EF86 fit first, the device-model rule: Python, SPICE,
-  circuitsim, both builders; sources to find: Neumann's U 67 drawing, EMI's REDD.47 sheets), WP29
-  (M49: an AC701 fit), WP27 (the Cloudlifter and three-stage chains in `compose_chain.py`), WP26 (a
-  surface-mounted mic in scenes), WP30 (a crystal transducer kind), WP31 (a carbon kind); WP15's
-  switches and WP14's bass switch (their curves digitized; WP14's network unread); WP13 (RE20)
-  waits on the N-entry room generalization (its Decision). Open options inside done WPs: the
-  Helios EQ (the IA-H9's EQUALIZER, VTB9043 / VTB9042 as the inductors), a CK12-family refit to
-  the C414 ULS's curves (its sheet's p.2, vector paths), the TG's channel past Amplifier D, the
-  U 47 fet's bass cut and -6 dB switches. The user fetches login-walled files on request: each
-  URL alone in a code block.
+  `scripts/fit_r121.py`); each WP's Notes. WP28 (2026-11-11): the EF86 and E88CC fits (`EF86@1`,
+  `E88CC@1`), the Neumann U 67 from Neumann's drawing (`K67@1` by `scripts/fit_k67.py`) and the EMI
+  REDD.47 from EMI's REDD.47/C1/1 and REDD.M47; WP28's Notes.
+- **Next:** WP29: the AC701 fit (`AC701@1`; its sheet is open) is this WP's first step; **the M 49
+  waits on its drawing** (not on the open web; the user fetches, `data/schematics/neumann_m49/README.md`):
+
+  ```
+  https://groupdiy.com/threads/m49c-circuit-details-questions.80237
+  ```
+
+  ```
+  https://www.radiomuseum.org/r/neumann_kondensator_mikrofon_m49b.html
+  ```
+
+  WP27: **the Cloudlifter's circuit isn't public** (Cloud's pages give +25 dB, 3k input, two
+  stages of four matched JFETs as a cascode, phantom-fed drains); a teardown is behind GroupDIY's
+  login (the user fetches):
+
+  ```
+  https://groupdiy.com/goto/post?id=1123046
+  ```
+
+  ```
+  https://groupdiy.com/threads/cloudlifter-cl-1repair.78404/page-2
+  ```
+
+  WP26 (the PZM): no schematic is open (Crown's service archive doesn't list the PZM-30D); the
+  surface placement in scenes can be built first. Then WP30 (a crystal transducer kind), WP31 (a
+  carbon kind); WP15's switches and WP14's bass switch (their curves digitized; WP14's network
+  unread); WP13 (RE20) waits on the N-entry room generalization (its Decision). Open options inside
+  done WPs: the Helios EQ (the IA-H9's EQUALIZER, VTB9043 / VTB9042 as the inductors), a
+  CK12-family refit to the C414 ULS's curves (its sheet's p.2, vector paths), the TG's channel past
+  Amplifier D, the U 47 fet's bass cut and -6 dB switches, the U 67's bass cut's shape (WP28's
+  Notes). The user fetches login-walled files on request: each URL alone in a code block.
 - **The user's decisions (2026-11-10):** the IA-H9 files (Iron Age Audioworks) are OK to use for
   WP19. The C414 GroupDIY thread and a legible ELA M 251 drawing can't be had (the links are
   dead): don't ask for them again. Build those by inference, every value sourced as provisional
@@ -82,7 +105,8 @@ runs**.
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
-  (`config/scenes/new_chains_check.yaml` renders one of each) in the Room view (optional). One call
+  and the 2026-11-11 ones (U67 -> REDD.47 added to `config/scenes/new_chains_check.yaml`, which
+  renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
   material (moves every render).
@@ -183,7 +207,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | done 2026-11-10 |
 | 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | |
-| 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | |
+| 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | done 2026-11-11 (with the E88CC fit) |
 | 29 | The AC701 fit; Neumann M49 | M49 -> V76 | L | |
 | 30 | The crystal kind; the Shure Green Bullet into the 5E3 (an instrument, a source in the room) | Green Bullet -> 5E3 | L | |
 | 31 | The carbon kind; a carbon transmitter | Carbon -> clean | M | |
@@ -1553,6 +1577,72 @@ provenance). Not checked: the offset's brighter rear at close range (the manual'
 polars beyond the figure-8's null. `config/circuits/royer_r121.yaml`, `tests/test_royer_r121.py`
 (4); `r121_api312` composed and rendered.
 
+### WP28. The EF86 fit; the Neumann U 67; the EMI REDD.47
+
+Sources: the EF86 sheets (`data/datasheets/sources/philips_ef86_1956.pdf`,
+`tesla_ef86_1959.pdf`, frank.pocnet.net), the E88CC's (`philips_e88cc.pdf`,
+`telefunken_e88cc.pdf`; the REDD.47's output valve, a second fit this WP needs),
+`data/schematics/neumann_u67/README.md` (Neumann's drawing 1020390101, BV 12's winding
+specification, the 1966 specification sheets), `data/schematics/emi_redd47/README.md` (EMI's
+REDD.M47 text and drawing REDD.47/C1/1, via Sowter).
+
+Steps:
+1. The EF86: its curves digitized (plate, transfer, screen, triode connection) with provenance;
+   `build_ef86` in `varimu/devices/library.py` (a Koren pentode, the e1 screen law as the
+   EF804S, its sister), `EF86@1`; the pentode device already has the Python, SPICE and circuitsim
+   implementations and both builders, so "done" is the fit, its report, the agreement fixtures
+   (`export_circuit_fixtures.py`) and a test against the sheet's printed points.
+2. The E88CC likewise (`build_e88cc`, a Koren triode, `E88CC@1`).
+3. The U 67: `K67@1` (K87@2's geometry refitted to the U 67's curves through the circuit, the
+   K87 / KK84 method), `config/circuits/neumann_u67.yaml` from the drawing (BV 12's turns from
+   its specification), idle against the printed voltages, sensitivity 11 / 20 / 14 mV/Pa,
+   the preamplifier's -2 / 0 dB, C17 within 80-160 pF; its tests; `u67_n1073` composed.
+4. The REDD.47: `config/circuits/emi_redd47.yaml` from REDD.47/C1/1, idle against its printed
+   voltages and currents, its profile (34 / 40 / 46 dB into 200 ohm, VR1 trimmed for 40 dB at the
+   mid position); `u67_redd47` composed.
+
+Decisions (2026-11-11, Claude's):
+- The EF86 fit is joint (plate, Tesla's screen at Vg2 <= 200 V, the triode connection's total
+  current), the e1 screen law, the exponent held >= 1: Tesla's 250 V screen curve (above the
+  rating) dragged the screen law 7 sigma off; without it every set fits at ~2 sigma.
+- The U 67's grid capacitance: the EF86's sheet gives g1 to everything 3.8 pF, but the 1966
+  sheet's preamplifier amplification (-2.0 dB cardioid / 0 dB omni at the calibrating input) needs
+  ~100 pF at the grid; a g1-to-anode capacitor `c_ga_f` (the triode connection's g1-g2 plus the
+  head's wiring, Miller-multiplied) fitted to the cardioid's -2.0: 3.4 pF (omni then +0.24 dB).
+- The calibrating input is a `sine` part at R20 with 0 V amplitude (not a control input: the room
+  pipeline drives only `p_rear`).
+- The U 67's BV 12 from Neumann's winding specification (turns, the maximum DC resistances,
+  mu-metal UI 30, 7.1 mm stack, 0.05 kg), leakage and capacitance provisional; S4's 50 ohm strap not
+  modelled.
+- The REDD.47's T1 leakage / capacitance chosen (2 mH / 200 pF) so its resonance sits above the
+  band (no response curve of the REDD.47 among the sources: REDD.47/C25 isn't); T2's provisional
+  core sized so 20 Hz near overload doesn't saturate (an 8 mm tongue read 76% THD there).
+
+Notes (2026-11-11, done): the EF86 (`EF86@1`, `build_ef86`; curves digitized by a subagent:
+`data/datasheets/philips_ef86.provenance.yaml`, `tesla_ef86.provenance.yaml`; Philips' p.6-7 are
+the EF40's graphs re-stamped): class A 3.15 mA / Ig2 0.51 / gm 1.96 mA/V / mu 39.9 (printed 3.0 /
+0.5-0.6 / 2.0 / 38), rp 6.2 MOhm (printed 2.5: Koren's knee); the triode connection 2.4 sigma rms.
+The E88CC (`E88CC@1`, `build_e88cc`, `philips_e88cc.provenance.yaml` + Telefunken's as a
+cross-check, 0.59 mA rms apart): 15.3 mA at the sheet's 15 mA point, gm 10.6 (the curves' own
+slope 11.3, printed 12.5: both sheets' curves alike). Both in `test_spice_agreement.py` and the
+device fixtures; `varimu/devices/table.py` has the E88CC's table grid.
+**The U 67** (`config/circuits/neumann_u67.yaml`, `K67@1` by `scripts/fit_k67.py`: K87@2's
+geometry through the circuit's measured correction, `reports/mics/k67_correction.json`): idles at
+the anode 80.6 V (printed approx. 75), grid -1.75, backplate 58.9, rear line 119.5; 12.1 / 19.3 /
+12.8 mV/Pa omni / cardioid / figure-8 into 1k (the sheet 11 / 20 / 14), preamplifier -1.97 / +0.24
+dB, 166 ohm (200 +-20%), 0.27% THD at 116 dB SPL (<= 0.5%), the cardioid's rear -23.7 dB at 1 kHz,
+the pad -11.7 dB (approx. 10). K67's fit: on axis rms 0.9 / 0.8 dB (omni / cardioid; worst 2.4 dB
+at 63 Hz, the electronics' region), the cardioid's 180 deg rms 2.2 dB (worst 4.1 at 2.8 kHz); the
+tension 61 N/m, several network values at their bounds. The 100 Hz bass cut (S1) also takes ~0.6
+dB at 2 kHz and is steeper than the sheet's dashed curve (-6.7 dB at 100 Hz against ~-3.5): open.
+`tests/test_neumann_u67.py` (6). **The REDD.47** (`config/circuits/emi_redd47.yaml`, VR1 by
+`scripts/redd47_trim.py --write`: 0.1346): V2 17.7 mA at 3.54 V / 145 V (printed 18 mA / 3.7 / 138),
+V1's anode 60.5 V and cathode 1.93 V (printed 73 / 1.65: the EF86 fit runs ~12% more current
+there); profile (`reports/units/redd47_nominal/`): 33.6 / 40.0 / 46.5 dB, flat within 0.13 dB
+10 Hz-20 kHz from the generator (re the terminals the top rises: the input falls to ~1.4k at 15
+kHz, the loading REDD.M47 describes), output 16 ohm, THD 0.08% at 0 dBu, 0.49% at +14 dBu, 1% near
++17 dBu, 6.5% at 20 Hz near overload. `tests/test_emi_redd47.py` (5). `u67_redd47`, `u67_n1073`
+composed; `u67_redd47` rendered in `new_chains_check.yaml` (-16.7 dBFS rms).
 
 ### WP10-WP31
 
@@ -1676,3 +1766,10 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   M 160 (RIBBON_M160 on the 77-DX's circuit, a hypercardioid slot); WP16 the R-121 (the offset
   ribbon); SM57 -> Helios, 251 -> 1073, C414 -> SSL / clean, 4038 / U87 / KM84 -> TG, U47 fet ->
   API, M160 -> 1073, R-121 -> API composed: 40 of 51 available.
+- 2026-11-11 (the user away): WP28 done: the EF86 fit (Philips' plate / transfer / triode
+  connection and Tesla's screen curves, digitized by a subagent) and the E88CC's (the REDD.47's
+  output valve); the Neumann U 67 from Neumann's drawing 1020390101 (found on vintagewindings.com
+  with the BV 12's winding specification; the 1966 sheets' curves digitized; `K67@1` fitted through
+  the circuit) and the EMI REDD.47 from EMI's REDD.M47 and REDD.47/C1/1 (via Sowter); U67 ->
+  REDD.47 and -> 1073 composed: 42 of 51. WP29's M 49 and WP27's Cloudlifter wait on login-walled
+  drawings (the URLs in Status).

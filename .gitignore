@@ -86,6 +86,13 @@ data/schematics/emi_tg12345/*.txt
 data/schematics/api_312/*.pdf
 # Royer's R-121 manual and cut sheet (cited by data/schematics/royer_r121/README.md)
 data/schematics/royer_r121/*.pdf
+# Neumann's U 67 and EMI's REDD.47 documents (cited by their READMEs: URLs and sha256)
+data/schematics/neumann_u67/*
+!data/schematics/neumann_u67/README.md
+data/schematics/emi_redd47/*
+!data/schematics/emi_redd47/README.md
+data/schematics/neumann_m49/*
+!data/schematics/neumann_m49/README.md
 
 # Reference recordings of real instruments and songs (commercial / third-party audio), never committed
 real instrument samples/

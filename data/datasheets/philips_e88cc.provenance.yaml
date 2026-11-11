@@ -1,0 +1,77 @@
+device: "E88CC (6922)"
+document: "Philips Data handbook, E88CC S.Q. tube (special quality double triode), 12 pages"
+publisher: Philips
+date: 1968-12
+local_copy: sources/philips_e88cc.pdf
+local_copy_sha256: 7cf06271f4c06c3b7fe3c60508d29c0ff64d33db0da09f2c2984b18932288ae4
+scan_source: "web: https://frank.pocnet.net/sheets/009/e/E88CC.pdf"
+other_copies: >-
+  Telefunken E88CC / 6922 / CCa, sheets 147-154 (pages dated 010164-040164; local copy
+  sources/telefunken_e88cc.pdf): its own plate family (Ro/V-B 0602 R) digitized as
+  telefunken_e88cc_plate.csv (telefunken_e88cc.provenance.yaml).
+digitized_with: >-
+  the PDF's native 1-bit page image of p.9 (1712 x 2448 px, ~200 dpi) extracted with PyMuPDF
+  extract_image; each grid line fitted along its length (straight line through per-strip centroids,
+  residuals 0.2-0.45 px; the lines lean ~0.5 deg and vary in slope, so each is fitted on its own),
+  values interpolated between the neighbouring fitted lines; strokes traced column by column and row
+  by row as run centres with the grid-line bands masked (a run cut by a band on one side placed by its
+  far edge and the local stroke width), grouped into one curve each by connectivity after dilation,
+  outliers rejected against a smoothing spline of Va(Ia); read at round anode voltages by local linear
+  fits (+-2.5 V, +-4 V where a grid crossing left a gap); overlay of every read point on the page
+  checked by eye (Claude Code subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  philips_e88cc_plate.csv:
+    figure: "PDF p.9, lower graph (7Z01254): Ia vs Va, Vg as parameter, each section (0-300 V x 0-20 mA)"
+    columns: "vg_v, vp_v, ip_a"
+    curves: "Vg = 0, -1, -2, ..., -10 V (11 curves; 10-18 points each, 137 in all)"
+    coverage: >-
+      Ia 0.2-19 mA, Va 5-300 V, every 5 V (2.5 V on the -9 and -10 V curves, which are short within
+      the rating). Points above Wa = 1.5 W (p.5: max. 1.5 W per section; 1.8 W when both together
+      stay <= 2 W) left out, so the -1 V curve stops at 85 V (16.0 mA), -2 V at 110 V, -4 V at 160 V,
+      ..., -8 V at 255 V; the 0 V curve ends at the graph's 20 mA top (60 V). Below ~0.2 mA the strokes
+      lie on the zero axis: not read. The -10 V point at 300 V is extrapolated <= 1.5 V to the frame.
+      The REDD.47 region (Va 100-200 V, a few mA per section) is covered by the -3 to -7 V curves.
+  not digitized: >-
+    p.9 upper graph (7Z04430, 0-350 V x 0-100 mA, Vg = +4 ... -10 V): within 1.5 W it duplicates the
+    lower graph at a 4x coarser current scale, except the positive-grid curves (+1 to +4 V), which lie
+    within 1.5 W only below ~25-50 V where the strokes crowd at the origin. Read as a cross-check only
+    (see checks). p.8 transfer curves (Ia vs Vg), p.10 S / mu / Ri / -Vg vs Ia at Va = 90 V and 150 V,
+    p.11-12 output curves: not digitized (a few p.10 values read for the checks).
+axis_calibration: "p.9 lower graph: 61 vertical lines 0-300 V every 5 V (labelled every 50 V), 41 horizontal lines 0-20 mA every 0.5 mA (labelled every 5 mA); ~21.05 px per line both ways"
+estimated_error: >-
+  About +-0.05 mA or +-1%, whichever is larger, in reading the drawn curves (stroke-centre scatter
+  0.1-0.3 V rms along Va about each curve's spline; grid-fit residuals <= 0.45 px = 0.01 mA / 0.1 V);
+  near the foot (< 0.5 mA) about +-0.1 mA. The drawn curves themselves disagree more than that between
+  figures: the upper graph of p.9 reads 0.35 mA rms, up to 1.06 mA (Vg = 0 V at 60 V, 20.0 vs 19.0 mA),
+  from the lower one at the same points (56 points, Ia > 3 mA; the -3 V curve 0.5-0.65 mA lower there,
+  0 V up to 1 mA higher).
+checks:
+  - >-
+    p.2 (characteristics, column I): Vba 100 V, +Vbg 9 V, Rk 680 ohm -> Ia 15 mA, S 12.5 mA/V, mu 33.
+    Solved on the curves (Ia^(2/3) interpolated in Vg between neighbouring curves, Vk = Ia Rk): Ia 15.05
+    mA at Va 89.8 V, Vg -1.23 V; mu 32.8 there (from the curves' spacing in Va at 15 mA: -1 / -2 / -3 V
+    at 82.1 / 114.5 / 147.0 V), S 11.3 mA/V, rp 2.9 kOhm (the -1 V curve's slope there, 0.346 mA/V).
+  - >-
+    p.2: Vba 90 V, Rk 120 ohm -> Ia 12 mA, S 11.5 mA/V. On the curves: Ia 12.16 mA at Va 88.5 V,
+    Vg -1.46 V, mu 33.0, S 10.5 mA/V, rp 3.15 kOhm.
+  - >-
+    p.10 (Va = 90 V; values read off the figure's fitted grid, not tabulated): at Ia 15 mA, -Vg 1.23 V,
+    S 12.5 mA/V, mu 33.2, Ri 2.65 kOhm; at 12 mA, -Vg 1.49 V, S 11.4 mA/V, mu 32.6, Ri 2.9 kOhm. The
+    plate curves give the same grid voltage (-1.24 V for 15 mA at 90 V) and mu, but their slope is ~10%
+    shallower than p.10's Ri (2.9 vs 2.65 kOhm at 15 mA), so S from the plate family is ~10% below the
+    printed 12.5 / 11.5 mA/V. The upper graph of p.9 gives 2.6 kOhm for the -1 V curve at 80-85 V.
+  - "p.6 class A output: Va 220 V, -Vg 6.5 V, Ia 6.5 mA at zero signal; the curves give 6.8 mA (-6 V: 10.1, -7 V: 4.0 mA at 220 V)."
+  - "p.6-7 class B: Va 200 V, -Vg 6 V, 5 mA per tube; the -6 V curve gives 4.95 mA at 200 V."
+  - >-
+    p.3 cut-off: -Vg 6.5 V (range 5-8.5 V) for Ia 0.1 mA at Va 150 V. The curves put 0.25 mA at 133.5 V
+    on -5 V and 161.6 V on -6 V, so 0.1 mA at 150 V lies near -5.7 to -5.8 V: inside the range, ~0.7 V
+    short of the nominal.
+  - "Telefunken's plate family (telefunken_e88cc_plate.csv) agrees within 0.12 mA rms above 1 mA (99 common points, mean -0.05 mA); below 1 mA Telefunken's feet run 0.1-0.5 mA lower."
+notes: >-
+  The REDD.47 runs both systems in parallel; this file is per section, as printed. The upper graph of
+  p.9 shows the same family to 100 mA (mostly beyond 1.5 W) and the positive-grid curves; its
+  agreement with the lower graph is the figure-to-figure spread quoted above. The sheet prints no anode
+  resistor for its Fig.1 (p.7, Ia = 33 mA at Vba 150 V, grid fed through 0.3 MOhm); Telefunken's
+  equivalent circuit has Ra = 2.5 kOhm.

@@ -30,7 +30,7 @@ def _op(netlist_lines, vectors):
     return {v: float(r[v][0]) for v in vectors}
 
 
-@pytest.mark.parametrize("name", ["6386", "12AX7", "12BH7", "12AY7", "VF14T@1"])
+@pytest.mark.parametrize("name", ["6386", "12AX7", "12BH7", "12AY7", "VF14T@1", "E88CC@1"])
 def test_triode_plate_and_grid_current_agree(name):
     t = load_device(name)
     pts = [(vg, vp) for vg in (-70, -40, -20, -10, -4, -1, 0, 0.5) for vp in range(0, 401, 25)]
@@ -55,10 +55,10 @@ SMALL = ((-6, -4, -2.5, -1.5, -0.5, 0), (40, 90, 160))  # signal pentodes, low s
 
 @pytest.mark.parametrize(
     "name,grid",
-    [("6973", POWER), ("6V6GT", POWER), ("EF804S@1", SMALL), ("E83F@1", SMALL)],
+    [("6973", POWER), ("6V6GT", POWER), ("EF804S@1", SMALL), ("E83F@1", SMALL), ("EF86@1", SMALL)],
 )
 def test_pentode_agrees(name, grid):
-    """Koren's screen law (6973, 6V6GT) and the "e1" law (EF804S, E83F)."""
+    """Koren's screen law (6973, 6V6GT) and the "e1" law (EF804S, E83F, EF86)."""
     p = load_device(name)
     pts = [(vg, vs, vp) for vg in grid[0] for vs in grid[1] for vp in range(0, 401, 25)]
     lines = [p.subckt()]

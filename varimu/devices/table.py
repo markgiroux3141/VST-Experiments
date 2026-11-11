@@ -71,6 +71,9 @@ GRIDS = {
     # The Neumann U47's VF14M, triode-connected (idles near Vg -1.1 V, Vp 34 V; cutoff near
     # -4 V at 100 V).
     "VF14T": TableGrid(_ranges((-40.0, -8.0, 0.5), (-8.0, 5.0, 0.02)), _VP_SMALL),
+    # The REDD.47's output valve, both sections (idle near Vg -3.6 V, Vp 140 V; cutoff near
+    # -6 V at 150 V).
+    "E88CC": TableGrid(_ranges((-60.0, -15.0, 0.5), (-15.0, 5.0, 0.02)), _VP_SMALL),
     # The regulator's pass tube (idles near Vg -5 V, Vp 195 V; Vp to 700 V for start-up).
     "EL34T": TableGrid(
         _ranges((-100.0, -20.0, 1.0), (-20.0, 5.0, 0.05)),

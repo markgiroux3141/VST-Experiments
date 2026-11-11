@@ -1,0 +1,48 @@
+device: "E88CC (6922, CCa)"
+document: "Telefunken E 88 CC / 6922 / CCa Doppeltriode (twin triode), data sheets 147-154"
+publisher: Telefunken
+date: "pages dated 010164 / 020164 / 030164 / 040164 (Jan. 1964 by Telefunken's sheet numbering)"
+local_copy: sources/telefunken_e88cc.pdf
+local_copy_sha256: 145a5ed2c6ca639de9d9e89cb949b1c6929a04d59ce43133207914df1876fcd3
+scan_source: "web: https://frank.pocnet.net/sheets/128/e/E88CC.pdf"
+digitized_with: >-
+  the PDF's native 1-bit page image of p.6 (sheet 152; 1888 x 2688 px) extracted with PyMuPDF
+  extract_image and turned 90 deg (the figure is printed sideways); each grid line fitted along its
+  length (residuals <= 0.85 px), values interpolated between the neighbouring fitted lines; only the
+  solid part of each curve traced (the region beyond 1.40 W masked, which also removes the dash-dot
+  Na = 1.5 W line), column by column and row by row as run centres with the grid-line bands masked
+  (a run cut by a band on one side placed by its far edge and the local stroke width), grouped by
+  connectivity, then tracked upward from each curve's clean lower quarter so the in-graph labels
+  ("Ug = 0V", "-10V") are dropped; read at round anode voltages by local linear fits; overlay checked
+  by eye (Claude Code subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  telefunken_e88cc_plate.csv:
+    figure: "PDF p.6 (sheet 152, Ro/V-B 0602 R): Ia = f(Ua), Ug = parameter, 0-300 V x 0-20 mA, curves solid up to Na = 1.5 W and dashed beyond"
+    columns: "vg_v, vp_v, ip_a"
+    curves: "Ug = 0, -1, -2, ..., -10 V (11 curves; 10-17 points each, 149 in all)"
+    coverage: >-
+      Ia 0.25-19 mA, Va 5-300 V, every 5 V (2.5 V from -4 V on, where the solid parts are short); only
+      the solid (<= 1.5 W) parts, read to ~1.4 W (the -1 V curve to 80 V, 14.4 mA). Feet below 0.25-0.4
+      mA rest on the zero axis: not read. The -10 V point at 300 V is extrapolated <= 1.5 V to the frame.
+  not digitized: >-
+    p.5 (sheet 151) Ia = f(Ug) at Ua = 90, 150, 200 V; p.7 (sheet 153) the 0-300 V x 0-100 mA family
+    with positive grids (coarse 25 V x 10 mA grid); p.8 (sheet 154) S, Ri, mu vs Ug at Ua 90 / 150 V.
+axis_calibration: "61 lines 0-300 V every 5 V (labelled every 50 V), 41 lines 0-20 mA every 0.5 mA (labelled every 5 mA); ~31 px per line"
+estimated_error: >-
+  About +-0.05 mA or +-1%, whichever is larger (stroke-centre scatter 0.06-0.25 V rms along Va about
+  each curve's spline); near the foot about +-0.1 mA.
+checks:
+  - >-
+    Against Philips' p.9 family (philips_e88cc_plate.csv): 0.12 mA rms, mean -0.05 mA over 99 common
+    points above 1 mA; below 1 mA Telefunken's feet are 0.1-0.5 mA lower (straighter feet as drawn).
+  - >-
+    The printed measuring point a) (p.1: Uba 100 V, Ubg +9 V, Rk 680 ohm -> Ia 15 +-0.8 mA, S 12.5 mA/V,
+    mu 33) sits at Va ~90 V, Ug ~-1.2 V, 1.35 W: beyond this file's last -1 V point (80 V); its check is
+    on the Philips curves (philips_e88cc.provenance.yaml), which agree with these within 0.12 mA rms.
+notes: >-
+  Telefunken's tabulated values are the same as Philips' (Ia 15 mA, S 12.5 mA/V, mu 33 at Uba 100 V,
+  Ubg +9 V, Rk 680 ohm). Its grid capacitance differs: Cg/k+f(+s) 3.1 +-0.6 pF vs Philips' 3.3 pF. Its
+  measuring circuit b) prints Ra = 2.5 kOhm, Rg = 0.3 MOhm from Ub = 150 V: Ia (Ug = 0 V) 33 +-5 mA,
+  Ug (Ia = 0.1 mA) -8.5 ... -5 V, Ia (Ug = -15 V) <= 5 uA, Ia (Ub = 60 V, Ug = 0 V) > 9 mA.

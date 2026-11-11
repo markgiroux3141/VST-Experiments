@@ -120,6 +120,12 @@ def _run_tg(*args, **kwargs):
     return opamp_pre_suite.run(*args, circuit="emi_tg12345", **kwargs)
 
 
+def _run_redd47(*args, **kwargs):
+    from varimu.measure import opamp_pre_suite
+
+    return opamp_pre_suite.run(*args, circuit="emi_redd47", **kwargs)
+
+
 def _run_porta(*args, **kwargs):
     from varimu.measure import opamp_pre_suite
 
@@ -171,6 +177,7 @@ PROFILES = {
     "neve_1073": Profile("neve_1073", "mic_preamp", _run_neve1073),
     "helios": Profile("helios", "mic_preamp", _run_helios),
     "emi_tg12345": Profile("emi_tg12345", "mic_preamp", _run_tg),
+    "emi_redd47": Profile("emi_redd47", "mic_preamp", _run_redd47),
     "ampex_351_record": Profile("ampex_351_record", "mic_preamp", _run_a351_record),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
     "urei_1176": Profile("urei_1176", "compressor", _run_limiter),

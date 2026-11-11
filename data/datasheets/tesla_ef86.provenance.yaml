@@ -1,0 +1,41 @@
+device: "EF86"
+document: "Tesla, EF86 nízkofrekvenční pentoda (data sheet, 16 pp.)"
+publisher: Tesla
+date: 1959-03-02
+local_copy: sources/tesla_ef86_1959.pdf
+local_copy_sha256: 1f1608d9400155486a52c5628ff87bb2927769133621ff4422341ec830d3e662
+scan_source: "web: https://frank.pocnet.net/sheets/183/e/EF86.pdf"
+digitized_with: >-
+  the PDF's native page image (PyMuPDF extract_image, 1600 x 2432, near-bitonal grayscale,
+  thresholded at 200 to keep the anti-aliased stroke edges); each grid line fitted along its length on
+  clean grid-width runs (rms 0.2-0.6 px), values interpolated between the neighbouring fitted lines;
+  strokes traced as run centres, by rows on the steep parts and by columns on the foot, with the
+  grid-line bands masked; read at round Ug1 by local linear fits (the 0 V values one-sided, a
+  quadratic over the last 0.3 V); every overlay checked by eye (Claude Code subagent, scratch
+  scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  tesla_ef86_screen.csv:
+    figure: "PDF p.10: Ig2 = f(Ug1) at Ua = 250 V, Ug3 = 0 V, Ug2 = 250 / 180 / 140 / 100 / 60 V"
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    curves: "Vg2 = 250, 180, 140, 100, 60 V"
+    coverage: >-
+      Vg1 in 0.25 V steps, Ig2 >= 0.02 mA (below that the stroke rests on the zero axis): 250 V
+      -5.75..-3.0 V (0.022-0.74 mA), 180 V -5.0..-1.75 V (0.040-1.06 mA), 140 V -3.75..0 V
+      (0.051-1.45 mA), 100 V -2.75..0 V (0.038-0.93 mA), 60 V -1.75..0 V (0.033-0.46 mA). The
+      sheet dashes the 250 V and 180 V curves beyond Wg2 = 0.2 W (from ~0.8 / ~1.1 mA): left out
+      (points with Ig2 Vg2 > 0.205 W; the 140 V curve is solid to its 0 V end at 0.203 W). Ug2 =
+      250 V is above the rated Vg2 max (200 V).
+axis_calibration: "labelled grid lines: -6..0 V every 0.2 V x 0-2.75 mA every 0.05 mA"
+estimated_error: >-
+  About +-0.005 mA (1 px = 0.0057 V, 0.0018 mA; local-fit scatter <= 0.0025 mA). Check against the
+  sheet's characteristics (p.1: Ua 250, Ug3 0, Ug2 140, Ug1 -2 V: Ia 3 mA, Ig2 0.5 mA, S 2 mA/V,
+  mu 38, Ri 2.5 MOhm, Ia < 0.1 mA at -5 V): the 140 V curve gives 0.493 mA at -2 V. Philips (1956)
+  prints Ig2 0.6 mA for the same point.
+notes: >-
+  Philips' EF86 sheets have no screen-current curve, hence this file. Other Tesla curves not
+  digitized: Ia(Ug1) at Ug2 200..60 V (p.6), S(Ug1) (p.8), Ia(Ug2) and Ig2(Ug2) families at
+  Ua 250 V (pp.9, 11), the triode-connected plate family (p.7) and transfer curves (p.14), the
+  pentode plate family at Ug2 140 V (p.15). The triode figures S, -Ug1, Ri, mu vs Ia at Ua 200 V
+  (p.16) are read at a few currents in the published-points transcription.

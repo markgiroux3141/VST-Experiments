@@ -1,0 +1,39 @@
+device: "U 67"
+curve: free-field frequency responses on axis (omni, cardioid, figure-8; the flat setting) and the cardioid at 180 deg
+publisher: Georg Neumann, Laboratorium fuer Elektroakustik GmbH, Berlin
+documents:
+  1966mar:
+    title: "Condenser Microphone U 67 (specification sheets, U 67 - 910 - 02 - 01, '373 Mrz 66')"
+    date: "March 1966"
+    scan_source: "web: https://coutant.org/u67/1966mar.pdf (linked from https://coutant.org/u67)"
+    sha256: 764c3632bdb770954e03a9d14fd075bb22c73a375d2eeaa91f81eeb0e6663a15
+    bytes: 394322
+    page: "PDF p. 7 (its own 8-bit scan, 2384 x 3274 px), turned upright 90 deg clockwise"
+  u67freq:
+    title: "the same chart as a GIF on coutant.org (600 x 416 px): not read, a cross-check by eye"
+    scan_source: "web: https://coutant.org/u67/u67freq.gif"
+    sha256: 9d02904c9eae9be6d55bf844f3bcf25a366ee675545625252810d62fd64e314f
+local_copy: "data/schematics/neumann_u67/coutant_1966mar.pdf"
+digitized_with: >-
+  scripts/digitize_neumann_u67.py: frequency log-linear, the 100 / 1000 Hz rules at x 1016 / 1810 px (794
+  px a decade; the frame's 20 Hz / 20 kHz edges at 465 / 2845 agree within 4 px); 5 dB rules 19.85 px a dB,
+  each chart's 0 dB rule at y 499.5 / 892 / 1683 px. The bold curves survive a 5 x 5 erosion (the grid
+  and the dashed curves are 2-3 px), each column's run nearest the last point. The cardioid's 180 deg
+  curve (dashed) read on the raw pixels below the 0 deg curve with the rules' rows masked, from 200 Hz
+  (below, the flat and bass-cut settings' 180 deg curves part) to 18 kHz, gaps interpolated. Every
+  trace overlaid on the page and checked by eye.
+digitized_by: Claude Code
+digitized_on: 2026-11-11
+files:
+  neumann_u67_response.csv:
+    columns: pattern (omni | cardioid | figure8), angle_deg (0 | 180), freq_hz, db_re_1k
+    coverage: >-
+      on axis 20 Hz - 20 kHz (figure-8 from 25 Hz), the flat setting (the built-in cut below ~30 Hz
+      included); 180 deg cardioid 200 Hz - 18 kHz, re the cardioid's on-axis 1 kHz. Not read: the
+      bass-cut (100 Hz) setting's dashed curves, the 180 deg curves below 200 Hz.
+estimated_error: >-
+  +-0.15 dB on the bold curves (a stroke ~6 px wide, its centre), +-0.3 dB on the dashed 180 deg curve
+  (+-0.5 dB where it crosses a rule); frequency +-1% (the rules' placement).
+notes: >-
+  Each curve is given re its own value at 1 kHz: the chart draws the three patterns' 0 dB at their own
+  1 kHz levels (the sensitivities differ: 1.1 / 2.0 / 1.4 mV/ub, the same sheet's p. 5).
