@@ -1013,6 +1013,18 @@ out of sample.
    field (complete erasure), no magnetized heads, no azimuth; demagnetization of the audio
    band only, a fixed point per block; cells a 2D slab, not 3D; Preisach interaction a fixed
    Gaussian, not a mean-field (moving) model.
+8. **The cells alias the literal bias (found 2026-11-12, the 300-4's chirp;
+   PERIOD_GEAR_BACKLOG.md PG1 has the measurements).** The cells (7.62 per wavelength of the
+   NOMINAL f_bias_hz: 0.5 um at 15 ips) point-sample the recorded pattern of the field's peaks
+   (two per bias cycle) and alias it to |8 f_b - v / ds| at the oscillator's ACTUAL f_b. The
+   351's runs at 92.99 kHz (the beat ~18 kHz, -68 dB re a hot tone), the 300-4's master at
+   95.86 kHz (~5.5 kHz: heard on the bass). Mapped over 88-104 kHz on the medium alone
+   (`scripts/chirp_alias_map.py` -> `reports/tape/chirp/alias_map.*`): 0.5 um has the beat in the
+   band from ~94 to ~97 kHz (-56 dB re the tone at 96 kHz); 0.25 um has none anywhere (the
+   tape part's `cell_m`; the deck uses it). A second, weaker family is in every cell size:
+   lines at |fs/2 - f_b|-type frequencies (6.0 kHz at 90 and 102 kHz), -67 to -75 dB re a tone 4
+   dB over operating level; not traced. Open (the user's): `cell_m` on the 351 family too (its
+   prints and alignment move; 2x the recording kernel's cells).
 
 **Speed: the GPU (the user's suggestion, 2026-11-01).** The dev machine has an RTX 3080.
 - **The candidate is the recording kernel** (`tape.rs`): every cell times 8 orientations
