@@ -147,9 +147,9 @@ pub fn run_cpu(s: &Strip, threads: usize) -> Vec<f64> {
                                 m[i] = st.m;
                             }
                         }
-                        for i in 0..n {
+                        for (vi, mi) in s.v.iter().zip(&m) {
                             for c in 0..3 {
-                                acc[c] += s.v[i] * m[i][c] / vsum;
+                                acc[c] += vi * mi[c] / vsum;
                             }
                         }
                         o.copy_from_slice(&acc);
