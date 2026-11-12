@@ -1321,6 +1321,39 @@ impl Element {
             Element::EdgeEvents(e) => vec![&e.plus, &e.minus, &e.src, &e.dst],
         }
     }
+
+    /// [`Element::nodes`], mutable (renaming a node); None for the Novachord's keys, whose
+    /// nodes aren't plain fields.
+    pub fn nodes_mut(&mut self) -> Option<Vec<&mut String>> {
+        Some(match self {
+            Element::Resistor(e) => vec![&mut e.a, &mut e.b],
+            Element::Capacitor(e) => vec![&mut e.a, &mut e.b],
+            Element::Inductor(e) => vec![&mut e.a, &mut e.b],
+            Element::Coupling(_) | Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
+            Element::VoltageSource(e) => vec![&mut e.pos, &mut e.neg],
+            Element::SineSource(e) => vec![&mut e.pos, &mut e.neg],
+            Element::Winding(e) => vec![&mut e.a, &mut e.b, &mut e.core],
+            Element::Vccs(e) => vec![&mut e.pos, &mut e.neg, &mut e.ctrl_pos, &mut e.ctrl_neg],
+            Element::NoiseCurrent(e) => vec![&mut e.a, &mut e.b],
+            Element::Device(e) => e.nodes.iter_mut().collect(),
+            Element::Plate(e) => vec![&mut e.sense_pos, &mut e.sense_neg, &mut e.out],
+            Element::Spring(e) => vec![&mut e.sense_pos, &mut e.sense_neg, &mut e.out],
+            Element::Tape(e) => {
+                let mut v = vec![&mut e.sense_pos, &mut e.sense_neg, &mut e.out];
+                v.extend(e.supply.as_mut());
+                v.extend(e.sync_out.as_mut());
+                v
+            }
+            Element::Harp(e) => vec![&mut e.out],
+            Element::ClavStrings(e) => vec![&mut e.centre, &mut e.bridge, &mut e.bridge_neg],
+            Element::NovaKeys(_) => return None,
+            Element::NickelKeys(e) => vec![&mut e.out],
+            Element::ReedKeys(e) => vec![&mut e.loc, &mut e.line, &mut e.out_loc, &mut e.out_line],
+            Element::ThyratronEvents(e) => vec![&mut e.a, &mut e.g, &mut e.w, &mut e.k],
+            Element::ResetEvents(e) => vec![&mut e.sense, &mut e.src, &mut e.dst],
+            Element::EdgeEvents(e) => vec![&mut e.plus, &mut e.minus, &mut e.src, &mut e.dst],
+        })
+    }
 }
 
 // --- Errors, (de)serialization, validation ----------------------------------------

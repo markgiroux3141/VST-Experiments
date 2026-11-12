@@ -139,13 +139,102 @@ const STUB_INPUT: &str = "partition_input";
 /// one thread and c on another.
 pub const GROUP_BREAK: &str = "|";
 
-/// The titles split at [`GROUP_BREAK`] into groups (empty ones dropped).
+/// An entry of a partition's list that cuts an element as a link line, not a title:
+/// `cut:CSPK_m` (METHODOLOGY_REVIEW.md W1, "coupling: line"; see [`LineCut`]).
+pub const CUT_PREFIX: &str = "cut:";
+
+/// The titles split at [`GROUP_BREAK`] into groups (empty ones dropped; [`CUT_PREFIX`]
+/// entries aren't titles and are left out).
 pub fn groups(titles: &[String]) -> Vec<Vec<String>> {
     titles
         .split(|t| t == GROUP_BREAK)
+        .map(|g| {
+            g.iter()
+                .filter(|t| !t.starts_with(CUT_PREFIX))
+                .cloned()
+                .collect::<Vec<_>>()
+        })
         .filter(|g| !g.is_empty())
-        .map(<[String]>::to_vec)
         .collect()
+}
+
+/// The elements a partition's list cuts as link lines (its [`CUT_PREFIX`] entries), in order.
+pub fn cuts(titles: &[String]) -> Vec<String> {
+    titles
+        .iter()
+        .filter_map(|t| t.strip_prefix(CUT_PREFIX))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Prefix of the elements a link line's end adds to its part (a resistor Z0 and a voltage
+/// source of twice the incident wave behind it).
+pub(crate) const LINE_PREFIX: &str = "LINE_";
+
+/// An element cut as a link line (METHODOLOGY_REVIEW.md W1, the TLM link line of real-time
+/// power-system simulators): a lossless line of one sample's delay in its place, between two
+/// parts, which each see a resistor Z0 into a source of twice the wave arriving at their end
+/// and send back the wave that leaves it (their end's voltage less the arriving wave). A
+/// passive line can't add energy, so the coupling is stable whatever the parts hold, and each
+/// part has a DC path at its end.
+///
+/// - **A capacitor to ground** C at a node two parts have: Z0 = h / C. The node splits into
+///   the two parts' copies. Driven alike at both ends the line is exactly trapezoidal C; its
+///   odd mode adds a series inductance h^2 / C between the copies.
+/// - **A series inductor** L between nodes of two parts: Z0 = L / h. Its parasite is a shunt
+///   capacitance h^2 / L split between the ends: good only where L is large against the step
+///   (a transformer's leakage at audio steps is not: scripts/methodology/tlm_cut2.py).
+///
+/// The waves are exchanged at the per-sample barrier the parts already have: over sample
+/// n -> n + 1 a part's source goes from twice the other end's wave at n - 1 to twice it at n
+/// (the line's delay, linear in between). The error is the line's against the element: for a
+/// capacitor, ~(w h / 2)^2 relative to the cut node's own response.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LineCut {
+    /// The element cut.
+    pub element: String,
+    /// The line's impedance (ohms).
+    pub z0: f64,
+    /// Its two ends: (part, node). A capacitor's: its node in each part (lower part first);
+    /// an inductor's: its `a`, then its `b`.
+    pub ends: [(usize, String); 2],
+    /// An inductor (its DC current flows from end 0 to end 1), else a capacitor.
+    pub series: bool,
+}
+
+impl LineCut {
+    /// The resistor and the source end `k` adds to its part.
+    pub fn end_elements(&self, k: usize) -> [Element; 2] {
+        let mid = format!("partition_line:{}", self.element);
+        [
+            Element::Resistor(Resistor {
+                name: format!("R{LINE_PREFIX}{}", self.element),
+                a: self.ends[k].1.clone(),
+                b: mid.clone(),
+                r_ohm: self.z0,
+            }),
+            Element::VoltageSource(VoltageSource {
+                name: self.source(),
+                pos: mid,
+                neg: GROUND.into(),
+                dc_v: 0.0,
+            }),
+        ]
+    }
+
+    /// The name of an end's source (the same in both parts).
+    pub fn source(&self) -> String {
+        format!("V{LINE_PREFIX}{}", self.element)
+    }
+
+    /// The waves leaving end 0 and end 1 at a DC operating point where the cut node(s) sit
+    /// at `v` and the line carries `i` from end 0 to end 1: an inductor's current, or what
+    /// flows through a capacitor's node from one part to the other (the line is a series
+    /// path between the node's copies; the capacitor itself carries none).
+    pub fn dc_waves(&self, v: f64, i: f64) -> [f64; 2] {
+        let d = i * self.z0;
+        [(v + d) / 2.0, (v - d) / 2.0]
+    }
 }
 
 /// A node two or more parts have: the part that owns it (the highest-numbered
@@ -209,6 +298,13 @@ pub(crate) struct Split {
     /// Each control input's part (IR order): 0, or the multi-rate part with an audio
     /// control's node (it reads its samples as it reads the input).
     pub control_part: Vec<usize>,
+    /// The elements cut as link lines (the list's [`CUT_PREFIX`] entries), in its order.
+    pub lines: Vec<LineCut>,
+    /// With a capacitor cut: the whole circuit for the DC start, each such node split into
+    /// its parts' copies joined by an inductor `L<LINE_PREFIX><element>` (a short at DC: its
+    /// current is what flows through the node from end 0's part to end 1's, which the line
+    /// carries at DC). None without one.
+    pub dc_meter: Option<CircuitIr>,
 }
 
 impl Split {
@@ -230,9 +326,54 @@ impl Split {
 }
 
 /// The circuit split by section title (`second`: groups separated by
-/// [`GROUP_BREAK`]; one group is the two-way split).
-pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
+/// [`GROUP_BREAK`]; one group is the two-way split), its [`CUT_PREFIX`] entries cut as
+/// link lines at step `h`.
+pub(crate) fn split(ir: &CircuitIr, second: &[String], h: f64) -> Result<Split, Error> {
     let mut groups = groups(second);
+    // The elements cut as link lines: out of their sections for the split.
+    let cut_names = cuts(second);
+    let mut cut_kinds: Vec<(String, f64, Vec<String>, bool)> = Vec::new();
+    for c in &cut_names {
+        let Some(e) = ir.elements().find(|e| e.name() == c) else {
+            return Err(Error::new(format!("partition: no element {c} to cut")));
+        };
+        let kind = match e {
+            Element::Capacitor(k) if k.a == GROUND || k.b == GROUND => {
+                if k.a == k.b {
+                    return Err(Error::new(format!("partition: cut {c} is shorted")));
+                }
+                let node = if k.a == GROUND { &k.b } else { &k.a };
+                (h / k.c_f, vec![node.clone()], false)
+            }
+            Element::Inductor(l) if l.a != GROUND && l.b != GROUND => {
+                if ir.elements().any(
+                    |e| matches!(e, Element::Coupling(k) if k.l_a == l.name || k.l_b == l.name),
+                ) {
+                    return Err(Error::new(format!(
+                        "partition: cut {c} is coupled to another inductor"
+                    )));
+                }
+                (l.l_h / h, vec![l.a.clone(), l.b.clone()], true)
+            }
+            _ => {
+                return Err(Error::new(format!(
+                    "partition: cut {c}: only a capacitor to ground or an inductor between \
+                     two nodes can be cut as a line"
+                )));
+            }
+        };
+        if !(kind.0.is_finite() && kind.0 > 0.0) {
+            return Err(Error::new(format!(
+                "partition: cut {c}'s line impedance {}",
+                kind.0
+            )));
+        }
+        if cut_kinds.iter().any(|k| &k.0 == c) {
+            return Err(Error::new(format!("partition: {c} cut twice")));
+        }
+        cut_kinds.push((c.clone(), kind.0, kind.1, kind.2));
+    }
+    let is_cut = |e: &Element| cut_names.iter().any(|c| c == e.name());
     let mut part_of: Vec<Option<usize>> = vec![None; ir.sections.len()];
     for (g, titles) in groups.iter().enumerate() {
         for t in titles {
@@ -340,6 +481,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
     let nodes = |secs: &[&Section]| -> HashSet<String> {
         secs.iter()
             .flat_map(|s| s.elements.iter())
+            .filter(|e| !is_cut(e))
             .flat_map(split_nodes)
             .filter(|n| *n != GROUND)
             .map(str::to_string)
@@ -467,11 +609,63 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             claims.push((n.clone(), p));
         }
     }
+    // The link lines' ends: a capacitor's node in exactly two parts (each its own copy, not
+    // a shared node); an inductor's nodes each in one part, two different ones. Single-rate
+    // parts only (a line's delay is the sample).
+    let mut lines: Vec<LineCut> = Vec::new();
+    let mut line_nodes: HashSet<String> = HashSet::new();
+    for (c, z0, nodes, series) in &cut_kinds {
+        let with = |n: &str| -> Vec<usize> {
+            (0..n_parts).filter(|&p| node_sets[p].contains(n)).collect()
+        };
+        let ends: [(usize, String); 2] = if *series {
+            let (a, b) = (with(&nodes[0]), with(&nodes[1]));
+            match (&a[..], &b[..]) {
+                ([p], [q]) if p != q => [(*p, nodes[0].clone()), (*q, nodes[1].clone())],
+                _ => {
+                    return Err(Error::new(format!(
+                        "partition: cut {c}'s nodes must be one part's each, two different \
+                         parts ({} in {a:?}, {} in {b:?})",
+                        nodes[0], nodes[1]
+                    )));
+                }
+            }
+        } else {
+            match &with(&nodes[0])[..] {
+                [p, q] => [(*p, nodes[0].clone()), (*q, nodes[0].clone())],
+                w => {
+                    return Err(Error::new(format!(
+                        "partition: cut {c}'s node {} must be in exactly two parts (in {w:?})",
+                        nodes[0]
+                    )));
+                }
+            }
+        };
+        for (p, n) in &ends {
+            if substeps[*p] != 1 {
+                return Err(Error::new(format!(
+                    "partition: cut {c} ends in a multi-rate part"
+                )));
+            }
+            if claims.iter().any(|(m, _)| m == n) {
+                return Err(Error::new(format!(
+                    "partition: cut {c}'s node {n} is claimed (`owns`)"
+                )));
+            }
+            line_nodes.insert(n.clone());
+        }
+        lines.push(LineCut {
+            element: c.clone(),
+            z0: *z0,
+            ends,
+            series: *series,
+        });
+    }
     // Shared nodes in order of first appearance in the IR.
     let mut shared: Vec<SharedNode> = Vec::new();
-    for e in ir.elements() {
+    for e in ir.elements().filter(|e| !is_cut(e)) {
         for n in split_nodes(e) {
-            if shared.iter().any(|s| s.name == n) {
+            if shared.iter().any(|s| s.name == n) || line_nodes.contains(n) {
                 continue;
             }
             let with: Vec<usize> = (0..n_parts).filter(|&p| node_sets[p].contains(n)).collect();
@@ -506,7 +700,9 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         )));
     }
     for p in 1..n_parts {
-        if !shared.iter().any(|s| s.owner == p || s.users.contains(&p)) {
+        if !shared.iter().any(|s| s.owner == p || s.users.contains(&p))
+            && !lines.iter().any(|l| l.ends.iter().any(|e| e.0 == p))
+        {
             return Err(Error::new(format!(
                 "partition: {:?} shares no node with the rest",
                 groups[p - 1]
@@ -545,6 +741,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 elements: s
                     .elements
                     .iter()
+                    .filter(|e| !is_cut(e))
                     .map(|e| match e {
                         Element::Tape(t) if remote.iter().any(|r| r.medium == t.name) => {
                             Element::Tape(crate::ir::Tape {
@@ -580,6 +777,28 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                         })
                     })
                     .collect(),
+            });
+        }
+        // Its ends of link lines: a resistor Z0 into a source each.
+        let ends: Vec<Element> = lines
+            .iter()
+            .flat_map(|l| {
+                (0..2)
+                    .filter(|&k| l.ends[k].0 == p)
+                    .flat_map(|k| l.end_elements(k))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        if !ends.is_empty() {
+            sections.push(Section {
+                title: "partition: link lines' ends".into(),
+                substeps: None,
+                decimate: None,
+                owns: None,
+                lag_samples: None,
+                method: None,
+                tube_tables: None,
+                elements: ends,
             });
         }
         if p != input_part {
@@ -675,6 +894,58 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             }
         }
     }
+    // The DC meter: the cut capacitors' nodes split and joined by a short that reads the
+    // current through them.
+    let dc_meter = if lines.iter().any(|l| !l.series) {
+        let mut m = ir.clone();
+        for (i, sec) in m.sections.iter_mut().enumerate() {
+            sec.elements.retain(|e| !is_cut(e));
+            for l in lines.iter().filter(|l| !l.series && l.ends[1].0 == part(i)) {
+                let copy = format!("partition_copy:{}", l.element);
+                for e in sec.elements.iter_mut() {
+                    let name = e.name().to_string();
+                    let Some(ns) = e.nodes_mut() else {
+                        if split_nodes(e).contains(&l.ends[1].1.as_str()) {
+                            return Err(Error::new(format!(
+                                "partition: cut {}: {name} on its node can't be split",
+                                l.element
+                            )));
+                        }
+                        continue;
+                    };
+                    for n in ns {
+                        if *n == l.ends[1].1 {
+                            *n = copy.clone();
+                        }
+                    }
+                }
+            }
+        }
+        m.sections.push(Section {
+            title: "partition: the link lines' DC meters".into(),
+            substeps: None,
+            decimate: None,
+            owns: None,
+            lag_samples: None,
+            method: None,
+            tube_tables: None,
+            elements: lines
+                .iter()
+                .filter(|l| !l.series)
+                .map(|l| {
+                    Element::Inductor(crate::ir::Inductor {
+                        name: format!("L{LINE_PREFIX}{}", l.element),
+                        a: l.ends[0].1.clone(),
+                        b: format!("partition_copy:{}", l.element),
+                        l_h: 1.0,
+                    })
+                })
+                .collect(),
+        });
+        Some(m)
+    } else {
+        None
+    };
     let mut titles = vec![Vec::new()];
     titles.extend(groups);
     Ok(Split {
@@ -689,6 +960,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         remote,
         input_part,
         control_part,
+        lines,
+        dc_meter,
     })
 }
 

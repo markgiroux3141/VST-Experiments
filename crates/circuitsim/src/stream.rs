@@ -49,10 +49,15 @@ enum Command {
 /// One coupling value a partition reads per sample: a value another partition
 /// publishes (partition, slot), or the sum of several (the currents the users of
 /// a node the partition owns draw from it).
+///
+/// `Line(partition, slot)`: a link line's source (`partition::LineCut`), twice the wave the
+/// other end sends, a sample late: twice its value published at n - 1 at the sample's start
+/// and at n at its end (whatever the run's coupling).
 #[derive(Debug, Clone)]
 enum Feed {
     Value(usize, usize),
     Sum(Vec<(usize, usize)>),
+    Line(usize, usize),
 }
 
 /// The stream's input, for a multi-rate part with the input node (`partition.rs`): every
@@ -200,6 +205,15 @@ impl Shared {
         for (k, f) in feeds.iter().enumerate() {
             (e0[k], e1[k]) = match f {
                 Feed::Value(p, slot) => one(*p, *slot),
+                Feed::Line(p, slot) => {
+                    let w1 = self.rings[*p].value(n, *slot);
+                    let w0 = if n > 0 {
+                        self.rings[*p].value(n - 1, *slot)
+                    } else {
+                        w1
+                    };
+                    (2.0 * w0, 2.0 * w1)
+                }
                 Feed::Sum(v) => v.iter().fold((0.0, 0.0), |(a, b), &(p, slot)| {
                     let (x0, x1) = one(p, slot);
                     (a + x0, b + x1)
@@ -325,6 +339,9 @@ struct PartIo {
     decimate: bool,
     /// Samples late it reads the others (`Options::multirate_lag`; 0: lockstep).
     lag: usize,
+    /// Its ends of link lines: (its output slot, the feed of its source). It publishes the
+    /// wave leaving the end: the end's voltage less the arriving wave (half the source).
+    lines: Vec<(usize, usize)>,
 }
 
 /// The partitions past the first: their threads, and what all share.
@@ -353,6 +370,12 @@ struct Parts {
     /// A part reads the others late (`Options::multirate_lag`): it may be ahead of a
     /// sample boundary when a command for it is queued, so updates are refused.
     lagged: bool,
+    /// The first partition's ends of link lines (`PartIo::lines`).
+    lines: Vec<(usize, usize)>,
+    /// The step (a link line's impedance follows its element's value at it).
+    h: f64,
+    /// The link lines' elements and ends (for updates: only values may change).
+    cuts: Vec<(String, [(usize, String); 2])>,
 }
 
 /// A partition's thread: step after the others' sample, applying commands
@@ -519,6 +542,9 @@ fn run_part(
         for (o, &i) in out.iter_mut().zip(&tr.mna().outputs).take(ends) {
             *o = tr.x()[i];
         }
+        for &(slot, f) in &io.lines {
+            out[slot] -= 0.5 * e1[f];
+        }
         n += 1;
         shared.rings[p].publish(n, &out);
         if n.is_multiple_of(4096) && part_timing() {
@@ -534,8 +560,47 @@ fn run_part(
 /// Partition `p`'s couplings in `sp` (`Mna::externals` past the control inputs,
 /// and `Mna::outputs`): the shared nodes it sources (their sources' rows; it
 /// publishes their currents, + into the node) and the ones it owns (their nodes;
-/// it publishes their voltages). Outputs: the owned nodes, then the sources.
+/// it publishes their voltages). Outputs: the owned nodes, then the sources, then its link
+/// lines' ends ([`line_ends`]: their nodes; the wave leaving is published in their place).
 fn couple(sp: &Split, p: usize, mna: &mut Mna) -> Vec<Feed> {
+    let mut f = couple_nodes(sp, p, mna);
+    for (l, k) in line_ends(sp, p) {
+        let line = &sp.lines[l];
+        let src = mna.branch(&line.source()).expect("added");
+        let node = mna.node(&line.ends[k].1).expect("the line's node");
+        mna.externals.push(src);
+        mna.outputs.push(node);
+        let q = line.ends[1 - k].0;
+        f.push(Feed::Line(q, line_slot(sp, q, l)));
+    }
+    f
+}
+
+/// Part `p`'s ends of link lines: (index into `sp.lines`, which end), in `sp.lines`' order.
+fn line_ends(sp: &Split, p: usize) -> Vec<(usize, usize)> {
+    sp.lines
+        .iter()
+        .enumerate()
+        .flat_map(|(l, line)| {
+            (0..2)
+                .filter(move |&k| line.ends[k].0 == p)
+                .map(move |k| (l, k))
+        })
+        .collect()
+}
+
+/// Part `q`'s output slot for its end of line `l` (after its owned nodes and its sources).
+fn line_slot(sp: &Split, q: usize, l: usize) -> usize {
+    sp.owned(q).len()
+        + sp.sourced(q).len()
+        + line_ends(sp, q)
+            .iter()
+            .position(|&(m, _)| m == l)
+            .expect("the line ends in q")
+}
+
+/// [`couple`]'s shared nodes.
+fn couple_nodes(sp: &Split, p: usize, mna: &mut Mna) -> Vec<Feed> {
     let (owned, sourced) = (sp.owned(p), sp.sourced(p));
     let src: Vec<usize> = sourced
         .iter()
@@ -696,7 +761,7 @@ impl Stream {
             return Ok(base(tr, None, sources, 0));
         }
 
-        let sp = split(ir, second)?;
+        let sp = split(ir, second, h)?;
         // Each part's controls (IR indices, in its controls' order).
         let part_ctl = |p: usize| -> Vec<usize> {
             (0..ir.controls.len())
@@ -738,6 +803,36 @@ impl Stream {
             .iter()
             .map(|s| whole.mna().node(&s.name).map_or(0.0, |i| whole.x()[i]))
             .collect();
+        // Each link line's waves at the DC point (`LineCut::dc_waves`): an end's source is
+        // twice the other end's.
+        // A capacitor's line carries the current through its node from one part to the
+        // other: read on the DC meter (the same DC point, the node split by a short).
+        let meter = match &sp.dc_meter {
+            Some(m) => Some(start_with(Mna::from_ir(m, opts.gmin)?, &all_ctl, &[], u0)?),
+            None => None,
+        };
+        let line_dc: Vec<[f64; 2]> = sp
+            .lines
+            .iter()
+            .map(|l| {
+                let v = whole.mna().node(&l.ends[0].1).map_or(0.0, |i| whole.x()[i]);
+                let i = if l.series {
+                    whole.mna().branch(&l.element).map_or(0.0, |b| whole.x()[b])
+                } else {
+                    let m = meter.as_ref().expect("a meter for a capacitor's line");
+                    let name = format!("L{}{}", crate::partition::LINE_PREFIX, l.element);
+                    m.mna().branch(&name).map_or(0.0, |b| m.x()[b])
+                };
+                l.dc_waves(v, i)
+            })
+            .collect();
+        drop(meter);
+        let line_sources = |p: usize| -> Vec<f64> {
+            line_ends(&sp, p)
+                .iter()
+                .map(|&(l, k)| 2.0 * line_dc[l][1 - k])
+                .collect()
+        };
         drop(whole);
         // Each partition at the DC point: its sources at the shared nodes'
         // voltages, its owned nodes fed the currents its users' sources deliver.
@@ -803,7 +898,12 @@ impl Stream {
                     .collect();
                 mna.externals.truncate(mna.n_controls + mna.n_media);
                 mna.externals.extend_from_slice(&br);
-                let ext: Vec<f64> = held.iter().map(|&i| v_dc[i]).collect();
+                for (l, _) in line_ends(&sp, p) {
+                    let src = mna.branch(&sp.lines[l].source()).expect("added");
+                    mna.externals.push(src);
+                }
+                let mut ext: Vec<f64> = held.iter().map(|&i| v_dc[i]).collect();
+                ext.extend(line_sources(p));
                 let tr = if p == 0 {
                     start(mna, &ext, u0)?
                 } else {
@@ -847,10 +947,19 @@ impl Stream {
                 ctl_order: opts.input_order.max(1),
                 decimate: sp.decimate[p].is_some(),
                 lag: 0,
+                lines: {
+                    let k0 = f.len() - line_ends(&sp, p).len();
+                    let s0 = sp.owned(p).len() + sp.sourced(p).len();
+                    (0..line_ends(&sp, p).len())
+                        .map(|j| (s0 + j, k0 + j))
+                        .collect()
+                },
             };
             let ext: Vec<f64> = f
                 .iter()
                 .map(|f| match f {
+                    // Set below (the last feeds).
+                    Feed::Line(..) => 0.0,
                     Feed::Value(q, slot) => {
                         // A sourced node: its voltage at DC.
                         let i = sp.owned(*q)[*slot];
@@ -868,6 +977,9 @@ impl Stream {
                         .sum(),
                 })
                 .collect();
+            let mut ext = ext;
+            let k0 = ext.len() - line_ends(&sp, p).len();
+            ext[k0..].copy_from_slice(&line_sources(p));
             let tr = if p == 0 {
                 start(mna, &ext, u0)?
             } else {
@@ -897,6 +1009,9 @@ impl Stream {
                 .iter()
                 .map(|&i| tr.x()[i])
                 .collect();
+            for &(slot, f) in &ios[p].lines {
+                o[slot] -= 0.5 * ext[f];
+            }
             let at = |u: Option<usize>| u.map_or(0.0, |i| tr.x()[i]);
             for &(a, b) in &ios[p].senses {
                 o.extend(std::iter::repeat_n(at(a) - at(b), sp.substeps[p]));
@@ -1032,6 +1147,13 @@ impl Stream {
             ctl0: part_ctl(0),
             senses: ios[0].senses.clone(),
             lagged,
+            lines: ios[0].lines.clone(),
+            h,
+            cuts: sp
+                .lines
+                .iter()
+                .map(|l| (l.element.clone(), l.ends.clone()))
+                .collect(),
         };
         let out_len = ios[0].n_coupling + ios[0].senses.len();
         let mut stream = base(a, Some(parts), sources, k);
@@ -1082,7 +1204,17 @@ impl Stream {
                 ));
             }
             Some(s) => {
-                let sp = split(ir, &s.second)?;
+                let sp = split(ir, &s.second, s.h)?;
+                let cuts: Vec<(String, [(usize, String); 2])> = sp
+                    .lines
+                    .iter()
+                    .map(|l| (l.element.clone(), l.ends.clone()))
+                    .collect();
+                if cuts != s.cuts {
+                    return Err(Error::new(
+                        "update: the partitions' link lines changed (only values may)",
+                    ));
+                }
                 let nodes: Vec<(String, usize)> = sp
                     .shared
                     .iter()
@@ -1341,6 +1473,9 @@ impl Stream {
                 .take(n_coupling)
             {
                 *o = self.a.x()[i];
+            }
+            for &(slot, f) in &s.lines {
+                self.out[slot] -= 0.5 * self.e1[f];
             }
             let x = self.a.x();
             let at = |u: Option<usize>| u.map_or(0.0, |i| x[i]);
