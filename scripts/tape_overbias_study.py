@@ -102,6 +102,9 @@ def variants() -> dict:
     v["o3d_k3_plane"] = {"o3d": (3.0, 3.0)}
     v["astroid_k15"] = {"astroid": 1.5}
     v["astroid_k3"] = {"astroid": 3.0}
+    # The astroid without the head's image (the image carried the over-bias fall under the
+    # projection rule: TM2 step 7): the pair the astroid upsets.
+    v["astroid_k15_noimage"] = {"astroid": 1.5, "noimage": True}
     return v
 
 
@@ -409,8 +412,14 @@ def plot(res: dict) -> None:
     names = [n for n in variants() if n in res and "no21" in res[n]]
     fig, ax = plt.subplots(2, 3, figsize=(19, 9.5))
     groups = (
-        ("mean field (moving)", [n for n in names if n.startswith(("base", "moving"))]),
-        ("static mean field / head / 3D axes", [n for n in names if not n.startswith("moving")]),
+        (
+            "astroid, moving mean field",
+            [n for n in names if n.startswith(("base", "moving", "astroid"))],
+        ),
+        (
+            "static mean field / head / 3D axes",
+            [n for n in names if not n.startswith(("moving", "astroid"))],
+        ),
     )
     for row, (title, ns) in enumerate(groups):
         for i, (key, data, f) in enumerate(
@@ -440,6 +449,20 @@ def plot(res: dict) -> None:
     a = ax[1, 2]
     a.plot(x, [get(n, "level", "level_3pct_db") for n in names], "o", label="3% over 1%, 12.7 um")
     a.plot(x, [get(n, "level51", "level_3pct_db") for n in names], "s", label="3% over 1%, 51 um")
+    a.plot(
+        x,
+        [get(n, "level_lite", "level_3pct_db") for n in names],
+        "D",
+        mfc="none",
+        label="the same at the base's bias (lite), 12.7 um",
+    )
+    a.plot(
+        x,
+        [get(n, "level_lite51", "level_3pct_db") for n in names],
+        "s",
+        mfc="none",
+        label="lite, 51 um",
+    )
     a.plot(x, [get(n, "b14", "-40db") for n in names], "^", label="No. 14 at 7 kHz (-40 dB)")
     a.axhspan(4.1, 4.8, color="C2", alpha=0.25, label="Sound Talk No. 1")
     a.axhline(4.0, color="k", ls="--", lw=1, label="No. 14: +4 dB")
@@ -491,8 +514,14 @@ def main() -> int:
             if part == "cost":
                 row[part] = cost(tape, spec, a.threads)
             elif part == "no21":
-                with options(spec, tape, 70e3, a.threads):
-                    r = sw.no21(tape, tape.preisach.hc_median_a_m)
+                no21_spec = sw.no21_spec
+                if spec.get("noimage"):
+                    sw.no21_spec = lambda f=no21_spec: dataclasses.replace(f(), head_image=False)
+                try:
+                    with options(spec, tape, 70e3, a.threads):
+                        r = sw.no21(tape, tape.preisach.hc_median_a_m)
+                finally:
+                    sw.no21_spec = no21_spec
                 row[part] = r
                 row["summary"] = summarize_no21(r)
                 if name == "base":
