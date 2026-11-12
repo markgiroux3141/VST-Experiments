@@ -840,7 +840,9 @@ update the same 1 mOhm end is clean. Renders never update mid-run, so only live 
 *B6's rest backlogged (2026-10-30, the user: diminishing returns):* capacitor leakage and
 DA (below: inaudible for new parts; leakage belongs with aging, B7), carbon resistors'
 excess noise and voltage coefficient, capacitor ESR and voltage coefficient. Picked up with
-B7 or when a circuit needs them.
+B7 or when a circuit needs them. *2026-11-11:* picked up as COMPONENT_DEPTH_PLAN.md, which
+notes that the DA measurement below ran at TC 2, where the 670's slow timing capacitors
+(C110 / C111 / C112) aren't switched in.
 
 *Capacitor leakage and dielectric absorption, measured 2026-10-30 (options to the user;
 nothing built; prototype in the session's scratch, the builder's C macro wrapped).*

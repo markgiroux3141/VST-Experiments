@@ -158,6 +158,12 @@ counterfactual hardware, charting the design space, feedback edges, tubes from t
 electrodes, ...), each with experiments and a short prior-art search, plus the rules any
 "it emerged" claim must pass (physics or numerics, inside the model's fitted range).
 
+Component depth ([docs/COMPONENT_DEPTH_PLAN.md](docs/COMPONENT_DEPTH_PLAN.md), 2026-11-11, a
+brainstorm with the user; nothing built): deeper part models (DA, excess noise, tempco, hum,
+mismatch) tested where a device misses its published figures, the 670 first (its idle noise 49 dB
+under spec; TC 6's sustained-program release 11 s vs 25 s, whose test burst is only 1 s);
+milestones CD0-CD6, the cheap checks CD0-CD2 first.
+
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
 devices that never existed from parts we model, ten instruments (the Nickel Organ, a
