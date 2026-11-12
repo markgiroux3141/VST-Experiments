@@ -31,6 +31,9 @@ transport), then the moving head only if the bench leaves the question open.
   - the full coating field doesn't converge with particles.
 - **What it points at:** the cheap model's missing astroid, a calibration target, not a
   replacement.
+- **A stretch that did predict something:** print-through's time law, 3.6-4.2 dB per decade
+  of storage over the whole bracket of barriers, against Manly's 3.45, nothing fitted; its
+  level rests on the unknown K V_act / kT.
 
 **Reproducing it** (the GPU binary first: `cargo build --release -p tapeparticles`;
 `$TPSIM_TARGET_DIR` points `varimu/tape_particles/runner.py` at another target directory):
@@ -315,6 +318,31 @@ worse than the Preisach medium does, and the configuration that matches the treb
 (`nodemag`) does it with an unphysical perpendicular remanence. Neither counts as a blind
 success.
 
+**5. Print-through, a stretch: a prediction of its time law** (`scripts/tape_particle_print.py`
+-> `print.json`). The `none` fit's particles (40,000, two samples), AC-erased, sit in a
+weak steady field H for a storage time t at 293 K, then in no field for 10 s (rewound and
+played); the remanence left over H is the print susceptibility, through the next layer's
+field at the print's peak wavelength (research 3.3: 307 um, 2 pi x #111's 48.8 um; the
+field of a layer's M through the 36.1 um base, (1 - e^{-k delta}) e^{-k d} / 2 = 0.06 of
+M). The master equation over a constant field is exact in one step of any length. Against
+Manly (1977, research 3.4: -52 dB at 5 min, -40 dB after a week, 3.45 dB per decade):
+
+| K V_act / kT median | print at 5 min | 1 day | 1 week | 1 year | dB per decade, 5 min to 1 week |
+|---|---|---|---|---|---|
+| 60 | -30.8 | -20.8 | -18.7 | -15.1 | 3.6 |
+| **150 (the provisional value)** | **-49.9** | -38.8 | **-36.3** | -31.9 | **4.1** |
+| 400 | -78.1 | -66.7 | -64.1 | -58.9 | 4.2 |
+
+(H = 2 Oe; at 10 Oe within 1.3 dB: linear, as Manly's print is.) The **time law is a
+prediction** and comes out near Manly's: 3.6-4.2 dB per decade over the whole bracket of
+barriers, against 3.45, from the lognormal tail of the barrier distribution and nothing
+fitted. The **level is not**: it moves ~19 dB per factor 2.5 of K V_act / kT, the least
+known number of the model (research 1.6); the provisional 150 lands within 2-4 dB of
+Manly's two points, which is coincidence until K V_act / kT is measured. Warmer storage, kT
+alone (Ms and K held): +0.9 dB per 10 K against Manly's 1.8 (research 3.3: the rest is Ms
+and K falling with temperature, not in this model). Not run: a recorded receiving layer,
+the wind and the decay after separation (research 3.4's items 4-6).
+
 ## Convergence
 
 **The bench** (0-D bias curves): steps per bias cycle and the zone's floor checked on the
@@ -434,14 +462,11 @@ width in the head's field profile and depth, which both models share.
 
 ## Unfinished and not done
 
-- **Print-through** (the stretch rung 5): not run. The bench has the machinery (thermal
-  activation over hours is the same master equation with dt in seconds), but the barrier
-  distribution (K V_act / kT median 150, log spread 0.9) is provisional, and the research's
-  section 3.4 gives the cheaper, data-anchored route (Manly 1977's laws). A particle
-  prediction would rest on the least known number of the model.
 - **The 3% THD level** (Sound Talk No. 1): not run (the moving head isn't converged in the
   coating's field, and the knee depends on the anhysteretic susceptibility, which the
   static fit leaves open; above).
+- Print-through as a model (research 3.4's linear condition dial) is not built; above is
+  only its time law from the particles.
 - `varimu/tape_particles/medium.py` / Rust `medium.rs` (a CPU strip with a cell FFT and a
   quenched local field) is written but unused: the CPU was saturated by other jobs all
   night; the GPU strip (`strip.py`) replaced it.
