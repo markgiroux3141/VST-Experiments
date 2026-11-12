@@ -46,15 +46,15 @@ controls:
     max: 1.0
     unit: rotation
     source: 'derived: the deck channel''s alignment (reports/multitrack/deck/channel_alignment.json, varimu.measure.tape_align,
-      key 77a0444469462950)'
+      key a480d070bce8d111)'
     notes: the alignment sets it for 0 VU in at the operating level (1% THD at 400 Hz)
   playback_level:
-    value: 0.4323695167092664
+    value: 0.44234340406066375
     min: 0.0
     max: 1.0
     unit: rotation
     source: 'derived: the deck channel''s alignment (reports/multitrack/deck/channel_alignment.json, varimu.measure.tape_align,
-      key 77a0444469462950)'
+      key a480d070bce8d111)'
     notes: the alignment sets it for 0 VU (+8 dBm) out at the operating level
   rec_eq_hi_f:
     value: 3.9814814814814816e-10
@@ -62,7 +62,7 @@ controls:
     max: 5.5e-10
     unit: F
     source: 'derived: the deck channel''s alignment (reports/multitrack/deck/channel_alignment.json, varimu.measure.tape_align,
-      key 77a0444469462950)'
+      key a480d070bce8d111)'
     notes: 'across 1R17 (via 4S2a HI): less cathode feedback above ~1 / (2 pi 47K C); the alignment sets
       it'
   rec_eq_lo_f:
@@ -87,7 +87,7 @@ controls:
     max: 1.0
     unit: rotation
     source: 'derived: the deck channel''s alignment (reports/multitrack/deck/channel_alignment.json, varimu.measure.tape_align,
-      key 77a0444469462950)'
+      key a480d070bce8d111)'
     notes: '0.67 is 50 us with 2C15 (derived: 50 us / 750 pF = 66.7K); the alignment sets it from a test
       tape (man p80)'
   oscillator:
