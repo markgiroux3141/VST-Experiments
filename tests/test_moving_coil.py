@@ -162,7 +162,7 @@ def test_element_formulas():
             "name": "sl",
             "kind": "slit",
             "a": "u",
-            "b": "v",
+            "b": "x",
             "width_m": 1e-4,
             "breadth_m": 0.03,
             "length_m": 2e-3,
@@ -170,7 +170,7 @@ def test_element_formulas():
         {
             "name": "tb",
             "kind": "tube",
-            "a": "v",
+            "a": "x",
             "b": "w",
             "radius_m": 5e-4,
             "length_m": 1e-3,

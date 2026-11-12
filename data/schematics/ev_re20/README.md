@@ -9,8 +9,13 @@ Sources (provenance per value):
   attenuation > 15 dB 45-10000 Hz, > 13 dB above; Acoustalloy diaphragm, low-mass aluminium
   coil, hum-bucking coil, steel case; 216.7 mm long, 54.4 mm widest, 49.2 mm body.
   **Wiring diagram (p.2):** XLR 2 / 3 balanced from the transformer secondary (XFMR, blue /
-  black); C1 0.01 uF, L2 15 mH, C3 22 uF, L1 560 mH, C2 0.022 uF, R1 220 ohm, with S1 / S2
-  (the bass-tilt network). Component placement to be read from the page image.
+  black); C1 0.01 uF, L2 15 mH, C3 0.22 uF, L1 560 mH, C2 0.022 uF, R1 220 ohm, with S1 / S2
+  (the bass-tilt network). Read from the page image enlarged (2026-11-12; C3 is ".22uf", first
+  misread as 22 uF): across the secondary (pin 2 to pin 3), always in, C1 || L2 from pin 2 to a
+  node A, then C2 from A to pin 3 and C3 + R1 in series from A to pin 3 (L2 and C3 in series
+  resonance at 2.77 kHz: a notch of R1 against the source, ~-5 dB at 150 ohm); the switch S1 /
+  S2 puts L1 from pin 2 to pin 3 (the bass tilt). The coil (blue / black, black to the
+  polarized lug) is the transformer's primary. `config/circuits/ev_re20.yaml`.
 - US 3,115,207 (Wiggins, filed 1954, granted 1963: Variable-D: a front opening and two rear
   openings at different distances behind the diaphragm; the acoustic circuit and vector
   diagrams) and **US 3,378,649 (Mawby, filed 1964, granted 1968: the continuously

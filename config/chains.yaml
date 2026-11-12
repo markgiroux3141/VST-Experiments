@@ -140,7 +140,18 @@ circuits:
     output: out
     drop: [RLOAD]
     pattern: hypercardioid
-  ev_re20: {kind: mic, tag: re20, label: EV RE20, wp: 13}
+  ev_re20:                          # dynamic cardioid, continuously Variable-D (CHAINS_PLAN.md WP13)
+    kind: mic
+    tag: re20
+    label: EV RE20
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings:
+      - key: bass_tilt              # S1 / S2: L1 across the output (ev: the wiring diagram)
+        label: RE20 bass tilt
+        choices: [[0, "off"], [1, "on"]]
+        default: 0
   sennheiser_md421:
     kind: mic
     tag: md421

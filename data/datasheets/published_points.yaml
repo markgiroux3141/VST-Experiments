@@ -1714,28 +1714,30 @@
   geometry:
     diaphragm:
       radius_m: {value: 15.0e-3}         # provisional: model knowledge (a large Acoustalloy dome in the 54 mm head; not fitted: the body's entry table depends on it)
-      moving_mass_kg: {value: 0.6e-3}    # provisional: the dome, coil and air load, fitted (bounds 0.15-3 g)
-      resonance_hz: {value: 120.0}       # provisional: fitted (bounds 30-600 Hz)
-      q: {value: 1.0}                    # provisional: fitted (bounds 0.2-8)
-      # one dome mode for the sheet's broad rise at 6-14 kHz (bounds f 4-16 kHz, q 0.7-8, mass 2-40%, area 5-60%)
+      moving_mass_kg: {value: 0.00015}    # provisional: the dome, coil and air load, fitted (bounds 0.15-3 g)
+      resonance_hz: {value: 30.688}       # provisional: fitted (bounds 30-600 Hz)
+      q: {value: 8}                    # provisional: fitted (bounds 0.2-8)
+      # a dome mode for the sheet's broad rise at 6-14 kHz (bounds f 5-16 kHz, q 0.7-3: no whistle between the sheet's points, mass 2-40%, area 5-45%)
       modes:
-        - {name: dome, f_hz: {value: 9000.0}, q: {value: 2.0}, mass_fraction: {value: 0.1}, area_fraction: {value: 0.3}}
+        - {name: dome, f_hz: {value: 6511.6}, q: {value: 1.1636}, mass_fraction: {value: 0.02}, area_fraction: {value: 0.34938}}
+        - {name: presence, f_hz: {value: 1500}, q: {value: 3}, mass_fraction: {value: 0.36705}, area_fraction: {value: 0.19144}}   # provisional: the capsule's presence peak the network's L2 / C3 notch (2.77 kHz) flattens (bounds f 1.5-5 kHz, q 0.5-3: the notch is broad, mass 2-40%, area 5-45%)
     coil:
-      bl_tm: {value: 3.0}                # provisional: fitted to 1.5 mV/Pa open circuit (bounds 0.5-20)
-      re_ohm: {value: 130.0}             # provisional: ev: 150 ohm rated impedance, the coil's DC resistance a little under it
-      le_h: {value: 1.0e-3}              # provisional: model knowledge (a 150 ohm moving coil's inductance)
+      bl_tm: {value: 3.9582}                # provisional: fitted to 1.5 mV/Pa open circuit (bounds 0.5-20)
+      re_ohm: {value: 30.0}              # provisional: model knowledge (a low-mass aluminium coil into RE20_OT, 1:2.15: n^2 x (30 + the primary's 5) and the secondary's 36 ohm make EV's 150 ohm)
+      le_h: {value: 0.2e-3}              # provisional: model knowledge (a 30 ohm moving coil's inductance)
     network:
-      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 30.0}, area_m2: {value: 1.5e-3}}   # provisional: the head's mesh and foam, fitted (bounds rayl 1-1000)
+      - {name: grille, kind: acoustic, a: front, b: g, r_pa_s_m3: {value: 20000}, m_kg_m4: {value: 1}}   # provisional: the head's mesh, blast filter and the openings ahead of the dome (EV: "integral blast filter"), R and M fitted (bounds r 2e4-1e8: a mesh and foam's 30 rayl and up over ~1.5 cm^2, m 1-1e4; a front cavity behind it was tried and dropped: undamped, it whistled near 11 kHz)
       - {name: dia, kind: diaphragm, a: g, b: u}
-      - {name: cav, kind: cavity, a: u, volume_m3: {value: 2.0e-6}}   # provisional: the air under the dome and in the magnet's gap, fitted (bounds 0.2-20 cm^3)
-      - {name: damp, kind: acoustic, a: u, b: m, r_pa_s_m3: {value: 2.0e+6}, m_kg_m4: {value: 200.0}}   # provisional: the magnet's channel and its cloth (Mawby), fitted (bounds r 1e4-1e9, m 10-1e5)
-      - {name: vd, kind: slotted_line, a: m, b: rear, tubes: 2, radius_m: {value: 3.0e-3}, lead_m: {value: 0.012}, slot_rayl: {value: 400.0}, slot_width_m: {value: 1.5e-3}}   # mawby: two parallel tubes, each with a cloth-covered slot; radius and the cloth's resistance fitted (bounds r 1-8 mm, rayl 10-1e4), the lead (the mouth to the slots' start) and the slot's width provisional
-      - {name: term, kind: cavity, a: vd_8, volume_m3: {value: 10.0e-6}}   # mawby: the terminating tube cavity behind, fitted (bounds 1-100 cm^3)
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.02913}, r1_pa_s_m3: {value: 5.6264e+05}, q: {value: 25.693}}   # provisional: the near rear path (the head basket's rear ports, the body's ports_m, EV's "dual-ported") as seeler61's phase-shift network, its cavity Cb the magnet's; d fitted (bounds 10-80 mm), r1 and q fitted (bounds 1e5-1e8, 0.6-30)
+      - {name: damp, kind: acoustic, a: m, b: t, r_pa_s_m3: {value: 9.1996e+05}, m_kg_m4: {value: 10}}   # provisional: the magnet's channel and its cloth into the tubes (Mawby), fitted (bounds r 1e4-1e9, m 10-1e5)
+      - {name: vd, kind: slotted_line, a: t, b: "0", tubes: 2, radius_m: {value: 0.008}, lead_m: {value: 0.040}, slot_rayl: {value: 865.37}, slot_width_m: {value: 1.5e-3}}   # mawby: two parallel tubes, each with a cloth-covered slot; radius and the cloth's resistance fitted (bounds r 1-8 mm, rayl 10-1e4), the lead (the mouth behind the magnet, ~22 mm back, to the slots' start at 62 mm) and the slot's width provisional
+      - {name: term, kind: cavity, a: vd_8, volume_m3: {value: 5.799e-05}}   # mawby: the terminating tube cavity behind, fitted (bounds 1-100 cm^3)
     body:
       form: variable_d
       radius_m: {value: 24.6e-3}         # ev: 49.2 mm body
       length_m: {value: 0.2167}          # ev: 216.7 mm long
-      slot_m: {value: [0.015, 0.100]}    # provisional: model knowledge (the casing's slot sets run along the front half of the body)
-      slot_sections: 8                   # numerics: the ladder's sections, each a BEM band (the slot's length over 8: 10.6 mm, a tenth of the wavelength at 3.2 kHz, where the far slots no longer reach the diaphragm)
+      ports_m: {value: [0.008, 0.030]}   # provisional: model knowledge (the head basket's rear ports behind the diaphragm; ev: the dimension drawing's head is the front ~53 mm)
+      slot_m: {value: [0.062, 0.134]}    # ev: the dimension drawing (p.2, 216.7 mm = 802 px): the casing's slot sets run 62-134 mm behind the front
+      slot_sections: 8                   # numerics: the ladder's sections, each a BEM band (the slot's length over 8: 9 mm, a tenth of the wavelength at 3.8 kHz, where the far slots no longer reach the diaphragm)
   published:
     sensitivity_v_per_pa: 1.5e-3         # ev: 1.5 mV/Pa at 1 kHz

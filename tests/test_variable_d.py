@@ -129,3 +129,53 @@ def test_free_field_entries_use_the_weights():
     w = mc.rear_entry_weights(G, f)
     want = bor.entry_factors(op, f, th, rear=bor.rear_weights(op.mesh, w, f))
     assert np.allclose(front, want[0]) and np.allclose(rear, want[1])
+
+
+def test_the_reduction_is_exact_with_ports():
+    """With the body's `ports_m` (the head's rear ports, entry 1, driven by a near path) every
+    slot section is an entry of its own: the reduction still equals the full solve."""
+    g = copy.deepcopy(G)
+    g["network"][2:3] = [
+        {"name": "near", "kind": "acoustic", "a": "u", "b": "rear", "r_pa_s_m3": 3.0e6,
+         "m_kg_m4": 500.0},
+        {"name": "damp", "kind": "acoustic", "a": "u", "b": "t", "r_pa_s_m3": 1.0e6},
+    ]  # fmt: skip
+    g["network"][4]["a"], g["network"][4]["b"] = "t", "0"
+    g["body"] = {**g["body"], "ports_m": [0.003, 0.008]}
+    lumped = mc.compile_network(g)
+    for e in lumped["elements"]:
+        for k in range(1, N + 1):
+            if e["name"] == f"vd_{k}_s":
+                assert e["b"] == "0"
+                e["b"] = f"s{k}"
+    c = mc.moving_coil_from_data({"name": "T", "kind": "moving_coil", "lumped": lumped})
+    els = parts.moving_coil("MC", "in", "p_rear", "out", "0", c)
+    els.append(Resistor("RLOAD", "out", "0", 1e9))
+    ctl = [Control("p_rear", "p_rear")] + [Control(f"c{k}", f"mc_s{k}") for k in range(1, N + 1)]
+    full_ir = CircuitIR(
+        title="full", input_node="in", probes=(VoltageProbe("out"),), models=(),
+        sections=(Section("cartridge", tuple(els)),), controls=tuple(ctl),
+    )  # fmt: skip
+    z = np.array([0.005] + [0.01 + (k + 0.5) * 0.08 / N for k in range(N)])
+    p = np.array([(0.9**k) * np.exp(-2j * np.pi * F * zk / 343.0) for k, zk in enumerate(z)])
+    full = ac.transfer(
+        full_ir, F, "out", drives={"p_rear": p[0], **{f"mc_s{k}": p[k] for k in range(1, N + 1)}}
+    )
+    w = mc.rear_entry_weights(g, F)
+    assert w.shape == (N + 1, len(F)) and np.allclose(w[0], 1.0)
+    cr = mc.moving_coil_from_data(
+        {"name": "T", "kind": "moving_coil", "lumped": mc.compile_network(g)}
+    )
+    reduced = ac.transfer(moving_coil_ir(cr), F, "out", drives={"p_rear": (w * p).sum(axis=0)})
+    assert np.max(abs(reduced - full) / abs(full)) < 1e-9
+    m = bor.variable_d_mesh(g["body"], 0.0125)
+    assert m.uniform == (bor.SLOT0,) + tuple(bor.SLOT0 + k for k in range(1, N + 1))
+
+
+def test_a_node_named_like_the_coils_is_refused():
+    """parts.moving_coil prefixes acoustic and electrical nodes alike: an acoustic `v` would be
+    the coil's node."""
+    g = copy.deepcopy(G)
+    g["network"][2] = {"name": "cav", "kind": "cavity", "a": "v", "volume_m3": 2.0e-6}
+    with pytest.raises(ValueError, match="coil's own"):
+        mc.compile_network(g)

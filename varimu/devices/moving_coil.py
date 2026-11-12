@@ -89,7 +89,11 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
                its centre, and the slot's cloth, a specific resistance `slot_rayl` over the
                slot's open area N slot_width_m dx, from the centre to that section's own entry.
                Entry 1 (the section nearest the diaphragm) is `b`, the others the ambient: the
-               rear entries reduce exactly to one (`rear_entry_weights`). Elements <name>_lead
+               rear entries reduce exactly to one (`rear_entry_weights`). With the body's
+               `ports_m` (the head's own rear ports, ahead of the slots) entry 1 is the ports'
+               band, node `rear`, driven by the other elements on it (a near path), and every
+               slot section is an entry of its own (the ambient here; `b` must be '0').
+               Elements <name>_lead
                (R, L), <name>_<k> (R) / <name>_<k>_m (L) spans, <name>_<k>_c (C),
                <name>_<k>_s (R, the slot) on node <name>_<k>
     seeler     the Unidyne III's phase-shift network (`seeler_rear_network`) from the node
@@ -224,6 +228,11 @@ def moving_mass(d: Mapping[str, Any], coil: Mapping[str, Any]) -> dict[str, floa
     }
 
 
+# The coil's own nodes in parts.moving_coil / moving_coil.rs (<part>_l, _e, _v): a network node
+# of the same name would be the same node there (found 2026-11-12, CHAINS_PLAN.md WP13).
+RESERVED_NODES = frozenset({"l", "e", "v"})
+
+
 def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
     """The lumped elements of a cartridge from its geometry `g` (SI): `diaphragm`
     {radius_m (the effective radiating radius: S = pi r^2), moving_mass_kg (dome, coil,
@@ -255,8 +264,17 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
         if name in names:
             raise ValueError(f"network element {name}: the name is taken")
         names.add(name)
+        clash = {str(e[k]) for k in ("a", "b", "mid") if k in e} & RESERVED_NODES
+        if clash:  # the part prefixes acoustic and electrical nodes alike (parts.moving_coil)
+            raise ValueError(f"network element {name}: node {sorted(clash)} is the coil's own")
         if kind == "slotted_line":
-            els += _slotted_line(name, a, b, e, _slot_body(g))
+            band = _slot_body(g)
+            if _ports(g):
+                if b != "0":
+                    raise ValueError(f"slotted_line {name}: with the body's ports_m, b is '0'")
+                els += _slotted_line(name, a, b, e, band, ["0"] * band[2])
+            else:
+                els += _slotted_line(name, a, b, e, band)
         elif kind != "diaphragm":
             els += compile_element(e)
         else:
@@ -496,6 +514,11 @@ def _slot_body(g: Mapping[str, Any]) -> tuple[float, float, int]:
     return lo, hi, n
 
 
+def _ports(g: Mapping[str, Any]) -> bool:
+    """Whether the geometry's variable_d body has the head's rear ports (`ports_m`)."""
+    return (g.get("body") or {}).get("ports_m") is not None
+
+
 def _slotted_line(
     name: str, a: str, b: str, e: Mapping[str, Any], band: tuple[float, float, int],
     entries: Sequence[str] | None = None,
@@ -532,7 +555,9 @@ def rear_entry_weights(g: Mapping[str, Any], f_hz: Sequence[float]) -> np.ndarra
     blocked, per pascal at entry k alone), behind one impedance (all entries at the ambient).
     The compiled network drives only entry 1 (`rear`) and grounds the others, so it is exact
     with the rear entry's pressure sum_k w_k p_k, w_k = G_k / G_1. Returns w, (n, len(f)):
-    w[0] = 1. A cartridge without a slotted_line: a (1, len(f)) array of ones."""
+    w[0] = 1. With the body's `ports_m`, entry 1 is the ports (node `rear`) and the slot sections
+    are entries 2..n + 1: w is (n + 1, len(f)). A cartridge without a slotted_line: a (1, len(f))
+    array of ones."""
     f = np.atleast_1d(np.asarray(f_hz, float))
     lines = [e for e in g["network"] if e["kind"] == "slotted_line"]
     if not lines:
@@ -543,39 +568,46 @@ def rear_entry_weights(g: Mapping[str, Any], f_hz: Sequence[float]) -> np.ndarra
     n = band[2]
     dia = next(e for e in g["network"] if e["kind"] == "diaphragm")
     back = str(dia.get("b", "0"))
-    slots = [f"@slot{k}" for k in range(1, n + 1)]
+    line = lines[0]
+    if _ports(g):
+        slots = ["@port"] + [f"@slot{k}" for k in range(1, n + 1)]
+        entry1, line_entries = "rear", slots[1:]
+    else:
+        slots = [f"@slot{k}" for k in range(1, n + 1)]
+        entry1, line_entries = str(line.get("b", "0")), slots
     els: list[dict[str, Any]] = []
     for e in g["network"]:
         if e["kind"] == "diaphragm":
             continue  # blocked: no volume velocity at its faces
         if e["kind"] == "slotted_line":
-            els += _slotted_line(str(e["name"]), str(e["a"]), str(e.get("b", "0")), e, band, slots)
+            els += _slotted_line(str(e["name"]), str(e["a"]), "0", e, band, line_entries)
         else:
             els += compile_element(e)
+    if entry1 != "0":  # other elements on entry 1's node see its pressure
+        els = [{**el, "a": slots[0] if el["a"] == entry1 else el["a"],
+                "b": slots[0] if el["b"] == entry1 else el["b"]} for el in els]  # fmt: skip
+    n = len(slots)
     fixed = {"0", "front", "rear", *slots}
     nodes = sorted({x for el in els for x in (el["a"], el["b"])} - fixed)
     if back not in nodes:
         raise ValueError(f"the diaphragm's back node {back!r} isn't in the rear network")
     idx = {x: i for i, x in enumerate(nodes)}
-    g_k = np.zeros((n, len(f)), complex)
-    for j, fj in enumerate(f):
-        s = 2j * math.pi * fj
-        y = np.zeros((len(nodes), len(nodes)), complex)
-        rhs = np.zeros((len(nodes), n), complex)
-        for el in els:
-            adm = {"R": 1.0 / el["value"], "L": 1.0 / (s * el["value"]), "C": s * el["value"]}[
-                el["kind"]
-            ]
-            ia, ib = idx.get(el["a"]), idx.get(el["b"])
-            for i0, other in ((ia, el["b"]), (ib, el["a"])):
-                if i0 is None:
-                    continue
-                y[i0, i0] += adm
-                if other in idx:
-                    y[i0, idx[other]] -= adm
-                elif other in slots:  # a driven entry: its pressure into the right side
-                    rhs[i0, slots.index(other)] += adm
-        g_k[:, j] = np.linalg.solve(y, rhs)[idx[back]]
+    s = 2j * math.pi * f
+    y = np.zeros((len(f), len(nodes), len(nodes)), complex)
+    rhs = np.zeros((len(f), len(nodes), n), complex)
+    for el in els:
+        v = el["value"]
+        adm = {"R": np.full(len(f), 1.0 / v, complex), "L": 1.0 / (s * v), "C": s * v}[el["kind"]]
+        ia, ib = idx.get(el["a"]), idx.get(el["b"])
+        for i0, other in ((ia, el["b"]), (ib, el["a"])):
+            if i0 is None:
+                continue
+            y[:, i0, i0] += adm
+            if other in idx:
+                y[:, i0, idx[other]] -= adm
+            elif other in slots:  # a driven entry: its pressure into the right side
+                rhs[:, i0, slots.index(other)] += adm
+    g_k = np.linalg.solve(y, rhs)[:, idx[back], :].T  # (n, f)
     return g_k / g_k[0]
 
 

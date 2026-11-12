@@ -37,7 +37,7 @@ from scipy.special import ellipe, ellipk, j0
 from varimu.devices.capsule import C_AIR
 
 FRONT, REAR = 1, 2  # panel tags: the front / rear diaphragm
-SLOT0 = 10  # a variable_d body's slot bands: SLOT0 + k, k = 1 nearest the front
+SLOT0 = 10  # a variable_d body's slot bands: SLOT0 + k, k = 1 nearest the front; its ports SLOT0
 
 
 @dataclass(frozen=True)
@@ -279,6 +279,8 @@ VARIABLE_D_BODY_FIELDS = (
     "length_m",
     "slot_m",  # [from, to]: the band of rear slots on the side, behind the front face
     "slot_sections",  # its equal sections, each a rear entry (the slotted_line's ladder)
+    # optional: "ports_m", [from, to] ahead of slot_m: the head's own rear ports, one band (tag
+    # SLOT0), the rear entry 1 a near path drives (moving_coil.rear_entry_weights)
 )
 
 
@@ -288,7 +290,9 @@ def variable_d_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e
     mode shape), the slot band on its side cut into `slot_sections` equal bands, each its own
     entry (tag SLOT0 + k, averaged over its area). Axisymmetric (azimuthal order 0): the RE20's
     two slot sets face opposite sides, so their sum keeps order 0 and loses order 2 only.
-    `rear_weights` sums the bands with the cartridge's weights into one rear entry."""
+    With `ports_m`, the head's rear ports are one more band ahead of the slots (tag SLOT0, the
+    first in `uniform`). `rear_weights` sums the bands with the cartridge's weights into one
+    rear entry."""
     a, rb, length = diaphragm_radius_m, body["radius_m"], body["length_m"]
     lo, hi = (float(x) for x in body["slot_m"])
     n = int(body["slot_sections"])
@@ -296,7 +300,20 @@ def variable_d_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e
         raise ValueError(f"variable_d body: need diaphragm < radius, slots on the side ({body})")
     c = [(0.0, 0.0), (a, 0.0), (rb, 0.0)]
     t, sizes = [FRONT, 0, 0], [panel_m, panel_m, panel_m]
-    c.append((rb, -lo))
+    ports = body.get("ports_m")
+    if ports is not None:
+        p_lo, p_hi = (float(x) for x in ports)
+        if not (0 < p_lo < p_hi <= lo):
+            raise ValueError(f"variable_d body: ports_m {ports} must lie ahead of slot_m")
+        c += [(rb, -p_lo), (rb, -p_hi)]  # tags are per segment: t[i] from c[i] to c[i + 1]
+        t.append(SLOT0)
+        sizes.append(panel_m)
+        if p_hi < lo:
+            c.append((rb, -lo))
+            t.append(0)
+            sizes.append(panel_m)
+    else:
+        c.append((rb, -lo))
     for k in range(1, n + 1):
         c.append((rb, -(lo + k * (hi - lo) / n)))
         t.append(SLOT0 + k)
@@ -305,15 +322,18 @@ def variable_d_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e
     t += [0, 0]
     sizes += [4 * panel_m, 2 * panel_m]
     m = polyline_mesh(c, t, panel_m, a, segment_panel_m=sizes)
-    tags = tuple(SLOT0 + k for k in range(1, n + 1))
+    tags = ((SLOT0,) if ports is not None else ()) + tuple(SLOT0 + k for k in range(1, n + 1))
     return Mesh(m.p0, m.p1, m.tag, m.diaphragm_radius_m, m.interior, uniform=tags)
 
 
 def rear_weights(mesh: Mesh, w: np.ndarray, f_hz: np.ndarray):
     """The rear entry's panel weights per frequency for a variable_d mesh: sum_k w[k, j]
-    face_weights(SLOT0 + k + 1) (w from varimu.devices.moving_coil.rear_entry_weights on
-    f_hz). A callable f -> weights, for `entry_factors` / `entry_table`."""
-    faces = np.array([mesh.face_weights(SLOT0 + k + 1) for k in range(w.shape[0])])
+    face_weights(band k) over its entry bands in order (`uniform`: the ports, if any, then
+    SLOT0 + 1, ...; w from varimu.devices.moving_coil.rear_entry_weights on f_hz). A callable
+    f -> weights, for `entry_factors` / `entry_table`."""
+    if w.shape[0] != len(mesh.uniform):
+        raise ValueError(f"{w.shape[0]} weights for {len(mesh.uniform)} entry bands")
+    faces = np.array([mesh.face_weights(tag) for tag in mesh.uniform])
     table = {float(x): w[:, j] @ faces for j, x in enumerate(np.atleast_1d(f_hz))}
     return lambda f: table[float(f)]
 

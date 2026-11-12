@@ -1,0 +1,73 @@
+# Electro-Voice RE20 dynamic cardioid, continuously Variable-D (docs/CHAINS_PLAN.md WP13). Built
+# by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/ev_re20/README.md has their provenance):
+#   "ev: ..."          EV's RE20 data sheet Rev G 07/2010 (1.5 mV/Pa, 150 ohm; p.2's wiring
+#                      diagram: the coil into a transformer, the secondary across the network
+#                      and the bass-tilt switch to XLR pins 2 / 3)
+#   "provisional: ..." model knowledge
+#
+# The cartridge R_RE20 (config/components/r_re20/): the pressure at its front entry on `in`, at
+# its rear entries on the control input `p_rear` (pascals as volts; the slot bands of Mawby's
+# Variable-D reduce exactly to this one entry, moving_coil.rear_entry_weights, applied by
+# varimu/mics/free_field.py and varimu/rooms/entries.py from the component's geometry). The coil
+# drives RE20_OT's primary (a design: config/designs/ev_re20_ot.yaml, 1:2.15 for 150 ohm,
+# inferred); across its secondary, always in, C1 || L2 in series with C2 || (C3 + R1), and the
+# BASS TILT switch (S1 / S2) puts L1 across the output. The output is open circuit, as the
+# sheet's 1.5 mV/Pa; a chain replaces RLOAD with the preamp's input.
+
+title: "Electro-Voice RE20"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out]
+# 0 dBFS in = 20 Pa peak at the capsule (117 dB SPL for a sine, as the U47's); out = volts
+# across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.1, source: "provisional: model knowledge (ev: 1.5 mV/Pa x 20 Pa = 30 mV peak, with headroom for the top's rise; as sennheiser_md421.yaml)"}
+
+controls:
+  bass_tilt: {value: 0, choices: [0, 1], unit: switch, source: "ev: the sheet's bass-tilt switch (S1 / S2 in the wiring diagram): 'with switch in off position, microphone shall be essentially flat from 80-6,000 Hz'", notes: "0 off (flat), 1 on (L1 across the output: the low end tilted down)"}
+
+values:
+  cartridge_model: {value: R_RE20@1, source: "config/components/r_re20/1.yaml (the RE20's cartridge: no construction is published, the geometry bounded and fitted by scripts/fit_re20.py to EV's figures through RE20_OT and this network: data/schematics/ev_re20/README.md)"}
+  transformer_model: {value: RE20_OT@1, source: "config/components/re20_ot/1.yaml (config/designs/ev_re20_ot.yaml: 1:2.15, inferred)"}
+  c1_f: {value: 0.01e-6, source: "ev: wiring diagram, C1 .01uf"}
+  l2_h: {value: 15.0e-3, source: "ev: wiring diagram, L2 15mH"}
+  l2_r_ohm: {value: 10.0, source: "provisional: model knowledge (a small 15 mH choke's winding resistance; not printed)"}
+  c2_f: {value: 0.022e-6, source: "ev: wiring diagram, C2 .022uf"}
+  c3_f: {value: 0.22e-6, source: "ev: wiring diagram, C3 .22uf (read from the enlarged page image; the README's first reading '22 uF' was the low-resolution page)"}
+  r1_ohm: {value: 220.0, source: "ev: wiring diagram, R1 220 ohms"}
+  l1_h: {value: 0.56, source: "ev: wiring diagram, L1 560mH (an iron-cored choke)"}
+  l1_r_ohm: {value: 40.0, source: "provisional: model knowledge (a small 560 mH iron-cored choke's winding resistance; not printed)"}
+  load_ohm: {value: 1.0e+6, source: "ev: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
+
+# No tolerance block: the nominal mic only (docs/SM57_PLAN.md Decisions 5).
+
+sections:
+  - title: cartridge
+    parts:
+      MC:
+        moving_coil: [in, p_rear, cp, "0"]
+        component: cartridge_model
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [cp, "0"]}
+          s: {nodes: [out, "0"]}
+        component: transformer_model
+      C1: {C: [out, na], c: c1_f, tolerance: none}
+      L2: {L: [out, nl2], l: l2_h, tolerance: none}
+      RL2: {R: [nl2, na], r: l2_r_ohm, tolerance: none}
+      C2: {C: [na, "0"], c: c2_f, tolerance: none}
+      C3: {C: [na, nb], c: c3_f, tolerance: none}
+      R1: {R: [nb, "0"], r: r1_ohm, tolerance: none}
+      SBASS:
+        switch: bass_tilt
+        parts:
+          L1: {L: [out, nl1], l: l1_h, in: [1]}
+          RL1: {R: [nl1, "0"], r: l1_r_ohm, tolerance: none, in: [1]}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

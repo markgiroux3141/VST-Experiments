@@ -1,46 +1,72 @@
 {
  "values": {
-  "coil/bl_tm": 10.149407633222664,
-  "diaphragm/moving_mass_kg": 0.0006513948605222438,
-  "diaphragm/resonance_hz": 35.153349440345515,
-  "diaphragm/q": 6.93367501949724,
-  "diaphragm/modes/0/f_hz": 12082.548793276317,
-  "diaphragm/modes/0/q": 7.999999998962528,
-  "diaphragm/modes/0/mass_fraction": 0.07708071947736468,
-  "diaphragm/modes/0/area_fraction": 0.5999999999999532,
-  "grille/rayl": 1.0864214371646808,
-  "cav/volume_m3": 3.054496210400557e-06,
-  "damp/r_pa_s_m3": 514051.92756949796,
-  "damp/m_kg_m4": 11.833205749160543,
-  "vd/radius_m": 0.0032444809811335365,
-  "vd/slot_rayl": 401.7292166073169,
-  "term/volume_m3": 6.037246976722135e-06
+  "coil/bl_tm": 3.9581865559454754,
+  "diaphragm/moving_mass_kg": 0.0001500000000000003,
+  "diaphragm/resonance_hz": 30.688324649668196,
+  "diaphragm/q": 7.999990806541996,
+  "diaphragm/modes/0/f_hz": 6511.603255339591,
+  "diaphragm/modes/0/q": 1.1635911832323993,
+  "diaphragm/modes/0/mass_fraction": 0.02000000455930915,
+  "diaphragm/modes/0/area_fraction": 0.34938078699683917,
+  "diaphragm/modes/1/f_hz": 1500.0000000000014,
+  "diaphragm/modes/1/q": 2.9999999999999996,
+  "diaphragm/modes/1/mass_fraction": 0.36704669809959467,
+  "diaphragm/modes/1/area_fraction": 0.19143729251025168,
+  "grille/r_pa_s_m3": 20000.00000000002,
+  "grille/m_kg_m4": 1.0000000367267723,
+  "ps/d_m": 0.02912980280798406,
+  "ps/r1_pa_s_m3": 562639.7803778446,
+  "ps/q": 25.693058262810357,
+  "damp/r_pa_s_m3": 919964.7449366128,
+  "damp/m_kg_m4": 10.000000000000007,
+  "vd/radius_m": 0.00799999999999999,
+  "vd/slot_rayl": 865.370787098221,
+  "term/volume_m3": 5.799036399654994e-05
  },
- "sensitivity_v_per_pa": 0.0014993964482878646,
+ "sensitivity_v_per_pa": 0.001420328294366837,
  "0_off": {
-  "rms_db": 3.805707132137548,
+  "rms_db": 1.420442230898318,
   "worst": [
-   10240.0,
-   -7.75434235746729
+   6450.8,
+   -3.72672421581911
   ]
  },
  "180_off": {
-  "rms_db": 3.9921733499287058,
+  "rms_db": 1.6469257713022232,
   "worst": [
-   1015.9,
-   7.747965839986625
+   5120.0,
+   3.894394554417966
+  ]
+ },
+ "0_tilt": {
+  "rms_db": 1.8794720264139626,
+  "worst": [
+   100.8,
+   2.9162665659833236
   ]
  },
  "side_90_db": {
-  "250.0": -7.04,
-  "1000.0": -5.0,
-  "2000.0": -1.37,
-  "4000.0": -6.14
+  "250.0": -7.36,
+  "1000.0": -8.32,
+  "2000.0": -7.68,
+  "4000.0": -7.74
  },
- "resonance_hz": 35.153349440345515,
- "cost": 253.35857757603745,
+ "proximity_10cm_db": {
+  "70.0": 12.67,
+  "100.0": 9.88,
+  "150.0": 6.95,
+  "200.0": 5.11
+ },
+ "resonance_hz": 30.6883246496682,
+ "cost": 198.44836906657335,
  "at_bounds": [
-  "diaphragm/modes/0/q",
-  "diaphragm/modes/0/area_fraction"
+  "diaphragm/moving_mass_kg",
+  "diaphragm/q",
+  "diaphragm/modes/0/mass_fraction",
+  "diaphragm/modes/1/f_hz",
+  "diaphragm/modes/1/q",
+  "grille/r_pa_s_m3",
+  "damp/m_kg_m4",
+  "vd/radius_m"
  ]
 }

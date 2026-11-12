@@ -13,13 +13,13 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 49 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 51 of 51, the list complete (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
   SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
   SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
   M160 -> 1073, R-121 -> API 312, U67 -> REDD.47, U67 -> 1073, M49 -> V76, 44-BX / SM7 -> Cloudlifter ->
-  clean, carbon -> clean, PZM -> clean, PZM -> SSL, Green Bullet -> 5E3; `uv run python scripts/chain_status.py`).
+  clean, carbon -> clean, PZM -> clean, PZM -> SSL, Green Bullet -> 5E3, RE20 -> API 312, RE20 -> 1073; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -69,13 +69,12 @@ runs**.
   mic's `surface`; WP26's Notes. WP30 (2026-11-11): the Shure 520D Green Bullet, controlled magnetic
   (`config/circuits/shure_green_bullet.yaml`, `R_520@1` by `scripts/fit_520d.py`), into the 5E3
   (`bullet_f5e3`, the amplifier as a chain's stage; a mic's `cable: attached`); WP30's Notes.
-- **In progress:** WP13 (RE20), the last two chains. Steps 1-3 done: the `slotted_line` network
-  kind, the `variable_d` body and the exact reduction of its N slot entries to one rear entry
-  (WP13's Decision of 2026-11-11: no N-entry room pipeline). Step 4 started: the provisional
-  "R_RE20" block and `scripts/fit_re20.py` exist, the first fit is poor (3.8 dB rms) and isn't
-  written. **Next: WP13 step 4's "Next, in this order"** (a near rear path for the mid / high
-  cardioid, the slotted line for the low end, a staged fit), then `fit-devices --only R_RE20`
-  (register `build_r_re20` in `varimu/devices/library.py` like `build_r_520`), then step 5. Open options
+- **Done 2026-11-12: WP13, the EV RE20** (`config/circuits/ev_re20.yaml`: `R_RE20@1`, Mawby's
+  Variable-D behind seeler61's near path, fitted by `scripts/fit_re20.py` through `RE20_OT@1` (a
+  design) and EV's network; WP13's Notes have the misses), re20_api312 and re20_n1073 composed:
+  **every chain of the list is built.** Nothing is in progress. What could come next is the user's
+  call: the misses the WPs' Notes list (the RE20's proximity, side and bass tilt first), and the
+  open options
   inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
@@ -1481,6 +1480,48 @@ by itself, the Unidyne / MD 421 way: a `seeler` network (or a tube + cavity) fro
 whole band; (2) the 1 kHz reference sits in the model's notch, so judge the shape before the
 level; (3) drop the dome mode's area bound to 0.8 if the 6-14 kHz rise still wants it.
 
+Steps 4-5 done (2026-11-12; the calls Claude's, the user away):
+- **The fit's speed:** `rear_entry_weights` solves every frequency at once (batched); a residual is
+  ~10 ms (the 8 minutes a run were its per-frequency loop). The BEM's bands are cached per body and
+  source distance (cache/re20/).
+- **EV's network read off the enlarged page** (the README): C1 0.01 uF || L2 15 mH in series with
+  C2 0.022 uF || (C3 **0.22** uF + R1 220 ohm) across the secondary, always in: L2 / C3 resonate at
+  2.77 kHz, a ~-5 dB notch against a 150 ohm source, so the capsule has a presence peak EV flattened
+  electrically; S1 / S2 put L1 560 mH across the output (the bass tilt). The fit measures through
+  them (`mic_ir`: the coil into RE20_OT as an ideal 1:2.15 with its compiled resistances, primary
+  inductance and leakage; the circuit with the real component agrees within 0.01 dB rms).
+- **RE20_OT@1** (`config/designs/ev_re20_ot.yaml`, EI-25 mumetall, 270 : 580 turns, 1.54 H): only
+  the wiring and 150 ohm are published; the ratio from the provisional 30 ohm coil.
+- **The slots where the drawing has them:** the dimension drawing (802 px = 216.7 mm) puts the casing's
+  slot sets 62-134 mm behind the front, the head basket the front ~53 mm. So the `variable_d` body has
+  an optional **`ports_m`** band ahead of the slots (`bor.variable_d_mesh`, tag SLOT0): the head's rear
+  ports, entry 1 (node `rear`), driven by the near path (seeler61's network, d 30-65 mm fitted); the
+  slot sections are then entries 2..n + 1, the slotted line's sections all to the ambient in the
+  compiled network (`moving_coil.rear_entry_weights` returns n + 1 rows; the reduction exact,
+  `test_the_reduction_is_exact_with_ports`). Ports 8-30 mm (provisional): at 20-50 mm the rear's null
+  failed above 1 kHz (180 deg at -8 dB, 4.2 dB rms).
+- **A bug found and guarded:** `parts.moving_coil` (and moving_coil.rs) prefix acoustic and electrical
+  nodes alike, so an acoustic node `v` was the coil's node `<part>_v` (the first network here used
+  it). `compile_network` refuses `l`, `e`, `v` (`RESERVED_NODES`); no saved component used them
+  (test_moving_coil's formula test did: renamed).
+- **The fit** (`fit_re20.py`, multistarts by seed): targets 0_off, 180_off (weight 1), 0_tilt (the
+  sheet's trace with L1), the 90 deg points, 1.5 mV/Pa, and proximity at 10 cm (70-200 Hz, a hinge
+  above +2 dB). Tried and dropped: a front cavity behind the grille (undamped, a whistle near 11 kHz),
+  dome Q above 3 (a sharp peak between the sheet's points). Coil 30 ohm, 0.2 mH (provisional).
+- **R_RE20@1's misses** (circuit vs sheet, `tests/test_ev_re20.py` at their size): on axis 1.42 dB rms
+  (-3.7 dB at 6.5 kHz), rear 1.65 dB rms (+3.9 at 5.1 kHz), 1.42 mV/Pa; the 90 deg points -7.4 to
+  -8.3 dB against EV's -4.2 / -5.6 (supercardioid-narrow); **proximity +9.9 dB at 10 cm, 100 Hz**
+  (a plain cardioid's: EV's "eliminated" isn't reached; the low end still enters mostly at the ports.
+  A delay-matched gradient's near / far is (r / (r + d)) |1 + 1 / (2 j k r)|, ~+3 dB at d = 0.1 m:
+  the floor the slots could reach); the bass tilt 1.2 dB from 400 to 100 Hz against EV's 4.5 (the low
+  30 ohm source barely sees L1; with a 130 ohm coil the tilt fitted but the 3 kHz notch didn't).
+  Options for later: the proximity hinge's weight, the slotted line's resistance profile, the coil's
+  resistance as a fitted unknown (tilt against the notch), and the polar's two-sides asymmetry
+  (order 2, which the axisymmetric BEM drops).
+- Step 5: `ev_re20.yaml` (the BASS TILT switch `bass_tilt`), the list's entry (pattern cardioid, the
+  switch as a setting), re20_api312 / re20_n1073 composed, app fixtures exported (the agreement test
+  passes). Not rendered in `config/scenes/new_chains_check.yaml` (owed, optional).
+
 ### WP14. The Sennheiser MD 421
 
 A plain pressure-gradient dynamic (one rear entry through its "bass tubes"), so it fits the
@@ -1973,7 +2014,7 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
 passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1`, `build_pzm_capsule` in `varimu/devices/library.py`, every existing IR
-unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key; 2026-11-11 (WP30): `build_r_520` there, likewise, the two new circuits' app fixtures exported, the agreement test passes; 2026-11-11 (WP13): the `slotted_line` kind and `rear_entry_weights` in `varimu/devices/moving_coil.py`, every existing component recompiling unchanged; `varimu/mics/{bor,free_field}.py`, `varimu/rooms/entries.py` outside the key): these
+unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key; 2026-11-11 (WP30): `build_r_520` there, likewise, the two new circuits' app fixtures exported, the agreement test passes; 2026-11-11 (WP13): the `slotted_line` kind and `rear_entry_weights` in `varimu/devices/moving_coil.py`, every existing component recompiling unchanged; `varimu/mics/{bor,free_field}.py`, `varimu/rooms/entries.py` outside the key; 2026-11-12 (WP13 steps 4-5): `ports_m`, the batched weights and `RESERVED_NODES` in `moving_coil.py`, `build_r_re20` in `library.py`, every existing component unchanged, the app fixtures exported, the agreement test passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `cargo clippy -p varimu-app --all-targets -- -D warnings` fails on two findings in the
 multitrack deck's code (`deck.rs` type_complexity, `session_view.rs` collapsible_if; not the chains'),
@@ -2124,3 +2165,8 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   N-entry room pipeline: the Decision revised); the `slotted_line` kind, the `variable_d` body,
   the weights at the entry tables' call sites; step 4 started (`fit_re20.py`; the first fit
   poor, not written; WP13's notes say what to try next).
+- 2026-11-12: WP13 done: EV's network read off the enlarged page (C3 0.22 uF: a 2.77 kHz notch),
+  the slots placed from the dimension drawing (62-134 mm) with the head's ports as entry 1
+  (`ports_m`), a node-name collision with the coil fixed and guarded, `RE20_OT@1`, `R_RE20@1` (on axis
+  1.42 dB rms; proximity, sides and tilt known misses), `ev_re20.yaml`, re20_api312 / re20_n1073
+  composed: **51 of 51, the list complete.**

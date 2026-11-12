@@ -1,0 +1,45 @@
+# The Electro-Voice RE20's coil-to-line transformer (docs/CHAINS_PLAN.md WP13) by an inferred
+# construction: EV's sheet gives only the wiring (the voice coil, blue / black, into the
+# transformer's primary; its secondary, red / green, across the bass-tilt network to XLR pins 2 /
+# 3: data/schematics/ev_re20/) and the 150 ohm rated impedance. The voice coil's resistance isn't
+# published (R_RE20's 30 ohm is provisional); the ratio is derived from it reflected to ~150 ohm
+# (1:2.15), the rest provisional (an EI-25 in the RE20's 49 mm body, as SM57_OT's size class).
+#
+# A design (the component editor's source), compiled and saved by
+# `cargo run -p varimu-components -- save config/designs/ev_re20_ot.yaml`.
+name: RE20_OT
+kind: transformer
+source: "Electro-Voice RE20 transformer (ev: the RE20 data sheet Rev G 2010 p.2's wiring diagram, 150 ohm rated; data/schematics/ev_re20/README.md): the construction unpublished, the ratio derived from R_RE20's provisional 30 ohm coil reflected to ~150 ohm, the rest provisional"
+core:
+  lamination: {value: EI-25, source: "provisional: model knowledge (a microphone transformer inside the RE20's 49.2 mm body behind the cartridge: SM57_OT's EI-25, 1/4 in tongue)"}
+  material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer at millivolts: a high-nickel core)"}
+  stack_m: {value: 0.00635, source: "provisional: model knowledge (a 1/4 in stack on the 1/4 in tongue, as SM57_OT)"}
+  stacking_factor: {value: 0.92, source: "web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%)"}
+  stacking: {value: interleaved, source: "provisional: model knowledge (an ungapped microphone transformer: E and I interleaved)"}
+  joint_gap_m: {value: 0.235e-6, source: "provisional: as SM57_OT's (config/designs/sm57_ot.yaml: an interleaved mumetall joint fitted to a measured primary inductance)"}
+bobbin:
+  wall_m: {value: 0.4e-3, source: "provisional: model knowledge (a small plastic bobbin)"}
+  cheek_m: {value: 0.6e-3, source: "provisional: model knowledge"}
+  margin_m: {value: 0.2e-3, source: "provisional: model knowledge (a small creepage margin each end)"}
+  pitch_factor: {value: 1.1765, source: "web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)"}
+arrangement: {value: layer, source: "provisional: model knowledge (layer-wound: the coil's primary on the tongue, then the secondary)"}
+windings: [p, s]
+sections:
+  - winding: p
+    turns: {value: 270, source: "provisional: model knowledge (twice SM57_OT's 135 turns on the same core: ~1.5 H of primary, flat to the sheet's 45 Hz from the provisional 30 ohm coil)"}
+    layers: {value: 7, source: "derived: turns / turns per layer (39 of the 42 the 11.10 mm traverse holds: AWG 32 heavy's 0.0093 in at the pitch factor)"}
+    wire: {value: AWG 32 heavy, source: "provisional: model knowledge (the primary's resistance a few ohms, well under the coil's)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 0.012e-3, source: "provisional: model knowledge (thin interlayer film)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft paper)"}}
+  - insulation: {thickness_m: {value: 0.1e-3, source: "provisional: model knowledge (a few wraps of tape between the windings)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+  - winding: s
+    turns: {value: 580, source: "derived: n = 2.15: R_RE20's provisional 30 ohm coil and the primary's few ohms reflected (n^2 x ~33 = 152 ohm) make EV's 150 ohm rated impedance with the secondary's resistance"}
+    layers: {value: 10, source: "derived: turns / turns per layer (58: the 11.10 mm traverse over AWG 36 heavy's 0.0059 in at the pitch factor holds 63)"}
+    wire: {value: AWG 36 heavy, source: "provisional: model knowledge (the secondary's resistance a few percent of the 150 ohm)"}
+    enamel: {value: enamel, source: "provisional: model knowledge"}
+    interlayer: {thickness_m: {value: 0.012e-3, source: "provisional: model knowledge (thin interlayer film)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+leakage_method: formula
+rating:
+  windings: [p]
+  v_rms: {value: 0.03, source: "provisional: model knowledge (the coil's EMF at ~140 dB SPL: 200 Pa x 1.5 mV/Pa / 2.15 / sqrt 2 and some headroom)"}
+  f_hz: {value: 50.0, source: "provisional: model knowledge (the bottom of the band)"}

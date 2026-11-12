@@ -1323,6 +1323,30 @@ def build_r_520() -> dict[str, Any]:
     }
 
 
+def build_r_re20() -> dict[str, Any]:
+    """The Electro-Voice RE20's moving-coil cartridge (docs/CHAINS_PLAN.md WP13): Mawby's
+    continuously Variable-D rear path as a `slotted_line` on a `variable_d` body behind
+    seeler61's near path (published_points.yaml "R_RE20": no construction is published, so
+    every dimension is bounded and fitted by scripts/fit_re20.py through RE20_OT and EV's
+    network), the lumped network compiled from it as R57's
+    (varimu.devices.moving_coil.compile_network; the slot entries reduce to the one rear
+    entry: moving_coil.rear_entry_weights, applied where the entry tables are)."""
+    from varimu.devices import moving_coil
+
+    pub = _published()["R_RE20"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "R_RE20",
+        "kind": "moving_coil",
+        "source": "derived: varimu.devices.moving_coil.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": moving_coil.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
+    }
+
+
 def build_ribbon_44bx() -> dict[str, Any]:
     """The RCA 44-BX's ribbon motor (docs/CHAINS_PLAN.md WP5): its geometry
     (published_points.yaml "RIBBON_44BX": the ribbon from AEA's R44 sheet, the motor after
@@ -4236,6 +4260,7 @@ BUILDERS = {
     "R_MD421": build_r_md421,
     "R_SM7": build_r_sm7,
     "R_520": build_r_520,
+    "R_RE20": build_r_re20,
     "RIBBON_44BX": build_ribbon_44bx,
     "RIBBON_4038": build_ribbon_4038,
     "RIBBON_77DX": build_ribbon_77dx,
