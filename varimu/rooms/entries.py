@@ -121,7 +121,15 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
         src = (Path(bor.__file__)).read_bytes() + Path(__file__).read_bytes()
         if ball:
             src += Path(bor_permeable.__file__).read_bytes()
-        key = json.dumps([geometry["body"], a, f.tolist(), th.tolist(), inv_r.tolist()])
+        variable_d = geometry["body"].get("form") == "variable_d"  # the RE20: the weights'
+        if variable_d:  # network and formulas in the key (moving_coil.rear_entry_weights)
+            from varimu.devices import moving_coil
+
+            src += Path(moving_coil.__file__).read_bytes()
+        key = json.dumps(
+            [geometry["body"], a, f.tolist(), th.tolist(), inv_r.tolist()]
+            + ([geometry["network"]] if variable_d else [])
+        )
         h = hashlib.sha256(src + key.encode()).hexdigest()[:24]
         path = CACHE / f"table_{h}.npz"
         if path.exists():
@@ -134,7 +142,12 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
                 front, rear = bor_permeable.entry_table(op, f, body["z_s_pa_s_m"], th, d)
             else:
                 op = bor.operator(bor.body_mesh(geometry["body"], a))
-                front, rear = bor.entry_table(op, f, th, d)
+                rear_w = None
+                if variable_d:  # the slot bands summed into one rear entry
+                    from varimu.devices.moving_coil import rear_entry_weights
+
+                    rear_w = bor.rear_weights(op.mesh, rear_entry_weights(geometry, f), f)
+                front, rear = bor.entry_table(op, f, th, d, rear=rear_w)
             path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(path, front=front, rear=rear)
         if "ribbon" in geometry:  # the slot's length, the azimuthal mean (1 / r unchanged)

@@ -76,6 +76,22 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
                resistance (its wall loss neglected). Elements <name>_<k> (R) and
                <name>_<k>_m (L) of span k, <name>_<k>_c (C) of section k, on node
                <name>_<k>; a matched end's resistance <name>_end on node <name>_e
+    slotted_line
+               a Variable-D rear path (Mawby, US 3,378,649; CHAINS_PLAN.md WP13): `tubes`
+               parallel round tubes of radius_m from the mouth `a` (behind the diaphragm), a
+               plain lead lead_m long, then the slotted part, the body's slot band
+               (`body.slot_m` [from, to] behind the front face, in `body.slot_sections` equal
+               sections: the slotted line takes both from the body, so the BEM's slot bands
+               and the ladder's are the same), the far end closed (a cavity element may hang on
+               its last node <name>_<n>). Per section: the tubes' air mass rho dx / (N pi r^2)
+               and Poiseuille resistance 8 mu dx / (N pi r^4) in series between centres (half a
+               section from the lead's end), the air's compliance N pi r^2 dx / (gamma P0) at
+               its centre, and the slot's cloth, a specific resistance `slot_rayl` over the
+               slot's open area N slot_width_m dx, from the centre to that section's own entry.
+               Entry 1 (the section nearest the diaphragm) is `b`, the others the ambient: the
+               rear entries reduce exactly to one (`rear_entry_weights`). Elements <name>_lead
+               (R, L), <name>_<k> (R) / <name>_<k>_m (L) spans, <name>_<k>_c (C),
+               <name>_<k>_s (R, the slot) on node <name>_<k>
     seeler     the Unidyne III's phase-shift network (`seeler_rear_network`) from the node
                under the dome `a` to the rear entry `b`, its magnet cavity on node `mid`:
                the back entry R1 + L1 (a -> b), the cavity under the dome Ca (a), the coil's
@@ -130,11 +146,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from varimu.devices.capsule import C_AIR, END_CORRECTION, GAMMA, MU_AIR, P0, RHO_AIR
 
 KINDS = (
     "screen", "tube", "slit", "radiation", "cavity", "film", "acoustic", "line", "seeler",
-    "diaphragm",
+    "slotted_line", "diaphragm",
 )  # fmt: skip
 PORTS = ("front", "rear", "0")
 # The leak across the diaphragm's compliance: a resistance this many times the
@@ -237,7 +255,9 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
         if name in names:
             raise ValueError(f"network element {name}: the name is taken")
         names.add(name)
-        if kind != "diaphragm":
+        if kind == "slotted_line":
+            els += _slotted_line(name, a, b, e, _slot_body(g))
+        elif kind != "diaphragm":
             els += compile_element(e)
         else:
             n_diaphragm += 1
@@ -461,6 +481,102 @@ def _line(name: str, a: str, b: str, e: Mapping[str, Any]) -> list[dict[str, Any
         z0 = math.sqrt(RHO_AIR * alpha * gamma_p * P0) / (phi * area)
         els.append(_el(f"{name}_end", "R", far, "0", z0))
     return els
+
+
+def _slot_body(g: Mapping[str, Any]) -> tuple[float, float, int]:
+    """The slot band (from, to behind the front face) and its sections, from the geometry's
+    body (form `variable_d`: varimu.mics.bor.variable_d_mesh)."""
+    body = g.get("body") or {}
+    if body.get("form") != "variable_d":
+        raise ValueError("a slotted_line needs a body of form variable_d (its slot band)")
+    lo, hi = (float(x) for x in body["slot_m"])
+    n = int(body["slot_sections"])
+    if not (0 < lo < hi and n >= 1):
+        raise ValueError(f"variable_d body: slot_m {body['slot_m']}, sections {n}")
+    return lo, hi, n
+
+
+def _slotted_line(
+    name: str, a: str, b: str, e: Mapping[str, Any], band: tuple[float, float, int],
+    entries: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:  # fmt: skip
+    """The `slotted_line` kind's ladder (the module docstring). `entries`: the sections' entry
+    nodes (default: `b`, then the ambient)."""
+    lo, hi, n = band
+    big_n, r = float(e.get("tubes", 1)), float(e["radius_m"])
+    area = big_n * math.pi * r * r
+    dx = (hi - lo) / n
+    lead = float(e["lead_m"])
+    entries = list(entries) if entries is not None else [b] + ["0"] * (n - 1)
+    if len(entries) != n:
+        raise ValueError(f"slotted_line {name}: {len(entries)} entries for {n} sections")
+    rho_l = RHO_AIR / area  # mass per metre
+    res_l = 8.0 * MU_AIR / (big_n * math.pi * r**4)  # resistance per metre
+    slot = float(e["slot_rayl"]) / (big_n * float(e["slot_width_m"]) * dx)
+    els: list[dict[str, Any]] = []
+    span0 = lead + 0.5 * dx  # the mouth to the first section's centre
+    els += _series(f"{name}_lead", a, f"{name}_1", res_l * span0, rho_l * span0)
+    for k in range(1, n + 1):
+        node = f"{name}_{k}"
+        els.append(_el(f"{name}_{k}_c", "C", node, "0", area * dx / (GAMMA * P0)))
+        els.append(_el(f"{name}_{k}_s", "R", node, entries[k - 1], slot))
+        if k < n:
+            els += _series(f"{name}_{k}", node, f"{name}_{k + 1}", res_l * dx, rho_l * dx)
+    return els
+
+
+def rear_entry_weights(g: Mapping[str, Any], f_hz: Sequence[float]) -> np.ndarray:
+    """The Variable-D reduction (CHAINS_PLAN.md WP13): the rear network is linear and meets the
+    rest only at the diaphragm's back face, so its N slot entries act on the diaphragm through
+    one Thevenin pressure there, sum_k G_k p_k (G_k: the back face's pressure, the diaphragm
+    blocked, per pascal at entry k alone), behind one impedance (all entries at the ambient).
+    The compiled network drives only entry 1 (`rear`) and grounds the others, so it is exact
+    with the rear entry's pressure sum_k w_k p_k, w_k = G_k / G_1. Returns w, (n, len(f)):
+    w[0] = 1. A cartridge without a slotted_line: a (1, len(f)) array of ones."""
+    f = np.atleast_1d(np.asarray(f_hz, float))
+    lines = [e for e in g["network"] if e["kind"] == "slotted_line"]
+    if not lines:
+        return np.ones((1, len(f)))
+    if len(lines) > 1:
+        raise ValueError("one slotted_line per cartridge")
+    band = _slot_body(g)
+    n = band[2]
+    dia = next(e for e in g["network"] if e["kind"] == "diaphragm")
+    back = str(dia.get("b", "0"))
+    slots = [f"@slot{k}" for k in range(1, n + 1)]
+    els: list[dict[str, Any]] = []
+    for e in g["network"]:
+        if e["kind"] == "diaphragm":
+            continue  # blocked: no volume velocity at its faces
+        if e["kind"] == "slotted_line":
+            els += _slotted_line(str(e["name"]), str(e["a"]), str(e.get("b", "0")), e, band, slots)
+        else:
+            els += compile_element(e)
+    fixed = {"0", "front", "rear", *slots}
+    nodes = sorted({x for el in els for x in (el["a"], el["b"])} - fixed)
+    if back not in nodes:
+        raise ValueError(f"the diaphragm's back node {back!r} isn't in the rear network")
+    idx = {x: i for i, x in enumerate(nodes)}
+    g_k = np.zeros((n, len(f)), complex)
+    for j, fj in enumerate(f):
+        s = 2j * math.pi * fj
+        y = np.zeros((len(nodes), len(nodes)), complex)
+        rhs = np.zeros((len(nodes), n), complex)
+        for el in els:
+            adm = {"R": 1.0 / el["value"], "L": 1.0 / (s * el["value"]), "C": s * el["value"]}[
+                el["kind"]
+            ]
+            ia, ib = idx.get(el["a"]), idx.get(el["b"])
+            for i0, other in ((ia, el["b"]), (ib, el["a"])):
+                if i0 is None:
+                    continue
+                y[i0, i0] += adm
+                if other in idx:
+                    y[i0, idx[other]] -= adm
+                elif other in slots:  # a driven entry: its pressure into the right side
+                    rhs[i0, slots.index(other)] += adm
+        g_k[:, j] = np.linalg.solve(y, rhs)[idx[back]]
+    return g_k / g_k[0]
 
 
 def _series(name: str, a: str, b: str, r: float, m: float) -> list[dict[str, Any]]:

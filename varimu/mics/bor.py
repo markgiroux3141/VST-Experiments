@@ -37,6 +37,7 @@ from scipy.special import ellipe, ellipk, j0
 from varimu.devices.capsule import C_AIR
 
 FRONT, REAR = 1, 2  # panel tags: the front / rear diaphragm
+SLOT0 = 10  # a variable_d body's slot bands: SLOT0 + k, k = 1 nearest the front
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,50 @@ def dynamic_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3)
     return Mesh(m.p0, m.p1, m.tag, m.diaphragm_radius_m, m.interior, uniform=(REAR,))
 
 
+VARIABLE_D_BODY_FIELDS = (
+    "radius_m",  # the body's cylinder; the diaphragm's face at the origin facing +z
+    "length_m",
+    "slot_m",  # [from, to]: the band of rear slots on the side, behind the front face
+    "slot_sections",  # its equal sections, each a rear entry (the slotted_line's ladder)
+)
+
+
+def variable_d_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3) -> Mesh:
+    """A Variable-D mic (the EV RE20, CHAINS_PLAN.md WP13) as a rigid cylinder (`body`: form
+    `variable_d`, VARIABLE_D_BODY_FIELDS): the front entry on its face (FRONT, the diaphragm's
+    mode shape), the slot band on its side cut into `slot_sections` equal bands, each its own
+    entry (tag SLOT0 + k, averaged over its area). Axisymmetric (azimuthal order 0): the RE20's
+    two slot sets face opposite sides, so their sum keeps order 0 and loses order 2 only.
+    `rear_weights` sums the bands with the cartridge's weights into one rear entry."""
+    a, rb, length = diaphragm_radius_m, body["radius_m"], body["length_m"]
+    lo, hi = (float(x) for x in body["slot_m"])
+    n = int(body["slot_sections"])
+    if not (a < rb and 0 < lo < hi < length and n >= 1):
+        raise ValueError(f"variable_d body: need diaphragm < radius, slots on the side ({body})")
+    c = [(0.0, 0.0), (a, 0.0), (rb, 0.0)]
+    t, sizes = [FRONT, 0, 0], [panel_m, panel_m, panel_m]
+    c.append((rb, -lo))
+    for k in range(1, n + 1):
+        c.append((rb, -(lo + k * (hi - lo) / n)))
+        t.append(SLOT0 + k)
+        sizes.append(panel_m)
+    c += [(rb, -length), (0.0, -length)]
+    t += [0, 0]
+    sizes += [4 * panel_m, 2 * panel_m]
+    m = polyline_mesh(c, t, panel_m, a, segment_panel_m=sizes)
+    tags = tuple(SLOT0 + k for k in range(1, n + 1))
+    return Mesh(m.p0, m.p1, m.tag, m.diaphragm_radius_m, m.interior, uniform=tags)
+
+
+def rear_weights(mesh: Mesh, w: np.ndarray, f_hz: np.ndarray):
+    """The rear entry's panel weights per frequency for a variable_d mesh: sum_k w[k, j]
+    face_weights(SLOT0 + k + 1) (w from varimu.devices.moving_coil.rear_entry_weights on
+    f_hz). A callable f -> weights, for `entry_factors` / `entry_table`."""
+    faces = np.array([mesh.face_weights(SLOT0 + k + 1) for k in range(w.shape[0])])
+    table = {float(x): w[:, j] @ faces for j, x in enumerate(np.atleast_1d(f_hz))}
+    return lambda f: table[float(f)]
+
+
 BAFFLE_BODY_FIELDS = (
     "radius_m",  # the baffle's equivalent disc (a ribbon's pole pieces)
     "depth_m",  # its thickness: the pole pieces' depth, the channel mouths on its faces
@@ -335,6 +380,8 @@ def body_mesh(body: dict, diaphragm_radius_m: float) -> Mesh:
         return pressure_mesh(body, diaphragm_radius_m)
     if body.get("form") == "dynamic":
         return dynamic_mesh(body, diaphragm_radius_m)
+    if body.get("form") == "variable_d":
+        return variable_d_mesh(body, diaphragm_radius_m)
     return capsule_mesh(body, diaphragm_radius_m)
 
 
@@ -487,25 +534,35 @@ def surface_pressure(
 
 
 def entry_factors(
-    op: Operator, f_hz: np.ndarray, theta_rad: np.ndarray, distance_m: float = np.inf
-) -> tuple[np.ndarray, np.ndarray]:
+    op: Operator, f_hz: np.ndarray, theta_rad: np.ndarray, distance_m: float = np.inf,
+    rear=None,
+) -> tuple[np.ndarray, np.ndarray]:  # fmt: skip
     """The front and rear diaphragms' mode-weighted pressures (freqs, angles) per unit
-    incident pressure at the origin (the capsule's centre)."""
+    incident pressure at the origin (the capsule's centre). `rear`: a callable f -> the rear
+    entry's panel weights (`rear_weights`, a variable_d body's), else the REAR tag's."""
     wf, wr = op.mesh.face_weights(FRONT), op.mesh.face_weights(REAR)
+    _variable_d_needs_weights(op.mesh, rear)
     out_f, out_r = [], []
     for f in np.atleast_1d(f_hz):
         p = surface_pressure(op, float(f), theta_rad, distance_m)
         out_f.append(wf @ p)
-        out_r.append(wr @ p)
+        out_r.append((rear(f) if rear is not None else wr) @ p)
     return np.array(out_f), np.array(out_r)
 
 
+def _variable_d_needs_weights(mesh: Mesh, rear) -> None:
+    if rear is None and any(t >= SLOT0 for t in mesh.uniform):
+        raise ValueError("a variable_d body's rear entry needs the cartridge's weights (`rear`)")
+
+
 def entry_table(
-    op: Operator, f_hz: np.ndarray, theta_rad: np.ndarray, distances_m: np.ndarray
+    op: Operator, f_hz: np.ndarray, theta_rad: np.ndarray, distances_m: np.ndarray, rear=None
 ) -> tuple[np.ndarray, np.ndarray]:
     """`entry_factors` over a grid, (freqs, distances, angles) each: one system per
-    frequency, solved for every incidence at once (a distance np.inf is a plane wave)."""
+    frequency, solved for every incidence at once (a distance np.inf is a plane wave).
+    `rear` as `entry_factors`'."""
     wf, wr = op.mesh.face_weights(FRONT), op.mesh.face_weights(REAR)
+    _variable_d_needs_weights(op.mesh, rear)
     xs = np.vstack([op.mesh.mid, op.mesh.interior])
     th = np.atleast_1d(theta_rad)
     nd, na = len(distances_m), len(th)
@@ -519,5 +576,5 @@ def entry_table(
         )  # fmt: skip
         p = np.linalg.lstsq(_system(op, k), rhs, rcond=None)[0]
         out_f[i] = (wf @ p).reshape(nd, na)
-        out_r[i] = (wr @ p).reshape(nd, na)
+        out_r[i] = ((rear(f) if rear is not None else wr) @ p).reshape(nd, na)
     return out_f, out_r

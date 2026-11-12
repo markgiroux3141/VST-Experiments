@@ -65,7 +65,9 @@ def capsule_entry_pressures(
             lf = ribbon_line_factor(geometry, grid, [theta_rad])[:, 0]
             front, rear = _apply(p, fs, grid, (fr * lf, rr * lf))
         else:
-            front, rear = body_entry_pressures(p, theta_rad, geometry["body"], a, fs, distance_m)
+            front, rear = body_entry_pressures(
+                p, theta_rad, geometry["body"], a, fs, distance_m, geometry=geometry
+            )
         return front, rear, f"body {geometry['body']}, distance {distance_m} m"
     if not np.isinf(distance_m):
         raise ValueError("a source distance needs a capsule body (varimu.mics.bor)")
@@ -199,12 +201,15 @@ def body_entry_factors(
     body: dict,
     diaphragm_radius_m: float,
     distance_m: float = np.inf,
+    geometry: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """The front and rear entries (freqs, angles) on the capsule's real body
     (varimu.mics.bor: a rigid body of revolution, `bor.BODY_FIELDS`), per pascal of the
     incident wave's free-field pressure at the centre: a plane wave from theta, or a point
     source `distance_m` away. Each call solves the BEM (~0.2 s per frequency); see
-    `body_entry_grid` for a cached grid."""
+    `body_entry_grid` for a cached grid. A `variable_d` body (the RE20) needs the whole
+    `geometry`: its slot bands sum into one rear entry with its cartridge's weights
+    (varimu.devices.moving_coil.rear_entry_weights)."""
     from varimu.mics import bor
 
     if body.get("form") == "ball":  # a permeable grille (the SM58): bor_permeable
@@ -221,12 +226,39 @@ def body_entry_factors(
             op, np.atleast_1d(f_hz), body["z_s_pa_s_m"], np.atleast_1d(theta_rad)
         )
     op = bor.operator(bor.body_mesh(body, diaphragm_radius_m))
-    return bor.entry_factors(op, np.atleast_1d(f_hz), np.atleast_1d(theta_rad), distance_m)
+    f = np.atleast_1d(np.asarray(f_hz, float))
+    rear = _variable_d_rear(op.mesh, body, geometry, f)
+    return bor.entry_factors(op, f, np.atleast_1d(theta_rad), distance_m, rear=rear)
+
+
+def _variable_d_rear(mesh, body: dict, geometry: dict | None, f: np.ndarray):
+    """A variable_d body's rear entry weights (`bor.rear_weights`), else None."""
+    if body.get("form") != "variable_d":
+        return None
+    from varimu.devices.moving_coil import rear_entry_weights
+    from varimu.mics import bor
+
+    if geometry is None:
+        raise ValueError("a variable_d body's entries need the cartridge's geometry")
+    return bor.rear_weights(mesh, rear_entry_weights(geometry, f), f)
+
+
+def _variable_d_key(body: dict, geometry: dict | None) -> object:
+    """What a variable_d body's entries depend on beyond the body: the cartridge's network
+    (the weights) and moving_coil.py's formulas."""
+    if body.get("form") != "variable_d" or geometry is None:
+        return None
+    from pathlib import Path
+
+    from varimu.devices import moving_coil
+
+    return [geometry["network"], Path(moving_coil.__file__).read_text(encoding="utf-8")]
 
 
 def body_entry_grid(
-    theta_rad: float, body: dict, diaphragm_radius_m: float, distance_m: float, f_max_hz: float
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    theta_rad: float, body: dict, diaphragm_radius_m: float, distance_m: float, f_max_hz: float,
+    geometry: dict | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:  # fmt: skip
     """(f, front, rear) on a log grid to f_max_hz for one angle, cached in
     cache/diffraction/ by the inputs and bor.py's source (the BEM takes a minute)."""
     import hashlib
@@ -237,7 +269,9 @@ def body_entry_grid(
 
     src = (Path(__file__).parent / "bor.py").read_bytes()
     key = json.dumps(
-        [theta_rad, body, diaphragm_radius_m, str(distance_m), f_max_hz], sort_keys=True
+        [theta_rad, body, diaphragm_radius_m, str(distance_m), f_max_hz]
+        + ([vd] if (vd := _variable_d_key(body, geometry)) is not None else []),
+        sort_keys=True,
     )
     h = hashlib.sha256(src + key.encode()).hexdigest()[:24]
     path = REPO_ROOT / "cache" / "diffraction" / f"{h}.npz"
@@ -245,7 +279,9 @@ def body_entry_grid(
         d = np.load(path)
         return d["f"], d["front"], d["rear"]
     f = np.unique(np.r_[np.geomspace(5.0, f_max_hz, 240), f_max_hz])
-    front, rear = body_entry_factors(f, [theta_rad], body, diaphragm_radius_m, distance_m)
+    front, rear = body_entry_factors(
+        f, [theta_rad], body, diaphragm_radius_m, distance_m, geometry=geometry
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez(path, f=f, front=front[:, 0], rear=rear[:, 0])
     return f, front[:, 0], rear[:, 0]
@@ -273,11 +309,14 @@ def body_entry_pressures(
     diaphragm_radius_m: float,
     fs: int,
     distance_m: float = np.inf,
+    geometry: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """The front and rear entries' pressure signals on the capsule's body
     (`body_entry_grid`) for a wave whose free-field pressure at the centre is `p`
     (pascals at fs)."""
-    grid, front, rear = body_entry_grid(theta_rad, body, diaphragm_radius_m, distance_m, fs / 2)
+    grid, front, rear = body_entry_grid(
+        theta_rad, body, diaphragm_radius_m, distance_m, fs / 2, geometry=geometry
+    )
     return tuple(_apply(p, fs, grid, (front, rear)))
 
 

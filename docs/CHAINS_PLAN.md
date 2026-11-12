@@ -69,10 +69,11 @@ runs**.
   mic's `surface`; WP26's Notes. WP30 (2026-11-11): the Shure 520D Green Bullet, controlled magnetic
   (`config/circuits/shure_green_bullet.yaml`, `R_520@1` by `scripts/fit_520d.py`), into the 5E3
   (`bullet_f5e3`, the amplifier as a chain's stage; a mic's `cable: attached`); WP30's Notes.
-- **Next:** WP13 (RE20), the last two chains: it needs the N-entry generalization of the room
-  pipeline (its Decision: a plan file of its own first, `docs/RE20_PLAN.md`, then the `slotted_line`
-  network kind and N rear entries through `EntryTable`, the image sources / rays / wave solver,
-  `scene.py`, `balance.py`, `mic_print.py`, `networks.py`, `ac.py` and both builders). Open options
+- **In progress:** WP13 (RE20), the last two chains. Steps 1-3 done: the `slotted_line` network
+  kind, the `variable_d` body and the exact reduction of its N slot entries to one rear entry
+  (WP13's Decision of 2026-11-11: no N-entry room pipeline). **Next: WP13 step 4**, `R_RE20@1` by
+  a new `scripts/fit_re20.py` (WP13's "Next (step 4)" has the start values and the fit's plan),
+  then step 5. Open options
   inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
@@ -181,7 +182,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | done 2026-11-10 (the mic path; the EQ is B13's rest) |
 | 12 | API 312 (the 2520) | SM57 -> API | L | done 2026-11-10 |
-| 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |
+| 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | started (steps 1-3: the slotted line and its exact reduction to one rear entry) |
 | 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | done 2026-11-11 (the patent lookup skipped) |
 | 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the switches 2026-11-11) |
 | 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | done 2026-11-10 |
@@ -1413,6 +1414,53 @@ optional `rears` (a space-separated node list; ports `rear_1`..) in both builder
 are digitized; nothing else of the RE20 is built. The order moves on to the WPs that
 open chains with the machinery that exists.
 
+Decision (2026-11-11, Claude's, the user away; **replaces the one above**): no N-entry room
+pipeline. The rear network is linear and meets the rest of the cartridge only at the
+diaphragm's back face, so its N slot entries act on the diaphragm through one Thevenin pressure
+there, sum_k G_k p_k, behind one impedance (every entry at the ambient). A netlist that drives
+entry 1 alone and grounds the others is therefore exact when entry 1's pressure is sum_k w_k
+p_k, w_k = G_k / G_1 (entry 1 the slot nearest the diaphragm, which passes the top: the sum is
+well conditioned). The weights are computed where the entry tables are (per frequency, from the
+cartridge's network), so the room (image sources, rays, wave solver, GPU kernels), scenes,
+balance, mic_print and both builders keep their two entries; the IR is the old moving-coil
+part. The cost: the BEM is axisymmetric, so the RE20's two slot sets (opposite sides) keep
+azimuthal order 0 and lose order 2.
+
+Steps 2-3 done (2026-11-11, second session):
+- `varimu/devices/moving_coil.py`: the network kind `slotted_line` (`tubes` round tubes of
+  `radius_m`, a lead `lead_m`, then the body's slot band in `slot_sections` sections, each a
+  mass / Poiseuille resistance span, a compliance and the slot's cloth `slot_rayl` over
+  `slot_width_m` x dx to its own entry; entry 1 is `b`, the others the ambient; the far end
+  closed, a cavity may hang on `<name>_<n>`); it takes the slot band from the geometry's body
+  (form `variable_d`), so the ladder's sections and the BEM's bands are the same.
+  `rear_entry_weights(g, f)`: w (n, len f), w[0] = 1, by nodal analysis of the rear network
+  with the diaphragm blocked.
+- `varimu/mics/bor.py`: body form `variable_d` (`variable_d_mesh`: a cylinder `radius_m` x
+  `length_m`, the front entry on its face, the band `slot_m` [from, to] cut into
+  `slot_sections` uniform tags SLOT0 + k), `rear_weights(mesh, w, f)`, and `entry_factors` /
+  `entry_table` take `rear=` (a variable_d mesh refuses without it).
+- The call sites: `varimu/mics/free_field.py` (`body_entry_factors` / `body_entry_grid` /
+  `body_entry_pressures` take `geometry=`; `capsule_entry_pressures` passes it; the cache key
+  holds the network and moving_coil.py) and `varimu/rooms/entries.py` (the room's tables, the
+  same). A fit script calls them with the geometry (fit_sm57's `body_entries` doesn't: the
+  RE20's fit computes its own).
+- `tests/test_variable_d.py` (6): the reduction equals a full six-entry solve to 1e-9; far slots
+  fade with frequency; the mesh's bands and the weighted sum; the free-field path. Every
+  existing cartridge and ribbon recompiles unchanged (`fit-devices`), test_moving_coil /
+  test_ribbon / test_bor / test_labyrinth / test_sm57 / test_rooms pass.
+
+Next (step 4): `R_RE20@1` on this network. A start, all provisional and bounded: the diaphragm
+~ 1.25 in Acoustalloy (radius ~14 mm, mass and resonance fitted), the coil 150 ohm (EV) in a
+seeler-like front / magnet path, a `slotted_line` of 2 tubes along ~8-9 cm of the 216.7 mm body
+(the sheet's), a terminating cavity on its far node, the magnet's axial channel (`tube` + cloth)
+as a parallel rear path to entry 1; the body `variable_d` radius 24.6 mm (49.2 mm body), length
+0.217 m. `scripts/fit_re20.py` on fit_d112.py's method, entries by `free_field.body_entry_factors(
+..., geometry=g)` (cache them per fit iteration only when the network's rear part is fixed: the
+weights move with it, the BEM doesn't, so cache the per-band factors and apply the weights in
+the fit); targets the response, the 180 deg trace, the polars at 90 / 180 above and below 700 Hz,
+1.5 mV/Pa. Then step 5 (the circuit with the bass-tilt network from the wiring diagram, the list's
+entry, re20_api312 / re20_n1073, no proximity rise at 10 cm).
+
 ### WP14. The Sennheiser MD 421
 
 A plain pressure-gradient dynamic (one rear entry through its "bass tubes"), so it fits the
@@ -1905,7 +1953,7 @@ its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.p
 `varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
 `profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
 passes; 2026-11-11: `build_kk49`, `build_lsk389a`, `build_f1`, `build_pzm_capsule` in `varimu/devices/library.py`, every existing IR
-unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key; 2026-11-11 (WP30): `build_r_520` there, likewise, the two new circuits' app fixtures exported, the agreement test passes): these
+unchanged, the app fixtures re-exported, the agreement test passes; `varimu/rooms/scene.py`'s `surface`, outside the key; 2026-11-11 (WP30): `build_r_520` there, likewise, the two new circuits' app fixtures exported, the agreement test passes; 2026-11-11 (WP13): the `slotted_line` kind and `rear_entry_weights` in `varimu/devices/moving_coil.py`, every existing component recompiling unchanged; `varimu/mics/{bor,free_field}.py`, `varimu/rooms/entries.py` outside the key): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `cargo clippy -p varimu-app --all-targets -- -D warnings` fails on two findings in the
 multitrack deck's code (`deck.rs` type_complexity, `session_view.rs` collapsible_if; not the chains'),
@@ -2052,3 +2100,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-11: WP30 done: the 520D's Figure 1 digitized, `R_520@1` (a balanced armature on
   `moving_coil`, 0.84 dB rms) in `shure_green_bullet.yaml`, the 5E3 as a chain stage, a mic's
   `cable: attached`; `bullet_f5e3` composed and rendered; 49 of 51.
+- 2026-11-11: WP13 steps 2-3: the RE20's N slot entries reduce exactly to one rear entry (no
+  N-entry room pipeline: the Decision revised); the `slotted_line` kind, the `variable_d` body,
+  the weights at the entry tables' call sites; next the fit (step 4).
