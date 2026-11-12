@@ -555,8 +555,17 @@ HLF-3C wait.
     substeps of 192 kHz without error control, its error periodic in where the bias cycle falls
     on the substep grid, beating at m (fs - 2 f_b) = 20 x 0.27 kHz = 5.4 kHz exactly (the FIR
     test above only changed the supply currents the island hands on, not the head current the
-    tape senses per substep). Being tested: the excerpt with the island at 40 substeps (the beat
-    would move to 10.8 kHz and shrink).
+    tape senses per substep).
+  - **Confirmed (06:35): the record island's substeps.** The first 1.2 s of the excerpt (three
+    notes, trim +13.6 dB: 2 dB hotter than the 3 s run) with the island and the tapes' literal
+    bias at 40 substeps: the 5.2-5.8 kHz band rises 3.9 dB after each note against the dry's 3.2
+    (at 20 substeps, the same 1.2 s: +11.9 dB over the dry), nothing at 10.8 kHz, no band
+    1-23 kHz over +4.7 dB; its spectrogram has the bass's harmonics and the hiss only. The 351's
+    oscillator puts the same beat at 65.7 kHz (out of the band), which is why it never showed
+    there and why the 351's noise-floor checks of the record side's numerics (P4's TR-BDF2 with
+    tube tables, TAPE_SPEED_PLAN.md) couldn't see it. Options (the user's): 40 substeps on the
+    deck (its record side's cost doubles), or the island's method (esdirk4 without tables at
+    20, P4's previous setting, tested next), then the deck re-aligned and the song reprinted.
   - **Open (the user's):** the deck's re-alignment and trims on 0.25 um cells (align_300_4.py,
     ampex_300_4_trim.py: their settings move little, measured below when done), the song's
     reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of
