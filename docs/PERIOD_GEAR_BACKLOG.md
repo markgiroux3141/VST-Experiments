@@ -563,9 +563,19 @@ HLF-3C wait.
     1-23 kHz over +4.7 dB; its spectrogram has the bass's harmonics and the hiss only. The 351's
     oscillator puts the same beat at 65.7 kHz (out of the band), which is why it never showed
     there and why the 351's noise-floor checks of the record side's numerics (P4's TR-BDF2 with
-    tube tables, TAPE_SPEED_PLAN.md) couldn't see it. Options (the user's): 40 substeps on the
-    deck (its record side's cost doubles), or the island's method (esdirk4 without tables at
-    20, P4's previous setting, tested next), then the deck re-aligned and the song reprinted.
+    tube tables, TAPE_SPEED_PLAN.md) couldn't see it.
+  - **And it is P4's method.** The same 1.2 s at 20 substeps with the island back on esdirk4
+    without tube tables (P4's previous setting): the band rises 4.8 dB against the dry's 3.2,
+    nothing at 5.4 or 10.8 kHz (40 substeps on TR-BDF2: 3.9; 20 on TR-BDF2 with tables: 15.1).
+    Both runs were slowed alike by the shared machine (2083 / 2091 s), so their costs aren't
+    measured here; TAPE_SPEED_PLAN.md has P4's gain on the 351 (the record side ~2x).
+    **Options (the user's):** (a) the deck's island on esdirk4 without tables (P4 undone for the
+    deck: the record side ~2x slower; the 351 can keep P4, its beat at 65.7 kHz); (b) 40 substeps
+    on TR-BDF2 with tables (also ~2x on the island); then the deck re-aligned (~1.5 h; on 0.25 um
+    cells it moved PLAYBACK LEVEL only, 0.432 -> 0.442) and the song reprinted (~3 h+). A guard
+    for any machine: the beat is m |fs - 2 f_b| (fs the engine's internal rate), so an oscillator
+    within ~1.2 kHz of fs / 2 puts it in the audio band at m = 20; the 351's BIAS ADJUST or a
+    later machine could land there.
   - **Open (the user's):** the deck's re-alignment and trims on 0.25 um cells (align_300_4.py,
     ampex_300_4_trim.py: their settings move little, measured below when done), the song's
     reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of
