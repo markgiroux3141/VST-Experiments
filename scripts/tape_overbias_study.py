@@ -68,7 +68,6 @@ from varimu.config import REPO_ROOT
 from varimu.devices import library, tape_fit
 from varimu.devices.fit import load_csv
 from varimu.devices.preisach import PreisachParams
-from varimu.devices.tape import Orientation
 from varimu.devices.tape_machine import tone_harmonics
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -246,6 +245,68 @@ def cost(tape, spec: dict, threads: int) -> dict:
     return {"seconds": dt, "solves": solves, "fails": fails, "worst_residual": worst}
 
 
+def anhysteretic_knee(tape, alpha: float) -> dict:
+    """The ideal anhysteretic with the mean field (a decaying AC from saturation on a steady
+    h, 1000 half cycles; the moving model followed through it) and its knee: the 3% THD
+    level over the 1% of a sine through it (the switching study's `erf_level`, +4.9 dB for
+    the base model's erf). The medium's own steepening (few bias cycles per freezing) comes
+    on top."""
+    pre = tape.ensemble()
+    a = alpha * tape.ms_a_m
+    hs = np.linspace(0.0, 900.0, 181) * OE
+    n = 1000
+    amp = 2.0 * pre.p.h_max_a_m * (1.0 - np.arange(n) / n)
+    sign = np.where(np.arange(n) % 2 == 0, 1.0, -1.0)
+    hist = hs[:, None] + (amp * sign)[None, :]
+    hist = np.concatenate([hist, hs[:, None]], axis=1)
+    m = tv.along_x_rust(pre, hist, tape.orientation, a)
+    h_all = np.r_[-hs[:0:-1], hs]
+    m_all = np.r_[-m[:0:-1], m]
+    th = np.linspace(0, 2 * math.pi, 2048, endpoint=False)
+
+    def thd(x):
+        y = np.interp(x * np.sin(th), h_all, m_all)
+        sp = np.abs(np.fft.rfft(y))
+        return float(np.hypot(sp[3], sp[5]) / sp[1])
+
+    def level(target):
+        lo, hi = 1.0 * OE, 890.0 * OE
+        for _ in range(50):
+            mid = math.sqrt(lo * hi)
+            lo, hi = (mid, hi) if thd(mid) < target else (lo, mid)
+        return math.sqrt(lo * hi)
+
+    a1, a3 = level(0.01), level(0.03)
+    slope = float(np.polyfit(hs[:6], m[:6], 1)[0])
+    return {
+        "level_3pct_db": 20 * math.log10(a3 / a1),
+        "h_1pct_oe": a1 / OE,
+        "chi_an_per_oe": slope * OE,
+        "m_at_300oe": float(np.interp(300 * OE, hs, m)),
+    }
+
+
+def level_lite(tape, spec: dict, base_level: dict, threads: int, **spec_kw) -> dict:
+    """The knee at 400 Hz, 15 ips on the medium at the base model's aligned bias (A/m,
+    not re-aligned: the alignment costs ~50x more with the moving kernel), THD at six levels
+    re the base's 0 VU, the 1% and 3% crossings interpolated in ln THD."""
+    from varimu.devices.tape_machine import TapeMachineSpec
+
+    s = TapeMachineSpec(flutter=False, **spec_kw)
+    hc0 = library.load_tape("SCOTCH111@3").preisach.hc_median_a_m
+    bias = base_level["hg_bias_over_hc"] * hc0
+    a0 = base_level["hg_0vu_a_m"]
+    db = np.array([-4.0, -1.0, 2.0, 4.0, 6.0, 8.0])
+    with options(spec, tape, s.f_bias_hz, threads):
+        thd = sw.thd_fn(s, tape, bias, 0.05 * hc0)
+        vals = np.array([thd(a0 * 10 ** (d / 20))[0] for d in db])
+    lt = np.log(vals)
+    x1 = float(np.interp(math.log(0.01), lt, db))
+    x3 = float(np.interp(math.log(0.03), lt, db))
+    return {"db": db.tolist(), "thd": vals.tolist(), "level_1pct_db_re_base": x1,
+            "level_3pct_db": x3 - x1}  # fmt: skip
+
+
 #: Print-through's period numbers (the literature study, section 3.3: Manly, Audio Sept.
 #: 1977, redrawing Lippert, Daniel & Axon, Westmijze; 3M Sound Talk Nos. 10 and 38).
 PRINT_DATA = {
@@ -319,8 +380,8 @@ def print_part(tape, base_row: dict) -> dict:
                     "level_law_db_per_db": (db(five) - db(five, m=m0 * 10 ** (-0.5))) / 10.0 + 1.0,
                     "peak_lambda_over_2pi_total": float(peak / lam),
                 }
-                print(f"  print {h0n} k{km:g} s{sg:g}:", json.dumps(out["cases"][f"{h0n}_k{km:g}_s{sg:g}"],
-                  default=float), flush=True)  # fmt: skip
+                case = out["cases"][f"{h0n}_k{km:g}_s{sg:g}"]
+                print(f"  print {h0n} k{km:g} s{sg:g}:", json.dumps(case), flush=True)
     return out
 
 
@@ -407,7 +468,8 @@ def main() -> int:
         row["spec"] = spec
         tape = base if name == "base" or "head" in spec else refit(base, spec, row)
         save()
-        for part in ("cost", "no21", "level", "level51", "b14"):
+        parts = ("cost", "anh", "no21", "level", "level_lite", "level51", "level_lite51", "b14")
+        for part in parts:
             if part not in a.parts or part in row:
                 continue
             t0 = time.time()
@@ -423,6 +485,14 @@ def main() -> int:
             elif part == "level":
                 with options(spec, tape, 100e3, a.threads):
                     row[part] = sw.level(tape)
+            elif part == "anh":
+                row[part] = anhysteretic_knee(tape, spec.get("moving", spec.get("static", 0.0)))
+            elif part == "level_lite":
+                row[part] = level_lite(tape, spec, res["base"]["level"], a.threads)
+            elif part == "level_lite51":
+                row[part] = level_lite(
+                    tape, spec, res["base"]["level51"], a.threads, rec_gap_m=51e-6
+                )
             elif part == "level51":
                 with options(spec, tape, 100e3, a.threads):
                     row[part] = sw.level(tape, rec_gap_m=51e-6)
@@ -432,8 +502,8 @@ def main() -> int:
             row.setdefault("seconds", {})[part] = time.time() - t0
             show = row.get("summary") if part == "no21" else row[part]
             show = {k: v for k, v in show.items() if not isinstance(v, list)}
-            print(f"{name} {part} ({time.time() - t0:.0f} s):", json.dumps(show, default=float)[:500],
-                  flush=True)  # fmt: skip
+            text = json.dumps(show, default=float)[:500]
+            print(f"{name} {part} ({time.time() - t0:.0f} s):", text, flush=True)
             save()
     return 0
 
