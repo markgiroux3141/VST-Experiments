@@ -58,6 +58,8 @@ ALIGNMENT = REPO_ROOT / "reports" / "tape" / "ampex_351_alignment.json"
 #: ampex_300_4_channel.yaml); until it exists the deck carries the 351's.
 CHANNEL_ALIGNMENT = REPO_ROOT / "reports" / "multitrack" / "deck" / "channel_alignment.json"
 TRIMS = CONFIG_DIR / "ampex_300_4_trims.yaml"
+#: The tape's cells (the tape part's cell_m; see one_channel's source text).
+TAPE_CELL_M = 0.25e-6
 FIT = REPO_ROOT / "reports" / "multitrack" / "crosstalk" / "fit.json"
 TRACKS = 4
 MIL = 25.4e-6
@@ -170,11 +172,24 @@ def one_channel(base: dict, alignment: dict, fit: dict, trims: dict) -> dict:
     del c["controls"]["speed"]
     for k, v in deck_values(fit, trims).items():
         c["values"][k] = v
+    c["values"]["tape_cell_m"] = {
+        "value": TAPE_CELL_M,
+        "source": (
+            "numerical: the tape's cells at 0.25 um, not 7.62 per nominal bias wavelength "
+            "(0.5 um): with the literal bias the cells point-sample the pattern of the "
+            "field's peaks (two per bias cycle, ~2 um apart on tape) and alias it to "
+            "|8 f_b - v / ds|; the master oscillator runs at ~95.9 kHz, which put that at "
+            "~5.5 kHz on 0.5 um cells (the chirp on the bass, docs/PERIOD_GEAR_BACKLOG.md "
+            "PG1; scripts/chirp_alias_map.py); 0.25 um was within 0.3 dB of 0.5 um on "
+            "No. 21 (docs/TAPE_PLAN.md TM2 step 7)"
+        ),
+    }
     heads = heads_section(c)
     stp = heads["parts"].pop("STP")
     tp = copy.deepcopy(stp["parts"]["TP"])
     tp.pop("in")
     tp["tape"] = [*tp["tape"], "sy"]
+    tp["cell_m"] = "tape_cell_m"
     tp["sync_l_h"] = "rec_l_h"
     tp["crosstalk_group"] = "deck"
     tp["crosstalk_track"] = 1

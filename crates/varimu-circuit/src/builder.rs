@@ -743,6 +743,7 @@ fn macro_of(kind: &str) -> Macro {
                 .chain(std::iter::once(opt("crosstalk_track", Count)))
                 .chain(crate::tape::CROSSTALK.iter().map(|k| opt(k, Physical)))
                 .chain(std::iter::once(opt("sync_l_h", Physical)))
+                .chain(std::iter::once(opt("cell_m", Physical)))
                 .collect(),
             false,
         ),
@@ -1465,6 +1466,18 @@ fn tape_part(
         (given > 0).then_some(&tr),
         supply.as_ref().map(|(n, hz)| (n.as_str(), *hz)),
     );
+    // The cells' length (`builder.py`'s cell_m): absent, 7.62 per nominal bias wavelength.
+    if !a["cell_m"].is_null() {
+        let ds = ctx.float(&format!("{name}.cell_m"), &a["cell_m"])?;
+        if ds.is_nan() || ds <= 0.0 {
+            return Err(ctx.fail(&format!("{name}.cell_m"), "a length > 0"));
+        }
+        for e in &mut els {
+            if let Element::Tape(t) = e {
+                t.medium.ds_m = ds;
+            }
+        }
+    }
     // Sel-Sync: the record head as a playback head, its EMF behind its coil to the 4th node.
     if nodes.len() == 4 {
         if a["sync_l_h"].is_null() {

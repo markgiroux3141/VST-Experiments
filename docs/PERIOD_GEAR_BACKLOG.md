@@ -522,3 +522,63 @@ HLF-3C wait.
   2x vs 3x oversampling (`examples/tape_print.rs --oversample N`: an alias moves with the rate),
   takes 15-20 min per run and was stopped; parked by the user. The song's print would be redone
   after a fix.
+- 2026-11-12, **the chirp found** (overnight, branch `tape-chirp`; scripts `chirp_ultrasonic.py`,
+  `chirp_medium.py`, `chirp_alias_map.py` -> `reports/tape/chirp/`): **the deck's, not the 351's,
+  and numerical.** The same 3 s bass (the song at 25 s) through the 351 (at the song's level and
+  +6 dB) has no rise in 5.2-5.8 kHz (2.6 dB after each note, the dry 2.8) and no line 1-23 kHz
+  the dry lacks but a steady 21.2 kHz at -64 to -70 dB re the total; the deck with the bass alone
+  on track 1 has it (14.9 dB; the song 16.9), so not crosstalk. Its picture: a ~800 Hz wide band at
+  5.1-5.9 kHz and a copy at 10.4-11.4 kHz while a note sounds, striped by the bass's period.
+  - **The master oscillator runs at 95.86 kHz** (the erase head's node at 192 kHz, no decimation),
+    the 351's at 92.99 kHz: four bias lines load the deck's tank.
+  - **Not the island's box average** (`decimate: fir` on the nine record-side sections: the same
+    14.9 dB) **nor the substeps** (the medium alone at 10, 20 and 40: the same to 0.1 dB).
+  - **The tape's cells.** The medium alone (circuitsim's TapeStream on the deck's and the 351's
+    media, an ideal sine bias plus a tone) makes it at 95.865 kHz and not at 92.99 (-57 against
+    -73 dB re the tone in 5.2-5.8 kHz), on Scotch 202 and 111 alike; the line moves 8 Hz per Hz of
+    f_b (4.9 / 5.6 / 6.5 kHz at 95.765 / 95.865 / 95.965 kHz): **|8 f_b - v / ds|**. With the
+    literal bias the recorded pattern of the field's peaks (two per bias cycle, ~1.99 um apart at
+    15 ips) is point-sampled by cells of ds = v / (7.62 f_nominal) = 0.5 um, sized for the nominal
+    100 kHz (the beat then at 38 kHz); at the deck's 95.9 kHz it falls to ~5.5 kHz, at the 351's
+    93.0 kHz to ~18 kHz (the medium alone: a line at 17.4-17.7 kHz, -68 dB re the tone; the
+    flutter smears the beat into a band). The bass modulates the pattern's residue (the stripes).
+  - **Shorter cells remove the medium's alias.** At 0.25 um (and 0.125) the medium alone has no
+    line above -82 dB re the tone under 20 kHz at 95.865 kHz; 0.25 um was within 0.3 dB of 0.5 um on
+    No. 21 (TAPE_PLAN.md TM2 step 7). Built: the tape part's optional `cell_m` (both builders;
+    absent, every IR as before; a reduction keeps its own ds), the deck's tape parts at 0.25 um
+    (`make_ampex_300_4.py`'s `TAPE_CELL_M`, its channel file too). The cost: the recording
+    kernel's cells double.
+  - **But the deck's chirp stays** (the same excerpt on 0.25 um cells: 15.6 dB, peak 5.42 kHz,
+    the 10.8 kHz copy: unchanged). So a second mechanism dominates in the circuit, near the same
+    frequency: the record island's own numerics, which the medium-alone runs (an ideal sine
+    bias) can't show. Its candidate: the oscillator's and head driver's waveform integrated at 20
+    substeps of 192 kHz without error control, its error periodic in where the bias cycle falls
+    on the substep grid, beating at m (fs - 2 f_b) = 20 x 0.27 kHz = 5.4 kHz exactly (the FIR
+    test above only changed the supply currents the island hands on, not the head current the
+    tape senses per substep).
+  - **Confirmed (06:35): the record island's substeps.** The first 1.2 s of the excerpt (three
+    notes, trim +13.6 dB: 2 dB hotter than the 3 s run) with the island and the tapes' literal
+    bias at 40 substeps: the 5.2-5.8 kHz band rises 3.9 dB after each note against the dry's 3.2
+    (at 20 substeps, the same 1.2 s: +11.9 dB over the dry), nothing at 10.8 kHz, no band
+    1-23 kHz over +4.7 dB; its spectrogram has the bass's harmonics and the hiss only. The 351's
+    oscillator puts the same beat at 65.7 kHz (out of the band), which is why it never showed
+    there and why the 351's noise-floor checks of the record side's numerics (P4's TR-BDF2 with
+    tube tables, TAPE_SPEED_PLAN.md) couldn't see it.
+  - **And it is P4's method.** The same 1.2 s at 20 substeps with the island back on esdirk4
+    without tube tables (P4's previous setting): the band rises 4.8 dB against the dry's 3.2,
+    nothing at 5.4 or 10.8 kHz (40 substeps on TR-BDF2: 3.9; 20 on TR-BDF2 with tables: 15.6 on
+    the 3 s run).
+    Both runs were slowed alike by the shared machine (2083 / 2091 s), so their costs aren't
+    measured here; TAPE_SPEED_PLAN.md has P4's gain on the 351 (the record side ~2x).
+    **Options (the user's):** (a) the deck's island on esdirk4 without tables (P4 undone for the
+    deck: the record side ~2x slower; the 351 can keep P4, its beat at 65.7 kHz); (b) 40 substeps
+    on TR-BDF2 with tables (also ~2x on the island); then the deck re-aligned (~1.5 h; on 0.25 um
+    cells it moved PLAYBACK LEVEL only, 0.432 -> 0.442) and the song reprinted (~3 h+). A guard
+    for any machine: the beat is m |fs - 2 f_b| (fs the engine's internal rate), so an oscillator
+    within ~1.2 kHz of fs / 2 puts it in the audio band at m = 20; the 351's BIAS ADJUST or a
+    later machine could land there.
+  - **Open (the user's):** the deck's re-alignment and trims on 0.25 um cells (align_300_4.py,
+    ampex_300_4_trim.py: their settings move little, measured below when done), the song's
+    reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of
+    the band; a BIAS ADJUST that moves its oscillator toward 96 kHz brings it down into the band):
+    the same `cell_m` there moves every 351 print and needs its re-alignment (~1 h).

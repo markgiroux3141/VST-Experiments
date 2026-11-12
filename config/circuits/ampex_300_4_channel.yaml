@@ -648,6 +648,13 @@ values:
     value: 1000000.0
     source: 'provisional: model knowledge (Sel-Sync''s monitoring tap: a reproduce preamp''s grid leak,
       the readout barely loaded)'
+  tape_cell_m:
+    value: 2.5e-07
+    source: 'numerical: the tape''s cells at 0.25 um, not 7.62 per nominal bias wavelength (0.5 um): with
+      the literal bias the cells point-sample the pattern of the field''s peaks (two per bias cycle, ~2
+      um apart on tape) and alias it to |8 f_b - v / ds|; the master oscillator runs at ~95.9 kHz, which
+      put that at ~5.5 kHz on 0.5 um cells (the chirp on the bass, docs/PERIOD_GEAR_BACKLOG.md PG1; scripts/chirp_alias_map.py);
+      0.25 um was within 0.3 dB of 0.5 um on No. 21 (docs/TAPE_PLAN.md TM2 step 7)'
 noise:
   seed: 1
 mains:
@@ -1323,6 +1330,7 @@ sections:
       scrape_c_m_s: scrape_c_m_s
       scrape_q: scrape_q
       scrape_rms: scrape_rms
+      cell_m: tape_cell_m
       sync_l_h: rec_l_h
       crosstalk_group: deck
       crosstalk_track: 1

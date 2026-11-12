@@ -1,0 +1,220 @@
+{
+ "rows": [
+  {
+   "f_bias_hz": 88000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.58580423603276,
+   "beat_hz": 58000.0
+  },
+  {
+   "f_bias_hz": 88000.0,
+   "kind": "matched",
+   "ds_m": 5.681818181818182e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.39848424706102,
+   "beat_hz": 33440.0
+  },
+  {
+   "f_bias_hz": 88000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.58541112472139,
+   "beat_hz": 820000.0
+  },
+  {
+   "f_bias_hz": 90000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 6000.0,
+   "worst_db": -71.0833245761186,
+   "beat_hz": 42000.0
+  },
+  {
+   "f_bias_hz": 90000.0,
+   "kind": "matched",
+   "ds_m": 5.555555555555555e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.34848590109473,
+   "beat_hz": 34200.0
+  },
+  {
+   "f_bias_hz": 90000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 6000.0,
+   "worst_db": -71.08609220388107,
+   "beat_hz": 804000.0
+  },
+  {
+   "f_bias_hz": 92000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.48837889442908,
+   "beat_hz": 26000.0
+  },
+  {
+   "f_bias_hz": 92000.0,
+   "kind": "matched",
+   "ds_m": 5.434782608695653e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.57332239328719,
+   "beat_hz": 34960.00000000012
+  },
+  {
+   "f_bias_hz": 92000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.48799735899681,
+   "beat_hz": 788000.0
+  },
+  {
+   "f_bias_hz": 94000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 19944.0,
+   "worst_db": -75.08303744082392,
+   "beat_hz": 10000.0
+  },
+  {
+   "f_bias_hz": 94000.0,
+   "kind": "matched",
+   "ds_m": 5.319148936170213e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.22181350803459,
+   "beat_hz": 35720.0
+  },
+  {
+   "f_bias_hz": 94000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 19944.0,
+   "worst_db": -75.05926994225915,
+   "beat_hz": 772000.0
+  },
+  {
+   "f_bias_hz": 96000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 5944.0,
+   "worst_db": -55.9993041870802,
+   "beat_hz": 6000.0
+  },
+  {
+   "f_bias_hz": 96000.0,
+   "kind": "matched",
+   "ds_m": 5.208333333333334e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.21262410872431,
+   "beat_hz": 36480.0
+  },
+  {
+   "f_bias_hz": 96000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.39822502228631,
+   "beat_hz": 756000.0
+  },
+  {
+   "f_bias_hz": 98000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.35517508606162,
+   "beat_hz": 22000.0
+  },
+  {
+   "f_bias_hz": 98000.0,
+   "kind": "matched",
+   "ds_m": 5.10204081632653e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.31910052463692,
+   "beat_hz": 37239.99999999988
+  },
+  {
+   "f_bias_hz": 98000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 246.0,
+   "worst_db": -81.35514256224631,
+   "beat_hz": 740000.0
+  },
+  {
+   "f_bias_hz": 100000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 19998.0,
+   "worst_db": -72.64431435266792,
+   "beat_hz": 38000.0
+  },
+  {
+   "f_bias_hz": 100000.0,
+   "kind": "matched",
+   "ds_m": 5e-07,
+   "worst_hz": 19998.0,
+   "worst_db": -72.64431435266792,
+   "beat_hz": 38000.0
+  },
+  {
+   "f_bias_hz": 100000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 19998.0,
+   "worst_db": -72.64568566327836,
+   "beat_hz": 724000.0
+  },
+  {
+   "f_bias_hz": 102000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 6000.0,
+   "worst_db": -67.21006748164532,
+   "beat_hz": 54000.0
+  },
+  {
+   "f_bias_hz": 102000.0,
+   "kind": "matched",
+   "ds_m": 4.901960784313725e-07,
+   "worst_hz": 18000.0,
+   "worst_db": -72.86571657006562,
+   "beat_hz": 38760.0
+  },
+  {
+   "f_bias_hz": 102000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 6000.0,
+   "worst_db": -67.21158687452244,
+   "beat_hz": 708000.0
+  },
+  {
+   "f_bias_hz": 104000.0,
+   "kind": "now",
+   "ds_m": 5e-07,
+   "worst_hz": 4056.0,
+   "worst_db": -81.27461680070363,
+   "beat_hz": 70000.0
+  },
+  {
+   "f_bias_hz": 104000.0,
+   "kind": "matched",
+   "ds_m": 4.807692307692307e-07,
+   "worst_hz": 14560.0,
+   "worst_db": -72.73798467453975,
+   "beat_hz": 39520.0
+  },
+  {
+   "f_bias_hz": 104000.0,
+   "kind": "fine",
+   "ds_m": 2.5e-07,
+   "worst_hz": 4056.0,
+   "worst_db": -81.27014202138696,
+   "beat_hz": 692000.0
+  }
+ ]
+}

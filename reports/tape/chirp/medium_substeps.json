@@ -1,0 +1,112 @@
+{
+ "args": {
+  "seconds": 0.6,
+  "bias_ma": 2.94,
+  "audio_ma": 0.6,
+  "head_a_m_per_a": 8000000.0,
+  "fb": [
+   95865.0
+  ],
+  "machines": [
+   "deck"
+  ],
+  "substeps": [
+   10,
+   20,
+   40
+  ],
+  "out": "medium_substeps.json"
+ },
+ "rows": [
+  {
+   "machine": "deck",
+   "substeps": 10,
+   "f_bias_hz": 95865.0,
+   "beat_hz": 2700,
+   "band_5k2_5k8_db_re_60hz": -57.1,
+   "at_beat_db_re_60hz": -67.6,
+   "strongest_lines_1k_90k": [
+    [
+     33345,
+     -59.0
+    ],
+    [
+     1020,
+     -59.5
+    ],
+    [
+     1502,
+     -68.2
+    ],
+    [
+     1982,
+     -74.1
+    ],
+    [
+     6058,
+     -75.4
+    ]
+   ]
+  },
+  {
+   "machine": "deck",
+   "substeps": 20,
+   "f_bias_hz": 95865.0,
+   "beat_hz": 5400,
+   "band_5k2_5k8_db_re_60hz": -57.1,
+   "at_beat_db_re_60hz": -57.2,
+   "strongest_lines_1k_90k": [
+    [
+     33345,
+     -59.0
+    ],
+    [
+     1020,
+     -59.5
+    ],
+    [
+     1502,
+     -68.2
+    ],
+    [
+     1982,
+     -74.1
+    ],
+    [
+     6058,
+     -75.4
+    ]
+   ]
+  },
+  {
+   "machine": "deck",
+   "substeps": 40,
+   "f_bias_hz": 95865.0,
+   "beat_hz": 10800,
+   "band_5k2_5k8_db_re_60hz": -57.1,
+   "at_beat_db_re_60hz": -71.5,
+   "strongest_lines_1k_90k": [
+    [
+     33345,
+     -59.0
+    ],
+    [
+     1020,
+     -59.5
+    ],
+    [
+     1502,
+     -68.2
+    ],
+    [
+     1982,
+     -74.1
+    ],
+    [
+     6058,
+     -75.4
+    ]
+   ]
+  }
+ ]
+}
