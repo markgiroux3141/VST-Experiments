@@ -480,9 +480,17 @@ impl Device {
         !matches!(self.group, Group::Retired | Group::Instruments) && !self.plays_own_oscillator()
     }
 
-    /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`).
+    /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`; or
+    /// with them apart where its partition names them, `<PART> readout`). readouts apart where its partition names them (`<PART> readout`).
     pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
+        let apart: Vec<&str> = self
+            .partition
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|t| t.strip_suffix(" readout"))
+            .collect();
         c.with_live_speaker(self.live_speaker_v)
+            .with_readouts_apart(&apart)
     }
 
     /// The settings it plays at: `s` (its quality's) with its cores.
@@ -645,10 +653,12 @@ pub const DEVICES: [Device; 33] = [
         // blocks at up to 2.3x real time, a backlog of 170 ms at worst (draft-2x,
         // `examples/load_profile.rs`, 2026-10-29); at volume 0.6, 8 ms.
         ahead_s: 0.25,
-        // Hard clipped, it aliases -8 dB re its harmonics at draft-1x, -31 at the draft's
-        // 96 kHz (amp_suite); 0.46x real time there on a guitar take (the user's choice,
-        // 2026-10-29).
-        quality: Quality::Draft2x,
+        // Draft-1x since 2026-11-12 (the user's choice: to play it live; production renders
+        // compare). Through the speaker, aliasing is -29.8 dB re the harmonics at draft-1x,
+        // -34.5 at draft-2x (`tests/live.rs`; on the terminal voltage -7.2 / -24.1, why it
+        // was draft-2x from 2026-10-29). With its back wave apart: 0.44x real time at
+        // draft-1x, 0.78x at draft-2x (COMPONENT_EDITOR_PLAN.md, C3's Play speed).
+        quality: Quality::Draft1x,
         cores: None,
         mod_wheel: None,
         gate: None,
@@ -661,7 +671,14 @@ pub const DEVICES: [Device; 33] = [
         live_speaker_v: None,
         newton: None,
         method: None,
-        partition: None,
+        // The P12R's pressure readout (its back wave's delay line and the cone's modes,
+        // ~60 states) on a thread of its own: it only senses the driver, a sample late
+        // (`Device::live`; COMPONENT_EDITOR_PLAN.md C3's speed). In one solve it took the
+        // amp from 0.48x to 1.61x real time (DK's state update, square in the states).
+        // The power supply on a third (the rails behind the reservoir and filter
+        // capacitors): the amp's thread 23% less busy cranked, -38.9 dB from the one solve
+        // against -39.1 without it (`tests/speaker_readout.rs`).
+        partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
         id: "reactor_filter",

@@ -454,3 +454,166 @@ pub fn terminal(
     }));
     els
 }
+
+/// The title of the section [`readout_apart`] moves speaker part `part`'s back wave into.
+pub fn readout_title(part: &str) -> String {
+    format!("{part} readout")
+}
+
+/// Whether element `element` is in speaker part `part`'s back wave: [`readout`]'s
+/// directivity pole and delay line (`<G|R|C><P>_b`, `G<P>_d`, `<R|C|L><P>_d<i>`, `R<P>_dt`).
+/// The rest of the readout (`G<P>_a<i>` and `L<P>_pf`, the front wave; `G<P>_o`, `G<P>_o<e>`,
+/// `R<P>_o`, the listener's sum) and the driver's elements (`_re`, `_le`, `_l2`, `_r2`, `_m`,
+/// `_cms`, `_rms`, `_k<k>`, `_g1`, `_g2`, `_g`, `_f`, `_t`) are not.
+fn in_back_wave(part: &str, element: &str) -> bool {
+    let upper = part.to_uppercase();
+    let mut chars = element.chars();
+    if !matches!(chars.next(), Some('G' | 'R' | 'L' | 'C')) {
+        return false;
+    }
+    let Some(suffix) = chars
+        .as_str()
+        .strip_prefix(&upper)
+        .and_then(|s| s.strip_prefix('_'))
+    else {
+        return false;
+    };
+    match suffix {
+        "b" | "dt" => true,
+        s => s
+            .strip_prefix('d')
+            .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit())),
+    }
+}
+
+/// Speaker part `part`'s back wave (its directivity pole and the delay line around the
+/// cabinet's edges: most of the readout's states) moved out of its section into one of its
+/// own, right after it, titled [`readout_title`], so a partition can run it on a thread of
+/// its own (a live build: docs/COMPONENT_EDITOR_PLAN.md C3's speed; DK's state update grows
+/// with the square of a solve's states).
+///
+/// The front wave stays with the driver: it differentiates the cone's velocity (pressure is
+/// acceleration), which a sample-late copy of the velocity would turn into a backward
+/// difference (-34 dB re signal at best on the 5E3, measured). The back wave senses the
+/// front pressure (`<p>_pf`, which the driver's section claims, `owns`, so a partition keeps
+/// it there) and is low-passed at the piston's directivity pole; the listener's sum senses
+/// the delay line's taps. Every coupling either way is a Vccs, so neither side draws current
+/// from the other: the split costs a sample's lag on the back wave (a few millimetres of its
+/// path). The elements and their order are otherwise unchanged (one solve of the result is
+/// the same circuit).
+///
+/// Refused when the part has no back wave here (a terminal build) or the split wouldn't be
+/// one-way: a moved element driving a node outside them, or an element outside them on one
+/// of their nodes other than through a Vccs's control.
+pub fn readout_apart(ir: &mut circuitsim::ir::CircuitIr, part: &str) -> Result<String, Error> {
+    use std::collections::BTreeSet;
+    let title = readout_title(part);
+    let Some(at) = ir
+        .sections
+        .iter()
+        .position(|s| s.elements.iter().any(|e| in_back_wave(part, e.name())))
+    else {
+        return Err(Error(format!(
+            "speaker {part}: no back wave in the circuit"
+        )));
+    };
+    if ir.sections.iter().any(|s| s.title == title) {
+        return Err(Error(format!(
+            "speaker {part}: a section titled {title:?} already"
+        )));
+    }
+    let (moved, kept): (Vec<Element>, Vec<Element>) = std::mem::take(&mut ir.sections[at].elements)
+        .into_iter()
+        .partition(|e| in_back_wave(part, e.name()));
+    ir.sections[at].elements = kept;
+    // Nodes an element drives (a Vccs's controls only sense).
+    let driven = |e: &Element| -> Vec<String> {
+        match e {
+            Element::Vccs(v) => vec![v.pos.clone(), v.neg.clone()],
+            e => e.nodes().into_iter().map(str::to_string).collect(),
+        }
+    };
+    let own: BTreeSet<String> = moved
+        .iter()
+        .flat_map(driven)
+        .filter(|n| n != GROUND)
+        .collect();
+    for e in &moved {
+        if !matches!(
+            e,
+            Element::Vccs(_) | Element::Resistor(_) | Element::Capacitor(_) | Element::Inductor(_)
+        ) {
+            return Err(Error(format!(
+                "speaker {part}: {} in the back wave",
+                e.name()
+            )));
+        }
+    }
+    if let Some(e) = ir
+        .sections
+        .iter()
+        .flat_map(|s| &s.elements)
+        .find(|e| driven(e).iter().any(|n| own.contains(n)))
+    {
+        return Err(Error(format!(
+            "speaker {part}: {} outside the back wave drives one of its nodes",
+            e.name()
+        )));
+    }
+    let sensed: Vec<String> = moved
+        .iter()
+        .filter_map(|e| match e {
+            Element::Vccs(v) => Some([v.ctrl_pos.clone(), v.ctrl_neg.clone()]),
+            _ => None,
+        })
+        .flatten()
+        .filter(|n| n != GROUND && !own.contains(n))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let s = &mut ir.sections[at];
+    let mut owns = s.owns.take().unwrap_or_default();
+    owns.extend(
+        sensed
+            .into_iter()
+            .filter(|n| !owns.contains(n))
+            .collect::<Vec<_>>(),
+    );
+    s.owns = Some(owns);
+    ir.sections.insert(
+        at + 1,
+        circuitsim::ir::Section {
+            title: title.clone(),
+            elements: moved,
+            substeps: None,
+            decimate: None,
+            owns: None,
+            lag_samples: None,
+            method: None,
+            tube_tables: None,
+        },
+    );
+    Ok(title)
+}
+
+#[cfg(test)]
+mod readout_tests {
+    use super::*;
+
+    #[test]
+    fn the_back_wave_is_told_from_the_rest() {
+        for n in [
+            "GSPK_b", "RSPK_b", "CSPK_b", "GSPK_d", "RSPK_d0", "CSPK_d3", "LSPK_d29", "RSPK_dt",
+        ] {
+            assert!(in_back_wave("SPK", n), "{n}");
+        }
+        for n in [
+            "GSPK_a0", "LSPK_pf", "GSPK_o", "GSPK_o2", "RSPK_o", "RSPK_re", "LSPK_le", "LSPK_l2",
+            "RSPK_r2", "CSPK_m", "LSPK_cms", "RSPK_rms", "RSPK_k1", "LSPK_k8", "CSPK_k3",
+            "GSPK_g1", "GSPK_g2", "XSPK_g", "LSPK_f", "RSPK_f", "GSPK_t", "RSPK_t", "GSPKX_d",
+            "RSPK2_b", "RSPK_dx",
+        ] {
+            assert!(!in_back_wave("SPK", n), "{n}");
+        }
+    }
+}
