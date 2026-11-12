@@ -399,10 +399,24 @@ impl Settings {
             })
             .filter(|g| !g.is_empty())
             .collect();
-        if groups.iter().map(Vec::len).sum::<usize>() >= titles.len() {
+        if groups.iter().map(Vec::len).sum::<usize>() >= titles.len() || groups.is_empty() {
             return Vec::new();
         }
-        groups.join(&GROUP_BREAK.to_string())
+        // Its link lines (`cut:ELEMENT`, circuitsim's partition.rs) whose element is here.
+        let names: Vec<&str> = ir
+            .sections
+            .iter()
+            .flat_map(|s| s.elements.iter())
+            .map(|e| e.name())
+            .collect();
+        let mut out = groups.join(&GROUP_BREAK.to_string());
+        out.extend(
+            partition::cuts(&self.partition)
+                .into_iter()
+                .filter(|c| names.contains(&c.as_str()))
+                .map(|c| format!("{}{c}", partition::CUT_PREFIX)),
+        );
+        out
     }
 }
 

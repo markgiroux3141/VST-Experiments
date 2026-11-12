@@ -67,6 +67,8 @@ pub struct Circuit {
     live_speaker_v: Option<f64>,
     /// Speaker parts whose readouts go into sections of their own (`with_readouts_apart`).
     readouts_apart: Vec<String>,
+    /// Speaker parts whose mechanics go into sections of their own (`with_mechanics_apart`).
+    mechanics_apart: Vec<String>,
     /// Its tape's track (`with_track`): None the first, Some a further one's name.
     track: Option<String>,
 }
@@ -88,6 +90,7 @@ impl Circuit {
             events: false,
             live_speaker_v: None,
             readouts_apart: Vec::new(),
+            mechanics_apart: Vec::new(),
             track: None,
         })
     }
@@ -104,6 +107,7 @@ impl Circuit {
             events: false,
             live_speaker_v: None,
             readouts_apart: Vec::new(),
+            mechanics_apart: Vec::new(),
             track: None,
         }
     }
@@ -130,6 +134,29 @@ impl Circuit {
     pub fn with_readouts_apart(mut self, parts: &[&str]) -> Circuit {
         self.readouts_apart = parts.iter().map(|p| p.to_string()).collect();
         self
+    }
+
+    /// Speaker parts `parts` with their mechanics in sections of their own, titled
+    /// `varimu_circuit::speaker::mechanics_title` (`<PART> mechanics`; after the readouts are
+    /// apart), so a partition cutting the moving mass as a link line (`cut:C<PART>_m`) can run
+    /// each on a thread of its own (a live build, METHODOLOGY_REVIEW.md W1). One solve of the
+    /// result is the same circuit. Ignored with `with_live_speaker` (no readout).
+    pub fn with_mechanics_apart(mut self, parts: &[&str]) -> Circuit {
+        self.mechanics_apart = parts.iter().map(|p| p.to_string()).collect();
+        self
+    }
+
+    /// The readouts and mechanics apart that partition `titles` names (`<PART> readout`,
+    /// `<PART> mechanics`).
+    pub fn with_apart_from(self, titles: &[&str]) -> Circuit {
+        let named = |suffix: &str| -> Vec<&str> {
+            titles
+                .iter()
+                .filter_map(|t| t.strip_suffix(suffix))
+                .collect()
+        };
+        let (r, m) = (named(" readout"), named(" mechanics"));
+        self.with_readouts_apart(&r).with_mechanics_apart(&m)
     }
 
     /// Its tapes on another track of the same tape (`Some(name)`; None the first): the
@@ -226,6 +253,10 @@ impl Circuit {
             if self.live_speaker_v.is_none() {
                 for part in &self.readouts_apart {
                     varimu_circuit::speaker::readout_apart(&mut ir, part)
+                        .map_err(|e| e.to_string())?;
+                }
+                for part in &self.mechanics_apart {
+                    varimu_circuit::speaker::mechanics_apart(&mut ir, part)
                         .map_err(|e| e.to_string())?;
                 }
             }

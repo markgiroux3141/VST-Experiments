@@ -596,6 +596,139 @@ pub fn readout_apart(ir: &mut circuitsim::ir::CircuitIr, part: &str) -> Result<S
     Ok(title)
 }
 
+/// The title of the section [`mechanics_apart`] moves speaker part `part`'s mechanics into.
+pub fn mechanics_title(part: &str) -> String {
+    format!("{part} mechanics")
+}
+
+/// The element of speaker part `part` that is its moving mass: the capacitor at the
+/// motional node `<p>_m` (impedance analogy: the cone's velocity is that node's voltage), the
+/// element a partition cuts as a link line (`cut:C<P>_m`, circuitsim's partition.rs).
+pub fn mass_element(part: &str) -> String {
+    format!("C{}_m", part.to_uppercase())
+}
+
+/// Whether element `element` of speaker part `part` is the electrical side of its driver
+/// (`R<P>_re`, `L<P>_le`, `L<P>_l2`, `R<P>_r2`: the voice coil up to the motional node).
+fn in_voice_coil(part: &str, element: &str) -> bool {
+    let upper = part.to_uppercase();
+    ["R{}_re", "L{}_le", "L{}_l2", "R{}_r2"]
+        .iter()
+        .any(|f| f.replace("{}", &upper) == element)
+}
+
+/// Whether element `element` belongs to speaker part `part` (`<X><P>_<suffix>`).
+fn of_speaker(part: &str, element: &str) -> bool {
+    let upper = part.to_uppercase();
+    let mut chars = element.chars();
+    chars.next().is_some()
+        && chars
+            .as_str()
+            .strip_prefix(&upper)
+            .is_some_and(|s| s.starts_with('_'))
+}
+
+/// Speaker part `part`'s mechanics moved out of its section into one of their own, right
+/// after it, titled [`mechanics_title`]: the motional network from the motional node `<p>_m`
+/// on (the moving mass, the suspension and its losses, the break-up modes) and the readout
+/// that senses it (the front wave, the listener's sum, and the back wave unless
+/// [`readout_apart`] already moved it), a live build (METHODOLOGY_REVIEW.md W1). The voice
+/// coil (`_re`, `_le`, `_l2`, `_r2`) stays with what drives it. The two meet only at `<p>_m`,
+/// so a partition that cuts the moving mass ([`mass_element`]) as a link line runs them on
+/// threads of their own; the moved section claims the nodes it drives that others sense (the
+/// front pressure, taken over from the driver's section). One solve of the result is the same
+/// circuit (elements and their order otherwise unchanged).
+///
+/// Refused for a speaker with parts this split doesn't know (an electromagnet's field, a
+/// terminal-voltage build) or without a motional node.
+pub fn mechanics_apart(ir: &mut circuitsim::ir::CircuitIr, part: &str) -> Result<String, Error> {
+    use std::collections::BTreeSet;
+    let title = mechanics_title(part);
+    let mass = mass_element(part);
+    let Some(at) = ir
+        .sections
+        .iter()
+        .position(|s| s.elements.iter().any(|e| e.name() == mass))
+    else {
+        return Err(Error(format!("speaker {part}: no moving mass {mass}")));
+    };
+    if ir.sections.iter().any(|s| s.title == title) {
+        return Err(Error(format!(
+            "speaker {part}: a section titled {title:?} already"
+        )));
+    }
+    let upper = part.to_uppercase();
+    let known = |e: &str| -> bool {
+        let Some(s) = e
+            .get(1..)
+            .and_then(|s| s.strip_prefix(&upper))
+            .and_then(|s| s.strip_prefix('_'))
+        else {
+            return false;
+        };
+        let indexed = |p: &str| {
+            s.strip_prefix(p)
+                .is_some_and(|r| !r.is_empty() && r.chars().all(|c| c.is_ascii_digit()))
+        };
+        matches!(s, "m" | "cms" | "rms" | "pf" | "o")
+            || indexed("k")
+            || indexed("a")
+            || indexed("o")
+            || in_back_wave(part, e)
+    };
+    if let Some(e) = ir.sections[at]
+        .elements
+        .iter()
+        .find(|e| of_speaker(part, e.name()) && !in_voice_coil(part, e.name()) && !known(e.name()))
+    {
+        return Err(Error(format!(
+            "speaker {part}: {} isn't a part of the mechanics this split knows",
+            e.name()
+        )));
+    }
+    let (moved, kept): (Vec<Element>, Vec<Element>) = std::mem::take(&mut ir.sections[at].elements)
+        .into_iter()
+        .partition(|e| of_speaker(part, e.name()) && known(e.name()));
+    ir.sections[at].elements = kept;
+    // The nodes the moved elements drive (a Vccs's controls only sense): the driver's section
+    // gives up its claims on them.
+    let driven: BTreeSet<String> = moved
+        .iter()
+        .flat_map(|e| match e {
+            Element::Vccs(v) => vec![v.pos.clone(), v.neg.clone()],
+            e => e.nodes().into_iter().map(str::to_string).collect(),
+        })
+        .filter(|n| n != GROUND)
+        .collect();
+    let motional = format!("{}_m", part.to_lowercase());
+    let mut claims = Vec::new();
+    if let Some(owns) = ir.sections[at].owns.as_mut() {
+        claims = owns
+            .iter()
+            .filter(|n| driven.contains(*n) && **n != motional)
+            .cloned()
+            .collect();
+        owns.retain(|n| !claims.contains(n));
+        if owns.is_empty() {
+            ir.sections[at].owns = None;
+        }
+    }
+    ir.sections.insert(
+        at + 1,
+        circuitsim::ir::Section {
+            title: title.clone(),
+            elements: moved,
+            substeps: None,
+            decimate: None,
+            owns: (!claims.is_empty()).then_some(claims),
+            lag_samples: None,
+            method: None,
+            tube_tables: None,
+        },
+    );
+    Ok(title)
+}
+
 #[cfg(test)]
 mod readout_tests {
     use super::*;
@@ -615,5 +748,18 @@ mod readout_tests {
         ] {
             assert!(!in_back_wave("SPK", n), "{n}");
         }
+    }
+
+    #[test]
+    fn the_voice_coil_is_told_from_the_mechanics() {
+        for n in ["RSPK_re", "LSPK_le", "LSPK_l2", "RSPK_r2"] {
+            assert!(in_voice_coil("SPK", n), "{n}");
+        }
+        for n in ["CSPK_m", "LSPK_cms", "RSPK_k1", "GSPK_a0", "RSPK2_re"] {
+            assert!(!in_voice_coil("SPK", n), "{n}");
+        }
+        assert!(of_speaker("SPK", "CSPK_m"));
+        assert!(!of_speaker("SPK", "CSPK2_m"));
+        assert_eq!(mass_element("spk"), "CSPK_m");
     }
 }

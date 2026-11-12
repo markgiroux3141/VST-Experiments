@@ -129,8 +129,10 @@ fn main() -> Result<(), String> {
         s.partition_coupling = c;
     }
     let k = s.oversample as usize;
+    let titles: Vec<&str> = s.partition.iter().map(String::as_str).collect();
     let circuit = dev
         .live(Circuit::load(&config, dev.circuit, s.cores()?)?)
+        .with_apart_from(&titles)
         .with_events(s.events)
         .with_noise(noise);
     let mut v = values(&knobs(dev, circuit.spec()));

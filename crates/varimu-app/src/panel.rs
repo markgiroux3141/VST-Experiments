@@ -481,16 +481,11 @@ impl Device {
     }
 
     /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`; or
-    /// with them apart where its partition names them, `<PART> readout`). readouts apart where its partition names them (`<PART> readout`).
+    /// with their readouts and mechanics apart where its partition names them, `<PART>
+    /// readout`, `<PART> mechanics`).
     pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
-        let apart: Vec<&str> = self
-            .partition
-            .unwrap_or(&[])
-            .iter()
-            .filter_map(|t| t.strip_suffix(" readout"))
-            .collect();
         c.with_live_speaker(self.live_speaker_v)
-            .with_readouts_apart(&apart)
+            .with_apart_from(self.partition.unwrap_or(&[]))
     }
 
     /// The settings it plays at: `s` (its quality's) with its cores.
