@@ -409,7 +409,7 @@ def main() -> int:
         log(f"preisach ({time.time() - t0:.0f} s): {json.dumps(width_numbers(biases, pc[:, 0]))}")
         save()
         for v in a.variants:
-            f = STRONG if v == "dynamic_strong" else res["fit"][v]
+            f = STRONG if v == "dynamic_strong" else res["fit"]["none" if v == "mean" else v]
             spec = spec_of(v, hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"],
                            interaction_scale=f.get("interaction_scale", 1.0))
             box = bn.make_box(spec, a.n, seed=a.seed)
@@ -426,7 +426,7 @@ def main() -> int:
         arm["preisach"] = {"m": pa.tolist(), "knee_db": knee_db(ARM_DC_OE * OE, pa)}
         log(f"preisach ARM: {np.round(pa, 4)} knee {arm['preisach']['knee_db']}")
         for v in a.variants:
-            f = STRONG if v == "dynamic_strong" else res["fit"][v]
+            f = STRONG if v == "dynamic_strong" else res["fit"]["none" if v == "mean" else v]
             spec = spec_of(v, hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"],
                            interaction_scale=f.get("interaction_scale", 1.0))
             box = bn.make_box(spec, a.n, seed=a.seed)

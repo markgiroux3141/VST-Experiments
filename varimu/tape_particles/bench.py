@@ -62,7 +62,7 @@ class BenchSpec:
     temp_k: float = 293.0
     soften_m: float = 0.05e-6
     sample_demag: tuple = (0.0, 1.0, 0.0)
-    interactions: str = "dynamic"  # "dynamic" | "frozen" | "none"
+    interactions: str = "dynamic"  # "dynamic" | "frozen" | "none" | "mean" (only -N . M)
     #: a scale on the interaction field (1: the physics; a study knob only)
     interaction_scale: float = 1.0
     #: needles relaxed apart (no overlaps: `pack`); False: centres uniform, overlapping
@@ -274,6 +274,9 @@ def run(
     for j in range(len(h_app)):
         if spec.interactions == "none":
             hint = np.zeros((nb, 3))
+        elif spec.interactions == "mean":
+            mu = spec.ms_p_a_m * (box.v[:, None] * m).sum(axis=0) / box.side_m**3
+            hint = np.tile(-np.asarray(spec.sample_demag) * mu, (nb, 1))
         elif spec.interactions == "frozen":
             if hint0 is None:
                 hint0 = interaction_field(box, spec, m)

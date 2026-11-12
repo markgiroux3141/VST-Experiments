@@ -32,6 +32,8 @@ pub struct Strip {
     pub iters: usize,
     pub stochastic: bool,
     pub seed: u32,
+    /// > 0: the cell's own perpendicular demagnetization, -ms_local M_y (`step_local`).
+    pub ms_local: f64,
 }
 
 impl Strip {
@@ -71,6 +73,7 @@ impl Strip {
             iters: m.usize("iters")?,
             stochastic: m.bool("stochastic")?,
             seed: m.usize("seed")? as u32,
+            ms_local: m.f64("ms_local").unwrap_or(0.0),
         })
     }
 
@@ -109,6 +112,49 @@ pub fn run_cpu(s: &Strip, threads: usize) -> Vec<f64> {
                 for (k, o) in oc.chunks_mut(3).enumerate() {
                     let r = ci * chunk + k;
                     let mut acc = [0.0; 3];
+                    if s.ms_local > 0.0 {
+                        let mut p: Vec<f64> = s.p0.clone();
+                        let mut m = vec![[0.0; 3]; n];
+                        for j in 0..steps {
+                            let f = s.field(r, j);
+                            let us: Vec<Option<f64>> = (0..n)
+                                .map(|i| {
+                                    s.stochastic.then(|| {
+                                        sw::hash_uniform(s.seed, (r * n + i) as u32, j as u32)
+                                    })
+                                })
+                                .collect();
+                            // Implicit: mu = F(h - Ms mu), bisection (head.wgsl's step_local).
+                            let at = |mu: f64, i: usize| {
+                                let h = [f[0], f[1] - s.ms_local * mu, f[2]];
+                                sw::step(&s.parts[i], h, p[i], s.dt, s.f0, &g, s.iters, us[i])
+                            };
+                            let (mut lo, mut hi) = (-1.0f64, 1.0f64);
+                            for _ in 0..14 {
+                                let mu = 0.5 * (lo + hi);
+                                let fm: f64 =
+                                    (0..n).map(|i| s.v[i] * at(mu, i).m[1]).sum::<f64>() / vsum;
+                                if fm > mu {
+                                    lo = mu;
+                                } else {
+                                    hi = mu;
+                                }
+                            }
+                            let mu = 0.5 * (lo + hi);
+                            let outs: Vec<sw::Outcome> = (0..n).map(|i| at(mu, i)).collect();
+                            for (i, st) in outs.iter().enumerate() {
+                                p[i] = st.p;
+                                m[i] = st.m;
+                            }
+                        }
+                        for i in 0..n {
+                            for c in 0..3 {
+                                acc[c] += s.v[i] * m[i][c] / vsum;
+                            }
+                        }
+                        o.copy_from_slice(&acc);
+                        continue;
+                    }
                     for i in 0..n {
                         let mut p = s.p0[i];
                         let mut m = [0.0; 3];
@@ -153,7 +199,7 @@ struct U {
     inv_m: f32,
     vsum: f32,
     coupled: u32,
-    pad1: u32,
+    ms_local: f32,
     pad2: u32,
 }
 
@@ -261,7 +307,11 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
                 cache: None,
             })
     };
-    let (p_step, p_reduce) = (pipe("step_head"), pipe("reduce"));
+    let local = s.ms_local > 0.0 && cp.is_none();
+    if local && n > 256 {
+        return Err("step_local takes at most 256 particles".into());
+    }
+    let (p_step, p_reduce) = (pipe(if local { "step_local" } else { "step_head" }), pipe("reduce"));
     let mut un = U {
         n: n as u32,
         reps: reps as u32,
@@ -281,7 +331,7 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
         inv_m: s.inv_m as f32,
         vsum: vsum as f32,
         coupled: cp.is_some() as u32,
-        pad1: 0,
+        ms_local: s.ms_local as f32,
         pad2: 0,
     };
     let ubuf = g.uniform("u", bytemuck::bytes_of(&un));
@@ -305,6 +355,16 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
     } else {
         (65535, (reps as u32).div_ceil(65535))
     };
+    // step_local: a workgroup per replica (x, then y past 65535).
+    let grid = if local {
+        if reps <= 65535 {
+            (reps as u32, 1, 1)
+        } else {
+            (65535, (reps as u32).div_ceil(65535), 1)
+        }
+    } else {
+        (wx, wy, wz)
+    };
     // Steps per dispatch: ~2e8 particle-steps (well under Windows' GPU timeout); coupled,
     // the cells' field is updated every `update_every` steps.
     let mut per = ((2e8 / (n * reps) as f64) as usize).clamp(1, steps.max(1));
@@ -317,7 +377,7 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
         un.j0 = j as u32;
         un.j1 = j1 as u32;
         g.queue.write_buffer(&ubuf, 0, bytemuck::bytes_of(&un));
-        g.run(&p_step, &group, (wx, wy, wz))?;
+        g.run(&p_step, &group, grid)?;
         if let Some(c) = cp {
             g.run(&p_reduce, &group, ((reps as u32).div_ceil(64), 1, 1))?;
             let o: Vec<[f32; 4]> =

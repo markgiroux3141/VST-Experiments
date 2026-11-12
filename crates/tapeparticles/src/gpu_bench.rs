@@ -62,6 +62,7 @@ pub fn run_gpu(
             Mode::Dynamic => 0,
             Mode::Frozen => 1,
             Mode::None => 2,
+            Mode::Mean => 3,
         },
         grid: b.grid as u32,
         iters: b.iters as u32,

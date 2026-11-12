@@ -81,6 +81,9 @@ class Numerics:
     demag_mix: float = 0.1
     demag_tol: float = 2e-3
     image: bool = True
+    #: the cell's own perpendicular demagnetization, -Ms_coat M_y, implicit in each step
+    #: (`step_local`: bisection on the cell's M_y; at most 256 particles a cell)
+    local_demag: bool = False
     grid: int = 32
     iters: int = 10
 
@@ -134,6 +137,7 @@ def run(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he, gpu=True, s
         "e_steps": num.e_steps, "a_sig": a_sig, "bias": bias, "fs_dt": f_sig * dt,
         "inv_m": 1.0 / num.steps_per_cycle, "dt": dt, "f0": spec.f0_hz, "grid": num.grid,
         "iters": num.iters, "stochastic": False, "seed": seed,
+        "ms_local": spec.packing * spec.ms_p_a_m if num.local_demag else 0.0,
     }
     d = tempfile.mkdtemp(prefix="tp_strip_")
     try:
@@ -162,6 +166,7 @@ def reference(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he):
     t0 = (x_cells - z) / mach.speed_m_s
     pt = ens.Particles(n, hk, v, e0, np.zeros((len(hk), 3)))
     out = np.zeros((2, ncx, nl, 3))
+    ms_local = spec.packing * spec.ms_p_a_m if num.local_demag else 0.0
     for si, sg in enumerate((1.0, -1.0)):
         for c in range(ncx):
             for li in range(nl):
@@ -175,6 +180,17 @@ def reference(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he):
                         h = np.array([hg * tab[j, li, 0] + hs[si, c, li, 0], hg * tab[j, li, 1] + hs[si, c, li, 1], 0.0])
                     else:
                         h = np.array([he[si, c, li, 0], he[si, c, li, 1], 0.0])
+                    if ms_local > 0:
+                        # Implicit: mu = F(h - Ms mu), bisection (head.wgsl's step_local).
+                        lo, hi = -1.0, 1.0
+                        for _ in range(14):
+                            mu = 0.5 * (lo + hi)
+                            hh = h.copy()
+                            hh[1] -= ms_local * mu
+                            _, mt = ens.step(pt, np.tile(hh, (len(hk), 1)), p, dt, spec, num.grid)
+                            fm = float((v * mt[:, 1]).sum() / v.sum())
+                            lo, hi = (mu, hi) if fm > mu else (lo, mu)
+                        h[1] -= ms_local * 0.5 * (lo + hi)
                     p, m = ens.step(pt, np.tile(h, (len(hk), 1)), p, dt, spec, num.grid)
                 out[si, c, li] = (v[:, None] * m).sum(axis=0) / v.sum()
     return out
@@ -259,7 +275,7 @@ def tone(spec, parts, mach, num, f_sig, a_sig, bias, gpu=True, log=None):
     return 0.5 * (r[0] - r[1]), {"demag_changes": hist, "cells": ncx, **info}
 
 
-def tone_coupled(spec, parts, mach, num, f_sig, a_sig, bias, q: int = 2, update_every: int = 4,
+def tone_coupled(spec, parts, mach, num, f_sig, a_sig, bias, q: int = 2, update_every: int = 1,
                  lam_min: str = "medium", log=None, demag_scale: float = 1.0):
     """A tone with the coating's field causal: every cell steps in absolute time (the step
     dt = ds / (v q), so cell c enters the zone at step c q), and every `update_every` steps

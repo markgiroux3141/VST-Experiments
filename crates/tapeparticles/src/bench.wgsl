@@ -92,7 +92,7 @@ fn field(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocatio
         for (var k = 0u; k < cnt; k = k + 1u) {
             musum = musum + t_mu[k].xyz;
             psum = psum + t_p[k].xyz;
-            if (t * WG + k == i) {
+            if (t * WG + k == i || u.mode == 3u) {
                 continue;
             }
             let ep = t_ep[k];
@@ -117,7 +117,10 @@ fn field(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocatio
         workgroupBarrier();
     }
     let mbar = musum / u.vol;
-    let mf = psum / u.vol / 3.0 - u.sd.xyz * mbar;
+    var mf = psum / u.vol / 3.0 - u.sd.xyz * mbar;
+    if (u.mode == 3u) {
+        mf = -u.sd.xyz * mbar;
+    }
     let c = counter[0];
     if (i == 0u) {
         trace[c * u.reps + r] = vec4<f32>(musum / u.vsum, 0.0);
@@ -196,7 +199,7 @@ fn step(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(workgroup_id) wi
     let j = counter[0];
     let base = r * u.n;
     var hi = vec3<f32>(0.0);
-    if (u.mode == 0u) {
+    if (u.mode == 0u || u.mode == 3u) {
         hi = hint[base + i].xyz;
     } else if (u.mode == 1u) {
         hi = hfrozen[base + i].xyz;

@@ -134,3 +134,29 @@ def test_moving_head_rust_and_gpu_agree_with_python():
     except RuntimeError as e:
         pytest.skip(f"no GPU: {e}")
     assert np.abs(gpu - ref).max() < 1e-3
+
+
+def test_moving_head_local_demag_rust_and_gpu_agree_with_python():
+    import dataclasses
+
+    from varimu.tape_particles import strip as sp
+
+    _runner_or_skip()
+    spec = bn.BenchSpec(hk_median_a_m=730 * bn.OE, sigma_ln_hk=0.25, interactions="none")
+    mach = sp.Machine()
+    num = sp.Numerics(layers=2, steps_per_cycle=8, floor_a_m=200 * bn.OE, local_demag=True)
+    parts = sp.sample(spec, 24, seed=2)
+    x = np.array([1e-6, 2e-6])
+    z = np.zeros((2, 2, 2, 2))
+    args = (parts, spec, mach, num, 15e3, 999.0, 400 * bn.OE, x, z, z)
+    ref = sp.reference(*args)
+    off = sp.reference(parts, spec, mach, dataclasses.replace(num, local_demag=False), 15e3, 999.0,
+                       400 * bn.OE, x, z, z)
+    assert np.abs(ref - off).max() > 1e-3  # the demagnetization acts
+    cpu, _ = sp.run(*args, gpu=False)
+    assert np.abs(cpu - ref).max() < 1e-5
+    try:
+        gpu, _ = sp.run(*args, gpu=True)
+    except RuntimeError as e:
+        pytest.skip(f"no GPU: {e}")
+    assert np.abs(gpu - ref).max() < 1e-3

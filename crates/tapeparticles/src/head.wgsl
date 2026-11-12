@@ -27,7 +27,7 @@ struct U {
     inv_m: f32,
     vsum: f32,
     coupled: u32,
-    pad1: u32,
+    ms_local: f32,
     pad2: u32,
 }
 
@@ -42,6 +42,7 @@ struct U {
 
 const PI: f32 = 3.14159265358979;
 const TWO_PI: f32 = 6.28318530717959;
+const NBISECT: u32 = 14u;
 
 fn fp(t: f32, a: f32, b: f32) -> vec2<f32> {
     let s = sin(t);
@@ -237,5 +238,87 @@ fn reduce(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var i = 0u; i < u.n; i = i + 1u) {
         s = s + axis[i].w * mom[r * u.n + i].xyz;
     }
-    outm[r] = vec4<f32>(s / u.vsum, 0.0);
+    outm[r] = vec4<f32>(s / u.vsum, outm[r].w);
+}
+
+// The cell's own perpendicular demagnetization, -Ms_coat M_y (a layer of uniform M_y: the
+// field inside is -M_y, the long-wavelength limit), implicit in each step (explicit, a step
+// late, it flips the cell every step: the feedback's gain is Ms_coat / H_K ~ 2) on the replica (a workgroup: its particles are the threads, n <= 256). The replica's M_y
+// persists in outm[r].w between dispatches. Otherwise step_head's pass.
+var<workgroup> red: array<f32, 256>;
+
+@compute @workgroup_size(256)
+fn step_local(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
+    let i = lid.x;
+    let r = wid.x + wid.y * 65535u;
+    if (r >= u.reps) {
+        return;
+    }
+    let valid = i < u.n;
+    let base = r * u.n;
+    let l = r % u.layers;
+    let c0 = repc[2u * r];
+    let c1 = repc[2u * r + 1u];
+    var ax = vec4<f32>(1.0, 0.0, 0.0, 0.0);
+    var pr = vec4<f32>(1.0, 0.0, 0.0, 0.0);
+    var p = 0.5;
+    var m = vec4<f32>(0.0);
+    if (valid) {
+        ax = axis[i];
+        pr = prm[i];
+        p = state[base + i];
+        m = mom[base + i];
+    }
+    var my = outm[r].w;
+    for (var k = u.j0; k < u.j1; k = k + 1u) {
+        var h = vec3<f32>(c1.x, c1.y, 0.0);
+        if (k < u.s_steps) {
+            let f = tab[k * u.layers + l];
+            let pb = fract(c0.x + f32(k) * u.inv_m);
+            let ps = fract(c0.y + f32(k) * u.fs_dt);
+            let hg = c1.z * u.a_sig * sin(TWO_PI * ps) + u.bias * sin(TWO_PI * pb);
+            h = vec3<f32>(hg * f.x + c0.z, hg * f.y + c0.w, 0.0);
+        }
+        // Implicit: the cell's M_y after this step, mu, solves mu = F(h - Ms mu) (F the
+        // particles' M_y after a step in that field; F falls as mu rises), by bisection.
+        let rnd = hash_uniform(u.seed, base + i, k);
+        var lo = -1.0;
+        var hi = 1.0;
+        for (var it = 0u; it < NBISECT; it = it + 1u) {
+            let mu = 0.5 * (lo + hi);
+            if (valid) {
+                let o = sw_step(ax.xyz, pr.x, pr.y, h - vec3<f32>(0.0, u.ms_local * mu, 0.0), p, rnd);
+                red[i] = ax.w * o.y;
+            } else {
+                red[i] = 0.0;
+            }
+            workgroupBarrier();
+            for (var st = 128u; st > 0u; st = st >> 1u) {
+                if (i < st) {
+                    red[i] = red[i] + red[i + st];
+                }
+                workgroupBarrier();
+            }
+            let fm = red[0] / u.vsum;
+            workgroupBarrier();
+            if (fm > mu) {
+                lo = mu;
+            } else {
+                hi = mu;
+            }
+        }
+        my = 0.5 * (lo + hi);
+        if (valid) {
+            let o = sw_step(ax.xyz, pr.x, pr.y, h - vec3<f32>(0.0, u.ms_local * my, 0.0), p, rnd);
+            p = o.w;
+            m = vec4<f32>(o.xyz, 0.0);
+        }
+    }
+    if (valid) {
+        state[base + i] = p;
+        mom[base + i] = m;
+    }
+    if (i == 0u) {
+        outm[r].w = my;
+    }
 }

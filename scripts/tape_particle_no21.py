@@ -5,7 +5,9 @@ medium's geometry, against SCOTCH111@3's Preisach medium in the same configurati
 model then gets No. 21's one bias scale (scripts/tape_switching_study.py's protocol).
 
 Configurations: `nodemag` (no coating field: every cell independent; the Preisach medium's
-`demag_iterations=0`), `demag` (the medium's demagnetization fixed point, Anderson: it
+`demag_iterations=0`), `local` (each cell's own perpendicular demagnetization, -Ms M_y,
+from the step before: the long-wavelength limit of the coating's field, which a 3D-random
+coating can't do without), `demag` (the medium's demagnetization fixed point, Anderson: it
 doesn't converge with particles, see the doc), `causal` (the coating's field from the
 present pattern, every cell in absolute time: `strip.tone_coupled`, the medium's wavelength
 cut) and `causal_full` (the same from the whole pattern).
@@ -52,32 +54,52 @@ def numerics(config: str, f_hz: float) -> sp.Numerics:
     if config == "nodemag":
         # Cells are independent: one wavelength, no guards.
         return sp.Numerics(demag_iterations=0, guard_waves=0, read_waves=1)
+    if config == "local":
+        # Each cell's own perpendicular demagnetization only: still independent.
+        return sp.Numerics(demag_iterations=0, guard_waves=0, read_waves=1, local_demag=True)
     if f_hz < 5e3:
         return sp.Numerics(guard_waves=1, read_waves=1)
     return sp.Numerics()
 
 
-def run_particles(config, n, points, log, seed=1, m=16):
+def run_particles(config, n, points, log, seed=1, m=16, seeds=None, **num_kw):
+    """The particles' curves; with `seeds`, each a different particle sample (cells of other
+    particles, as along a real tape), the complex fundamentals averaged."""
     spec = particle_spec()
     mach = sp.Machine()
-    parts = sp.sample(spec, n, seed=seed)
-    out = {"spec": dataclasses.asdict(spec) | {"sources": None}, "n": n, "seed": seed}
+    seeds = list(seeds) if seeds else [seed]
+    samples = [sp.sample(spec, n, seed=sd) for sd in seeds]
+    out = {"spec": dataclasses.asdict(spec) | {"sources": None}, "n": n, "seeds": seeds}
     for f in (1e3, 15e3):
-        num = dataclasses.replace(numerics(config, f), steps_per_cycle=m)
-        amps, infos = [], []
+        num = dataclasses.replace(numerics(config, f), steps_per_cycle=m, **num_kw)
+        amps, per_seed, infos = [], [], []
         for b in biases(points):
             t0 = time.time()
-            if config.startswith("causal"):
-                lm = "none" if config == "causal_full" else "medium"
-                r, info = sp.tone_coupled(spec, parts, mach, num, f, LOW, b, lam_min=lm)
-            else:
-                r, info = sp.tone(spec, parts, mach, num, f, LOW, b)
+            rs = []
+            for parts in samples:
+                if config.startswith("causal"):
+                    lm = "none" if config == "causal_full" else "medium"
+                    r, info = sp.tone_coupled(spec, parts, mach, num, f, LOW, b, lam_min=lm)
+                else:
+                    r, info = sp.tone(spec, parts, mach, num, f, LOW, b)
+                rs.append(r)
+            r = complex(np.mean(rs))
             amps.append(abs(r))
+            per_seed.append([[x.real, x.imag] for x in rs])
             infos.append({"seconds": time.time() - t0, "steps": info["steps"],
                           "demag_changes": info.get("demag_changes")})
             log(f"  particles {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: {20 * math.log10(abs(r)):.2f} dB ({time.time() - t0:.0f} s)")
-        out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist(), "runs": infos}
+        out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist(), "runs": infos,
+                         "per_seed": per_seed}
     out["no21"] = no21.fit(biases(points), out["1000"]["db"], out["15000"]["db"])
+    # The seed-to-seed spread of the fit: each sample's curves fitted on their own.
+    if len(seeds) > 1:
+        fits = []
+        for k in range(len(seeds)):
+            c1 = [20 * math.log10(abs(complex(*x[k]))) for x in out["1000"]["per_seed"]]
+            c15 = [20 * math.log10(abs(complex(*x[k]))) for x in out["15000"]["per_seed"]]
+            fits.append(no21.fit(biases(points), c1, c15))
+        out["no21_per_seed"] = fits
     return out
 
 
@@ -141,7 +163,10 @@ def main() -> int:
     ap.add_argument("--points", type=int, default=16)
     ap.add_argument("--m", type=int, default=16)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--seeds", type=int, nargs="+", default=None)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--floor-oe", type=float, default=None)
+    ap.add_argument("--layers", type=int, default=None)
     a = ap.parse_args()
     path = OUT / "no21.json"
     res = json.loads(path.read_text()) if path.exists() else {}
@@ -153,7 +178,8 @@ def main() -> int:
 
     for c in a.configs:
         if "particles" in a.parts:
-            res[f"particles/{c}{a.tag}"] = run_particles(c, a.n, a.points, log, a.seed, a.m)
+            kw = {k: v for k, v in (("floor_a_m", a.floor_oe and a.floor_oe * bn.OE), ("layers", a.layers)) if v}
+            res[f"particles/{c}{a.tag}"] = run_particles(c, a.n, a.points, log, a.seed, a.m, a.seeds, **kw)
             path.write_text(json.dumps(res, indent=1, default=float))
             log(json.dumps({k: v for k, v in res[f"particles/{c}{a.tag}"]["no21"].items()}, default=float)[:900])
         if "preisach" in a.parts:

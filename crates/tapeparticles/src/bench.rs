@@ -20,6 +20,8 @@ pub enum Mode {
     Dynamic,
     Frozen,
     None,
+    /// Only the sample's demagnetization, -N . M (no near fields).
+    Mean,
 }
 
 pub struct Bench {
@@ -69,6 +71,7 @@ impl Bench {
             "dynamic" => Mode::Dynamic,
             "frozen" => Mode::Frozen,
             "none" => Mode::None,
+            "mean" => Mode::Mean,
             o => return Err(format!("interactions {o}")),
         };
         Ok(Bench {
@@ -252,6 +255,27 @@ pub fn run_cpu(b: &Bench, threads: usize, trace: bool) -> (Vec<f64>, Vec<f64>, V
                     .get_or_insert_with(|| interaction_field(b, &m, threads))
                     .clone(),
                 Mode::Dynamic => interaction_field(b, &m, threads),
+                Mode::Mean => {
+                    let mu: Vec<[f64; 3]> = (0..n)
+                        .map(|i| {
+                            let s = b.ms_p * b.v[i];
+                            [s * m[i][0], s * m[i][1], s * m[i][2]]
+                        })
+                        .collect();
+                    let vol = b.side * b.side * b.side;
+                    let mut mbar = [0.0; 3];
+                    for x in &mu {
+                        for c in 0..3 {
+                            mbar[c] += x[c] / vol;
+                        }
+                    }
+                    let h = [
+                        -b.sample_demag[0] * mbar[0],
+                        -b.sample_demag[1] * mbar[1],
+                        -b.sample_demag[2] * mbar[2],
+                    ];
+                    vec![h; n]
+                }
             };
             let ha = &b.h_app[(j * b.reps + r) * 3..(j * b.reps + r) * 3 + 3];
             let chunk = n.div_ceil(threads.max(1)).max(64);
