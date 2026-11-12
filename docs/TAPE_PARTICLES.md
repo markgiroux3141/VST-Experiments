@@ -371,6 +371,9 @@ not**: one 512-particle sample moves the fitted curves by 1.6-3.3 dB and the fit
 one orientation) act coherently along the whole strip. The reported runs average several
 samples (each a different set of cells' particles, as along a real tape): `nodemag` 3 x
 1024, `local` 4 x 256, with each sample's own fit shown thin in `no21.png` as the spread.
+The `local` result holds with 4 other samples at 32 steps a bias cycle (`local_4s_m32`):
+rms 3.74 / 3.60 dB (3.54 / 2.49), 1 kHz -8.4 at 8 mA (-9.2), 15k - 1k -2.4 at 8 mA (-2.6),
+peaks 4.5 / 3.7 mA (4.5 / 4.5).
 
 **The coating's field:**
 - the Preisach medium's fixed point (each cell sees the final pattern's field) with
