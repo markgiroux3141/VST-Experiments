@@ -176,8 +176,11 @@ the speaker's mass can (`speaker::mechanics_apart`, `<P> mechanics`) but costs 1
 for 18% of load (not adopted). Their worst blocks were Newton cycling at the plate flyback
 (+-6 kV iterates): pentodes now limit Newton's step (`devices/pentode.rs`), the Plexi's
 rectifiers converge to 0.01 of the tolerance (its bias at the draft); the Plexi 1.18x -> 0.65x,
-the AC30 0.75x -> 0.69x, ~6-7% of 10 ms blocks still over 1.0 (W2 next). `examples/cut_error.rs`
-measures a partition's error and load (`--against` a saved run).
+the AC30 0.75x -> 0.69x, ~6-7% of 10 ms blocks still over 1.0. **W2 built too:** `solver:
+dk_sparse` (circuitsim `linalg::SparseLu`, dk.rs `SparseDk`; opt-in, within 7e-9 of `dk`): the 5E3
+with its readout in one solve 1.62x -> 1.08x, no gain at the amps' ~60 states. `examples/cut_error.rs`
+measures a partition's error and load (`--against` a saved run); `load_profile.rs` streams Live's
+probes only and takes `--solver`.
 
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
