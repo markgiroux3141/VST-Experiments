@@ -522,3 +522,33 @@ HLF-3C wait.
   2x vs 3x oversampling (`examples/tape_print.rs --oversample N`: an alias moves with the rate),
   takes 15-20 min per run and was stopped; parked by the user. The song's print would be redone
   after a fix.
+- 2026-11-12, **the chirp found** (overnight, branch `tape-chirp`; scripts `chirp_ultrasonic.py`,
+  `chirp_medium.py`, `chirp_alias_map.py` -> `reports/tape/chirp/`): **the deck's, not the 351's,
+  and numerical.** The same 3 s bass (the song at 25 s) through the 351 (at the song's level and
+  +6 dB) has no rise in 5.2-5.8 kHz (2.6 dB after each note, the dry 2.8) and no line 1-23 kHz
+  the dry lacks but a steady 21.2 kHz at -64 to -70 dB re the total; the deck with the bass alone
+  on track 1 has it (14.9 dB; the song 16.9), so not crosstalk. Its picture: a ~800 Hz wide band at
+  5.1-5.9 kHz and a copy at 10.4-11.4 kHz while a note sounds, striped by the bass's period.
+  - **The master oscillator runs at 95.86 kHz** (the erase head's node at 192 kHz, no decimation),
+    the 351's at 92.99 kHz: four bias lines load the deck's tank.
+  - **Not the island's box average** (`decimate: fir` on the nine record-side sections: the same
+    14.9 dB) **nor the substeps** (the medium alone at 10, 20 and 40: the same to 0.1 dB).
+  - **The tape's cells.** The medium alone (circuitsim's TapeStream on the deck's and the 351's
+    media, an ideal sine bias plus a tone) makes it at 95.865 kHz and not at 92.99 (-57 against
+    -73 dB re the tone in 5.2-5.8 kHz), on Scotch 202 and 111 alike; the line moves 8 Hz per Hz of
+    f_b (4.9 / 5.6 / 6.5 kHz at 95.765 / 95.865 / 95.965 kHz): **|8 f_b - v / ds|**. With the
+    literal bias the recorded pattern of the field's peaks (two per bias cycle, ~1.99 um apart at
+    15 ips) is point-sampled by cells of ds = v / (7.62 f_nominal) = 0.5 um, sized for the nominal
+    100 kHz (the beat then at 38 kHz); at the deck's 95.9 kHz it falls to ~5.5 kHz, at the 351's
+    93.0 kHz to ~18 kHz (the medium alone: a line at 17.4-17.7 kHz, -68 dB re the tone; the
+    flutter smears the beat into a band). The bass modulates the pattern's residue (the stripes).
+  - **The fix: shorter cells.** At 0.25 um (and 0.125) the medium alone has no line above -82 dB
+    re the tone under 20 kHz at 95.865 kHz; 0.25 um was within 0.3 dB of 0.5 um on No. 21 (TAPE_PLAN.md
+    TM2 step 7). Built: the tape part's optional `cell_m` (both builders; absent, every IR as
+    before; a reduction keeps its own ds), the deck's tape parts at 0.25 um (`make_ampex_300_4.py`'s
+    `TAPE_CELL_M`, its channel file too). The cost: the recording kernel's cells double.
+  - **Open (the user's):** the deck's re-alignment and trims on 0.25 um cells (align_300_4.py,
+    ampex_300_4_trim.py: their settings move little, measured below when done), the song's
+    reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of
+    the band; a BIAS ADJUST that moves its oscillator toward 96 kHz brings it down into the band):
+    the same `cell_m` there moves every 351 print and needs its re-alignment (~1 h).

@@ -138,7 +138,11 @@ Macro parts (connection; params, * = required):
                 an events build plays) and reduction_bias (a control: the reduced tape's
                 bias is that control's setting through the reduction's measured bias map,
                 e.g. BIAS ADJUST's capacitance to the head's bias; without it the
-                reduction's own bias)
+                reduction's own bias), cell_m (the medium's cells' length; absent, 7.62
+                per wavelength of the nominal f_bias_hz: with the literal bias the cells
+                alias the field peaks' pattern to |8 f_b - v / cell_m| at the
+                oscillator's actual f_b, so a machine whose oscillator runs off nominal
+                may need shorter cells; a reduction keeps its own)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -1085,6 +1089,19 @@ def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     elif a["supply_nominal_hz"] is not None:
         raise ctx.fail(f"{name}.supply_nominal_hz", "only with a supply node")
     els = parts.tape(name, *conn[:3], model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr, supply)
+    # The cells' length: absent, 7.62 per nominal bias wavelength (parts.tape). Given, it
+    # replaces that (docs/TAPE_PLAN.md "Gaps"): with the literal bias the cells point-sample
+    # the recorded pattern of the field's peaks, ~2 um apart, and alias it to
+    # |8 f_b - v / ds| for the oscillator's actual f_b; 0.25 um puts it out of the band.
+    if a["cell_m"] is not None:
+        if not a["cell_m"] > 0:
+            raise ctx.fail(f"{name}.cell_m", "a length > 0")
+        els = [
+            dataclasses.replace(e, medium=dataclasses.replace(e.medium, ds_m=float(a["cell_m"])))
+            if isinstance(e, Tape)
+            else e
+            for e in els
+        ]
     # Sel-Sync: the record head as a playback head, its EMF behind its coil to the 4th node.
     if len(conn) == 4:
         if a["sync_l_h"] is None:
@@ -1387,6 +1404,7 @@ for _name, _macro in {
             "crosstalk_track": Param("count", None),
             **{k: Param("physical", None) for k in parts.TAPE_CROSSTALK},
             "sync_l_h": Param("physical", None),
+            "cell_m": Param("physical", None),
         },
         optional_nodes=1,
     ),
