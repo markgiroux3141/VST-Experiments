@@ -542,11 +542,21 @@ HLF-3C wait.
     100 kHz (the beat then at 38 kHz); at the deck's 95.9 kHz it falls to ~5.5 kHz, at the 351's
     93.0 kHz to ~18 kHz (the medium alone: a line at 17.4-17.7 kHz, -68 dB re the tone; the
     flutter smears the beat into a band). The bass modulates the pattern's residue (the stripes).
-  - **The fix: shorter cells.** At 0.25 um (and 0.125) the medium alone has no line above -82 dB
-    re the tone under 20 kHz at 95.865 kHz; 0.25 um was within 0.3 dB of 0.5 um on No. 21 (TAPE_PLAN.md
-    TM2 step 7). Built: the tape part's optional `cell_m` (both builders; absent, every IR as
-    before; a reduction keeps its own ds), the deck's tape parts at 0.25 um (`make_ampex_300_4.py`'s
-    `TAPE_CELL_M`, its channel file too). The cost: the recording kernel's cells double.
+  - **Shorter cells remove the medium's alias.** At 0.25 um (and 0.125) the medium alone has no
+    line above -82 dB re the tone under 20 kHz at 95.865 kHz; 0.25 um was within 0.3 dB of 0.5 um on
+    No. 21 (TAPE_PLAN.md TM2 step 7). Built: the tape part's optional `cell_m` (both builders;
+    absent, every IR as before; a reduction keeps its own ds), the deck's tape parts at 0.25 um
+    (`make_ampex_300_4.py`'s `TAPE_CELL_M`, its channel file too). The cost: the recording
+    kernel's cells double.
+  - **But the deck's chirp stays** (the same excerpt on 0.25 um cells: 15.6 dB, peak 5.42 kHz,
+    the 10.8 kHz copy: unchanged). So a second mechanism dominates in the circuit, near the same
+    frequency: the record island's own numerics, which the medium-alone runs (an ideal sine
+    bias) can't show. Its candidate: the oscillator's and head driver's waveform integrated at 20
+    substeps of 192 kHz without error control, its error periodic in where the bias cycle falls
+    on the substep grid, beating at m (fs - 2 f_b) = 20 x 0.27 kHz = 5.4 kHz exactly (the FIR
+    test above only changed the supply currents the island hands on, not the head current the
+    tape senses per substep). Being tested: the excerpt with the island at 40 substeps (the beat
+    would move to 10.8 kHz and shrink).
   - **Open (the user's):** the deck's re-alignment and trims on 0.25 um cells (align_300_4.py,
     ampex_300_4_trim.py: their settings move little, measured below when done), the song's
     reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of

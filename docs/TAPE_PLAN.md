@@ -1021,7 +1021,10 @@ out of sample.
    95.86 kHz (~5.5 kHz: heard on the bass). Mapped over 88-104 kHz on the medium alone
    (`scripts/chirp_alias_map.py` -> `reports/tape/chirp/alias_map.*`): 0.5 um has the beat in the
    band from ~94 to ~97 kHz (-56 dB re the tone at 96 kHz); 0.25 um has none anywhere (the
-   tape part's `cell_m`; the deck uses it). A second, weaker family is in every cell size:
+   tape part's `cell_m`; the deck uses it). It isn't what the deck's bass chirp mostly is:
+   on 0.25 um cells the deck's excerpt keeps it unchanged (PERIOD_GEAR_BACKLOG.md PG1: a beat
+   of the record island's 20 substeps against the bias, m (fs - 2 f_b), is being tested). A
+   second, weaker family is in every cell size:
    lines at |fs/2 - f_b|-type frequencies (6.0 kHz at 90 and 102 kHz), -67 to -75 dB re a tone 4
    dB over operating level; not traced. Open (the user's): `cell_m` on the 351 family too (its
    prints and alignment move; 2x the recording kernel's cells).
