@@ -56,6 +56,7 @@ MU0 = 4e-7 * math.pi
 #: The solver's tolerance on M / Ms and its iteration limit (as circuitsim's).
 MOVING_TOL = 1e-12
 MOVING_ITER = 400
+MOVING_DET_MIN = 0.05
 
 
 class _Tables:
@@ -130,8 +131,9 @@ class Stack:
 
 def moving_step(t: _Tables, axes, stacks, h, a: float, m0):
     """The cell's M (in Ms) at one sample: each axis sees its share of h + a M (a = alpha
-    Ms); commits the axes' states (circuitsim's `tape::moving_step`, step for step). Newton
-    for a < 0, the fixed-point iteration from m0 for a > 0. Returns (M, converged)."""
+    Ms); commits the axes' states (circuitsim's `tape::moving_step`, step for step): damped
+    Newton while its Jacobian's determinant exceeds MOVING_DET_MIN, else the fixed-point
+    iteration from m0 (near an avalanche). Returns (M, converged)."""
     hx, hy = h
     trials: list[_Trial] = [None] * len(stacks)  # type: ignore[list-item]
 
@@ -152,19 +154,19 @@ def moving_step(t: _Tables, axes, stacks, h, a: float, m0):
     it = 0
     while not done and it < MOVING_ITER:
         it += 1
-        if a < 0.0:
-            fx, fy = hx + a * m[0], hy + a * m[1]
-            j11, j12, j22 = 1.0, 0.0, 1.0
-            for st, ax in zip(stacks, axes, strict=True):
-                x = ax[0] * fx + ax[1] * fy
-                dx = 1e-6 * (abs(x) + t.pre.p.h_max_a_m * 1e-3)
-                chi = 2.0 * (st.trial(t, x + dx).up - st.trial(t, x).up) / dx
-                k = -a * ax[2] * chi
-                j11 += k * ax[0] * ax[0]
-                j12 += k * ax[0] * ax[1]
-                j22 += k * ax[1] * ax[1]
+        fx, fy = hx + a * m[0], hy + a * m[1]
+        j11, j12, j22 = 1.0, 0.0, 1.0
+        for st, ax, tr in zip(stacks, axes, trials, strict=True):
+            x = ax[0] * fx + ax[1] * fy
+            dx = 1e-6 * (abs(x) + t.pre.p.h_max_a_m * 1e-3)
+            chi = 2.0 * (st.trial(t, x + dx).up - tr.up) / dx
+            k = -a * ax[2] * chi
+            j11 += k * ax[0] * ax[0]
+            j12 += k * ax[0] * ax[1]
+            j22 += k * ax[1] * ax[1]
+        det = j11 * j22 - j12 * j12
+        if det > MOVING_DET_MIN:
             gx, gy = m[0] - f[0], m[1] - f[1]
-            det = j11 * j22 - j12 * j12
             step = ((j22 * gx - j12 * gy) / det, (j11 * gy - j12 * gx) / det)
             cand = (m[0] - step[0], m[1] - step[1])
             fc = ev(cand)
@@ -622,3 +624,90 @@ def static_mean_field(alpha: float, ms_a_m: float):
         yield
     finally:
         tape_mod.demag_fields_vector = original
+
+
+# --- 4. Print-through from a barrier distribution (an estimate, not a medium change) ----
+
+
+@dataclass(frozen=True)
+class PrintThrough:
+    """A minimal Preisach-Neel carrier of print-through (the literature study's section
+    3.4; TAPE_PLAN.md "Later"). The particles' barriers kappa = K V / kT are lognormal
+    (median kappa_median at t0_k, log spread sigma_ln: the volume's), kappa proportional to
+    V. A particle is thermally active over a time t at temperature T when kappa T0 / T <
+    ln(f0 t / ln 2) (Neel; K's own temperature dependence left out); an active particle sits
+    in equilibrium in the field there, its moment along its axis tanh(2 kappa_T H cos / H0)
+    (mu0 Ms_p V / kT = 2 kappa / H0: kappa = mu0 Ms_p H0 V / (2 kT), the switching study's
+    convention, H0 the athermal switching field). Inactive ones keep what they had. So the
+    neighbouring turn's stray field prints into the active tail, and the print decays once
+    the turns part (its particles re-equilibrate in no field) as fast as it grew.
+
+    packing_ms_a_m: the coating's particle magnetization (packing x Ms_p); cos2_x / cos2_y:
+    <cos^2> of the axes along x / y (the orientation)."""
+
+    kappa_median: float
+    sigma_ln: float
+    h0_a_m: float
+    packing_ms_a_m: float
+    cos2_x: float
+    cos2_y: float
+    f0_hz: float = 1e9
+    t0_k: float = 293.15
+
+    def _kappas(self, n: int = 4001) -> tuple[np.ndarray, np.ndarray]:
+        z = np.linspace(-8.0, 8.0, n)
+        k = self.kappa_median * np.exp(self.sigma_ln * z)
+        w = np.exp(-0.5 * z * z)
+        return k, w / w.sum()
+
+    def threshold(self, t_s: float, temp_k: float) -> float:
+        """The largest barrier (at t0_k) active within t_s at temp_k."""
+        return math.log(self.f0_hz * t_s / math.log(2.0)) * temp_k / self.t0_k
+
+    def printed(self, h_a_m: float, t_s: float, temp_k: float, apart_s: float = 0.0) -> tuple:
+        """(M_x, M_y) per unit field component (A/m printed per A/m of stray field, the
+        field h_a_m's amplitude setting the tanh's level) after t_s in contact at temp_k,
+        then apart_s apart at t0_k (those active within apart_s relax)."""
+        k, w = self._kappas()
+        active = k < self.threshold(t_s, temp_k)
+        if apart_s > 0.0:
+            active &= k >= self.threshold(apart_s, self.t0_k)
+        kt = k * self.t0_k / temp_k
+
+        def resp(c2):
+            # The axis at the field's angle: <tanh(x cos) cos> over a cos^2 of c2, by its
+            # rms cosine (the linear regime exact).
+            c = math.sqrt(c2)
+            x = 2.0 * kt * h_a_m * c / self.h0_a_m
+            return float((w * active * np.tanh(x) * c).sum()) * self.packing_ms_a_m / h_a_m
+
+        return resp(self.cos2_x), resp(self.cos2_y)
+
+
+def print_ratio_db(
+    pt: PrintThrough,
+    m0_a_m: float,
+    lam_m: float,
+    coating_m: float,
+    base_m: float,
+    t_s: float,
+    temp_k: float = 293.15,
+    apart_s: float = 0.0,
+    sense: int = 1,
+) -> float:
+    """The printed signal over the master (dB), read by the same reproducer: the master a
+    pattern M0 cos(k x) uniform through its coating; its field through the base (the outer
+    turn: separated by the base only, Sound Talk No. 38) H(z) = (M0 / 2)(1 - e^{-k delta})
+    e^{-k z} in both components (in quadrature); the print chi_x Hx + chi_y Hy into the
+    neighbour's coating from the face toward the master, which is the face a reproducer
+    reads (oxide-in wind). Its longitudinal and perpendicular parts read with the same depth
+    weight e^{-k y} and add for one side (sense 1: the pre-print of a tails-out reel ... the
+    worse side) and subtract for the other (sense -1)."""
+    k = 2.0 * math.pi / lam_m
+    h_face = 0.5 * m0_a_m * (1.0 - math.exp(-k * coating_m)) * math.exp(-k * base_m)
+    cx, cy = pt.printed(h_face, t_s, temp_k, apart_s)
+    # Depth weights over the coating: the print falls as e^{-k y} into it, read as e^{-k y}.
+    read_print = (1.0 - math.exp(-2.0 * k * coating_m)) / (2.0 * k)
+    read_master = (1.0 - math.exp(-k * coating_m)) / k
+    chi = cx + sense * cy
+    return 20.0 * math.log10(abs(chi) * h_face / m0_a_m * read_print / read_master + 1e-300)

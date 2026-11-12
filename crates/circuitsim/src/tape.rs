@@ -355,6 +355,8 @@ pub fn moving_stats() -> (usize, usize, f64) {
 /// The solver's tolerance on M / Ms and its iteration limit.
 const MOVING_TOL: f64 = 1e-12;
 const MOVING_ITER: usize = 400;
+/// Below this determinant of G's Jacobian a step is a fixed-point one, not Newton's.
+const MOVING_DET_MIN: f64 = 0.05;
 
 /// One sample of the moving model: the cell's M (in Ms) that the axes' states give when each
 /// axis sees its share of (hx, hy) + a M, a = alpha Ms; commits the axes' states. `m0` is
@@ -388,21 +390,22 @@ fn moving_step(
     let mut it = 0;
     while !done && it < MOVING_ITER {
         it += 1;
-        let next = if a < 0.0 {
-            // Newton on G = M - F(M), F's Jacobian from each axis's slope (a difference).
-            let (fx, fy) = (hx + a * m.0, hy + a * m.1);
-            let (mut j11, mut j12, mut j22) = (1.0, 0.0, 1.0);
-            for (st, ax) in stacks.iter().zip(axes) {
-                let x = ax[0] * fx + ax[1] * fy;
-                let dx = 1e-6 * (x.abs() + p.h_max * 1e-3);
-                let chi = 2.0 * (st.trial(p, x + dx).up - st.trial(p, x).up) / dx;
-                let k = -a * ax[2] * chi;
-                j11 += k * ax[0] * ax[0];
-                j12 += k * ax[0] * ax[1];
-                j22 += k * ax[1] * ax[1];
-            }
+        // Newton on G = M - F(M), F's Jacobian from each axis's slope (a difference from
+        // the state at m, which the trials hold).
+        let (fx, fy) = (hx + a * m.0, hy + a * m.1);
+        let (mut j11, mut j12, mut j22) = (1.0, 0.0, 1.0);
+        for ((st, ax), tr) in stacks.iter().zip(axes).zip(trials.iter()) {
+            let x = ax[0] * fx + ax[1] * fy;
+            let dx = 1e-6 * (x.abs() + p.h_max * 1e-3);
+            let chi = 2.0 * (st.trial(p, x + dx).up - tr.up) / dx;
+            let k = -a * ax[2] * chi;
+            j11 += k * ax[0] * ax[0];
+            j12 += k * ax[0] * ax[1];
+            j22 += k * ax[1] * ax[1];
+        }
+        let det = j11 * j22 - j12 * j12;
+        let next = if det > MOVING_DET_MIN {
             let (gx, gy) = (m.0 - f.0, m.1 - f.1);
-            let det = j11 * j22 - j12 * j12;
             let mut step = ((j22 * gx - j12 * gy) / det, (j11 * gy - j12 * gx) / det);
             // Damped: halve while the residual grows.
             let mut cand = (m.0 - step.0, m.1 - step.1);
@@ -420,6 +423,8 @@ fn moving_step(
             res = rc;
             cand
         } else {
+            // At or past the avalanche (a > 0, a chi >= 1): the fixed-point iteration from
+            // the previous state follows the branch the field moves along.
             let cand = f;
             f = eval(cand, trials);
             res = (f.0 - cand.0).abs().max((f.1 - cand.1).abs());
