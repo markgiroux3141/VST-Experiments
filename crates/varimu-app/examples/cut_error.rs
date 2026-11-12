@@ -7,11 +7,15 @@
 //!         [--start S] [--seconds S] [--normalize -11.5] [--set KEY=VALUE ...]
 //!         [--probe out --probe spk] [--coupling hold|extrapolate] [--block 480]
 //!         --partition "TITLE,cut:ELEMENT|TITLE" [--partition ...]
+//!         [--save F] [--against F] [--newton RELTOL,VNTOL]
 //!
 //! A partition is titles separated by ",", groups by "|" (load_profile's form), with
 //! `cut:ELEMENT` entries for link lines; the readouts and mechanics it names
 //! (`<PART> readout`, `<PART> mechanics`) are moved apart as the app does. "none" is the
 //! one solve (always run first, the reference). The input is normalized as Play does.
+//! `--save F` writes the one solve's probes (f64, little-endian, probe after probe);
+//! `--against F` compares the one solve with such a file (another build or Newton
+//! tolerance: `--newton` overrides the quality's).
 
 use std::path::Path;
 use std::time::Instant;
@@ -104,6 +108,7 @@ fn main() -> Result<(), String> {
     let (mut sets, mut parts, mut probes) = (Vec::new(), Vec::new(), Vec::new());
     let mut coupling: Option<String> = None;
     let mut quality = None;
+    let (mut save, mut against, mut newton) = (None, None, None);
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
@@ -115,6 +120,16 @@ fn main() -> Result<(), String> {
             "--block" => block = next()?.parse().map_err(|e| format!("{e}"))?,
             "--coupling" => coupling = Some(next()?),
             "--probe" => probes.push(next()?),
+            "--save" => save = Some(next()?),
+            "--against" => against = Some(next()?),
+            "--newton" => {
+                let v = next()?;
+                let (r, n) = v.split_once(',').ok_or("--newton RELTOL,VNTOL")?;
+                newton = Some((
+                    r.parse::<f64>().map_err(|e| format!("{e}"))?,
+                    n.parse::<f64>().map_err(|e| format!("{e}"))?,
+                ));
+            }
             "--quality" => {
                 quality = Some(match next()?.as_str() {
                     "draft" => Quality::Draft,
@@ -193,6 +208,10 @@ fn main() -> Result<(), String> {
         if let Some(c) = &coupling {
             s.partition_coupling = c.clone();
         }
+        if let Some((r, n)) = newton {
+            s.newton_reltol = r;
+            s.newton_vntol = n;
+        }
         let titles: Vec<&str> = part.iter().map(String::as_str).collect();
         let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
         let circuit = if part.is_empty() {
@@ -254,6 +273,38 @@ fn main() -> Result<(), String> {
     }
     let fs = rate as f64;
     let reference = &runs[0];
+    if let Some(path) = &save {
+        let bytes: Vec<u8> = reference
+            .probes
+            .iter()
+            .flatten()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        std::fs::write(path, bytes).map_err(|e| e.to_string())?;
+    }
+    if let Some(path) = &against {
+        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        let all: Vec<f64> = bytes
+            .chunks_exact(8)
+            .map(|c| f64::from_le_bytes(c.try_into().expect("8 bytes")))
+            .collect();
+        let n = all.len() / probes.len();
+        println!("the one solve against {path}:");
+        for (k, (p, y)) in probes.iter().zip(&reference.probes).enumerate() {
+            let r = &all[k * n..(k + 1) * n];
+            let m = n.min(y.len());
+            let e: Vec<f64> = y[..m].iter().zip(&r[..m]).map(|(a, b)| a - b).collect();
+            let (eb, rb) = (bands(&e, fs), bands(&r[..m], fs));
+            println!(
+                "    {p}: {:.1} dB re its rms; by band {:.1} / {:.1} / {:.1} dB; max {:.3e}",
+                db(rms(&e) / rms(&r[..m])),
+                db(rms(&eb[0]) / rms(&rb[0])),
+                db(rms(&eb[1]) / rms(&rb[1])),
+                db(rms(&eb[2]) / rms(&rb[2])),
+                e.iter().fold(0.0f64, |a, v| a.max(v.abs())),
+            );
+        }
+    }
     for (part, run) in variants.iter().zip(&runs) {
         let name = if part.is_empty() {
             "one solve".to_string()
@@ -268,9 +319,10 @@ fn main() -> Result<(), String> {
             for (p, y) in probes.iter().zip(&reference.probes) {
                 let [lo, mid, hi] = bands(y, fs);
                 println!(
-                    "    {p}: rms {:.3e}, peak {:.3e}, bands < 200 Hz {:.1} / 200 Hz-2 kHz {:.1} / > 2 kHz {:.1} dB re rms",
+                    "    {p}: rms {:.3e}, min {:.3e}, max {:.3e}, bands < 200 Hz {:.1} / 200 Hz-2 kHz {:.1} / > 2 kHz {:.1} dB re rms",
                     rms(y),
-                    y.iter().fold(0.0f64, |m, v| m.max(v.abs())),
+                    y.iter().copied().fold(f64::INFINITY, f64::min),
+                    y.iter().copied().fold(f64::NEG_INFINITY, f64::max),
                     db(rms(&lo) / rms(y)),
                     db(rms(&mid) / rms(y)),
                     db(rms(&hi) / rms(y))
@@ -283,10 +335,13 @@ fn main() -> Result<(), String> {
             let e: Vec<f64> = y[..n].iter().zip(&r[..n]).map(|(a, b)| a - b).collect();
             let (eb, rb) = (bands(&e, fs), bands(&r[..n], fs));
             let finite = e.iter().all(|v| v.is_finite());
+            let mean = |a: &[f64]| a.iter().sum::<f64>() / a.len().max(1) as f64;
             println!(
-                "    {p}: error {:.1} dB re its rms{}; by band {:.1} / {:.1} / {:.1} dB re the band",
+                "    {p}: error {:.1} dB re its rms{}, mean {:+.3e} (the one solve's {:.3e}); by band {:.1} / {:.1} / {:.1} dB re the band",
                 db(rms(&e) / rms(&r[..n])),
                 if finite { "" } else { " (NOT FINITE)" },
+                mean(&e),
+                mean(&r[..n]),
                 db(rms(&eb[0]) / rms(&rb[0])),
                 db(rms(&eb[1]) / rms(&rb[1])),
                 db(rms(&eb[2]) / rms(&rb[2])),

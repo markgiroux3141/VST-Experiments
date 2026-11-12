@@ -237,6 +237,35 @@ the existing partitions.
     1207 of 6234 blocks over 1.0.
 - Not measured: the 670 at T104's leakage, the tube synth at a filter capacitor.
 
+**The spikes were Newton cycling, fixed (2026-11-12, the user's call after the above).** A trace
+of the Plexi's heaviest 60 ms: at the flyback the EL34s' Newton iterates swung between -6 and
++6 kV (one -37 kV), the grids +-100 V, until the 50-iteration cap and a halved step; the fixed
+point was ordinary (a plate at 40 V, its grid at -22 V). Far from the knee a pentode's plate
+conductance vanishes, so a small current mismatch asked for a step of kilovolts through the
+output transformer, and the tubes had no step limiting. `Pentode::limit` (circuitsim
+`devices/pentode.rs`) bounds a port's move per iteration to max(50 V, half its voltage), the
+grid's to max(10 V, half): numerics only, a limited iteration never converges. Then a second
+numerics finding, the Plexi's operating point at the draft: its silicon rectifiers at the
+draft's 10 mV left the EL34 bias 1.2 V (one solve) to 4.7 V (the supply split) off the
+converged -41.4 V; `tol_scale: 0.01` on them (marshall_1987.yaml, the user's OK). Measured
+(the Dry Guitar take, draft-1x, each device's partition; `examples/load_profile.rs`):
+
+| | amp thread | mean load | blocks > 1.0 (of 6234) | p99 | worst |
+|---|---|---|---|---|---|
+| Plexi before | 82 kcycles a sample | 1.18x | 2293 | | 9x |
+| Plexi after | 44 kcycles | 0.65x | 444 (7.1%) | 1.25 | 1.69 |
+| AC30 before | 48 kcycles | 0.75x | 683 | | 4x |
+| AC30 after | 47 kcycles | 0.69x | 373 (6.0%) | 1.22 | 3.89 |
+| 5E3 (for scale) | 24 kcycles | 0.37x | 0 | 0.63 | 0.88 |
+
+The draft lands closer to a tight-tolerance run than before (the Plexi's out -43.0 dB, was
+-38.6); production renders move by -135 dB (the 670) to -85 dB (the Plexi cranked), same speed.
+The Plexi's supply split is now -75.3 dB from the one solve in its heaviest passage (was
+-28.9: the bias), better than lines there (-68.5: their floor on the bias rail's top band), so
+both devices keep their partitions. What is left over budget is ~6-7% of 10 ms blocks at
+1.0-1.7x, loud passages with 4-5 Newton iterations a sample, and linear algebra is now 40-47%
+of both amp threads (60 states, 18-24 ports): W2's ground.
+
 ### W2. A sparse-state DK (from E1)
 
 The state update without the dense products: with A's sparse LU (pattern and factors fixed
