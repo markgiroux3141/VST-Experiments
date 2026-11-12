@@ -371,6 +371,80 @@ def fit_preisach(h_peak, phi_r, coercivity_a_m, coating_m, alpha, orientation=No
     )
 
 
+# --- 5. The astroid: switching in a rotating field -------------------------------------
+
+
+def astroid_drive(c, s, hx, hy):
+    """The field (hx, hy) on an easy axis (c, s) as the equivalent field along it:
+    sign(h_par) |H| / h_sw(psi), h_sw = (cos^{2/3} psi + sin^{2/3} psi)^{-3/2} the
+    Stoner-Wohlfarth switching field at the angle psi between field and axis, relative to
+    the field along it (Stoner & Wohlfarth, Phil. Trans. A 240, 599 (1948)). The particle
+    bench's finding (docs/TAPE_PARTICLES.md on the `tape-particles` branch: the over-bias
+    fall comes from switching in the head's rotating field, which projections lack) as a
+    vector Preisach rule: each hysteron of the axis switches at its own astroid. Along the
+    axis it is the projection; at 45 degrees twice it. circuitsim's `tape::astroid_drive`
+    is the port. Arrays broadcast."""
+    hx, hy = np.asarray(hx, float), np.asarray(hy, float)
+    par = c * hx + s * hy
+    perp = -s * hx + c * hy
+    mag = np.sqrt(par * par + perp * perp)
+    safe = np.where(mag == 0.0, 1.0, mag)
+    cp, sp = np.abs(par) / safe, np.abs(perp) / safe
+    k = np.cbrt(cp) ** 2 + np.cbrt(sp) ** 2
+    return np.where((mag == 0.0) | (par == 0.0), 0.0, np.sign(par) * mag * k * np.sqrt(k))
+
+
+def record_astroid_reference(args: dict) -> tuple[np.ndarray, np.ndarray]:
+    """The astroid variant's recording over circuitsim `tape_record`'s inputs (as
+    `variant_kernel` captures them; table_step 0), each cell's history per axis through
+    `astroid_drive` and the corner formula (the tests' reference)."""
+    pre = args["pre"]
+    head = tape_mod.HeadGeometry(*args["head"])
+    layers, cells = len(args["heights"]), len(args["s_cells"])
+    mx = np.zeros(layers * cells)
+    my = np.zeros(layers * cells)
+    for li in range(layers):
+        y = args["heights"][li]
+        for ci in range(cells):
+            s, k0, k1, (hsx, hsy), (hex_, hey) = _kernel_inputs(args, li, ci)
+            j = np.arange(k0, max(k1, k0))
+            fx, fy = tape_mod.head_field(head, s - args["s_rec"][j], np.full(len(j), y))
+            hx = np.r_[args["hg"][j] * fx + hsx, hsx, hex_]
+            hy = np.r_[args["hg"][j] * fy + hsy, hsy, hey]
+            for c, sn, w in args["axes"]:
+                m = float(pre.state_after(astroid_drive(c, sn, hx, hy)[None, :])[0])
+                mx[li * cells + ci] += w * c * m
+                my[li * cells + ci] += w * sn * m
+    return mx, my
+
+
+def along_x_astroid(pre: Preisach, h: np.ndarray, orientation=None) -> np.ndarray:
+    """`tape_fit.along_x` with each axis driven by `astroid_drive` of the field along x."""
+    h = np.atleast_2d(np.asarray(h, float))
+    if orientation is None:
+        return pre.state_after(h)
+    cs, sn, wt = orientation.axes()
+    return sum(
+        w * c * pre.state_after(astroid_drive(c, s, h, np.zeros_like(h)))
+        for c, s, w in zip(cs, sn, wt, strict=True)
+    )
+
+
+def fit_preisach_astroid(h_peak, phi_r, coercivity_a_m, coating_m, orientation):
+    """`tape_fit.fit_preisach` with the astroid drive in the B-H meter's loops (its along_x
+    swapped for `along_x_astroid` while it fits)."""
+    from varimu.devices import tape_fit
+
+    original = tape_fit.along_x
+    tape_fit.along_x = along_x_astroid
+    try:
+        return tape_fit.fit_preisach(
+            h_peak, phi_r, coercivity_a_m, coating_m, orientation=orientation
+        )
+    finally:
+        tape_fit.along_x = original
+
+
 # --- 2. The record head's field against its current -------------------------------------
 
 
@@ -527,11 +601,12 @@ def variant_kernel(
     threads: int = 0,
     head_law: HeadLaw | None = None,
     capture: bool = False,
+    astroid: bool = False,
 ):
     """Inside the block, varimu.devices.tape's Rust kernel call (`_record_rust`) runs with
     the moving model's mean field (alpha, with the tape's Ms), at most `threads` threads
-    (0: every core), and the head's field mapped by `head_law`. capture: keep each call's
-    inputs in CAPTURE."""
+    (0: every core), the head's field mapped by `head_law`, and with `astroid` each axis
+    driven by `astroid_drive`. capture: keep each call's inputs in CAPTURE."""
     if mean_field != 0.0 and not ms_a_m:
         raise ValueError("the mean field needs the tape's Ms")
     import circuitsim
@@ -592,6 +667,7 @@ def variant_kernel(
             threads,
             mean_field,
             ms_a_m or 0.0,
+            astroid,
         )
         shape = (slab.layers, len(s_cells))
         mx, my = np.asarray(mx).reshape(shape), np.asarray(my).reshape(shape)

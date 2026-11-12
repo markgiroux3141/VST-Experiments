@@ -477,10 +477,11 @@ fn tape_gpu() -> (Option<String>, Option<String>) {
 /// height (0: exact); `gpu`: on the GPU in f32 (the `gpu` feature); `threads`: the CPU
 /// kernel's threads (0: every logical core; the result doesn't depend on it); `mean_field`
 /// (alpha) and `ms_a_m`: the moving model's mean field alpha Ms M on every hysteron (an
-/// opt-in variant, `crate::tape::record_mean_field`; 0: off). Returns (M_x, M_y) / Ms,
+/// opt-in variant, `crate::tape::record_mean_field`; 0: off); `astroid`: the axes driven by
+/// `crate::tape::astroid_drive` (an opt-in variant). Returns (M_x, M_y) / Ms,
 /// layers x cells flattened. Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0, gpu = false, threads = 0, mean_field = 0.0, ms_a_m = 0.0))]
+#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0, gpu = false, threads = 0, mean_field = 0.0, ms_a_m = 0.0, astroid = false))]
 #[allow(clippy::too_many_arguments)]
 fn tape_record<'py>(
     py: Python<'py>,
@@ -501,6 +502,7 @@ fn tape_record<'py>(
     threads: usize,
     mean_field: f64,
     ms_a_m: f64,
+    astroid: bool,
 ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let (heights, zones) = (heights.as_array().to_vec(), zones.as_array().to_vec());
     let (s_rec, hg) = (s_rec.as_array().to_vec(), hg.as_array().to_vec());
@@ -559,7 +561,7 @@ fn tape_record<'py>(
                 threads,
                 gpu,
             };
-            crate::tape::record_mean_field(&rec, mean_field, ms_a_m)
+            crate::tape::record_mean_field(&rec, mean_field, ms_a_m, astroid)
         })
         .map_err(invalid)?;
     Ok((

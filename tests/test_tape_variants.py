@@ -174,3 +174,35 @@ def test_the_rust_static_loops_agree(ensemble, alpha):
     np.testing.assert_allclose(
         tv.along_x_rust(ensemble, hist, o, a), tv.along_x(ensemble, hist, o, a), atol=1e-10
     )
+
+
+def test_the_astroid_drive():
+    """Along the axis the projection; at 45 degrees twice the projection's field magnitude
+    (h_sw = 1/2); odd; zero across the axis."""
+    assert float(tv.astroid_drive(1.0, 0.0, 3.0, 0.0)) == pytest.approx(3.0)
+    c = s = math.sqrt(0.5)
+    assert float(tv.astroid_drive(1.0, 0.0, c * 2.0, s * 2.0)) == pytest.approx(4.0)
+    assert float(tv.astroid_drive(c, s, -1.0, 0.3)) == pytest.approx(
+        -float(tv.astroid_drive(c, s, 1.0, -0.3))
+    )
+    assert float(tv.astroid_drive(1.0, 0.0, 0.0, 5.0)) == 0.0
+
+
+def test_the_rust_astroid_recording_agrees(ensemble):
+    """circuitsim's astroid-driven recording against the reference, cell for cell."""
+    _rust_or_skip()
+    v, slab = 0.381, Slab(12.7e-6, 2, 0.5e-6, 0.5e-6)
+    head = HeadGeometry(25e-6, 2e-3, 3e-3)
+    s = 300e-6 + np.arange(40) * 1.3e-6
+    rng = np.random.default_rng(9)
+    hs = rng.normal(0.0, 5 * OE, (slab.layers, len(s)))
+    he = rng.normal(0.0, 5 * OE, (slab.layers, len(s)))
+    tv.CAPTURE.clear()
+    with tv.variant_kernel(threads=2, astroid=True, capture=True):
+        mx, my = record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust")
+    (args,) = tv.CAPTURE
+    rx, ry = tv.record_astroid_reference(args)
+    np.testing.assert_allclose(mx.ravel(), rx, atol=1e-10)
+    np.testing.assert_allclose(my.ravel(), ry, atol=1e-10)
+    a = record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust")
+    assert np.abs(mx - a[0]).max() > 1e-3

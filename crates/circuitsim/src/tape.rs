@@ -616,25 +616,51 @@ pub fn record(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
     if r.gpu {
         return record_gpu(r);
     }
-    Ok(record_cpu(r, 0.0))
+    Ok(record_cpu(r, 0.0, false))
 }
 
-/// [`record`] with the moving model's mean field (an opt-in variant, TAPE_PLAN.md "Over-bias
-/// options"): every hysteron of a cell sees the field plus `alpha` Ms M, M the cell's own
-/// magnetization (`ms` A/m its saturation), followed forward sample by sample. On the CPU
-/// only; `alpha` 0 is [`record`] itself.
+/// [`record`] with the over-bias study's opt-in variants (TAPE_PLAN.md "Over-bias options"):
+/// the moving model's mean field (every hysteron of a cell sees the field plus `alpha` Ms M,
+/// M the cell's own magnetization, `ms` A/m its saturation, followed forward sample by
+/// sample), or `astroid`: each easy axis driven by [`astroid_drive`] instead of the field's
+/// projection (not with the mean field). On the CPU only; `alpha` 0 without the astroid is
+/// [`record`] itself.
 pub fn record_mean_field(
     r: &Recording<'_>,
     alpha: f64,
     ms: f64,
+    astroid: bool,
 ) -> Result<(Vec<f64>, Vec<f64>), String> {
-    if alpha == 0.0 {
+    if alpha == 0.0 && !astroid {
         return record(r);
     }
     if r.gpu {
-        return Err("tape: the moving model runs on the CPU only".into());
+        return Err("tape: the over-bias variants run on the CPU only".into());
     }
-    Ok(record_cpu(r, alpha * ms))
+    if alpha != 0.0 && astroid {
+        return Err("tape: the astroid drive isn't combined with the mean field".into());
+    }
+    Ok(record_cpu(r, alpha * ms, astroid))
+}
+
+/// The astroid drive (an opt-in variant): the field (hx, hy) on an easy axis (cos, sin) as
+/// the equivalent field along it, sign(h_par) |H| / h_sw(psi), h_sw(psi) = (cos^{2/3} psi +
+/// sin^{2/3} psi)^{-3/2} the Stoner-Wohlfarth switching field at the angle psi between the
+/// field and the axis, relative to the field along it (Stoner & Wohlfarth 1948): a hysteron
+/// of the axis switches where its own astroid says, the projection's switching made
+/// rotational. Along the axis it is the projection; at 45 degrees twice it. The reference is
+/// `varimu.tape_variants.astroid_drive`.
+#[inline]
+pub fn astroid_drive(c: f64, s: f64, hx: f64, hy: f64) -> f64 {
+    let par = c * hx + s * hy;
+    let perp = -s * hx + c * hy;
+    let mag = (par * par + perp * perp).sqrt();
+    if mag == 0.0 || par == 0.0 {
+        return 0.0;
+    }
+    let (cp, sp) = (par.abs() / mag, perp.abs() / mag);
+    let k = cp.cbrt().powi(2) + sp.cbrt().powi(2);
+    par.signum() * mag * k * k.sqrt()
 }
 
 /// Each layer's head field table, if the recording tabulates it.
@@ -719,7 +745,7 @@ fn record_gpu(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
 }
 
 /// [`record`] on the CPU, in f64.
-fn record_cpu(r: &Recording<'_>, a: f64) -> (Vec<f64>, Vec<f64>) {
+fn record_cpu(r: &Recording<'_>, a: f64, astroid: bool) -> (Vec<f64>, Vec<f64>) {
     let layers = r.heights.len();
     let cells = r.s_cells.len();
     let chunks = cells.div_ceil(CHUNK);
@@ -750,7 +776,7 @@ fn record_cpu(r: &Recording<'_>, a: f64) -> (Vec<f64>, Vec<f64>) {
                     let mut my = vec![0.0; c1 - c0];
                     for ci in c0..c1 {
                         let (x, y) = if a == 0.0 {
-                            cell(r, l, ci, &mut corners, tables[l].as_ref())
+                            cell(r, l, ci, &mut corners, tables[l].as_ref(), astroid)
                         } else {
                             cell_moving(r, l, ci, &mut stacks, tables[l].as_ref(), a)
                         };
@@ -778,6 +804,7 @@ fn cell(
     ci: usize,
     corners: &mut [Corner],
     table: Option<&FieldTable>,
+    astroid: bool,
 ) -> (f64, f64) {
     let cells = r.s_cells.len();
     let s = r.s_cells[ci];
@@ -798,8 +825,13 @@ fn cell(
         *cr = Corner::new(p.h_max);
         // The field it is left in, after its pass (the history's last sample), and before
         // it the steady field alone as the cell leaves the head.
-        cr.push(p, a[0] * hex + a[1] * hey);
-        cr.push(p, a[0] * hsx + a[1] * hsy);
+        if astroid {
+            cr.push(p, astroid_drive(a[0], a[1], hex, hey));
+            cr.push(p, astroid_drive(a[0], a[1], hsx, hsy));
+        } else {
+            cr.push(p, a[0] * hex + a[1] * hey);
+            cr.push(p, a[0] * hsx + a[1] * hsy);
+        }
     }
     for j in (k0..k1.max(k0)).rev() {
         let x = s - r.s_rec[j];
@@ -809,7 +841,11 @@ fn cell(
         };
         let (fx, fy) = (r.hg[j] * fx, r.hg[j] * fy);
         for (cr, a) in corners.iter_mut().zip(r.axes) {
-            cr.push(p, a[0] * fx + a[1] * fy + (a[0] * hsx + a[1] * hsy));
+            if astroid {
+                cr.push(p, astroid_drive(a[0], a[1], fx + hsx, fy + hsy));
+            } else {
+                cr.push(p, a[0] * fx + a[1] * fy + (a[0] * hsx + a[1] * hsy));
+            }
         }
     }
     let (mut mx, mut my) = (0.0, 0.0);

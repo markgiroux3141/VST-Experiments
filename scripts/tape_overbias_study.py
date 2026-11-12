@@ -29,6 +29,11 @@ D:/Claude Code Projects/VST-chirp/docs/TAPE_PARTICLE_RESEARCH.md sections 2 and 
    reluctance ratio 250-1000 (l_c / g ~ 500, the throat), laminations 0.1-0.35 mm, the
    pole tips' flux concentration 1-3. Plus `stretch`: what power law Hg = s I^p would fit
    No. 21 on the base model's curves (a diagnostic, not a model: p is fitted to No. 21).
+5. `astroid_*`: each axis driven by the Stoner-Wohlfarth astroid's equivalent field instead
+   of the field's projection (`tape_variants.astroid_drive`; the particle bench's finding,
+   docs/TAPE_PARTICLES.md on the `tape-particles` branch: the over-bias fall is switching
+   in the head's rotating field), refitted to Bulletin 20 with the astroid in the loops;
+   kappa 1.5 (the base's) and 3.
 4. `o3d_*`: the easy axes in 3D (a Bingham density exp(kappa u_x^2 - lam u_y^2): lam > 0
    keeps them in the tape's plane, the coating's flow), refitted to Bulletin 20 and Hc. The
    base model spreads them in the head's x-y plane (kappa 1.5, fitted to No. 21 in TM2).
@@ -68,6 +73,7 @@ from varimu.config import REPO_ROOT
 from varimu.devices import library, tape_fit
 from varimu.devices.fit import load_csv
 from varimu.devices.preisach import PreisachParams
+from varimu.devices.tape import Orientation
 from varimu.devices.tape_machine import tone_harmonics
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -94,6 +100,8 @@ def variants() -> dict:
     v["o3d_k15"] = {"o3d": (1.5, 0.0)}
     v["o3d_k15_plane"] = {"o3d": (1.5, 3.0)}
     v["o3d_k3_plane"] = {"o3d": (3.0, 3.0)}
+    v["astroid_k15"] = {"astroid": 1.5}
+    v["astroid_k3"] = {"astroid": 3.0}
     return v
 
 
@@ -113,7 +121,11 @@ def refit(base, spec: dict, res_row: dict):
     o = orientation_of(base, spec)
     alpha = spec.get("moving", spec.get("static"))
     t0 = time.time()
-    if alpha is not None:
+    if "astroid" in spec:
+        fit = tv.fit_preisach_astroid(
+            rows[:, 0], rows[:, 1], pub["coercivity_a_m"], pub["oxide_m"], o
+        )
+    elif alpha is not None:
         fit = tv.fit_preisach(
             rows[:, 0], rows[:, 1], pub["coercivity_a_m"], pub["oxide_m"], alpha, orientation=o
         )
@@ -144,6 +156,8 @@ def orientation_of(base, spec):
     if "o3d" in spec:
         k, lam = spec["o3d"]
         return tv.Orientation3D(k, lam)
+    if "astroid" in spec:
+        return Orientation(spec["astroid"], base.orientation.n)
     return base.orientation
 
 
@@ -164,6 +178,7 @@ def options(spec: dict, tape, f_bias_hz: float, threads: int):
                 ms_a_m=tape.ms_a_m,
                 threads=threads,
                 head_law=head_law(spec, f_bias_hz),
+                astroid="astroid" in spec,
             )
         )
         if "static" in spec:
