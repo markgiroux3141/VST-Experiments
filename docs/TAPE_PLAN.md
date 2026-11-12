@@ -1153,8 +1153,7 @@ the variant on.
   formula within 2e-6, the tables' diagonal interpolation; circuitsim's moving and astroid
   recordings and the moving loops against the Python references within 1e-10; the 3D axes;
   the head law); `scripts/tape_overbias_study.py` -> `reports/tape/overbias_study.{json,png}`
-  (merged from the parallel runs' `overbias_moving.json`, `overbias_print.json`,
-  `overbias_b14.json`).
+  (merged from the parallel runs' `overbias_moving.json` and `overbias_print.json`).
 - Sources beyond the bulletins: the parallel literature study D:/Claude Code Projects/
   VST-chirp/docs/TAPE_PARTICLE_RESEARCH.md (sections 2, 3, 5) and the particle bench, docs/
   TAPE_PARTICLES.md on branch worktree-agent-a7931fefe46225e86 (its static bench:
@@ -1173,13 +1172,13 @@ against the base's):
 | variant | Bulletin 20 fit (reading errors) | No. 21 rms 1k / 15k (dB) | 1k at 3 mA (-11.0) | 1k / 15k at 8 mA (-3.3 / -7.1) | 15k - 1k at 8 mA (-10.4) | peaks 1k / 15k, dB of bias | knee: aligned / lite (12.7 um) | knee 51 um: aligned / lite | cost |
 |---|---|---|---|---|---|---|---|---|---|
 | **No. 21 / #111** | | | -11.0 | -3.3 / -7.1 | -10.4 | 0 / 0 | ~4.1-4.5 (No. 1) | | |
-| base | - | 2.25 / 1.74 | -5.5 | -3.2 / -5.1 | -6.6 | -1.3 / -0.8 | 3.33 / 3.22 | 4.00 / 3.97 | 1.0x |
+| base (SCOTCH111@3) | 0.57 | 2.25 / 1.74 | -5.5 | -3.2 / -5.1 | -6.6 | -1.3 / -0.8 | 3.33 / 3.22 | 4.00 / 3.97 | 1.0x |
 | astroid_k15 | 0.73 | 1.87 / 1.94 | -8.0 | -1.9 / -8.6 | -15.6 | -0.3 / -2.0 | 3.94 / - | - / - | 2.7x |
 | astroid_k3 | 0.71 | 2.03 / 2.06 | -8.9 | -1.3 / -8.7 | -18.3 | +0.0 / -1.6 | - / - | - / - | 2.1x |
-| astroid_k15_noimage | 0.73 | 2.16 / 2.63 | -5.4 | -2.9 / -8.9 | -15.6 | -1.0 / -1.7 | - / - | - / - | -x |
+| astroid_k15_noimage | 0.73 | 2.16 / 2.63 | -5.4 | -2.9 / -8.9 | -15.6 | -1.0 / -1.7 | - / - | - / - | - |
 | moving_p06 | 0.53 | 2.22 / 1.80 | -6.1 | -3.6 / -4.9 | -6.1 | -1.4 / -0.9 | - / 3.05 | - / - | 11.7x |
 | moving_m05 | 0.64 | 2.42 / 2.00 | -5.0 | -3.2 / -6.3 | -7.3 | -1.2 / -0.7 | - / - | - / - | 11.1x |
-| moving_m10 | 0.75 | 2.92 / 2.93 | -3.9 | -3.7 / -10.0 | -8.3 | -2.1 / -1.6 | - / 4.18 | - / - | -x |
+| moving_m10 | 0.75 | 2.92 / 2.93 | -3.9 | -3.7 / -10.0 | -8.3 | -2.1 / -1.6 | - / 4.18 | - / 5.18 | - |
 | static_p06 | 0.53 | 1.89 / 1.62 | -6.2 | -2.7 / -4.8 | -7.3 | -1.5 / -1.0 | 3.31 / - | - / - | 0.7x |
 | static_m10 | 0.75 | 3.40 / 2.79 | -3.5 | -5.3 / -8.1 | -4.6 | -2.1 / -1.6 | 3.01 / - | - / - | 1.0x |
 | head_typical | - | 2.26 / 1.78 | -5.5 | -3.2 / -5.1 | -6.7 | -1.2 / -0.8 | 3.38 / - | - / - | 1.2x |
@@ -1210,7 +1209,7 @@ against the base's):
      together, the 15 kHz overshoot is the astroid's own (switching far downstream in the
      perpendicular field), not a double count with the image.
    - Bulletin 14 (7 kHz re 400 Hz at 7.5 ips; 3M +4 dB, base -1.8 / -1.0 at the -40 / -30 dB
-     criteria): B14_TEXT
+     criteria): not measured (stopped after 80 min at 2 threads; the next run).
    - Cost: ~2-3x the base kernel per recording (a cube root and a square root per axis and
      peak; thread-normalized); CPU only for now (the GPU kernel would take the same lines).
    - Renders moved if adopted: every print through a tape and its alignment, with a new
@@ -1247,7 +1246,7 @@ against the base's):
      **+4.18 at -0.10** (the 1% level -1.4 dB), inside #111's 4.1-4.5. So a demagnetizing
      mean field softens the medium's knee by ~1 dB (the opposite of the ideal curve: it acts
      through the few bias cycles of the freezing, not the anhysteretic), at the price of a
-     worse No. 21. On the 351's 51 um gap (base +4.00 aligned, +3.97 lite): M10_51.
+     worse No. 21. On the 351's 51 um gap (base +4.00 aligned, +3.97 lite) alpha -0.10 gives +5.18 (the 1% level -2.6 dB): past #111's range, where the base already sits inside it, so the lever is only wanted on the short-gap machine.
    - Cost: ~12x the base kernel per recording (Newton on the cell's (M_x, M_y) at every bias
      peak, 11.6-17.4 M solves per 1 kHz recording, none unconverged at 1e-12), 27-60x wall
      time on No. 21; CPU only.
@@ -1324,14 +1323,16 @@ either way (the reduction files are refused for another medium).
   particle bench flags as unconverged) with the astroid in, on the same checks, No. 21 held
   out where it can be.
 - The moving mean field: don't adopt at the literature's sign (nothing measurable, ~12x
-  cost). At alpha -0.10 it puts the 12.7 um knee in #111's range but worsens No. 21; worth
-  keeping as the knee's lever if the astroid's knee falls short.
+  cost). At alpha -0.10 it puts the 12.7 um knee in #111's range but worsens No. 21 and
+  overshoots the knee on the 351's 51 um gap; worth keeping only as a knee lever if the
+  astroid's knee falls short.
 - The static mean field, the head's current law, the 3D axes: close them.
 - Print-through: build it as a condition dial from the literature study's linear model
   (3.4, the period laws) with this barrier tail as its physical check; it doesn't touch
   No. 21.
 
-Unfinished: the astroid with other orientations or an out-of-plane share; No. 21 for alpha
+Unfinished: Bulletin 14 for the astroid (the first check to run next); the astroid with
+other orientations or an out-of-plane share; No. 21 for alpha
 +0.03 / +0.09 (only their knees: +3.03 lite at +0.09); Bulletin 14 and the 51 um knee for
 the variants other than those named above; the moving model's zone floor (120 Oe, the
 base's) not re-checked lower.
