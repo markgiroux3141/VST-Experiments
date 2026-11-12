@@ -76,7 +76,9 @@ impl Bench {
         };
         Ok(Bench {
             side: m.f64("side_m")?,
-            r: (0..n).map(|i| [rr[3 * i], rr[3 * i + 1], rr[3 * i + 2]]).collect(),
+            r: (0..n)
+                .map(|i| [rr[3 * i], rr[3 * i + 1], rr[3 * i + 2]])
+                .collect(),
             parts,
             l: read_f64(dir, "l", n)?,
             v: read_f64(dir, "v", n)?,
@@ -292,7 +294,8 @@ pub fn run_cpu(b: &Bench, threads: usize, trace: bool) -> (Vec<f64>, Vec<f64>, V
                                 ha[2] + b.scale * hint[i][2],
                             ];
                             let u = sw::hash_uniform(b.seed, i as u32, j as u32);
-                            let o = sw::step(&b.parts[i], h, *pp, b.dt, b.f0, grid, b.iters, Some(u));
+                            let o =
+                                sw::step(&b.parts[i], h, *pp, b.dt, b.f0, grid, b.iters, Some(u));
                             *pp = o.p;
                             *mm = o.m;
                         }

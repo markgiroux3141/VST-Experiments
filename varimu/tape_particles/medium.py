@@ -37,8 +37,7 @@ from varimu.devices.tape import (
 )
 from varimu.tape_particles import bench as bn
 from varimu.tape_particles import ensemble as ens
-from varimu.tape_particles import runner
-from varimu.tape_particles import sw
+from varimu.tape_particles import runner, sw
 
 
 @dataclass(frozen=True)
@@ -85,15 +84,22 @@ class Strip:
     length_m: float
 
 
-def place(spec: bn.BenchSpec, sigma_int_a_m: float, length_m: float, mach: Machine,
-          num: Numerics, seed: int = 1, name: str = "strip") -> Strip:
+def place(
+    spec: bn.BenchSpec,
+    sigma_int_a_m: float,
+    length_m: float,
+    mach: Machine,
+    num: Numerics,
+    seed: int = 1,
+    name: str = "strip",
+) -> Strip:
     """Particles of the bench's distributions, uniform in the strip (length x coating x
     width), sorted by (x cell, layer)."""
     g = {k: ens.rng_for(seed, f"{name}.{k}") for k in ("l", "hk", "axis", "phi", "x", "y", "hloc")}
     v_med = 0.25 * math.pi * (spec.length_median_m / spec.aspect) ** 2 * spec.length_median_m
     v_mean = v_med * math.exp(0.5 * (3 * spec.sigma_ln_length) ** 2)
     count = int(round(spec.packing * length_m * mach.coating_m * num.width_m / v_mean))
-    l = spec.length_median_m * np.exp(spec.sigma_ln_length * g["l"].standard_normal(count))
+    l = spec.length_median_m * np.exp(spec.sigma_ln_length * g["l"].standard_normal(count))  # noqa: E741 (l: the needles' lengths)
     w = l / spec.aspect
     v = 0.25 * math.pi * w * w * l
     t = ens.watson_cos(spec.kappa, g["axis"].random(count))
@@ -124,8 +130,15 @@ def zone_m(mach: Machine, peak_a_m: float, floor_a_m: float) -> float:
     return float(x[on].max()) if on.any() else mach.rec.gap_m
 
 
-def schedule(strip: Strip, mach: Machine, num: Numerics, f_sig: float, a_sig: float,
-             bias: float, phase: float = 0.0):
+def schedule(
+    strip: Strip,
+    mach: Machine,
+    num: Numerics,
+    f_sig: float,
+    a_sig: float,
+    bias: float,
+    phase: float = 0.0,
+):
     """Per step: the gap's position, the deep-gap field, the zone's x cells [c0, c1)."""
     z = zone_m(mach, abs(a_sig) + bias, num.floor_a_m)
     dt = 1.0 / (mach.f_bias_hz * num.steps_per_cycle)
@@ -134,7 +147,9 @@ def schedule(strip: Strip, mach: Machine, num: Numerics, f_sig: float, a_sig: fl
     t = np.arange(steps) * dt
     xg = x0 + mach.speed_m_s * t
     tt = xg / mach.speed_m_s  # the signal's time: the tape at x is recorded at x / v
-    hg = a_sig * np.sin(2 * math.pi * f_sig * tt) + bias * np.sin(2 * math.pi * mach.f_bias_hz * t + phase)
+    hg = a_sig * np.sin(2 * math.pi * f_sig * tt) + bias * np.sin(
+        2 * math.pi * mach.f_bias_hz * t + phase
+    )
     c0 = np.clip(np.floor((xg - z) / num.ds_m), 0, strip.ncx).astype(int)
     c1 = np.clip(np.ceil((xg + z) / num.ds_m) + 1, 0, strip.ncx).astype(int)
     return xg, hg, c0, np.maximum(c1, c0), dt
@@ -150,33 +165,67 @@ def kernels(strip: Strip, mach: Machine, num: Numerics):
     return n_fft, out
 
 
-def record(strip: Strip, spec: bn.BenchSpec, mach: Machine, num: Numerics, f_sig: float,
-           a_sig: float, bias: float, threads: int = 6, seed: int = 1, phase: float = 0.0,
-           keep: Path | None = None):
+def record(
+    strip: Strip,
+    spec: bn.BenchSpec,
+    mach: Machine,
+    num: Numerics,
+    f_sig: float,
+    a_sig: float,
+    bias: float,
+    threads: int = 6,
+    seed: int = 1,
+    phase: float = 0.0,
+    keep: Path | None = None,
+):
     """Runs tpsim medium: (p, m (N x 3)) after the pass and the relaxation."""
     xg, hg, c0, c1, dt = schedule(strip, mach, num, f_sig, a_sig, bias, phase)
     n_fft, ker = kernels(strip, mach, num)
     d = Path(tempfile.mkdtemp(prefix="tp_medium_")) if keep is None else keep
     meta = {
-        "n_particles": len(strip.x), "layers": num.layers, "ncx": strip.ncx, "steps": len(xg),
-        "n_fft": n_fft, "update_every": num.update_every, "dt": dt, "f0": spec.f0_hz,
-        "grid": num.grid, "iters": num.iters, "stochastic": False, "seed": seed,
-        "relax_steps": num.relax_steps, "relax_dt": num.relax_dt_s,
-        "head": [mach.rec.gap_m, mach.rec.pole_m, mach.rec.relax_m], "ms_p": spec.ms_p_a_m,
+        "n_particles": len(strip.x),
+        "layers": num.layers,
+        "ncx": strip.ncx,
+        "steps": len(xg),
+        "n_fft": n_fft,
+        "update_every": num.update_every,
+        "dt": dt,
+        "f0": spec.f0_hz,
+        "grid": num.grid,
+        "iters": num.iters,
+        "stochastic": False,
+        "seed": seed,
+        "relax_steps": num.relax_steps,
+        "relax_dt": num.relax_dt_s,
+        "head": [mach.rec.gap_m, mach.rec.pole_m, mach.rec.relax_m],
+        "ms_p": spec.ms_p_a_m,
         "cell_vol": num.ds_m * (mach.coating_m / num.layers) * num.width_m,
     }
     arrays = {
-        "n": strip.n, "hk": strip.hk, "e0_kt": strip.e0_kt, "hloc": strip.hloc, "x": strip.x,
-        "y": mach.spacing_m + strip.depth, "v": strip.v, "cell": strip.cell,
-        "p0": np.full(len(strip.x), 0.5), "cell_start": strip.cell_start, "step_x": xg,
-        "step_hg": hg, "step_c0": c0, "step_c1": c1,
+        "n": strip.n,
+        "hk": strip.hk,
+        "e0_kt": strip.e0_kt,
+        "hloc": strip.hloc,
+        "x": strip.x,
+        "y": mach.spacing_m + strip.depth,
+        "v": strip.v,
+        "cell": strip.cell,
+        "p0": np.full(len(strip.x), 0.5),
+        "cell_start": strip.cell_start,
+        "step_x": xg,
+        "step_hg": hg,
+        "step_c0": c0,
+        "step_c1": c1,
     }
     for name, (kept, k) in ker.items():
         arrays[f"{name}_kept"] = kept
         arrays[f"{name}_k"] = np.stack([k.real, k.imag], axis=-1)
     runner.write(d, meta, arrays)
-    r = subprocess.run([str(runner.tpsim()), "medium", str(d), "--threads", str(threads)],
-                       capture_output=True, text=True)
+    r = subprocess.run(
+        [str(runner.tpsim()), "medium", str(d), "--threads", str(threads)],
+        capture_output=True,
+        text=True,
+    )
     if r.returncode != 0:
         raise RuntimeError(f"tpsim medium failed: {r.stderr}")
     p = runner.read(d, "out_p")

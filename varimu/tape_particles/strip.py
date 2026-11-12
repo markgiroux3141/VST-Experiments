@@ -41,10 +41,10 @@ from varimu.devices.tape import (
     HeadGeometry,
     Slab,
     demag_fields_vector,
-    lstsq_mgs,
     head_field,
     head_hx_spectrum,
     head_hy_spectrum,
+    lstsq_mgs,
 )
 from varimu.tape_particles import bench as bn
 from varimu.tape_particles import ensemble as ens
@@ -133,10 +133,21 @@ def run(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he, gpu=True, s
     repc[..., 4:6] = he
     repc[0, ..., 6], repc[1, ..., 6] = 1.0, -1.0
     meta = {
-        "n_particles": len(hk), "reps": 2 * ncx * nl, "layers": nl, "s_steps": s,
-        "e_steps": num.e_steps, "a_sig": a_sig, "bias": bias, "fs_dt": f_sig * dt,
-        "inv_m": 1.0 / num.steps_per_cycle, "dt": dt, "f0": spec.f0_hz, "grid": num.grid,
-        "iters": num.iters, "stochastic": False, "seed": seed,
+        "n_particles": len(hk),
+        "reps": 2 * ncx * nl,
+        "layers": nl,
+        "s_steps": s,
+        "e_steps": num.e_steps,
+        "a_sig": a_sig,
+        "bias": bias,
+        "fs_dt": f_sig * dt,
+        "inv_m": 1.0 / num.steps_per_cycle,
+        "dt": dt,
+        "f0": spec.f0_hz,
+        "grid": num.grid,
+        "iters": num.iters,
+        "stochastic": False,
+        "seed": seed,
         "ms_local": spec.packing * spec.ms_p_a_m if num.local_demag else 0.0,
     }
     d = tempfile.mkdtemp(prefix="tp_strip_")
@@ -144,8 +155,19 @@ def run(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he, gpu=True, s
         from pathlib import Path
 
         dd = Path(d)
-        runner.write(dd, meta, {"n": n, "hk": hk, "e0_kt": e0, "v": v,
-                                "p0": np.full(len(hk), 0.5), "tab": tab, "repc": repc})
+        runner.write(
+            dd,
+            meta,
+            {
+                "n": n,
+                "hk": hk,
+                "e0_kt": e0,
+                "v": v,
+                "p0": np.full(len(hk), 0.5),
+                "tab": tab,
+                "repc": repc,
+            },
+        )
         cmd = [str(runner.tpsim()), "strip", d] + (["--gpu"] if gpu else ["--threads", "6"])
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
@@ -176,8 +198,16 @@ def reference(parts, spec, mach, num, f_sig, a_sig, bias, x_cells, hs, he):
                     if j < s:
                         pb = (mach.f_bias_hz * t0[c] % 1.0) + j / num.steps_per_cycle
                         ps = (f_sig * t0[c] % 1.0) + j * f_sig * dt
-                        hg = sg * a_sig * math.sin(2 * math.pi * ps) + bias * math.sin(2 * math.pi * pb)
-                        h = np.array([hg * tab[j, li, 0] + hs[si, c, li, 0], hg * tab[j, li, 1] + hs[si, c, li, 1], 0.0])
+                        hg = sg * a_sig * math.sin(2 * math.pi * ps) + bias * math.sin(
+                            2 * math.pi * pb
+                        )
+                        h = np.array(
+                            [
+                                hg * tab[j, li, 0] + hs[si, c, li, 0],
+                                hg * tab[j, li, 1] + hs[si, c, li, 1],
+                                0.0,
+                            ]
+                        )
                     else:
                         h = np.array([he[si, c, li, 0], he[si, c, li, 1], 0.0])
                     if ms_local > 0:
@@ -279,8 +309,20 @@ def tone(spec, parts, mach, num, f_sig, a_sig, bias, gpu=True, log=None):
     return 0.5 * (r[0] - r[1]), {"demag_changes": hist, "cells": ncx, **info}
 
 
-def tone_coupled(spec, parts, mach, num, f_sig, a_sig, bias, q: int = 2, update_every: int = 1,
-                 lam_min: str = "medium", log=None, demag_scale: float = 1.0):
+def tone_coupled(
+    spec,
+    parts,
+    mach,
+    num,
+    f_sig,
+    a_sig,
+    bias,
+    q: int = 2,
+    update_every: int = 1,
+    lam_min: str = "medium",
+    log=None,
+    demag_scale: float = 1.0,
+):
     """A tone with the coating's field causal: every cell steps in absolute time (the step
     dt = ds / (v q), so cell c enters the zone at step c q), and every `update_every` steps
     the cells' present (M_x, M_y) give the field on all of them (imaged for the cells in the
@@ -318,30 +360,56 @@ def tone_coupled(spec, parts, mach, num, f_sig, a_sig, bias, q: int = 2, update_
     n_fft = 1 << int(math.ceil(math.log2(2 * ncx)))
     slab = Slab(mach.coating_m, nl, ds, mach.spacing_m)
     lm = mach.lam_min_m if lam_min == "medium" else None
-    arrays = {"n": n, "hk": hk, "e0_kt": e0, "v": v, "p0": np.full(len(hk), 0.5), "tab": tab,
-              "repc": repc, "k0": k0}
+    arrays = {
+        "n": n,
+        "hk": hk,
+        "e0_kt": e0,
+        "v": v,
+        "p0": np.full(len(hk), 0.5),
+        "tab": tab,
+        "repc": repc,
+        "k0": k0,
+    }
     for name, img in (("img", mach.spacing_m if num.image else None), ("free", None)):
         keep, kern = _demag_kernels(n_fft, slab, lm, 16, img)
         arrays[f"{name}_kept"] = np.nonzero(keep)[0]
         arrays[f"{name}_k"] = np.stack([np.stack(kern).real, np.stack(kern).imag], axis=-1)
     meta = {
-        "n_particles": len(hk), "reps": 2 * ncx * nl, "layers": nl, "s_steps": s_steps,
-        "e_steps": num.e_steps, "a_sig": a_sig, "bias": bias, "fs_dt": f_sig * dt,
-        "inv_m": mach.f_bias_hz * dt, "dt": dt, "f0": spec.f0_hz, "grid": num.grid,
-        "iters": num.iters, "stochastic": False, "seed": 1, "ncx": ncx, "n_fft": n_fft,
-        "total_steps": total, "update_every": update_every,
+        "n_particles": len(hk),
+        "reps": 2 * ncx * nl,
+        "layers": nl,
+        "s_steps": s_steps,
+        "e_steps": num.e_steps,
+        "a_sig": a_sig,
+        "bias": bias,
+        "fs_dt": f_sig * dt,
+        "inv_m": mach.f_bias_hz * dt,
+        "dt": dt,
+        "f0": spec.f0_hz,
+        "grid": num.grid,
+        "iters": num.iters,
+        "stochastic": False,
+        "seed": 1,
+        "ncx": ncx,
+        "n_fft": n_fft,
+        "total_steps": total,
+        "update_every": update_every,
         "ms_coat": demag_scale * spec.packing * spec.ms_p_a_m,
     }
     d = tempfile.mkdtemp(prefix="tp_cstrip_")
     try:
         dd = Path(d)
         runner.write(dd, meta, arrays)
-        r = subprocess.run([str(runner.tpsim()), "strip", d, "--coupled"], capture_output=True, text=True)
+        r = subprocess.run(
+            [str(runner.tpsim()), "strip", d, "--coupled"], capture_output=True, text=True
+        )
         if r.returncode != 0:
             raise RuntimeError(f"tpsim strip --coupled failed: {r.stderr}")
         m = runner.read(dd, "out_m").reshape(2, ncx, nl, 3)
         info = json.loads((dd / "out.json").read_text())
     finally:
         shutil.rmtree(d, ignore_errors=True)
-    rb = [readback(m[si, :, :, 0].T, m[si, :, :, 1].T, x_cells, mach, num, f_sig) for si in range(2)]
+    rb = [
+        readback(m[si, :, :, 0].T, m[si, :, :, 1].T, x_cells, mach, num, f_sig) for si in range(2)
+    ]
     return 0.5 * (rb[0] - rb[1]), {"cells": ncx, "steps": total, "zone_m": z, **info}

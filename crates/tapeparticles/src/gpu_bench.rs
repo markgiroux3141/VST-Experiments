@@ -38,10 +38,7 @@ fn v4(x: impl Iterator<Item = [f32; 4]>) -> Vec<u8> {
 /// (final p (reps x N), final M (reps x 3), trace (steps x reps x 3) if asked, the last
 /// interaction field (reps x N x 3: from the final moments)): bench.rs's `run_cpu` in f32.
 #[allow(clippy::type_complexity)]
-pub fn run_gpu(
-    b: &Bench,
-    trace: bool,
-) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>), String> {
+pub fn run_gpu(b: &Bench, trace: bool) -> Result<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>), String> {
     let g: &Gpu = gpu()?;
     let n = b.n();
     let reps = b.reps;
@@ -92,14 +89,21 @@ pub fn run_gpu(
         "axis",
         &v4((0..n).map(|i| {
             let nn = b.parts[i].n;
-            [nn[0] as f32, nn[1] as f32, nn[2] as f32, (b.v[i] * UM * UM * UM) as f32]
+            [
+                nn[0] as f32,
+                nn[1] as f32,
+                nn[2] as f32,
+                (b.v[i] * UM * UM * UM) as f32,
+            ]
         })),
     );
     let prm = g.storage(
         "prm",
         &v4((0..n).map(|i| [b.parts[i].hk as f32, b.parts[i].e0_kt as f32, 0.0, 0.0])),
     );
-    let st: Vec<f32> = (0..reps).flat_map(|_| b.p0.iter().map(|&p| p as f32)).collect();
+    let st: Vec<f32> = (0..reps)
+        .flat_map(|_| b.p0.iter().map(|&p| p as f32))
+        .collect();
     let state = g.storage("state", bytemuck::cast_slice(&st));
     let mom = g.storage(
         "mom",
@@ -126,7 +130,9 @@ pub fn run_gpu(
     let tr = g.zeros("trace", ((steps + 1) * reps * 16) as u64);
     let counter = g.zeros("counter", 16);
     let src = include_str!("bench.wgsl");
-    let ro = [false, true, true, true, false, false, false, false, true, false, false];
+    let ro = [
+        false, true, true, true, false, false, false, false, true, false, false,
+    ];
     let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..11)
         .map(|i| wgpu::BindGroupLayoutEntry {
             binding: i as u32,
@@ -156,12 +162,10 @@ pub fn run_gpu(
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
-    let module = g
-        .device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("bench"),
-            source: wgpu::ShaderSource::Wgsl(src.into()),
-        });
+    let module = g.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("bench"),
+        source: wgpu::ShaderSource::Wgsl(src.into()),
+    });
     let pipe = |entry: &str| {
         g.device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -256,5 +260,10 @@ pub fn run_gpu(
         .iter()
         .flat_map(|h| [h[0] as f64, h[1] as f64, h[2] as f64])
         .collect();
-    Ok((pv.iter().map(|&x| x as f64).collect(), fin, trace_out, hint_out))
+    Ok((
+        pv.iter().map(|&x| x as f64).collect(),
+        fin,
+        trace_out,
+        hint_out,
+    ))
 }

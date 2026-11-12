@@ -150,8 +150,18 @@ def test_moving_head_local_demag_rust_and_gpu_agree_with_python():
     z = np.zeros((2, 2, 2, 2))
     args = (parts, spec, mach, num, 15e3, 999.0, 400 * bn.OE, x, z, z)
     ref = sp.reference(*args)
-    off = sp.reference(parts, spec, mach, dataclasses.replace(num, local_demag=False), 15e3, 999.0,
-                       400 * bn.OE, x, z, z)
+    off = sp.reference(
+        parts,
+        spec,
+        mach,
+        dataclasses.replace(num, local_demag=False),
+        15e3,
+        999.0,
+        400 * bn.OE,
+        x,
+        z,
+        z,
+    )
     assert np.abs(ref - off).max() > 1e-3  # the demagnetization acts
     cpu, _ = sp.run(*args, gpu=False)
     assert np.abs(cpu - ref).max() < 1e-5

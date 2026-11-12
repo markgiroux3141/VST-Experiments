@@ -29,7 +29,10 @@ def tpsim() -> Path:
     if not EXE.exists():
         env = dict(os.environ, CARGO_BUILD_JOBS=os.environ.get("CARGO_BUILD_JOBS", "4"))
         subprocess.run(
-            ["cargo", "build", "--release", "-p", "tapeparticles"], cwd=REPO_ROOT, check=True, env=env
+            ["cargo", "build", "--release", "-p", "tapeparticles"],
+            cwd=REPO_ROOT,
+            check=True,
+            env=env,
         )
     return EXE
 
@@ -122,9 +125,16 @@ def bench_run(
     return fin, tr, info
 
 
-def erase(box: bn.Box, spec: bn.BenchSpec, seed: int = 1, gpu: bool = True,
-          peak_a_m: float = 2000.0 * bn.OE, cycles: int = 60, m: int = 8,
-          f_hz: float = 100e3) -> np.ndarray:
+def erase(
+    box: bn.Box,
+    spec: bn.BenchSpec,
+    seed: int = 1,
+    gpu: bool = True,
+    peak_a_m: float = 2000.0 * bn.OE,
+    cycles: int = 60,
+    m: int = 8,
+    f_hz: float = 100e3,
+) -> np.ndarray:
     """The AC-erased state: from random signs, an AC field along the tape decaying linearly
     from peak_a_m to 0 over `cycles` (an erase head's), interactions on. Returns p."""
     k = np.arange(1, cycles * m + 1)

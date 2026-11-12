@@ -36,7 +36,7 @@ import numpy as np
 
 from varimu.config import REPO_ROOT
 from varimu.devices import library
-from varimu.devices.tape import HeadGeometry, Orientation, head_field
+from varimu.devices.tape import HeadGeometry, head_field
 from varimu.tape_particles import bench as bn
 from varimu.tape_particles import runner
 from varimu.tape_particles import static as st
@@ -141,13 +141,19 @@ def fit_variant(variant: str, n: int, seed: int, log, fit_scale: bool = True) ->
         r = np.r_[(rem * top - d[:, 1]) / SIGMA_PHI, (hc - HC_EILERS) / (0.1 * HC_EILERS)]
         c = float(np.sum(r**2)) if np.isfinite(hc) else 1e9
         cache[key] = (c, rem, sat, hc)
-        log(f"  {variant}: hk {hk / OE:7.1f} Oe sigma {sg:.3f} scale {sc:.3f} -> cost {c:9.1f}"
-            f" Hc {hc / OE:6.1f} Oe")
+        log(
+            f"  {variant}: hk {hk / OE:7.1f} Oe sigma {sg:.3f} scale {sc:.3f} -> cost {c:9.1f}"
+            f" Hc {hc / OE:6.1f} Oe"
+        )
         return c
 
     best = None
-    grid = [(h, sg, sc) for h in (500.0, 700.0, 1000.0) for sg in (0.1, 0.25)
-            for sc in ((0.15, 0.4) if scaled else (1.0,))]
+    grid = [
+        (h, sg, sc)
+        for h in (500.0, 700.0, 1000.0)
+        for sg in (0.1, 0.25)
+        for sc in ((0.15, 0.4) if scaled else (1.0,))
+    ]
     for h, sg, sc in grid:
         x = np.array([math.log(h * OE), sg] + ([sc] if scaled else []))
         c = cost(x)
@@ -156,8 +162,12 @@ def fit_variant(variant: str, n: int, seed: int, log, fit_scale: bool = True) ->
     x0 = best[1]
     steps = [0.12, 0.06] + ([0.08] if scaled else [])
     simplex = [x0] + [x0 + np.eye(len(x0))[i] * steps[i] for i in range(len(x0))]
-    r = minimize(cost, x0, method="Nelder-Mead",
-                 options={"xatol": 0.004, "fatol": 0.5, "maxfev": 70, "initial_simplex": simplex})
+    r = minimize(
+        cost,
+        x0,
+        method="Nelder-Mead",
+        options={"xatol": 0.004, "fatol": 0.5, "maxfev": 70, "initial_simplex": simplex},
+    )
     x = r.x
     c, rem, sat, hc = cache[tuple(np.round(x, 5))]
     hk, sg, sc = unpack(x)
@@ -302,7 +312,9 @@ def bench_arm(box, spec, seeds, m=16, gpu=True, log=print):
         k = len(ARM_DC_OE)
         out.append(0.5 * (fin[:k, 0] - fin[k:, 0]))
     a = np.array(out)
-    return a.mean(axis=0), (a.std(axis=0, ddof=1) / math.sqrt(len(seeds)) if len(seeds) > 1 else None)
+    return a.mean(axis=0), (
+        a.std(axis=0, ddof=1) / math.sqrt(len(seeds)) if len(seeds) > 1 else None
+    )
 
 
 def preisach_arm(tape=None, m=16):
@@ -388,9 +400,12 @@ def main() -> int:
             res.setdefault("fit", {})[v] = fit_variant(v, a.n, a.seed, log)
             res["fit"][v]["seconds"] = time.time() - t0
             f = res["fit"][v]
-            log(f"fit {v}: hk {f['hk_median_oe']:.1f} Oe, sigma {f['sigma_ln_hk']:.3f}, scale "
+            log(
+                f"fit {v}: hk {f['hk_median_oe']:.1f} Oe, sigma {f['sigma_ln_hk']:.3f}, scale "
                 f"{f['interaction_scale']:.3f}, rms "
-                f"{f['rms_reading_errors']:.2f} reading errors, Hc {f['hc_oe']:.1f} Oe ({time.time() - t0:.0f} s)")
+                f"{f['rms_reading_errors']:.2f} reading errors, Hc {f['hc_oe']:.1f} Oe "
+                f"({time.time() - t0:.0f} s)"
+            )
             save()
     if "curves" in a.parts:
         biases = np.geomspace(150.0, 2500.0, a.points) * OE
@@ -399,8 +414,14 @@ def main() -> int:
         floor = a.floor_oe * OE
         cur = res.setdefault("curves", {})
         cur["bias_a_m"] = biases.tolist()
-        cur["settings"] = {"m": a.m, "signal_oe": a.signal_oe, "floor_oe": a.floor_oe,
-                           "depths": a.depths, "n": a.n, "seeds": a.seeds}
+        cur["settings"] = {
+            "m": a.m,
+            "signal_oe": a.signal_oe,
+            "floor_oe": a.floor_oe,
+            "depths": a.depths,
+            "n": a.n,
+            "seeds": a.seeds,
+        }
         t0 = time.time()
         # (always recomputed: ~1 min on the CPU)
         pc = preisach_curve(biases, s, ys, a.m, floor)
@@ -410,14 +431,32 @@ def main() -> int:
         save()
         for v in a.variants:
             f = STRONG if v == "dynamic_strong" else res["fit"]["none" if v == "mean" else v]
-            spec = spec_of(v, hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"],
-                           interaction_scale=f.get("interaction_scale", 1.0))
+            spec = spec_of(
+                v,
+                hk_median_a_m=f["hk_median_a_m"],
+                sigma_ln_hk=f["sigma_ln_hk"],
+                interaction_scale=f.get("interaction_scale", 1.0),
+            )
             box = bn.make_box(spec, a.n, seed=a.seed)
             t0 = time.time()
-            mean, se = bench_curve(box, spec, biases, s, ys, a.m, floor,
-                                   seeds=list(range(1, a.seeds + 1)), gpu=not a.cpu, log=log)
-            cur[v] = {"m": mean.tolist(), "se": None if se is None else se.tolist(),
-                      "seconds": time.time() - t0, **width_numbers(biases, mean[:, 0])}
+            mean, se = bench_curve(
+                box,
+                spec,
+                biases,
+                s,
+                ys,
+                a.m,
+                floor,
+                seeds=list(range(1, a.seeds + 1)),
+                gpu=not a.cpu,
+                log=log,
+            )
+            cur[v] = {
+                "m": mean.tolist(),
+                "se": None if se is None else se.tolist(),
+                "seconds": time.time() - t0,
+                **width_numbers(biases, mean[:, 0]),
+            }
             log(f"{v} ({time.time() - t0:.0f} s): {json.dumps(width_numbers(biases, mean[:, 0]))}")
             save()
     if "arm" in a.parts:
@@ -427,12 +466,19 @@ def main() -> int:
         log(f"preisach ARM: {np.round(pa, 4)} knee {arm['preisach']['knee_db']}")
         for v in a.variants:
             f = STRONG if v == "dynamic_strong" else res["fit"]["none" if v == "mean" else v]
-            spec = spec_of(v, hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"],
-                           interaction_scale=f.get("interaction_scale", 1.0))
+            spec = spec_of(
+                v,
+                hk_median_a_m=f["hk_median_a_m"],
+                sigma_ln_hk=f["sigma_ln_hk"],
+                interaction_scale=f.get("interaction_scale", 1.0),
+            )
             box = bn.make_box(spec, a.n, seed=a.seed)
             mean, se = bench_arm(box, spec, list(range(1, a.seeds + 1)), gpu=not a.cpu, log=log)
-            arm[v] = {"m": mean.tolist(), "se": None if se is None else se.tolist(),
-                      "knee_db": knee_db(ARM_DC_OE * OE, mean)}
+            arm[v] = {
+                "m": mean.tolist(),
+                "se": None if se is None else se.tolist(),
+                "knee_db": knee_db(ARM_DC_OE * OE, mean),
+            }
             log(f"{v} ARM: {np.round(mean, 4)} knee {arm[v]['knee_db']}")
             save()
     if "plot" in a.parts:
@@ -451,40 +497,75 @@ def plot(res: dict) -> None:
     for v, f in fits.items():
         hp = np.array(f["h_peak_a_m"]) / OE
         if v == next(iter(fits)):
-            ax[0].plot(hp, np.array(f["remanence_data"]) / 1.575e-6, "ks", label="Sound Talk No. 20 (#111)")
-        ax[0].plot(hp, np.array(f["remanence_model"]) / 1.575e-6, "o-", ms=3,
-                   label=f"{v}: Hk {f['hk_median_oe']:.0f} Oe, s {f['sigma_ln_hk']:.2f}, Hc {f['hc_oe']:.0f}")
-    ax[0].set(xlabel="peak field (Oe)", ylabel='remanent flux (lines per 1/4")',
-              title="static fit (60 Hz meter)")
+            ax[0].plot(
+                hp, np.array(f["remanence_data"]) / 1.575e-6, "ks", label="Sound Talk No. 20 (#111)"
+            )
+        ax[0].plot(
+            hp,
+            np.array(f["remanence_model"]) / 1.575e-6,
+            "o-",
+            ms=3,
+            label=f"{v}: Hk {f['hk_median_oe']:.0f} Oe, s {f['sigma_ln_hk']:.2f}, "
+            f"Hc {f['hc_oe']:.0f}",
+        )
+    ax[0].set(
+        xlabel="peak field (Oe)",
+        ylabel='remanent flux (lines per 1/4")',
+        title="static fit (60 Hz meter)",
+    )
     cur = res.get("curves", {})
     if "bias_a_m" in cur:
         b = np.array(cur["bias_a_m"]) / OE
-        colors = {"preisach": "k", "none": "C0", "dynamic": "C1", "frozen": "C2", "dynamic_strong": "C3"}
+        colors = {
+            "preisach": "k",
+            "none": "C0",
+            "dynamic": "C1",
+            "frozen": "C2",
+            "dynamic_strong": "C3",
+        }
         for k in ("preisach", "none", "dynamic", "frozen", "dynamic_strong"):
             if k not in cur:
                 continue
             m = np.array(cur[k]["m"])[:, 0]
             db = 20 * np.log10(np.abs(m))
             lab = "SCOTCH111@3 Preisach" if k == "preisach" else f"particles, {k}"
-            ax[1].semilogx(b, db - db.max(), "-" if k == "preisach" else "o-", color=colors[k], ms=3, label=lab)
+            ax[1].semilogx(
+                b, db - db.max(), "-" if k == "preisach" else "o-", color=colors[k], ms=3, label=lab
+            )
             se = cur[k].get("se")
             if se is not None:
                 e = 20 * np.log10(1 + 2 * np.abs(np.array(se)[:, 0]) / np.abs(m))
-                ax[1].fill_between(b, db - db.max() - e, db - db.max() + e, color=colors[k], alpha=0.15)
-        ax[1].set(xlabel="peak deep-gap bias field (Oe)", ylabel="dB re peak", ylim=(-30, 2),
-                  title="0-D bias curves: remanence along the tape after the pass")
+                ax[1].fill_between(
+                    b, db - db.max() - e, db - db.max() + e, color=colors[k], alpha=0.15
+                )
+        ax[1].set(
+            xlabel="peak deep-gap bias field (Oe)",
+            ylabel="dB re peak",
+            ylim=(-30, 2),
+            title="0-D bias curves: remanence along the tape after the pass",
+        )
         # No. 21's 1 kHz curve against the data's own bias, its peak placed on the Preisach's.
         if "preisach" in cur:
             pk = 10 ** (cur["preisach"]["peak_bias_db"] / 20) / OE
-            ax[1].semilogx(pk * NO21_MA / 6.0, NO21_1K, "ks--", label="No. 21, 1 kHz (bias scaled: peak on the Preisach's)")
+            ax[1].semilogx(
+                pk * NO21_MA / 6.0,
+                NO21_1K,
+                "ks--",
+                label="No. 21, 1 kHz (bias scaled: peak on the Preisach's)",
+            )
         rows = [k for k in ("preisach", "none", "dynamic", "frozen", "dynamic_strong") if k in cur]
         keys = ["rise_10db", "rise_20db", "fall_3db"]
         x = np.arange(len(keys))
         for i, k in enumerate(rows):
-            ax[2].bar(x + 0.16 * i, [cur[k].get(q) or 0 for q in keys], 0.16, color=colors[k], label=k)
+            ax[2].bar(
+                x + 0.16 * i, [cur[k].get(q) or 0 for q in keys], 0.16, color=colors[k], label=k
+            )
         # No. 21's 1 kHz curve's own widths (width_numbers on the bulletin's points).
         ax[2].plot(x + 0.32, [5.66, 9.39, 2.36], "k*", ms=14, label="No. 21, 1 kHz")
-        ax[2].set_xticks(x + 0.32, ["bias for -10 dB (rise)", "bias for -20 dB (rise)", "bias for -3 dB (over-bias)"])
+        ax[2].set_xticks(
+            x + 0.32,
+            ["bias for -10 dB (rise)", "bias for -20 dB (rise)", "bias for -3 dB (over-bias)"],
+        )
         ax[2].set(ylabel="dB of bias from the peak", title="widths")
     for a_ in ax:
         a_.grid(alpha=0.3)

@@ -46,8 +46,9 @@ def biases(points: int) -> np.ndarray:
 
 def particle_spec() -> bn.BenchSpec:
     f = json.loads((OUT / "bench_none.json").read_text())["fit"]["none"]
-    return bn.BenchSpec(interactions="none", hk_median_a_m=f["hk_median_a_m"],
-                        sigma_ln_hk=f["sigma_ln_hk"])
+    return bn.BenchSpec(
+        interactions="none", hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"]
+    )
 
 
 def numerics(config: str, f_hz: float) -> sp.Numerics:
@@ -92,11 +93,23 @@ def run_particles(config, n, points, log, seed=1, m=16, seeds=None, freqs=(1e3, 
             r = complex(np.mean(rs))
             amps.append(abs(r))
             per_seed.append([[x.real, x.imag] for x in rs])
-            infos.append({"seconds": time.time() - t0, "steps": info["steps"],
-                          "demag_changes": info.get("demag_changes")})
-            log(f"  particles {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: {20 * math.log10(abs(r)):.2f} dB ({time.time() - t0:.0f} s)")
-        out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist(), "runs": infos,
-                         "per_seed": per_seed}
+            infos.append(
+                {
+                    "seconds": time.time() - t0,
+                    "steps": info["steps"],
+                    "demag_changes": info.get("demag_changes"),
+                }
+            )
+            log(
+                f"  particles {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: "
+                f"{20 * math.log10(abs(r)):.2f} dB ({time.time() - t0:.0f} s)"
+            )
+        out[f"{f:g}"] = {
+            "amp": amps,
+            "db": (20 * np.log10(amps)).tolist(),
+            "runs": infos,
+            "per_seed": per_seed,
+        }
     if "1000" not in out or "15000" not in out:
         return out
     out["no21"] = no21.fit(biases(points), out["1000"]["db"], out["15000"]["db"])
@@ -112,8 +125,9 @@ def run_particles(config, n, points, log, seed=1, m=16, seeds=None, freqs=(1e3, 
 
 
 def run_preisach(config, points, log):
-    spec = TapeMachineSpec(speed_m_s=0.381, f_bias_hz=70e3, rec_gap_m=51e-6, flutter=False,
-                           ds_m=0.381 / 70e3 / 7.62)
+    spec = TapeMachineSpec(
+        speed_m_s=0.381, f_bias_hz=70e3, rec_gap_m=51e-6, flutter=False, ds_m=0.381 / 70e3 / 7.62
+    )
     if config == "nodemag":
         spec = dataclasses.replace(spec, demag_iterations=0)
     tape = library.load_tape("SCOTCH111@3")
@@ -123,7 +137,10 @@ def run_preisach(config, points, log):
         for b in biases(points):
             t0 = time.time()
             amps.append(abs(tone_harmonics(spec, tape, f, LOW, b, harmonics=1)[0]))
-            log(f"  preisach {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: {20 * math.log10(amps[-1]):.2f} dB ({time.time() - t0:.0f} s)")
+            log(
+                f"  preisach {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: "
+                f"{20 * math.log10(amps[-1]):.2f} dB ({time.time() - t0:.0f} s)"
+            )
         out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist()}
     out["no21"] = no21.fit(biases(points), out["1000"]["db"], out["15000"]["db"])
     return out
@@ -141,14 +158,19 @@ def plot(res):
 
     fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
     styles = {"particles": "-o", "preisach": "--s"}
-    colors = {"particles/local_4s": "C3", "particles/nodemag_1024x3": "C0", "preisach/nodemag": "C1"}
+    colors = {
+        "particles/local_4s": "C3",
+        "particles/nodemag_1024x3": "C0",
+        "preisach/nodemag": "C1",
+    }
     for key in PLOT_KEYS:
         r = res.get(key)
         if not isinstance(r, dict) or "no21" not in r:
             continue
         model, config = key.split("/")
         f = r["no21"]
-        lab = f"{model}, {config} (rms {f['rms_db_1k']:.2f} / {f.get('rms_db_15k', float('nan')):.2f} dB)"
+        r15 = f.get("rms_db_15k", float("nan"))
+        lab = f"{model}, {config} (rms {f['rms_db_1k']:.2f} / {r15:.2f} dB)"
         c = colors.get(key)
         ax[0].plot(no21.NO21_MA, f["model_1k_db"], styles[model], color=c, ms=3, label=lab)
         ax[1].plot(no21.NO21_MA, f["model_15k_db"], styles[model], color=c, ms=3, label=lab)
@@ -160,7 +182,13 @@ def plot(res):
     if "preisach_full" in res:
         f = res["preisach_full"]
         for i, k in enumerate(("model_1k_db", "model_15k_db", "diff_15k_1k_db")):
-            ax[i].plot(no21.NO21_MA, f[k], ":", color="gray", label="Preisach medium, demag + image (switching study)")
+            ax[i].plot(
+                no21.NO21_MA,
+                f[k],
+                ":",
+                color="gray",
+                label="Preisach medium, demag + image (switching study)",
+            )
     ax[0].plot(no21.NO21_MA, no21.NO21_1K, "ks-", lw=2, label="No. 21")
     ax[1].plot(no21.NO21_MA, no21.NO21_15K, "ks-", lw=2, label="No. 21")
     d = (no21.NO21_15K - no21.NO21_1K) - (no21.NO21_15K[0] - no21.NO21_1K[0])
@@ -199,14 +227,29 @@ def main() -> int:
 
     for c in a.configs:
         if "particles" in a.parts:
-            kw = {k: v for k, v in (("floor_a_m", a.floor_oe and a.floor_oe * bn.OE), ("layers", a.layers)) if v}
-            res[f"particles/{c}{a.tag}"] = run_particles(c, a.n, a.points, log, a.seed, a.m, a.seeds, a.freqs, **kw)
+            kw = {
+                k: v
+                for k, v in (("floor_a_m", a.floor_oe and a.floor_oe * bn.OE), ("layers", a.layers))
+                if v
+            }
+            res[f"particles/{c}{a.tag}"] = run_particles(
+                c, a.n, a.points, log, a.seed, a.m, a.seeds, a.freqs, **kw
+            )
             path.write_text(json.dumps(res, indent=1, default=float))
-            log(json.dumps({k: v for k, v in res[f"particles/{c}{a.tag}"].get("no21", {}).items()}, default=float)[:900])
+            log(
+                json.dumps(
+                    {k: v for k, v in res[f"particles/{c}{a.tag}"].get("no21", {}).items()},
+                    default=float,
+                )[:900]
+            )
         if "preisach" in a.parts:
             res[f"preisach/{c}"] = run_preisach(c, a.points, log)
             path.write_text(json.dumps(res, indent=1, default=float))
-            log(json.dumps({k: v for k, v in res[f"preisach/{c}"]["no21"].items()}, default=float)[:900])
+            log(
+                json.dumps({k: v for k, v in res[f"preisach/{c}"]["no21"].items()}, default=float)[
+                    :900
+                ]
+            )
     if "plot" in a.parts:
         plot(res)
     return 0

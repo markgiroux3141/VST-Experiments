@@ -40,7 +40,7 @@ def order(n) -> float:
     return float(np.linalg.eigvalsh(q).max())
 
 
-def relax(r, n, l, w, side, contact=0.8, max_iter=6000, rng=None, log=None):
+def relax(r, n, l, w, side, contact=0.8, max_iter=6000, rng=None, log=None):  # noqa: E741 (l: the needles' lengths)
     """Move centres r and turn axes n (N x 3, periodic cube `side`) until no two needles
     (lengths l, widths w) are closer than contact x the mean of their widths. Returns (r, n,
     iterations, overlapping pairs left)."""

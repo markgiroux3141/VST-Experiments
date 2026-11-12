@@ -20,16 +20,24 @@ impl Meta {
         self.0.get(k).ok_or_else(|| format!("meta.json: no {k}"))
     }
     pub fn f64(&self, k: &str) -> Result<f64, String> {
-        self.get(k)?.as_f64().ok_or_else(|| format!("meta.json: {k} not a number"))
+        self.get(k)?
+            .as_f64()
+            .ok_or_else(|| format!("meta.json: {k} not a number"))
     }
     pub fn usize(&self, k: &str) -> Result<usize, String> {
         Ok(self.f64(k)? as usize)
     }
     pub fn bool(&self, k: &str) -> Result<bool, String> {
-        self.get(k)?.as_bool().ok_or_else(|| format!("meta.json: {k} not a bool"))
+        self.get(k)?
+            .as_bool()
+            .ok_or_else(|| format!("meta.json: {k} not a bool"))
     }
     pub fn str(&self, k: &str) -> Result<String, String> {
-        Ok(self.get(k)?.as_str().ok_or_else(|| format!("meta.json: {k} not a string"))?.to_string())
+        Ok(self
+            .get(k)?
+            .as_str()
+            .ok_or_else(|| format!("meta.json: {k} not a string"))?
+            .to_string())
     }
     pub fn f64s(&self, k: &str) -> Result<Vec<f64>, String> {
         self.get(k)?
@@ -45,7 +53,12 @@ pub fn read_f64(dir: &Path, name: &str, len: usize) -> Result<Vec<f64>, String> 
     let p = dir.join(format!("{name}.f64"));
     let b = std::fs::read(&p).map_err(|e| format!("{}: {e}", p.display()))?;
     if b.len() != 8 * len {
-        return Err(format!("{}: {} bytes, expected {}", p.display(), b.len(), 8 * len));
+        return Err(format!(
+            "{}: {} bytes, expected {}",
+            p.display(),
+            b.len(),
+            8 * len
+        ));
     }
     Ok(b.chunks_exact(8)
         .map(|c| f64::from_le_bytes(c.try_into().unwrap()))
@@ -65,7 +78,10 @@ pub fn write_f64(dir: &Path, name: &str, data: &[f64]) -> Result<(), String> {
 /// re / im interleaved).
 pub fn read_kernels(dir: &Path, pfx: &str, layers: usize) -> Result<Kernels, String> {
     let p = dir.join(format!("{pfx}_kept.f64"));
-    let nk = std::fs::metadata(&p).map_err(|e| format!("{}: {e}", p.display()))?.len() as usize / 8;
+    let nk = std::fs::metadata(&p)
+        .map_err(|e| format!("{}: {e}", p.display()))?
+        .len() as usize
+        / 8;
     let kept: Vec<usize> = read_f64(dir, &format!("{pfx}_kept"), nk)?
         .iter()
         .map(|&k| k as usize)

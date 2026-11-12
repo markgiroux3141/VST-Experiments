@@ -100,9 +100,21 @@ pub fn extrema(a: f64, b: f64, grid: &Grid, iters: usize) -> (f64, f64, f64, boo
         prev = pos;
     }
     // numpy's argmax of an all-false row is 0.
-    let fr = if first_rise == usize::MAX { 0 } else { first_rise };
-    let lr = if last_rise == usize::MAX { g - 2 } else { last_rise };
-    let ff = if first_fall == usize::MAX { 0 } else { first_fall };
+    let fr = if first_rise == usize::MAX {
+        0
+    } else {
+        first_rise
+    };
+    let lr = if last_rise == usize::MAX {
+        g - 2
+    } else {
+        last_rise
+    };
+    let ff = if first_fall == usize::MAX {
+        0
+    } else {
+        first_fall
+    };
     let two = nrise >= 2 && first_fall != usize::MAX;
     let step = grid.th[1] - grid.th[0];
     let t1 = refine(grid.th[fr], grid.th[fr] + step, a, b, iters);

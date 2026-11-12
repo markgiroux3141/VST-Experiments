@@ -134,8 +134,11 @@ def draw(spec: ParticleSpec, count: int, seed: int = 1, name: str = "particles")
     st = np.sqrt(np.maximum(0.0, 1.0 - t * t))
     n = np.stack([t, st * np.cos(phi), st * np.sin(phi)], axis=1)
     # V_act = c V: the median K V_act / kT is kv_kt_median.
-    c = 2.0 * spec.kv_kt_median * spec.kt_j / (
-        sw.MU0 * spec.ms_p_a_m * spec.hk_median_a_m * spec.v_median_m3
+    c = (
+        2.0
+        * spec.kv_kt_median
+        * spec.kt_j
+        / (sw.MU0 * spec.ms_p_a_m * spec.hk_median_a_m * spec.v_median_m3)
     )
     e0 = sw.MU0 * spec.ms_p_a_m * hk * (c * v) / spec.kt_j
     hloc = spec.sigma_int_a_m * g["hloc"].standard_normal((count, 3))

@@ -67,7 +67,10 @@ impl Scenario {
             x: read_f64(dir, "x", n)?,
             y: read_f64(dir, "y", n)?,
             v: read_f64(dir, "v", n)?,
-            cell: read_f64(dir, "cell", n)?.iter().map(|&c| c as u32).collect(),
+            cell: read_f64(dir, "cell", n)?
+                .iter()
+                .map(|&c| c as u32)
+                .collect(),
             p0: read_f64(dir, "p0", n)?,
             cell_start: read_f64(dir, "cell_start", ncx * layers + 1)?
                 .iter()
@@ -272,7 +275,9 @@ impl Backend for Cpu {
         let n = sc.parts.len();
         self.par(0, n, |i, p, m| {
             let c = sc.cell[i] as usize;
-            let u = sc.stochastic.then(|| sw::hash_uniform(sc.seed, i as u32, j));
+            let u = sc
+                .stochastic
+                .then(|| sw::hash_uniform(sc.seed, i as u32, j));
             let o = sw::step(
                 &sc.parts[i],
                 [fx[c], fy[c], 0.0],

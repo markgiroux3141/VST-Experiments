@@ -159,10 +159,11 @@ pub fn run_cpu(s: &Strip, threads: usize) -> Vec<f64> {
                         let mut p = s.p0[i];
                         let mut m = [0.0; 3];
                         for j in 0..steps {
-                            let u = s.stochastic.then(|| {
-                                sw::hash_uniform(s.seed, (r * n + i) as u32, j as u32)
-                            });
-                            let st = sw::step(&s.parts[i], s.field(r, j), p, s.dt, s.f0, &g, s.iters, u);
+                            let u = s
+                                .stochastic
+                                .then(|| sw::hash_uniform(s.seed, (r * n + i) as u32, j as u32));
+                            let st =
+                                sw::step(&s.parts[i], s.field(r, j), p, s.dt, s.f0, &g, s.iters, u);
                             p = st.p;
                             m = st.m;
                         }
@@ -227,19 +228,27 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
         "axis",
         &v4((0..n).map(|i| {
             let nn = s.parts[i].n;
-            [nn[0] as f32, nn[1] as f32, nn[2] as f32, (s.v[i] * 1e18) as f32]
+            [
+                nn[0] as f32,
+                nn[1] as f32,
+                nn[2] as f32,
+                (s.v[i] * 1e18) as f32,
+            ]
         })),
     );
     let prm = g.storage(
         "prm",
         &v4((0..n).map(|i| [s.parts[i].hk as f32, s.parts[i].e0_kt as f32, 0.0, 0.0])),
     );
-    let st: Vec<f32> = (0..reps).flat_map(|_| s.p0.iter().map(|&p| p as f32)).collect();
+    let st: Vec<f32> = (0..reps)
+        .flat_map(|_| s.p0.iter().map(|&p| p as f32))
+        .collect();
     let state = g.storage("state", bytemuck::cast_slice(&st));
     let mom = g.zeros("mom", (reps * n * 16) as u64);
     let tab = g.storage(
         "tab",
-        &v4((0..s.s_steps * s.layers).map(|k| [s.tab[2 * k] as f32, s.tab[2 * k + 1] as f32, 0.0, 0.0])),
+        &v4((0..s.s_steps * s.layers)
+            .map(|k| [s.tab[2 * k] as f32, s.tab[2 * k + 1] as f32, 0.0, 0.0])),
     );
     let k0 = |r: usize| cp.map_or(0.0, |c| c.k0[r] as f32);
     let repc_bytes = |hs: Option<(&[f64], &[f64])>| {
@@ -251,7 +260,12 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
             };
             // The phases' fractions in f64 (f32 holds them to ~1e-7 of a cycle).
             [
-                [c[0].fract() as f32, c[1].fract() as f32, sx as f32, sy as f32],
+                [
+                    c[0].fract() as f32,
+                    c[1].fract() as f32,
+                    sx as f32,
+                    sy as f32,
+                ],
                 [ex as f32, ey as f32, c[6] as f32, k0(r)],
             ]
         }))
@@ -290,12 +304,10 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
             bind_group_layouts: &[Some(&bgl)],
             immediate_size: 0,
         });
-    let module = g
-        .device
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("head"),
-            source: wgpu::ShaderSource::Wgsl(src.into()),
-        });
+    let module = g.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("head"),
+        source: wgpu::ShaderSource::Wgsl(src.into()),
+    });
     let pipe = |e: &str| {
         g.device
             .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -311,7 +323,10 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
     if local && n > 256 {
         return Err("step_local takes at most 256 particles".into());
     }
-    let (p_step, p_reduce) = (pipe(if local { "step_local" } else { "step_head" }), pipe("reduce"));
+    let (p_step, p_reduce) = (
+        pipe(if local { "step_local" } else { "step_head" }),
+        pipe("reduce"),
+    );
     let mut un = U {
         n: n as u32,
         reps: reps as u32,
@@ -383,13 +398,16 @@ pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String>
             let o: Vec<[f32; 4]> =
                 bytemuck::cast_slice(&g.read(&outm, (reps * 16) as u64)?).to_vec();
             let (hs, he) = c.fields(&o);
-            g.queue.write_buffer(&repc, 0, &repc_bytes(Some((&hs, &he))));
+            g.queue
+                .write_buffer(&repc, 0, &repc_bytes(Some((&hs, &he))));
         }
         j = j1;
     }
     g.run(&p_reduce, &group, ((reps as u32).div_ceil(64), 1, 1))?;
     let o: Vec<[f32; 4]> = bytemuck::cast_slice(&g.read(&outm, (reps * 16) as u64)?).to_vec();
-    Ok(o.iter().flat_map(|x| [x[0] as f64, x[1] as f64, x[2] as f64]).collect())
+    Ok(o.iter()
+        .flat_map(|x| [x[0] as f64, x[1] as f64, x[2] as f64])
+        .collect())
 }
 
 /// The coupled run (`strip.py`'s `tone_coupled`): every cell steps in absolute time, cell c
@@ -433,8 +451,12 @@ impl Coupled {
         let mut hs = vec![0.0; 2 * o.len()];
         let mut he = vec![0.0; 2 * o.len()];
         for sg in 0..signs {
-            let mx: Vec<f64> = (0..per).map(|c| self.ms_coat * o[sg * per + c][0] as f64).collect();
-            let my: Vec<f64> = (0..per).map(|c| self.ms_coat * o[sg * per + c][1] as f64).collect();
+            let mx: Vec<f64> = (0..per)
+                .map(|c| self.ms_coat * o[sg * per + c][0] as f64)
+                .collect();
+            let my: Vec<f64> = (0..per)
+                .map(|c| self.ms_coat * o[sg * per + c][1] as f64)
+                .collect();
             let (ix, iy) = self.cf.apply(&self.img, &mx, &my);
             let (fx, fy) = self.cf.apply(&self.free, &mx, &my);
             for c in 0..per {

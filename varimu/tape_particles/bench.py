@@ -114,7 +114,7 @@ class Box:
     side_m: float
     r: np.ndarray
     n: np.ndarray
-    l: np.ndarray
+    l: np.ndarray  # noqa: E741 (l: the needles' lengths)
     v: np.ndarray
     hk: np.ndarray
     e0_kt: np.ndarray
@@ -140,7 +140,7 @@ def _geometry(spec: BenchSpec, count: int, seed: int, name: str):
     )
     path = PACK_CACHE / f"{key}.npz"
     g = {k: ens.rng_for(seed, f"{name}.{k}") for k in ("l", "axis", "phi", "r")}
-    l = spec.length_median_m * np.exp(spec.sigma_ln_length * g["l"].standard_normal(count))
+    l = spec.length_median_m * np.exp(spec.sigma_ln_length * g["l"].standard_normal(count))  # noqa: E741 (l: the needles' lengths)
     w = l / spec.aspect
     v = 0.25 * math.pi * w * w * l
     side = (v.sum() / spec.packing) ** (1.0 / 3.0)
@@ -178,7 +178,7 @@ def switching(spec: BenchSpec, count: int, v: np.ndarray, seed: int, name: str):
 
 
 def make_box(spec: BenchSpec, count: int, seed: int = 1, name: str = "bench") -> Box:
-    side, r, n, l, v = _geometry(spec, count, seed, name)
+    side, r, n, l, v = _geometry(spec, count, seed, name)  # noqa: E741 (l: the needles' lengths)
     hk, e0 = switching(spec, count, v, seed, name)
     return Box(side, r, n, l, v, hk, e0)
 

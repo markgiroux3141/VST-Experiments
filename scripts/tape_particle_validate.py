@@ -74,15 +74,20 @@ def main() -> int:
     res["astroid_max_rel_err"] = float(np.max(np.abs(num / ana - 1)))
     ax[0].plot(np.degrees(psi), ana, "k-", label="astroid (analytic)")
     ax[0].plot(np.degrees(psi), num, "C1.", ms=3, label="grid + Newton barrier = 0")
-    ax[0].set(xlabel="field angle to the easy axis (deg)", ylabel="h_sw = H_sw / H_K",
-              title=f"switching field (max error {100 * res['astroid_max_rel_err']:.2f}%)")
+    ax[0].set(
+        xlabel="field angle to the easy axis (deg)",
+        ylabel="h_sw = H_sw / H_K",
+        title=f"switching field (max error {100 * res['astroid_max_rel_err']:.2f}%)",
+    )
     for i, deg in enumerate((10, 45, 80)):
         p = math.radians(deg)
         h, m = loop(p, 1e6, 60.0)
         desc = h[: len(h) // 2]
         ax[1].plot(h, m, f"C{i}-", lw=1, label=f"{deg} deg, kMC master eq. (athermal)")
         ax[1].plot(desc, analytic_loop(p, desc, 1), f"C{i}:", lw=2, label=f"{deg} deg, analytic")
-        res[f"loop_{deg}_max_err"] = float(np.max(np.abs(m[: len(desc)] - analytic_loop(p, desc, 1))))
+        res[f"loop_{deg}_max_err"] = float(
+            np.max(np.abs(m[: len(desc)] - analytic_loop(p, desc, 1)))
+        )
     ax[1].set(xlabel="h", ylabel="m along the field", title="single-particle loops")
     # Thermal: the switching field against K V / kT and rate, psi = 0 (Sharrock n = 1/2).
     kvs = np.geomspace(40, 4000, 6)
@@ -100,7 +105,9 @@ def main() -> int:
         shar = 1 - np.sqrt(np.log(1e9 * t / math.log(2)) / kvs)
         ax[2].semilogx(kvs, hsw, c + "o", label=f"kMC, {f:g} Hz loop")
         ax[2].semilogx(kvs, shar, c + "--", label=f"Sharrock n = 1/2, {f:g} Hz (dh 0.02)")
-        res[f"thermal_hsw_{f:g}hz"] = dict(zip([f"{k:.0f}" for k in kvs], hsw.tolist()))
+        res[f"thermal_hsw_{f:g}hz"] = dict(
+            zip([f"{k:.0f}" for k in kvs], hsw.tolist(), strict=True)
+        )
     ax[2].set(xlabel="K V / kT", ylabel="h_sw (field along the axis)", title="thermal activation")
     for a in ax:
         a.grid(alpha=0.3)
