@@ -513,3 +513,12 @@ HLF-3C wait.
   lead's crosstalk). Then mixed with and without tape (HEADLESS_MIX_PLAN.md's status;
   `reports/lightfoot_mix/NOTES.md`). Still open: the seam check, Sel-Sync overdubs, bounces,
   punch-in.
+- 2026-11-11, **an artifact the user heard** in the song's tape tracks: a ~5.4 kHz chirp on each
+  bass note (bass strongest, guitar too, the voices none). Measured on the files: the 5.2-5.8 kHz
+  band follows the bass level (correlation 0.76, its neighbour 0.42) and rises 7-9 dB over its
+  neighbour 50-300 ms after each of 231 onsets, peak ~5.44 kHz (5.37-5.53). Suspected (not
+  confirmed): the ~100 kHz bias residue aliasing at a 96 kHz sampling point (90.6 or 101.4 kHz
+  folds to 5.4 kHz), its residue growing with the record drive. The test, a 3 s bass excerpt at
+  2x vs 3x oversampling (`examples/tape_print.rs --oversample N`: an alias moves with the rate),
+  takes 15-20 min per run and was stopped; parked by the user. The song's print would be redone
+  after a fix.

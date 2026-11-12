@@ -4,7 +4,7 @@
 //!
 //!     cargo run --release -p varimu-app --example tape_print -- --session DIR
 //!         [--stems DIR --tracks "bass,guitar,lead vocal,harmonies" [--from S] [--seconds S]]
-//!         [--rate 48000] [--no-noise] [--measure CHUNK_S] [--out DIR]
+//!         [--rate 48000] [--no-noise] [--measure CHUNK_S] [--oversample N] [--out DIR]
 //!
 //! Without a `session.json` in `--session`, the session is made: a track per stem named in
 //! `--tracks` (`<stems>/<name>.wav`, in tape-track order: the first on tape track 1), each
@@ -17,6 +17,9 @@
 //! the deck): the same input printed in pieces of CHUNK_S and as one run, each timed, both
 //! written to `--out` (`pieces_tape<k>.wav`, `whole_tape<k>.wav`, `meta.json`) for
 //! scripts/deck_pieces_study.py.
+//!
+//! `--oversample N`: production's oversampling replaced by N (a diagnostic: an alias moves
+//! with the engine's rate, the machine's physics doesn't).
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -47,7 +50,7 @@ fn main() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
     let (mut dir, mut stems, mut tracks, mut out) = (None, None, None, None);
     let (mut from_s, mut seconds, mut rate) = (0.0f64, None::<f64>, 48_000u32);
-    let (mut noise, mut measure) = (true, None::<f64>);
+    let (mut noise, mut measure, mut oversample) = (true, None::<f64>, None::<u32>);
     while let Some(a) = args.next() {
         let mut val = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
@@ -60,6 +63,9 @@ fn main() -> Result<(), String> {
             "--no-noise" => noise = false,
             "--measure" => measure = Some(val()?.parse().map_err(|e| format!("--measure: {e}"))?),
             "--out" => out = Some(PathBuf::from(val()?)),
+            "--oversample" => {
+                oversample = Some(val()?.parse().map_err(|e| format!("--oversample: {e}"))?)
+            }
             _ => return Err(format!("unknown argument {a}")),
         }
     }
@@ -140,7 +146,10 @@ fn main() -> Result<(), String> {
     let input = session
         .deck_input()
         .ok_or("no assigned track has a sound")?;
-    let prep = deck::prepare(&config, &deck)?;
+    let mut prep = deck::prepare(&config, &deck)?;
+    if let Some(o) = oversample {
+        prep.settings.oversample = o;
+    }
     let audio_s = input.len() as f64 / session.rate as f64;
     eprintln!(
         "{:.1} s of four tracks; settings tape_gpu {}, {} pieces at once",

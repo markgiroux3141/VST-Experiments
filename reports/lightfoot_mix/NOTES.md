@@ -105,6 +105,11 @@ time, the EQP-1A ~5.5x, the plate ~14x, run in parallel with the print).
 
 ## For the next pass
 
+- **The user's first listen (2026-11-11):** the voice's reverb far too much and too bright;
+  harsh around 6 kHz (the "s" region). And on the tape tracks a ~5.4 kHz chirp on each bass
+  note, an artifact (PERIOD_GEAR_BACKLOG.md's status has the measurements and the suspected
+  bias alias); the tape mix waits on its fix.
+
 - The user listens: `mix_through_4track.wav` vs `mix_no_tape.wav` (matched), and the mix
   itself (balance, the vocal's compression, the plate's amount, the pans).
 - Moves are one line each in `scripts/lightfoot_mix.py`'s `MOVES`; a remix re-uses the cached
