@@ -584,7 +584,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 33] = [
+pub const DEVICES: [Device; 34] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1862,6 +1862,31 @@ pub const DEVICES: [Device; 33] = [
         method: None,
         partition: None,
     },
+    Device {
+        id: "fender_5e3_mods",
+        label: "Fender Deluxe 5E3 with Mods",
+        short: "5E3 mods",
+        about: "The 5E3 with a bench's mods: VARIAC, RECTIFIER, V1 tube, BIAS, RESERVOIR and             jumpered inputs (scripts/make_fender_5e3_mods.py)",
+        group: Group::Amps,
+        circuit: "fender_5e3_mods",
+        panel: None,
+        ahead_s: 0.25,
+        // As the stock 5E3 (its quality, its split).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2647,7 +2672,7 @@ mod tests {
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
                 (Group::Eq, vec!["pultec_eqp1a"]),
-                (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
+                (Group::Amps, vec!["fender_5e3", "telefunken_v76", "fender_5e3_mods"]),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
                 (Group::Modulation, vec!["univibe"]),
                 (

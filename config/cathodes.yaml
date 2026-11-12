@@ -19,6 +19,9 @@ oxide:
 # gets emission_a_per_w x V x A / cathodes.
 tubes:
   "12AX7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AX7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
+  "12AY7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AY7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
+  "5Y3GT": {heater_v: 5.0, heater_a: 2.0, cathodes: 2, source: "provisional: model knowledge (RCA 5Y3GT: filament 5.0 V 2.0 A, directly heated; one filament for both plates, each diode instance half)"}
+  "GZ34": {heater_v: 5.0, heater_a: 1.9, cathodes: 2, source: "provisional: model knowledge (Mullard / Philips GZ34: heater 5.0 V 1.9 A, one indirectly heated cathode for both plates, each diode instance half)"}
   "12AU7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AU7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
   "6386": {heater_v: 6.3, heater_a: 0.35, cathodes: 2, source: "GE ET-T1113 p.1 (data/datasheets/published_points.yaml '6386' heater)"}
   "6V6GT": {heater_v: 6.3, heater_a: 0.45, cathodes: 1, source: "GE ET-T914 (data/datasheets/published_points.yaml '6V6GT' heater)"}
