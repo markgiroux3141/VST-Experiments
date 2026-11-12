@@ -73,7 +73,9 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::linalg::{ColLu, Lu, Matrix, Singular, gemv_add, gemv_sub};
+use std::cell::RefCell;
+
+use crate::linalg::{ColLu, Lu, Matrix, Singular, SparseLu, gemv_add, gemv_sub};
 use crate::mna::DeviceInstance;
 use crate::newton::{Failure, NewtonOptions};
 use crate::timing::{self, Part};
@@ -202,6 +204,85 @@ pub struct DkSystem {
     /// Response to each time-varying source's row, then each current
     /// column, rows x (sources + currents), column-major.
     bw: Vec<f64>,
+    /// The sparse form (`solver: dk_sparse`, METHODOLOGY_REVIEW.md W2): `xa` and `qa` are
+    /// empty, their products sparse solves instead ([`SparseDk`]).
+    sparse: Option<SparseDk>,
+}
+
+/// DK's state and stage-input responses without their dense matrices (`dk_sparse`): with
+/// `A`'s sparse LU, the response to the state is
+///
+/// ```text
+/// A^-1 C E_S x_S / (g h) = E_S x_S - A^-1 G' E_S x_S      (A = G' + C/(g h))
+/// ```
+///
+/// (G' the conductances with the diode ports' shunts): `C x/(g h)` is never formed, as the
+/// dense form's columns don't form it (the module docs: the 670's winding fluxes), and the
+/// response to the stage inputs `w` (on the state rows) is one solve. K and the port
+/// currents' response (`ia`) stay dense: Newton and the states need them every iteration.
+#[derive(Debug, Clone)]
+struct SparseDk {
+    lu: SparseLu,
+    /// G' on the state columns, column by column in the support's order: (row, value).
+    gs_ptr: Vec<u32>,
+    gs_ent: Vec<(u32, f64)>,
+    support: Vec<usize>,
+    /// Each port's (pin, reference) unknowns.
+    pnodes: Vec<(Option<usize>, Option<usize>)>,
+    /// Scratch for a solve: the vector and the LU's work (n each).
+    scratch: RefCell<(Vec<f64>, Vec<f64>)>,
+}
+
+impl SparseDk {
+    /// `A^-1 (E_S w)` into the scratch's vector (all n unknowns), then `f` of it.
+    fn solve_states<R>(&self, w: &[f64], f: impl FnOnce(&[f64]) -> R) -> R {
+        let mut sc = self.scratch.borrow_mut();
+        let (z, work) = &mut *sc;
+        z.fill(0.0);
+        for (&s, &x) in self.support.iter().zip(w) {
+            z[s] = x;
+        }
+        self.lu.solve(z, work);
+        f(z)
+    }
+
+    /// The response to the state, `E_S x_S - A^-1 G' E_S x_S`, then `f` of it.
+    fn state_response<R>(&self, xs: &[f64], f: impl FnOnce(&[f64]) -> R) -> R {
+        let mut sc = self.scratch.borrow_mut();
+        let (z, work) = &mut *sc;
+        z.fill(0.0);
+        for (k, &x) in xs.iter().enumerate() {
+            let (a, b) = (self.gs_ptr[k] as usize, self.gs_ptr[k + 1] as usize);
+            for &(row, g) in &self.gs_ent[a..b] {
+                z[row as usize] -= g * x;
+            }
+        }
+        self.lu.solve(z, work);
+        for (&s, &x) in self.support.iter().zip(xs) {
+            z[s] += x;
+        }
+        f(z)
+    }
+
+    /// `z` read out on the response rows `out` covers: the ports, the states, then the
+    /// unknowns in `order`.
+    fn read(&self, z: &[f64], order: &[usize], out: &mut [f64]) {
+        let at = |p: Option<usize>| p.map_or(0.0, |a| z[a]);
+        let (m, r) = (self.pnodes.len(), self.support.len());
+        for (o, &(p, rf)) in out.iter_mut().zip(&self.pnodes) {
+            *o = at(p) - at(rf);
+        }
+        if out.len() > m {
+            for (o, &s) in out[m..].iter_mut().zip(&self.support) {
+                *o = z[s];
+            }
+        }
+        if out.len() > m + r {
+            for (o, &k) in out[m + r..].iter_mut().zip(order) {
+                *o = z[k];
+            }
+        }
+    }
 }
 
 impl DkSystem {
@@ -222,6 +303,7 @@ impl DkSystem {
         ports: &Ports,
         support: &[usize],
         first: &[usize],
+        sparse: bool,
     ) -> Result<DkSystem, Singular> {
         let n = g.n();
         let (m, r) = (ports.len(), support.len());
@@ -246,11 +328,22 @@ impl DkSystem {
                 }
             }
         }
-        let lu = Lu::factor(&a)?;
+        enum Factored {
+            Dense(Lu),
+            Sparse(SparseLu),
+        }
+        let lu = if sparse {
+            Factored::Sparse(SparseLu::factor(&a)?)
+        } else {
+            Factored::Dense(Lu::factor(&a)?)
+        };
         let mut work = vec![0.0; n];
         // A^-1 z read out on the three row blocks.
         let mut respond = |z: &mut [f64], out: &mut [f64]| {
-            lu.solve(z, &mut work);
+            match &lu {
+                Factored::Dense(lu) => lu.solve(z, &mut work),
+                Factored::Sparse(lu) => lu.solve(z, &mut work),
+            }
             ports.voltages(z, &mut out[..m]);
             for (o, &s) in out[m..m + r].iter_mut().zip(support) {
                 *o = z[s];
@@ -260,7 +353,9 @@ impl DkSystem {
             }
         };
         let mut z = vec![0.0; n];
-        let mut xa = vec![0.0; rows * r];
+        // The sparse form keeps neither (see SparseDk).
+        let dense_len = if sparse { 0 } else { rows * r };
+        let mut xa = vec![0.0; dense_len];
         for (col, &s) in xa.chunks_exact_mut(rows).zip(support) {
             // Column s of C (not symmetric where windings read core nodes).
             for (i, zi) in z.iter_mut().enumerate() {
@@ -268,7 +363,7 @@ impl DkSystem {
             }
             respond(&mut z, col);
         }
-        let mut qa = vec![0.0; rows * r];
+        let mut qa = vec![0.0; dense_len];
         for (col, &s) in qa.chunks_exact_mut(rows).zip(support) {
             z.fill(0.0);
             z[s] = 1.0;
@@ -309,6 +404,41 @@ impl DkSystem {
             }
             respond(&mut z, col);
         }
+        let sparse = match lu {
+            Factored::Dense(_) => None,
+            Factored::Sparse(lu) => {
+                // G' (G with the diode ports' shunts) on the state columns.
+                let mut gp = g.clone();
+                for (&(p, rf), &g0) in ports.nodes.iter().zip(&ports.shunts) {
+                    if g0 != 0.0 {
+                        for (i, si) in [(p, 1.0), (rf, -1.0)] {
+                            for (j, sj) in [(p, 1.0), (rf, -1.0)] {
+                                if let (Some(i), Some(j)) = (i, j) {
+                                    gp.add(i, j, si * sj * g0);
+                                }
+                            }
+                        }
+                    }
+                }
+                let (mut gs_ptr, mut gs_ent) = (vec![0u32], Vec::new());
+                for &s in support {
+                    gs_ent.extend(
+                        (0..n)
+                            .filter(|&i| gp.get(i, s) != 0.0)
+                            .map(|i| (i as u32, gp.get(i, s))),
+                    );
+                    gs_ptr.push(gs_ent.len() as u32);
+                }
+                Some(SparseDk {
+                    lu,
+                    gs_ptr,
+                    gs_ent,
+                    support: support.to_vec(),
+                    pnodes: ports.nodes.clone(),
+                    scratch: RefCell::new((vec![0.0; n], vec![0.0; n])),
+                })
+            }
+        };
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         Ok(DkSystem {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
@@ -324,6 +454,7 @@ impl DkSystem {
             b0,
             be,
             bw,
+            sparse,
         })
     }
 
@@ -331,6 +462,13 @@ impl DkSystem {
     /// response to `b` and to the state `x_S`, on the ports, the states and
     /// the first `unknowns` rows of the third block (`base` that long).
     pub fn step_base(&self, xs: &[f64], base: &mut [f64]) {
+        if let Some(sp) = &self.sparse {
+            sp.state_response(xs, |z| sp.read(z, &self.order, base));
+            for (o, b) in base.iter_mut().zip(&self.b0) {
+                *o += b;
+            }
+            return;
+        }
         base.copy_from_slice(&self.b0[..base.len()]);
         gemv_add(base, &self.xa, 0, self.rows, xs);
     }
@@ -355,7 +493,29 @@ impl DkSystem {
             *o = b + u * e;
         }
         gemv_add(&mut out[..k], &self.bw, 0, self.rows, wv);
-        gemv_add(&mut out[..k], &self.qa, 0, self.rows, w);
+        self.add_stage_inputs(w, 0, &mut out[..k]);
+    }
+
+    /// `out += (A^-1 E_S w)` on the response rows from `row0` (`qa w`).
+    fn add_stage_inputs(&self, w: &[f64], row0: usize, out: &mut [f64]) {
+        match &self.sparse {
+            None => gemv_add(out, &self.qa, row0, self.rows, w),
+            Some(sp) => sp.solve_states(w, |z| {
+                let at = |p: Option<usize>| p.map_or(0.0, |a| z[a]);
+                let (m, r) = (self.m, self.r);
+                let end = row0 + out.len();
+                for row in row0..end.min(m) {
+                    let (p, rf) = sp.pnodes[row];
+                    out[row - row0] += at(p) - at(rf);
+                }
+                for row in row0.max(m)..end.min(m + r) {
+                    out[row - row0] += z[sp.support[row - m]];
+                }
+                for row in row0.max(m + r)..end {
+                    out[row - row0] += z[self.order[row - m - r]];
+                }
+            }),
+        }
     }
 
     /// Subtract the port currents' share from the state: `ys` is
@@ -383,7 +543,7 @@ impl DkSystem {
             *o = b + u * e;
         }
         gemv_add(x, &self.bw, k, self.rows, wv);
-        gemv_add(x, &self.qa, k, self.rows, w);
+        self.add_stage_inputs(w, k, x);
         gemv_sub(x, &self.ia, k, self.rows, i, neg);
     }
 
@@ -399,13 +559,13 @@ impl DkSystem {
         neg: &mut [f64],
     ) {
         w.fill(0.0);
-        gemv_add(w, &self.qa, 0, self.rows, e);
+        self.add_stage_inputs(e, 0, w);
         newton.factored().lu.solve(w);
         gd_mul(&newton.factored().gd, ports, w, neg);
         w.copy_from_slice(&neg[..self.m]);
         let out = &mut out[..self.m + self.r];
         out.fill(0.0);
-        gemv_add(out, &self.qa, 0, self.rows, e);
+        self.add_stage_inputs(e, 0, out);
         gemv_sub(out, &self.ia, 0, self.rows, w, neg);
     }
 
@@ -424,12 +584,12 @@ impl DkSystem {
     ) {
         let k = self.m + self.r;
         w.fill(0.0);
-        gemv_add(w, &self.qa, 0, self.rows, e);
+        self.add_stage_inputs(e, 0, w);
         newton.factored().lu.solve(w);
         gd_mul(&newton.factored().gd, ports, w, neg);
         w.copy_from_slice(&neg[..self.m]);
         x.fill(0.0);
-        gemv_add(x, &self.qa, k, self.rows, e);
+        self.add_stage_inputs(e, k, x);
         gemv_sub(x, &self.ia, k, self.rows, w, neg);
     }
 

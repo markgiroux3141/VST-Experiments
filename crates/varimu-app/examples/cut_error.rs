@@ -85,6 +85,34 @@ fn bands(x: &[f64], fs: f64) -> [Vec<f64>; 3] {
     [lo, mid, hi]
 }
 
+/// The error of `y` against `r` after the best delay of `y` within +-2 samples (quarter-sample
+/// steps, linear interpolation): (delay in samples, error rms).
+fn aligned(y: &[f64], r: &[f64]) -> (f64, f64) {
+    let n = y.len().min(r.len());
+    let mut best = (0.0, f64::INFINITY);
+    for q in -8i32..=8 {
+        let d = q as f64 / 4.0;
+        let (k, f) = (d.floor() as i64, d - d.floor());
+        let at = |i: i64| -> Option<f64> {
+            let j = i + k;
+            (j >= 0 && (j as usize) + 1 < n)
+                .then(|| y[j as usize] * (1.0 - f) + y[j as usize + 1] * f)
+        };
+        let (mut acc, mut cnt) = (0.0, 0usize);
+        for (i, &ri) in r.iter().enumerate().take(n.saturating_sub(4)).skip(4) {
+            if let Some(v) = at(i as i64) {
+                acc += (v - ri) * (v - ri);
+                cnt += 1;
+            }
+        }
+        let e = (acc / cnt.max(1) as f64).sqrt();
+        if e < best.1 {
+            best = (d, e);
+        }
+    }
+    best
+}
+
 fn rms(a: &[f64]) -> f64 {
     (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt()
 }
@@ -336,10 +364,13 @@ fn main() -> Result<(), String> {
             let (eb, rb) = (bands(&e, fs), bands(&r[..n], fs));
             let finite = e.iter().all(|v| v.is_finite());
             let mean = |a: &[f64]| a.iter().sum::<f64>() / a.len().max(1) as f64;
+            let (lag, ea) = aligned(y, r);
             println!(
-                "    {p}: error {:.1} dB re its rms{}, mean {:+.3e} (the one solve's {:.3e}); by band {:.1} / {:.1} / {:.1} dB re the band",
+                "    {p}: error {:.1} dB re its rms{}, {:.1} dB delayed {:+.2} samples, mean {:+.3e} (the one solve's {:.3e}); by band {:.1} / {:.1} / {:.1} dB re the band",
                 db(rms(&e) / rms(&r[..n])),
                 if finite { "" } else { " (NOT FINITE)" },
+                db(ea / rms(&r[..n])),
+                -lag,
                 mean(&e),
                 mean(&r[..n]),
                 db(rms(&eb[0]) / rms(&rb[0])),

@@ -297,6 +297,27 @@ criterion: the 1.61x falls toward the 0.48x it had without the readout. That als
 COMPONENT_EDITOR_PLAN.md C3's open question (Play's speed with the speaker), without the
 one-way partition proposed there.
 
+**Status (2026-11-12): built, the done-when met; a gain only where states dominate.**
+`linalg::SparseLu` (a minimum-degree order, `min_degree_order`, then `Lu`'s own equilibrated,
+pivoted factorization on the permuted matrix once per step size, its nonzero factors kept by
+rows) and `solver: dk_sparse` (`transient::Solver::DkSparse`; dk.rs's `SparseDk`: the state's
+response as E_S x_S - A^-1 G' E_S x_S, G' with the diode shunts, so C x / (g h) is never formed;
+the stage inputs' by one solve; K and `ia` stay dense). `tests/dk_sparse.rs`: within 1.5-7e-9 of
+`dk` (re each probe's peak) on the 670, the 5E3, the AC30 and the Plexi; `load_profile.rs
+--solver`. Measured (the Dry Guitar take, `load_profile.rs` with the timing feature):
+
+| | dk | dk_sparse |
+|---|---|---|
+| 5E3 at draft-2x, its readout in the one solve (112 states, 14 ports) | 1.62x, 57 kcycles a sample | **1.08x, 37 kcycles** |
+| 5E3 at draft-1x, readout apart (as played) | 0.35x, 23 kcycles | 0.41x, 28 kcycles |
+| AC30 amp thread (61 states, 24 ports) | 0.68x, 47 kcycles | 0.69x, 47 kcycles |
+| Plexi amp thread (60 states, 18 ports) | 0.66x, 45 kcycles | 0.67x, 46 kcycles |
+
+At ~60 states the dense products already run at ~2.5 multiply-adds a cycle (`examples/profile.rs`
+on the Plexi: a step's base 1.4 us, a stage 0.7 us), so nothing is left for the sparse solves;
+the 1.61x does fall, to 1.08x, not to 0.48x. No device's solver changed: `dk_sparse` is for
+state-heavy single solves (a speaker's readout kept in, the Suitcase's 470 states).
+
 ### W3. Stage-value oversampling (from E2)
 
 1. Repeat E2 on the real engine at draft-1x: the 5E3's hard-clipped tone, with aliasing at

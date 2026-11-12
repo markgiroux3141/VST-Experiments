@@ -483,9 +483,201 @@ impl Lu {
     }
 }
 
+/// A fill-reducing order for a sparse matrix's factorization: greedy minimum degree on the
+/// pattern of `a + a^T` (the node with the fewest uneliminated neighbours next, ties by
+/// index; its neighbours become a clique). `order[k]` is the original index eliminated k-th.
+/// Quadratic in n, for the step matrices' sizes (hundreds).
+pub fn min_degree_order(a: &Matrix) -> Vec<usize> {
+    let n = a.n;
+    let words = n.div_ceil(64);
+    let mut adj = vec![vec![0u64; words]; n];
+    let set = |row: &mut [u64], j: usize| row[j / 64] |= 1 << (j % 64);
+    for (i, row) in adj.iter_mut().enumerate() {
+        for j in 0..n {
+            if i != j && (a.get(i, j) != 0.0 || a.get(j, i) != 0.0) {
+                set(row, j);
+            }
+        }
+    }
+    let mut alive = vec![0u64; words];
+    for j in 0..n {
+        set(&mut alive, j);
+    }
+    let degree = |row: &[u64], alive: &[u64]| -> u32 {
+        row.iter()
+            .zip(alive)
+            .map(|(r, a)| (r & a).count_ones())
+            .sum()
+    };
+    let mut order = Vec::with_capacity(n);
+    for _ in 0..n {
+        let v = (0..n)
+            .filter(|&j| alive[j / 64] >> (j % 64) & 1 == 1)
+            .min_by_key(|&j| (degree(&adj[j], &alive), j))
+            .expect("a node left");
+        order.push(v);
+        alive[v / 64] &= !(1 << (v % 64));
+        let nv = adj[v].clone();
+        for u in 0..n {
+            if nv[u / 64] >> (u % 64) & 1 == 1 && alive[u / 64] >> (u % 64) & 1 == 1 {
+                for (x, y) in adj[u].iter_mut().zip(&nv) {
+                    *x |= y;
+                }
+                adj[u][u / 64] &= !(1 << (u % 64));
+            }
+        }
+    }
+    order
+}
+
+/// A sparse LU for repeated solves with one matrix (DK's step matrix, `dk.rs`'s
+/// `dk_sparse`): the rows and columns ordered by [`min_degree_order`], factored as [`Lu`]
+/// does (equilibrated, partial pivoting: the same numerics, once per matrix), and the
+/// factors' nonzero entries kept row by row. A solve then costs the factors' entries, not
+/// n^2, and their few kilobytes stay in L1.
+#[derive(Debug, Clone)]
+pub struct SparseLu {
+    n: usize,
+    /// The k-th equation of the factored system: right-hand side entry `in_map[k]` times
+    /// `in_scale[k]`.
+    in_map: Vec<usize>,
+    in_scale: Vec<f64>,
+    /// The i-th unknown of the factored system is unknown `out_map[i]`, times `out_scale[i]`.
+    out_map: Vec<usize>,
+    out_scale: Vec<f64>,
+    /// Unit lower L (strictly below the diagonal) and upper U (right of it) by rows:
+    /// `ptr` n + 1 offsets into (column, value); U's diagonal apart.
+    l_ptr: Vec<u32>,
+    l_ent: Vec<(u32, f64)>,
+    u_ptr: Vec<u32>,
+    u_ent: Vec<(u32, f64)>,
+    u_diag: Vec<f64>,
+}
+
+impl SparseLu {
+    pub fn factor(a: &Matrix) -> Result<SparseLu, Singular> {
+        let n = a.n;
+        let q = min_degree_order(a);
+        let mut ap = Matrix::zeros(n);
+        for (i, &qi) in q.iter().enumerate() {
+            for (j, &qj) in q.iter().enumerate() {
+                ap.set(i, j, a.get(qi, qj));
+            }
+        }
+        let lu = Lu::factor(&ap).map_err(|Singular { column }| Singular { column: q[column] })?;
+        let (mut l_ptr, mut l_ent) = (vec![0u32], Vec::new());
+        let (mut u_ptr, mut u_ent, mut u_diag) = (vec![0u32], Vec::new(), Vec::with_capacity(n));
+        for i in 0..n {
+            let row = lu.lu.row(i);
+            l_ent.extend(
+                row[..i]
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, x)| **x != 0.0)
+                    .map(|(j, &x)| (j as u32, x)),
+            );
+            l_ptr.push(l_ent.len() as u32);
+            u_diag.push(row[i]);
+            u_ent.extend(
+                row[i + 1..]
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, x)| **x != 0.0)
+                    .map(|(j, &x)| ((i + 1 + j) as u32, x)),
+            );
+            u_ptr.push(u_ent.len() as u32);
+        }
+        Ok(SparseLu {
+            n,
+            in_map: lu.perm.iter().map(|&p| q[p]).collect(),
+            in_scale: lu.perm.iter().map(|&p| lu.row_scale[p]).collect(),
+            out_map: q,
+            out_scale: lu.col_scale.clone(),
+            l_ptr,
+            l_ent,
+            u_ptr,
+            u_ent,
+            u_diag,
+        })
+    }
+
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// The factors' stored entries (L, U and the diagonal).
+    pub fn nnz(&self) -> usize {
+        self.l_ent.len() + self.u_ent.len() + self.n
+    }
+
+    /// Solve `A x = b`; `b` is overwritten with `x`. `work` must have length n.
+    pub fn solve(&self, b: &mut [f64], work: &mut [f64]) {
+        let n = self.n;
+        for ((w, &k), &s) in work.iter_mut().zip(&self.in_map).zip(&self.in_scale) {
+            *w = b[k] * s;
+        }
+        for i in 0..n {
+            let (a, z) = (self.l_ptr[i] as usize, self.l_ptr[i + 1] as usize);
+            let mut s = 0.0;
+            for &(j, l) in &self.l_ent[a..z] {
+                s += l * work[j as usize];
+            }
+            work[i] -= s;
+        }
+        for i in (0..n).rev() {
+            let (a, z) = (self.u_ptr[i] as usize, self.u_ptr[i + 1] as usize);
+            let mut s = 0.0;
+            for &(j, u) in &self.u_ent[a..z] {
+                s += u * work[j as usize];
+            }
+            work[i] = (work[i] - s) / self.u_diag[i];
+        }
+        for ((w, &k), &c) in work.iter().zip(&self.out_map).zip(&self.out_scale) {
+            b[k] = w * c;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The sparse LU solves as the dense one does, on a sparse matrix with a zero diagonal
+    /// (a voltage source's branch) that needs pivoting.
+    #[test]
+    fn the_sparse_lu_solves_as_the_dense() {
+        let n = 40;
+        let mut a = Matrix::zeros(n);
+        for i in 0..n - 1 {
+            // A chain of conductances, a capacitor to ground on every third node.
+            let g = 1.0 / (100.0 + 37.0 * i as f64);
+            a.add(i, i, g);
+            a.add(i + 1, i + 1, g);
+            a.add(i, i + 1, -g);
+            a.add(i + 1, i, -g);
+            if i % 3 == 0 {
+                a.add(i, i, 1e-6 * 96_000.0);
+            }
+        }
+        // A source on node 5 through a branch row/column (zero on its diagonal).
+        a.add(n - 1, 5, 1.0);
+        a.add(5, n - 1, 1.0);
+        a.set(n - 1, n - 1, 0.0);
+        let dense = Lu::factor(&a).unwrap();
+        let sparse = SparseLu::factor(&a).unwrap();
+        assert!(sparse.nnz() < n * n / 4, "{} entries", sparse.nnz());
+        let mut work = vec![0.0; n];
+        for k in [0, 5, 17, n - 1] {
+            let mut x = vec![0.0; n];
+            x[k] = 1.0;
+            let mut y = x.clone();
+            dense.solve(&mut x, &mut work);
+            sparse.solve(&mut y, &mut work);
+            for (p, q) in x.iter().zip(&y) {
+                assert!((p - q).abs() <= 1e-12 * p.abs().max(1e-6), "{p} {q}");
+            }
+        }
+    }
 
     /// Deterministic values spread over many magnitudes (a fixed LCG).
     fn values(n: usize, seed: u64) -> Vec<f64> {

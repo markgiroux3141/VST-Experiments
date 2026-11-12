@@ -4,13 +4,15 @@
 //! block's compute
 //! time over its audio time next to the solver's counters (Newton iterations,
 //! factorizations, device evaluations, halved steps) and the input's level and top
-//! octaves. Writes a CSV and prints the heaviest blocks.
+//! octaves. Writes a CSV and prints the heaviest blocks. The circuit streams only the probes
+//! Live reads (`live::live_probes`).
 //!
 //!     cargo run --release -p varimu-app --example load_profile -- --file F
 //!         [--device fairchild_670] [--normalize -11.5] [--block 512] [--out load.csv]
 //!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...] [--quality draft-1x|draft-2x|draft]
 //!         [--no-noise] (the circuit's noise sources off, as a chain's end plays)
 //!         [--coupling hold|extrapolate] (the partitions' coupling overridden)
+//!         [--solver dk|dk_sparse|mna] (the quality's solver overridden)
 //!         [--partition "TITLE,TITLE|TITLE"]   (the device's partition overridden: titles
 //!         separated by ",", groups by "|")
 //!
@@ -64,11 +66,13 @@ fn main() -> Result<(), String> {
     let mut partition: Option<Vec<String>> = None;
     let mut noise = true;
     let mut coupling: Option<String> = None;
+    let mut solver: Option<String> = None;
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
             "--device" => device = next()?,
             "--file" => file = Some(next()?),
+            "--solver" => solver = Some(next()?),
             "--out" => out = Some(next()?),
             "--normalize" => target = next()?.parse().map_err(|e| format!("{e}"))?,
             "--block" => block = next()?.parse().map_err(|e| format!("{e}"))?,
@@ -128,6 +132,9 @@ fn main() -> Result<(), String> {
     if let Some(c) = coupling {
         s.partition_coupling = c;
     }
+    if let Some(v) = solver {
+        s.solver = v;
+    }
     let k = s.oversample as usize;
     let titles: Vec<&str> = s.partition.iter().map(String::as_str).collect();
     let circuit = dev
@@ -142,7 +149,8 @@ fn main() -> Result<(), String> {
             None => v.push((k, x)),
         }
     }
-    let mut ir = circuit.build(&v)?;
+    // Only the probes Live streams (DK computes every probe's row at every step).
+    let mut ir = varimu_app::live::live_probes(&circuit.build(&v)?);
     // Experiments: capacitors to ground added to the built circuit (the circuit
     // file is untouched).
     for (node, c_f) in &added {

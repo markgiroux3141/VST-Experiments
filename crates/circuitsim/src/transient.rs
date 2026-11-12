@@ -159,6 +159,10 @@ pub enum Solver {
     /// once per step size, Newton on the device ports. Diagonally implicit
     /// methods only; fully implicit ones (Radau) fall back to `Mna`.
     Dk,
+    /// DK with the step matrix's sparse LU in place of the dense responses to the state
+    /// and the stage inputs (`dk.rs`'s `SparseDk`, METHODOLOGY_REVIEW.md W2): the same
+    /// algebra, its products sparse solves. Where the states outnumber the ports.
+    DkSparse,
     /// Newton on the full MNA system with the linear unknowns eliminated
     /// per step size (`newton.rs`). The reference the DK solver is checked
     /// against.
@@ -166,11 +170,17 @@ pub enum Solver {
 }
 
 impl Solver {
-    pub const NAMES: [&'static str; 2] = ["dk", "mna"];
+    pub const NAMES: [&'static str; 3] = ["dk", "dk_sparse", "mna"];
+
+    /// Either DK form.
+    pub fn is_dk(self) -> bool {
+        matches!(self, Solver::Dk | Solver::DkSparse)
+    }
 
     pub fn parse(name: &str) -> Result<Solver, Error> {
         match name {
             "dk" => Ok(Solver::Dk),
+            "dk_sparse" => Ok(Solver::DkSparse),
             "mna" => Ok(Solver::Mna),
             _ => Err(Error::new(format!(
                 "unknown solver {name:?} ({})",
@@ -954,7 +964,7 @@ impl Transient {
             || mna.noise.is_some()
             || mna.heat.is_some()
             || !mna.events.is_empty())
-            && (opts.solver != Solver::Dk || !opts.method.tableau().diagonal)
+            && (!opts.solver.is_dk() || !opts.method.tableau().diagonal)
         {
             return Err(Error::new(
                 "externals (control inputs, a partition's couplings), noise, heated \
@@ -995,7 +1005,7 @@ impl Transient {
         });
         let ports = vec![0.0; newton.v_lin.len()];
         let s = tab.s;
-        let dk = (opts.solver == Solver::Dk && tab.diagonal).then(|| Dk::new(&mna, &opts, s));
+        let dk = (opts.solver.is_dk() && tab.diagonal).then(|| Dk::new(&mna, &opts, s));
         let media = mna
             .media
             .iter()
@@ -1780,6 +1790,7 @@ impl Transient {
                 &dk.ports,
                 &dk.support,
                 &dk.probes,
+                self.opts.solver == Solver::DkSparse,
             )
             .map_err(|Singular { column }| StepFail::Matrix(column))?;
             dk.levels[level] = Some(sys);

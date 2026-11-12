@@ -466,8 +466,9 @@ const LIVE_PROBES: [&str; 3] = ["out", "out_r", "cv"];
 
 /// `ir` with only the probes a live stream reads ([`LIVE_PROBES`]): every probe is computed at
 /// every step (a multi-rate part's through its decimator), and the circuit's others are for
-/// inspection. The solution doesn't depend on them.
-fn live_probes(ir: &CircuitIr) -> CircuitIr {
+/// inspection. The solution doesn't depend on them. (Public for the load measurements,
+/// `examples/load_profile.rs`, which stream what Live streams.)
+pub fn live_probes(ir: &CircuitIr) -> CircuitIr {
     let mut ir = ir.clone();
     ir.probes.retain(|p| {
         let circuitsim::ir::Probe::Voltage { node } = p;
