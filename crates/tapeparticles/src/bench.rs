@@ -188,7 +188,7 @@ pub fn interaction_field(b: &Bench, m: &[[f64; 3]], threads: usize) -> Vec<[f64;
             });
         }
     });
-    let mf = mean_field(b, &mu);
+    let mf = mean_field(b, &mu, &perp);
     for o in out.iter_mut() {
         for c in 0..3 {
             o[c] += mf[c];
@@ -197,18 +197,21 @@ pub fn interaction_field(b: &Bench, m: &[[f64; 3]], threads: usize) -> Vec<[f64;
     out
 }
 
-pub fn mean_field(b: &Bench, mu: &[[f64; 3]]) -> [f64; 3] {
+/// bench.py's `mean_field`: the transverse dipoles' M_perp / 3 minus the sample's N . M.
+pub fn mean_field(b: &Bench, mu: &[[f64; 3]], perp: &[[f64; 3]]) -> [f64; 3] {
     let vol = b.side * b.side * b.side;
     let mut mbar = [0.0; 3];
-    for x in mu {
+    let mut pbar = [0.0; 3];
+    for (x, p) in mu.iter().zip(perp) {
         for c in 0..3 {
             mbar[c] += x[c] / vol;
+            pbar[c] += p[c] / vol;
         }
     }
     [
-        mbar[0] / 3.0 - b.sample_demag[0] * mbar[0],
-        mbar[1] / 3.0 - b.sample_demag[1] * mbar[1],
-        mbar[2] / 3.0 - b.sample_demag[2] * mbar[2],
+        pbar[0] / 3.0 - b.sample_demag[0] * mbar[0],
+        pbar[1] / 3.0 - b.sample_demag[1] * mbar[1],
+        pbar[2] / 3.0 - b.sample_demag[2] * mbar[2],
     ]
 }
 

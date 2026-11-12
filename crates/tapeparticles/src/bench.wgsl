@@ -65,6 +65,7 @@ fn field(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocatio
     }
     var acc = vec3<f32>(0.0);
     var musum = vec3<f32>(0.0);
+    var psum = vec3<f32>(0.0);
     let tiles = (u.n + WG - 1u) / WG;
     for (var t = 0u; t < tiles; t = t + 1u) {
         let j = t * WG + lid.x;
@@ -90,6 +91,7 @@ fn field(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocatio
         let cnt = min(WG, u.n - t * WG);
         for (var k = 0u; k < cnt; k = k + 1u) {
             musum = musum + t_mu[k].xyz;
+            psum = psum + t_p[k].xyz;
             if (t * WG + k == i) {
                 continue;
             }
@@ -115,7 +117,7 @@ fn field(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(local_invocatio
         workgroupBarrier();
     }
     let mbar = musum / u.vol;
-    let mf = mbar / 3.0 - u.sd.xyz * mbar;
+    let mf = psum / u.vol / 3.0 - u.sd.xyz * mbar;
     let c = counter[0];
     if (i == 0u) {
         trace[c * u.reps + r] = vec4<f32>(musum / u.vsum, 0.0);

@@ -3,6 +3,7 @@
 //!
 //!     tpsim bench DIR [--gpu] [--threads N] [--trace]
 //!     tpsim medium DIR [--threads N]
+//!     tpsim strip DIR [--gpu] [--threads N]
 //!     tpsim uniform DIR [--threads N] [--trace]
 
 use std::path::PathBuf;
@@ -10,7 +11,7 @@ use std::time::Instant;
 
 use tapeparticles::io::{Meta, read_f64, write_f64};
 use tapeparticles::sw::Particle;
-use tapeparticles::{bench, gpu_bench, medium};
+use tapeparticles::{bench, gpu_bench, medium, strip};
 
 fn main() {
     if let Err(e) = run() {
@@ -68,6 +69,17 @@ fn run() -> Result<(), String> {
             let h = bench::interaction_field(&b, &m, threads);
             let flat: Vec<f64> = h.iter().flat_map(|x| x.iter().copied()).collect();
             write_f64(&dir, "out_hint", &flat)?;
+        }
+        "strip" => {
+            let st = strip::Strip::read(&dir)?;
+            let m = if flag("--gpu") {
+                info.insert("backend".into(), "gpu".into());
+                strip::run_gpu(&st)?
+            } else {
+                info.insert("backend".into(), "cpu".into());
+                strip::run_cpu(&st, threads)
+            };
+            write_f64(&dir, "out_m", &m)?;
         }
         "medium" => {
             let sc = medium::Scenario::read(&dir)?;

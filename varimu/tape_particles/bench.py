@@ -20,7 +20,8 @@ periodic box, each softened over `soften_m` (r^2 -> r^2 + a^2: the charge's spre
 the end face), plus the field of the magnetization outside the cube: for a sample that is
 long along the tape and thin in depth (the B-H meter's strip, and a volume inside the
 coating whose long-wavelength demagnetization the medium computes separately) that is the
-cavity's M/3 minus the sample's demagnetization (0, 1, 0) . M (`mean_field`).
+sample's demagnetization (0, 1, 0) . M, plus the transverse dipoles' Lorentz term
+(`mean_field` says why the charges need none).
 
 The interaction is dynamic: every step's field follows every particle's state. Variants
 for the bench's question: `interactions="none"` (only the applied field) and "frozen" (the
@@ -35,6 +36,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 import numpy as np
 
@@ -125,13 +127,26 @@ class Box:
         return ens.Particles(self.n, self.hk, self.v, self.e0_kt, z)
 
 
-def make_box(spec: BenchSpec, count: int, seed: int = 1, name: str = "bench") -> Box:
-    g = {k: ens.rng_for(seed, f"{name}.{k}") for k in ("l", "hk", "axis", "phi", "r")}
+#: Packed geometries, on disk: relaxing thousands of needles takes minutes.
+PACK_CACHE = Path(__file__).resolve().parents[2] / "cache" / "tape_particles" / "packs"
+
+
+def _geometry(spec: BenchSpec, count: int, seed: int, name: str):
+    """(side, centres, axes, lengths, volumes): the needles placed (and relaxed apart)."""
+    key = (
+        f"{name}_{count}_{seed}_{spec.packing:.6g}_{spec.length_median_m:.6g}_"
+        f"{spec.sigma_ln_length:.6g}_{spec.aspect:.6g}_{spec.kappa:.6g}_{int(spec.packed)}_"
+        f"{spec.contact:.6g}"
+    )
+    path = PACK_CACHE / f"{key}.npz"
+    g = {k: ens.rng_for(seed, f"{name}.{k}") for k in ("l", "axis", "phi", "r")}
     l = spec.length_median_m * np.exp(spec.sigma_ln_length * g["l"].standard_normal(count))
     w = l / spec.aspect
     v = 0.25 * math.pi * w * w * l
     side = (v.sum() / spec.packing) ** (1.0 / 3.0)
-    hk = spec.hk_median_a_m * np.exp(spec.sigma_ln_hk * g["hk"].standard_normal(count))
+    if path.exists():
+        z = np.load(path)
+        return side, z["r"], z["n"], l, v
     t = ens.watson_cos(spec.kappa, g["axis"].random(count))
     phi = 2.0 * math.pi * g["phi"].random(count)
     st = np.sqrt(np.maximum(0.0, 1.0 - t * t))
@@ -145,11 +160,33 @@ def make_box(spec: BenchSpec, count: int, seed: int = 1, name: str = "bench") ->
         )
         if left:
             raise RuntimeError(f"{left} needle overlaps left after relaxing")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(path, r=r, n=n)
+    return side, r, n, l, v
+
+
+def switching(spec: BenchSpec, count: int, v: np.ndarray, seed: int, name: str):
+    """(H_K, e0_kt) per needle for the spec's switching parameters (the H_K draws' normals
+    are fixed by the seed, so a fit moves the same particles)."""
+    z = ens.rng_for(seed, f"{name}.hk").standard_normal(count)
+    hk = spec.hk_median_a_m * np.exp(spec.sigma_ln_hk * z)
     # V_act = c V, the median K V_act / kT = kv_kt_median.
     v_med = 0.25 * math.pi * (spec.length_median_m / spec.aspect) ** 2 * spec.length_median_m
     c = 2.0 * spec.kv_kt_median * spec.kt_j / (sw.MU0 * spec.ms_p_a_m * spec.hk_median_a_m * v_med)
     e0 = sw.MU0 * spec.ms_p_a_m * hk * c * v / spec.kt_j
+    return hk, e0
+
+
+def make_box(spec: BenchSpec, count: int, seed: int = 1, name: str = "bench") -> Box:
+    side, r, n, l, v = _geometry(spec, count, seed, name)
+    hk, e0 = switching(spec, count, v, seed, name)
     return Box(side, r, n, l, v, hk, e0)
+
+
+def retune(box: Box, spec: BenchSpec, seed: int = 1, name: str = "bench") -> Box:
+    """The same needles with the spec's switching parameters."""
+    hk, e0 = switching(spec, len(box), box.v, seed, name)
+    return replace(box, hk=hk, e0_kt=e0)
 
 
 def _wrap(d: np.ndarray, side: float) -> np.ndarray:
@@ -195,8 +232,18 @@ def interaction_field(box: Box, spec: BenchSpec, m: np.ndarray) -> np.ndarray:
 
 
 def mean_field(box: Box, spec: BenchSpec, m: np.ndarray) -> np.ndarray:
-    mbar = spec.ms_p_a_m * (box.v[:, None] * m).sum(axis=0) / box.side_m**3
-    return (mbar / 3.0 - np.asarray(spec.sample_demag) * mbar)[None, :]
+    """The field of the magnetization outside the box, on every particle. The end charges
+    are wrapped one by one (minimum image), so both signs fill the cube uniformly: their sum
+    is the periodic (Ewald, conducting-boundary) one, whose uniform part is zero; the
+    transverse point dipoles are wrapped whole by their centres, so the cube of them misses
+    the outside's Lorentz field, M_perp / 3. The sample's own demagnetization, -N . M,
+    acts on both."""
+    mu = spec.ms_p_a_m * box.v[:, None] * m
+    ax = np.einsum("ij,ij->i", mu, box.n)
+    perp = mu - ax[:, None] * box.n
+    vol = box.side_m**3
+    mbar = mu.sum(axis=0) / vol
+    return (perp.sum(axis=0) / vol / 3.0 - np.asarray(spec.sample_demag) * mbar)[None, :]
 
 
 def erased_state(count: int, seed: int, name: str = "bench.erase") -> np.ndarray:

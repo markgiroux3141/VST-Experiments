@@ -19,7 +19,10 @@ import numpy as np
 from varimu.config import REPO_ROOT
 from varimu.tape_particles import bench as bn
 
-EXE = REPO_ROOT / "target" / "release" / ("tpsim.exe" if os.name == "nt" else "tpsim")
+#: $TPSIM_TARGET_DIR: another cargo target directory (a build while target/release/tpsim is
+#: in use: Windows locks a running executable).
+TARGET = Path(os.environ.get("TPSIM_TARGET_DIR", REPO_ROOT / "target"))
+EXE = TARGET / "release" / ("tpsim.exe" if os.name == "nt" else "tpsim")
 
 
 def tpsim() -> Path:
@@ -55,6 +58,7 @@ def bench_run(
     iters: int = 10,
     keep: Path | None = None,
     field_only: bool = False,
+    p0: np.ndarray | None = None,
 ):
     """h_app: steps x reps x 3 (A/m). Returns (final M per replica reps x 3, trace steps x
     reps x 3 or None, info), M = sum V m / sum V; info["hint"]: the GPU's last interaction
@@ -92,7 +96,7 @@ def bench_run(
             "l": box.l,
             "v": box.v,
             "h_app": h_app,
-            "p0": bn.erased_state(len(box), seed),
+            "p0": bn.erased_state(len(box), seed) if p0 is None else p0,
         },
     )
     cmd = [str(tpsim()), "field" if field_only else "bench", str(d), "--threads", str(threads)]
@@ -106,6 +110,8 @@ def bench_run(
     info = json.loads((d / "out.json").read_text())
     if (d / "out_hint.f64").exists():
         info["hint"] = read(d, "out_hint").reshape(-1, len(box), 3)
+    if (d / "out_p.f64").exists():
+        info["p"] = read(d, "out_p").reshape(-1, len(box))
     if field_only:
         fin, tr = None, None
     else:
@@ -114,3 +120,15 @@ def bench_run(
     if keep is None:
         shutil.rmtree(d, ignore_errors=True)
     return fin, tr, info
+
+
+def erase(box: bn.Box, spec: bn.BenchSpec, seed: int = 1, gpu: bool = True,
+          peak_a_m: float = 2000.0 * bn.OE, cycles: int = 60, m: int = 8,
+          f_hz: float = 100e3) -> np.ndarray:
+    """The AC-erased state: from random signs, an AC field along the tape decaying linearly
+    from peak_a_m to 0 over `cycles` (an erase head's), interactions on. Returns p."""
+    k = np.arange(1, cycles * m + 1)
+    h = np.zeros((len(k), 1, 3))
+    h[:, 0, 0] = peak_a_m * (1 - k / len(k)) * np.sin(2 * np.pi * k / m)
+    _, _, info = bench_run(box, spec, h, 1 / (f_hz * m), seed=seed, gpu=gpu)
+    return info["p"][0]
