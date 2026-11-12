@@ -42,11 +42,12 @@ transport), then the moving head only if the bench leaves the question open.
     uv run python scripts/tape_particle_bench.py --parts fit --variants dynamic frozen none
     uv run python scripts/tape_particle_bench.py --parts curves arm plot \
         --variants none dynamic frozen dynamic_strong                     # rungs 2-4a
-    uv run python scripts/tape_particle_no21.py --configs nodemag --n 1024 --seeds 1 2 3 \
-        --tag _1024x3                                                     # rung 4b
+    uv run --extra fast python scripts/tape_particle_no21.py --configs nodemag --n 1024 \
+        --seeds 1 2 3 --tag _1024x3                                                     # rung 4b
     uv run python scripts/tape_particle_no21.py --configs local --n 256 --seeds 1 2 3 4 \
         --tag _4s --parts particles plot
-    uv run pytest tests/test_tape_particles.py                            # ~1 min
+    uv run python scripts/tape_particle_print.py                          # rung 5
+    uv run pytest tests/test_tape_particles.py                            # ~2 min
 
 -> `reports/tape/particles/`. Packed boxes are cached in `cache/tape_particles/packs/`.
 
