@@ -167,8 +167,8 @@ devices:
   V3B: {device: 12AX7@1}
   V4: {device: power_tube}
   V5: {device: power_tube}
-  DR: {device: rectifier}
-  DB: {device: bias_rectifier}
+  DR: {device: rectifier, tol_scale: 0.01, source: "Its ports converge to 0.01 of the Newton tolerance (`tol_scale`, numerics only: at the live draft's 10 mV the rectifiers' charging current carried a one-sided error that left the EL34 bias 1.2 V (one solve) to 4.7 V (the supply on its own thread) off the converged rail; METHODOLOGY_REVIEW.md W1 'Status')"}
+  DB: {device: bias_rectifier, tol_scale: 0.01, source: "Its ports converge to 0.01 of the Newton tolerance (`tol_scale`, numerics only: at the live draft's 10 mV the rectifiers' charging current carried a one-sided error that left the EL34 bias 1.2 V (one solve) to 4.7 V (the supply on its own thread) off the converged rail; METHODOLOGY_REVIEW.md W1 'Status')"}
 
 sections:
   - title: power supply
