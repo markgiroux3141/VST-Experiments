@@ -73,7 +73,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use std::cell::RefCell;
+use std::sync::Mutex;
 
 use crate::linalg::{ColLu, Lu, Matrix, Singular, SparseLu, gemv_add, gemv_sub};
 use crate::mna::DeviceInstance;
@@ -229,14 +229,32 @@ struct SparseDk {
     support: Vec<usize>,
     /// Each port's (pin, reference) unknowns.
     pnodes: Vec<(Option<usize>, Option<usize>)>,
-    /// Scratch for a solve: the vector and the LU's work (n each).
-    scratch: RefCell<(Vec<f64>, Vec<f64>)>,
+    /// Scratch for a solve: the vector and the LU's work (n each). A Mutex, not a RefCell:
+    /// the Python bindings' stream must be Sync (never contended: one thread steps a system).
+    scratch: Scratch,
+}
+
+/// [`SparseDk`]'s scratch: a Mutex (Sync for the Python bindings), cloned as a fresh one.
+#[derive(Debug)]
+struct Scratch(Mutex<(Vec<f64>, Vec<f64>)>);
+
+impl Clone for Scratch {
+    fn clone(&self) -> Self {
+        let n = self.lock().0.len();
+        Scratch(Mutex::new((vec![0.0; n], vec![0.0; n])))
+    }
+}
+
+impl Scratch {
+    fn lock(&self) -> std::sync::MutexGuard<'_, (Vec<f64>, Vec<f64>)> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 impl SparseDk {
     /// `A^-1 (E_S w)` into the scratch's vector (all n unknowns), then `f` of it.
     fn solve_states<R>(&self, w: &[f64], f: impl FnOnce(&[f64]) -> R) -> R {
-        let mut sc = self.scratch.borrow_mut();
+        let mut sc = self.scratch.lock();
         let (z, work) = &mut *sc;
         z.fill(0.0);
         for (&s, &x) in self.support.iter().zip(w) {
@@ -248,7 +266,7 @@ impl SparseDk {
 
     /// The response to the state, `E_S x_S - A^-1 G' E_S x_S`, then `f` of it.
     fn state_response<R>(&self, xs: &[f64], f: impl FnOnce(&[f64]) -> R) -> R {
-        let mut sc = self.scratch.borrow_mut();
+        let mut sc = self.scratch.lock();
         let (z, work) = &mut *sc;
         z.fill(0.0);
         for (k, &x) in xs.iter().enumerate() {
@@ -435,7 +453,7 @@ impl DkSystem {
                     gs_ent,
                     support: support.to_vec(),
                     pnodes: ports.nodes.clone(),
-                    scratch: RefCell::new((vec![0.0; n], vec![0.0; n])),
+                    scratch: Scratch(Mutex::new((vec![0.0; n], vec![0.0; n]))),
                 })
             }
         };
