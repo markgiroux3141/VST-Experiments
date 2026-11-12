@@ -566,7 +566,8 @@ HLF-3C wait.
     tube tables, TAPE_SPEED_PLAN.md) couldn't see it.
   - **And it is P4's method.** The same 1.2 s at 20 substeps with the island back on esdirk4
     without tube tables (P4's previous setting): the band rises 4.8 dB against the dry's 3.2,
-    nothing at 5.4 or 10.8 kHz (40 substeps on TR-BDF2: 3.9; 20 on TR-BDF2 with tables: 15.1).
+    nothing at 5.4 or 10.8 kHz (40 substeps on TR-BDF2: 3.9; 20 on TR-BDF2 with tables: 15.6 on
+    the 3 s run).
     Both runs were slowed alike by the shared machine (2083 / 2091 s), so their costs aren't
     measured here; TAPE_SPEED_PLAN.md has P4's gain on the 351 (the record side ~2x).
     **Options (the user's):** (a) the deck's island on esdirk4 without tables (P4 undone for the
