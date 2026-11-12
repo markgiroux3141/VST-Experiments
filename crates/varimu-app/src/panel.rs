@@ -584,7 +584,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 36] = [
+pub const DEVICES: [Device; 37] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1950,6 +1950,32 @@ pub const DEVICES: [Device; 36] = [
         method: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
+    Device {
+        id: "vox_ac30",
+        label: "Vox AC30/6 Top Boost",
+        short: "AC30",
+        about: "A 1963-64 Vox AC30/6 with Top Boost: four EL84s, no feedback, into two Celestion             Alnico Blues (config/circuits/vox_ac30.yaml)",
+        group: Group::Amps,
+        circuit: "vox_ac30",
+        panel: None,
+        ahead_s: 0.25,
+        // As the 5E3: draft-1x for live play, its speaker's back wave and its supply on
+        // threads of their own (an open back: the readout's delay line).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2735,7 +2761,7 @@ mod tests {
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
                 (Group::Eq, vec!["pultec_eqp1a"]),
-                (Group::Amps, vec!["fender_5e3", "telefunken_v76", "fender_5e3_mods", "marshall_1987", "fender_5f1"]),
+                (Group::Amps, vec!["fender_5e3", "telefunken_v76", "fender_5e3_mods", "marshall_1987", "fender_5f1", "vox_ac30"]),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
                 (Group::Modulation, vec!["univibe"]),
                 (
