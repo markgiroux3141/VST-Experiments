@@ -235,6 +235,10 @@ def tone(spec, parts, mach, num, f_sig, a_sig, bias, gpu=True, log=None):
             (fx, fy), (ix, iy) = demag_fields_vector(
                 mx, my, slab, 1.0, mach.lam_min_m, image_spacings_m=(None, mach.spacing_m)
             )
+            if num.local_demag:
+                # The cell's own -Ms M_y is solved inside each step (`step_local`): leave
+                # the rest (its long-wavelength limit is that self term).
+                fy, iy = fy + my, iy + my
             he[si, :, :, 0], he[si, :, :, 1] = fx.T, fy.T
             if num.image:
                 hs[si, :, :, 0], hs[si, :, :, 1] = ix.T, iy.T

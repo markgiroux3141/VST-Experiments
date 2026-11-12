@@ -459,31 +459,32 @@ def plot(res: dict) -> None:
     cur = res.get("curves", {})
     if "bias_a_m" in cur:
         b = np.array(cur["bias_a_m"]) / OE
-        for k in ("preisach", "dynamic", "frozen", "none"):
+        colors = {"preisach": "k", "none": "C0", "dynamic": "C1", "frozen": "C2", "dynamic_strong": "C3"}
+        for k in ("preisach", "none", "dynamic", "frozen", "dynamic_strong"):
             if k not in cur:
                 continue
             m = np.array(cur[k]["m"])[:, 0]
             db = 20 * np.log10(np.abs(m))
             lab = "SCOTCH111@3 Preisach" if k == "preisach" else f"particles, {k}"
-            ax[1].semilogx(b, db - db.max(), "o-" if k != "preisach" else "k-", ms=3, label=lab)
+            ax[1].semilogx(b, db - db.max(), "-" if k == "preisach" else "o-", color=colors[k], ms=3, label=lab)
             se = cur[k].get("se")
             if se is not None:
                 e = 20 * np.log10(1 + 2 * np.abs(np.array(se)[:, 0]) / np.abs(m))
-                ax[1].fill_between(b, db - db.max() - e, db - db.max() + e, alpha=0.2)
+                ax[1].fill_between(b, db - db.max() - e, db - db.max() + e, color=colors[k], alpha=0.15)
         ax[1].set(xlabel="peak deep-gap bias field (Oe)", ylabel="dB re peak", ylim=(-30, 2),
                   title="0-D bias curves: remanence along the tape after the pass")
         # No. 21's 1 kHz curve against the data's own bias, its peak placed on the Preisach's.
         if "preisach" in cur:
             pk = 10 ** (cur["preisach"]["peak_bias_db"] / 20) / OE
             ax[1].semilogx(pk * NO21_MA / 6.0, NO21_1K, "ks--", label="No. 21, 1 kHz (bias scaled: peak on the Preisach's)")
-        rows = [k for k in ("preisach", "dynamic", "frozen", "none") if k in cur]
+        rows = [k for k in ("preisach", "none", "dynamic", "frozen", "dynamic_strong") if k in cur]
         keys = ["rise_10db", "rise_20db", "fall_3db"]
         x = np.arange(len(keys))
         for i, k in enumerate(rows):
-            ax[2].bar(x + 0.2 * i, [cur[k].get(q) or 0 for q in keys], 0.2, label=k)
-        # No. 21: 1 kHz rise 20.4 dB over 2 -> 6 mA (9.5 dB of bias), -11.0 at 3 mA (6.0 dB below).
-        ax[2].plot([0.3], [20 * math.log10(6 / 3)], "k*", ms=12, label="No. 21: -11 dB at 6.0 dB below the peak")
-        ax[2].set_xticks(x + 0.3, ["bias for -10 dB (rise)", "bias for -20 dB (rise)", "bias for -3 dB (over-bias)"])
+            ax[2].bar(x + 0.16 * i, [cur[k].get(q) or 0 for q in keys], 0.16, color=colors[k], label=k)
+        # No. 21's 1 kHz curve's own widths (width_numbers on the bulletin's points).
+        ax[2].plot(x + 0.32, [5.66, 9.39, 2.36], "k*", ms=14, label="No. 21, 1 kHz")
+        ax[2].set_xticks(x + 0.32, ["bias for -10 dB (rise)", "bias for -20 dB (rise)", "bias for -3 dB (over-bias)"])
         ax[2].set(ylabel="dB of bias from the peak", title="widths")
     for a_ in ax:
         a_.grid(alpha=0.3)

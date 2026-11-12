@@ -146,7 +146,81 @@ What the static fit says on its own:
 
 ## The validation ladder
 
-TBD
+Plots in `reports/tape/particles/` (`scripts/tape_particle_validate.py`,
+`tape_particle_bench.py`, `tape_particle_no21.py`); tests in `tests/test_tape_particles.py`
+(12, ~30 s).
+
+**1. One SW particle** (`sw_validation.png`): the switching field against the astroid
+within 0.36% (the grid's early switch, at angles near 90 degrees); the barrier along the
+axis 1/2 (1 - h)^2 within 1e-7; athermal loops at 10 / 45 degrees on the analytic minimum
+within 3e-5 / 3e-4 of saturation (at 80 degrees 0.04, at the jump only); thermal
+activation (master equation, f0 1e9 Hz) on Sharrock's law with n = 1/2 at 60 Hz and 70 kHz
+over K V / kT 40-4000 (the switching field 0.47 / 0.66 of H_K at 40, 0.95 / 0.97 at 4000).
+A random 3D ensemble's saturation remanence is 0.5 (tested).
+
+**The three implementations agree** (tests): the interaction field Rust f64 against Python
+to 1e-9 of its largest value and the GPU's f32 to 5e-4 (sums of near fields that cancel);
+a short loop's trace Rust against Python within 0.03 and the GPU within 0.07 of saturation
+(kinetic Monte Carlo diverges once one near-threshold decision differs: the check is on the
+box's magnetization, not per particle); the moving head's pass Rust f64 against numpy to
+1e-6 and the GPU's f32 to 9e-5 of saturation.
+
+**2. The static fit** (`bench.png`, left; "Parameters" above): No. 20 within 0.72-0.87
+reading errors (Preisach 0.57), Hc 244-262 Oe against 270 +-10%, for all three interaction
+variants. No. 22 is not used: its four panels carry no type labels and its B includes H
+over an unstated area (research 1.1); TAPE_PLAN.md TM1 dropped it too.
+
+**3. The anhysteretic remanence** (the bench, `bench_arm.json`: a 70 kHz AC field decaying
+from 1500 Oe over 40 cycles on a steady field along the tape, the field then removed;
+normalized to the particles' saturation): the non-interacting particles' ARM is a step (51%
+of saturation by 20 Oe: the ideal anhysteretic of switching particles, thermal activation
+at the bias rate the only rounding), the fitted dynamic interactions (0.11 of physical)
+round it to ~40 Oe, and SCOTCH111@3's Preisach ensemble rises over ~100 Oe (its sigma_Hi,
+64 Oe). In the bench a sample's perpendicular demagnetization acts on M_y only; along the
+tape the ARM's slope is the interactions' alone. So the static fit, which can't tell
+interactions from a switching-field spread, leaves the anhysteretic susceptibility
+(the recording's small-signal transfer, research 2.1: "strength and sign of interparticle
+interactions largely determine" it) undetermined: the Preisach model fixes it by its
+sigma_Hi, the particles by their interaction strength, both from the same No. 20. The
+3%-over-1% knee from these curves is not meaningful (a 10-point ARM of a step); not
+reported.
+
+**4a. The bench's bias curves (the decisive question)** (`bench.png`, `bench_curves.json`):
+every particle of a 2000-needle box sees the field a particle at one of 3 depths of the
+coating sees passing the 51 um gap at 15 ips (Hx, Hy, 70 kHz bias, 16 steps a cycle, a
+20 Oe DC signal), the remanence along the tape read with the 1 kHz depth weights, 3 seeds
+(seed-to-seed error <= 2% near the peak, up to 15% far over-bias). SCOTCH111@3's vector
+Preisach on the same histories (with the perpendicular demagnetization N_y = 1 solved
+self-consistently). Widths in dB of bias from each curve's peak:
+
+| | rise to -3 dB | rise to -10 dB | rise to -20 dB | over-bias fall to -3 dB | -10 dB |
+|---|---|---|---|---|---|
+| No. 21, 1 kHz (for scale; includes the head's and the coating's depth effects) | 2.95 | 5.66 | 9.39 | 2.36 | - |
+| Preisach (SCOTCH111@3) | 2.61 | 5.05 | 7.08 | 4.76 | 9.85 |
+| particles, no interactions | 2.62 | 5.20 | 7.44 | 2.35 | 5.30 |
+| particles, dynamic interactions (fitted, 0.11) | 2.73 | 5.04 | 6.94 | 2.34 | 5.22 |
+| particles, frozen interactions (fitted, 0.19) | 2.22 | 4.75 | 7.34 | 3.94 | 7.21 |
+| particles, dynamic at 0.6 of physical (not fitted: No. 20 rms 4.4) | 2.38 | 4.75 | 7.05 | 2.90 | 6.10 |
+
+**The answer to the research's question: no.** At the strength the static data allow,
+dynamic interactions don't widen the bias curve's rise: -10 dB is reached 5.04 dB of bias
+below the peak against the non-interacting 5.20 and the Preisach model's 5.05; at -20 dB
+6.94 against 7.44 and 7.08. No. 21 needs ~2 dB more at -20 dB (9.39). Interactions held
+static (frozen) don't either. Nor do strong ones: at 0.6 of the physical strength (a poor static fit, 4.4 reading errors) -20 dB is 7.05 dB below the peak. Interactions narrow the rise slightly if anything; the bias curve's width in this geometry is set by the switching-field distribution and the head's field profile, as the research's freezing picture says (2.1).
+
+What the particles do differently is the **over-bias fall**: Stoner-Wohlfarth switching in
+the head's rotating field (the astroid: a field at 45 degrees switches at half the field
+along the axis) keeps re-recording particles downstream of the gap, where signal and bias
+fall together, and the remanence falls 3 dB within 2.35 dB of bias past the peak against
+the Preisach ensemble's 4.76 (No. 21: 2.36). The Preisach model's vector form drives each
+axis by the field's projection on it, which has no astroid; its over-bias fall in the full
+medium comes from the head's image instead (TAPE_PLAN.md TM2 step 7).
+
+**One caveat on the bench's interactions:** the dynamic variant's `interaction_scale`
+scales the sample's perpendicular demagnetization with the near fields (0.11 of -M_y); the
+full -M_y applied explicitly a step late is unstable (the "mean" variant: the box's M_y
+flips every step, every remanence 0: the feedback's gain is Ms_coat / H_K ~ 2). The moving
+head below solves it implicitly.
 
 ## Convergence
 

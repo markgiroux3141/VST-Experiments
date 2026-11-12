@@ -31,7 +31,7 @@ import numpy as np
 from varimu.config import REPO_ROOT
 from varimu.devices import library
 from varimu.devices.tape_machine import TapeMachineSpec, tone_harmonics
-from varimu.tape_particles import bench as bn
+from varimu.tape_particles import bench as bn  # noqa: F401
 from varimu.tape_particles import no21
 from varimu.tape_particles import strip as sp
 
@@ -57,12 +57,18 @@ def numerics(config: str, f_hz: float) -> sp.Numerics:
     if config == "local":
         # Each cell's own perpendicular demagnetization only: still independent.
         return sp.Numerics(demag_iterations=0, guard_waves=0, read_waves=1, local_demag=True)
+    if config == "local_fp":
+        # The cell's own -Ms M_y implicit, the rest of the coating's field by the medium's
+        # fixed point (Anderson).
+        if f_hz < 5e3:
+            return sp.Numerics(local_demag=True, guard_waves=1, read_waves=1)
+        return sp.Numerics(local_demag=True)
     if f_hz < 5e3:
         return sp.Numerics(guard_waves=1, read_waves=1)
     return sp.Numerics()
 
 
-def run_particles(config, n, points, log, seed=1, m=16, seeds=None, **num_kw):
+def run_particles(config, n, points, log, seed=1, m=16, seeds=None, freqs=(1e3, 15e3), **num_kw):
     """The particles' curves; with `seeds`, each a different particle sample (cells of other
     particles, as along a real tape), the complex fundamentals averaged."""
     spec = particle_spec()
@@ -70,7 +76,7 @@ def run_particles(config, n, points, log, seed=1, m=16, seeds=None, **num_kw):
     seeds = list(seeds) if seeds else [seed]
     samples = [sp.sample(spec, n, seed=sd) for sd in seeds]
     out = {"spec": dataclasses.asdict(spec) | {"sources": None}, "n": n, "seeds": seeds}
-    for f in (1e3, 15e3):
+    for f in freqs:
         num = dataclasses.replace(numerics(config, f), steps_per_cycle=m, **num_kw)
         amps, per_seed, infos = [], [], []
         for b in biases(points):
@@ -91,6 +97,8 @@ def run_particles(config, n, points, log, seed=1, m=16, seeds=None, **num_kw):
             log(f"  particles {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: {20 * math.log10(abs(r)):.2f} dB ({time.time() - t0:.0f} s)")
         out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist(), "runs": infos,
                          "per_seed": per_seed}
+    if "1000" not in out or "15000" not in out:
+        return out
     out["no21"] = no21.fit(biases(points), out["1000"]["db"], out["15000"]["db"])
     # The seed-to-seed spread of the fit: each sample's curves fitted on their own.
     if len(seeds) > 1:
@@ -121,6 +129,10 @@ def run_preisach(config, points, log):
     return out
 
 
+#: What the plot shows (the convergence runs stay in the JSON).
+PLOT_KEYS = ("particles/local_4s", "particles/nodemag_1024x3", "preisach/nodemag")
+
+
 def plot(res):
     import matplotlib
 
@@ -129,15 +141,22 @@ def plot(res):
 
     fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
     styles = {"particles": "-o", "preisach": "--s"}
-    for key, r in res.items():
+    colors = {"particles/local_4s": "C3", "particles/nodemag_1024x3": "C0", "preisach/nodemag": "C1"}
+    for key in PLOT_KEYS:
+        r = res.get(key)
         if not isinstance(r, dict) or "no21" not in r:
             continue
         model, config = key.split("/")
         f = r["no21"]
         lab = f"{model}, {config} (rms {f['rms_db_1k']:.2f} / {f.get('rms_db_15k', float('nan')):.2f} dB)"
-        ax[0].plot(no21.NO21_MA, f["model_1k_db"], styles[model], ms=3, label=lab)
-        ax[1].plot(no21.NO21_MA, f["model_15k_db"], styles[model], ms=3, label=lab)
-        ax[2].plot(no21.NO21_MA, f["diff_15k_1k_db"], styles[model], ms=3, label=lab)
+        c = colors.get(key)
+        ax[0].plot(no21.NO21_MA, f["model_1k_db"], styles[model], color=c, ms=3, label=lab)
+        ax[1].plot(no21.NO21_MA, f["model_15k_db"], styles[model], color=c, ms=3, label=lab)
+        ax[2].plot(no21.NO21_MA, f["diff_15k_1k_db"], styles[model], color=c, ms=3, label=lab)
+        for g in r.get("no21_per_seed", []):
+            ax[0].plot(no21.NO21_MA, g["model_1k_db"], "-", color=c, lw=0.5, alpha=0.4)
+            ax[1].plot(no21.NO21_MA, g["model_15k_db"], "-", color=c, lw=0.5, alpha=0.4)
+            ax[2].plot(no21.NO21_MA, g["diff_15k_1k_db"], "-", color=c, lw=0.5, alpha=0.4)
     if "preisach_full" in res:
         f = res["preisach_full"]
         for i, k in enumerate(("model_1k_db", "model_15k_db", "diff_15k_1k_db")):
@@ -164,11 +183,13 @@ def main() -> int:
     ap.add_argument("--m", type=int, default=16)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--seeds", type=int, nargs="+", default=None)
+    ap.add_argument("--freqs", type=float, nargs="+", default=[1e3, 15e3])
     ap.add_argument("--tag", default="")
+    ap.add_argument("--json", default="no21.json", help="(separate files for runs at once)")
     ap.add_argument("--floor-oe", type=float, default=None)
     ap.add_argument("--layers", type=int, default=None)
     a = ap.parse_args()
-    path = OUT / "no21.json"
+    path = OUT / a.json
     res = json.loads(path.read_text()) if path.exists() else {}
     sw = json.loads((REPO_ROOT / "reports" / "tape" / "switching_study.json").read_text())
     res["preisach_full"] = {k: v for k, v in sw["base"]["no21"].items()}
@@ -179,9 +200,9 @@ def main() -> int:
     for c in a.configs:
         if "particles" in a.parts:
             kw = {k: v for k, v in (("floor_a_m", a.floor_oe and a.floor_oe * bn.OE), ("layers", a.layers)) if v}
-            res[f"particles/{c}{a.tag}"] = run_particles(c, a.n, a.points, log, a.seed, a.m, a.seeds, **kw)
+            res[f"particles/{c}{a.tag}"] = run_particles(c, a.n, a.points, log, a.seed, a.m, a.seeds, a.freqs, **kw)
             path.write_text(json.dumps(res, indent=1, default=float))
-            log(json.dumps({k: v for k, v in res[f"particles/{c}{a.tag}"]["no21"].items()}, default=float)[:900])
+            log(json.dumps({k: v for k, v in res[f"particles/{c}{a.tag}"].get("no21", {}).items()}, default=float)[:900])
         if "preisach" in a.parts:
             res[f"preisach/{c}"] = run_preisach(c, a.points, log)
             path.write_text(json.dumps(res, indent=1, default=float))
