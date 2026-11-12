@@ -1,0 +1,14 @@
+[package]
+name = "tapeparticles"
+version = "0.1.0"
+description = "Tape at the particle level: Stoner-Wohlfarth particles recorded with AC bias, on the GPU (wgpu, f32) with f64 CPU references (docs/TAPE_PARTICLES.md); a study, not part of the tape model"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+wgpu = "29.0.4"
+pollster = "0.4.0"
+bytemuck = { version = "1.25.2", features = ["derive"] }
+rustfft = "6.4.1"
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }

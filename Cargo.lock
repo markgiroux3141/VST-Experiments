@@ -3763,6 +3763,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tapeparticles"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "pollster",
+ "rustfft",
+ "serde_json",
+ "wgpu",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
