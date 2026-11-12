@@ -1,0 +1,1086 @@
+<HTML>
+
+<TITLE>The Technology of the Tube Screamer</TITLE>
+
+<BODY>
+
+<A NAME="top"><H3>The Technology of the Tube Screamer</H3></A>
+
+<P>Copyright 1998 R.G. Keen All rights reserved.
+
+<P><FONT SIZE=-1>"Ibanez", "Tube Screamer", "TS-808", "TS5", "TS-9" and "TS10" are 
+
+trademarks of Ibanez. They are used here for reference. </FONT> 
+
+<A NAME="intro"><H4>Introduction</H4></A>
+
+<P>
+
+The Tube Screamer series of distortion/overdrive boxes from Ibanez has a reputation that has 
+
+led them to pass into musical urban myth. Helped along with Stevie Ray's use of them, the 
+
+TS 808 and TS 9 have been sought after and traded up to astronomical prices. The other 
+
+members of the TS family, the TS-10, the TS-5 and the TS-9 reissue have had a more troubled 
+
+reception. 
+
+<P>
+
+All the members of the TS family share a common technical design, with the similarities 
+
+vastly overwhelming the differences. Later, I'll go over some of the things that DO make 
+
+differences in these pedals, and some mods to effectively convert one to the other.
+
+<P>
+
+The TS series seems to be at its best when driving the input to a tube amplifier - that is, 
+
+a triode grid connected to ground through a resistance of about 1M. All the TS series are 
+
+capable of making their own distortion,  but by itself, this distortion is much less 
+
+interesting that what you get into a tube amp input.
+
+<P>
+
+<A NAME="blocks"><H4>Block diagram:</H4></A>
+
+All of the TS series are so similar that a <A HREF="tsxtech.gif"> single 
+
+schematic</A> with asterisks and notes can 
+
+cover them all. This simplified schematic breaks the circuit down into 
+
+some simpler blocks. There are some housekeeping/utility stages which 
+
+provide some common functions to several stages. The TS10 is the most 
+
+different one, and the common bias voltage is higher.
+
+Then there are the ones that actually do the work:
+
+<UL>
+
+<LI>Input buffer
+
+<LI>Clipping Amp
+
+<LI>Tone/volume control
+
+<LI>Bypass switching 
+
+<LI>Output buffer
+
+</UL>
+
+<P>
+
+<A NAME="utility"><H4>Common/utility Stages</H4></A>
+
+The 9V battery and external 9V input are common to all stages, as is the 4.5V generation 
+
+stage, used as a bias voltage by all stages. The 4.5V section uses two equal resistors from 
+
++9V to ground. The junction of the two resistors sits at « the battery voltage and is 
+
+decoupled to ground with a large value electrolytic capacitor to hold this point at an 
+
+AC ground. The input jack switches the battery (-) terminal to ground in the normal power 
+
+switching arrangement with a stereo jack. The exact value of the bias generation resistors 
+
+varies somewhat from model to model, but this has no effect on the sound of the unit as 
+
+long as the bias voltage is about 4.5V.
+
+<P>
+
+<A NAME="ibuffer"><H4>Input buffer stage</H4></A>
+
+<IMG SRC="tsxtech1.gif" ALIGN=LEFT width="340" height="260">Referring to the schematic, 
+
+the input stage is a plain vanilla emitter follower. The input transistor 
+
+in the 808 and 9 
+
+is the 2SC1815, a cheap high gain, low noise transistor. I have seen a couple of other 
+
+types in the other models, but the exact type of transistor has no significant effect on 
+
+the sound. It is used to provide a gain of 1 (that is, no voltage gain) and a high input 
+
+impedance. The base is tied to the common 4.5 V bias source through a 510k resistor, this 
+
+forming essentially all of the input impedance. The input impedance of an emitter follower 
+
+stage is the equivalent input biasing resistor in parallel with the input impedance of the 
+
+emitter follower; this is the current gain of the stage times any emitter resistor. In this 
+
+case the emitter resistor is 10K, and the typical gain of the 2SC1815 is 300, for an input 
+
+impedance of 3M at the transistor base. Therefore, the 510K biasing resistor accounts for 
+
+almost all of the signal loading at the input.  
+
+<P>
+
+This input stage is always connected to the input signal, not switched at all. Since 
+
+complaints of  "tone sucking" do not follow the TS9 and 808 around, apparently this is a 
+
+high enough impedance to avoid loading guitar pickups too much like the common wah pedals 
+
+do. Parenthetically, it's possible to avoid the "tone sucking" of the wah pedals by copying 
+
+the TS series input buffer in front of them. Some people have expressed interest in 
+
+converting the TS to a true bypass switching arrangement; I'll explain how to do that 
+
+later.
+
+<P>
+
+The emitter follower output feeds two stages: a JFET through a 0.1uF 
+
+capacitor, part of the "bypass" switching 
+
+and the clipping stage, through a 1uF non-polarized electrolytic, a large enough value to 
+
+not interfere with any guitar frequencies. 
+
+In the TS10 only, there is an additional stage of emitter follower 
+
+between the input buffer and the switching JFET. 
+
+<IMG SRC="tsxtech2.gif" ALIGN=LEFT width="335" height="410">
+
+<A NAME="clipper"><H4>Clipping Stage</H4></A>
+
+<P>
+
+The clipping stage is a fairly ordinary variable gain opamp stage with a 
+
+few tricks to shape 
+
+the amount of clipping and the frequency at which it occurs. The signal from the input buffer 
+
+stage feeds the (+) input of the opamp section, so the output is in phase with the input. In 
+
+all members of the TS family except the TS10, this is a direct connection from the coupling 
+
+capacitor to the emitter of the input buffer. In the TS10 there is a 220 ohm 
+
+resistor in series 
+
+with the (+) input. In all models the input is biased to the 4.5V bias source with a single 
+
+moderate value resistor, usually 10K; this seems not to make any 
+
+difference in the sound.  
+
+
+
+The gain of a noninverting opamp stage set up like this is [1+ Zf/Zi] where Zf is the 
+
+equivalent impedance of the feedback network from the output pin to the (-) input, and Zi 
+
+is the equivalent impedance from the (-) input to AC ground. 
+
+<P>
+
+Zi is formed by the series resistor and capacitor from the (-) input to ground. This 
+
+combination is frequency selective, in that the capacitor impedance is inversely 
+
+proportional to frequency. At DC, the capacitor is an open circuit; it's impedance goes 
+
+down as frequency goes up. At very high frequencies, the capacitor is effectively a short 
+
+circuit, and the resistor is the sole determining factor in the gain, the capacitor 
+
+impedance being negliglible compared to the resistor. At the point where the capacitor 
+
+impedance equals the resistor, the gain of the entire circuit begins to fall off toward 
+
+a gain of one. With the stock 4.7K resistor and 0.047uF capacitor, this frequency is 720Hz. 
+
+Only notes and harmonics above this point get the full gain of the distortion stage, and 
+
+everything below it gets pregressively less gain - and distortion. This fact probably 
+
+accounts for the lack of  "muddiness" of the distortion in the TS series as bass notes 
+
+are clipped least. 
+
+<P>
+
+Zf is the parallel combination of the clipping diodes, a 51pf capacitor, 
+
+and the series 
+
+combination of a 51K resistor and the 500K "Drive" control. Ignoring the 
+
+diodes and capacitor 
+
+for a moment, and assuming that the signal frequency is above the 720 Hz rolloff point of 
+
+the Zi network, the gain of the clipping stage is (51K + drive 
+
+control)/4.7K. This means the 
+
+gain of the whole stage can be varied by changing the drive control setting between 
+
+1 + (551K/4.7K)= 107 (about 44db) and 1+ (51K/4.7K), about 12. 
+
+<P>
+
+Going back to the clipping diodes now, the diodes have no effect until the signal at the 
+
+output is greater than the threshold voltage of the diode. In the stock TS series, these 
+
+are silicon signal diodes, with a turn on voltage of about 0.5 to 0.6v. As a diode turns 
+
+on, the equivalent resistance of the diode goes down as the diode turns on harder. 
+
+Effectively, there is a small range from about 0.4V to 0.7V (the exact voltages depending 
+
+on the type of diode, the package, the doping, etc, etc.) where the diode resistance goes 
+
+from an open circuit to a very low value, perhaps a few ohms for signal diodes. So as the 
+
+diode turns on, the gain of the opamp stage changes, going down to just over 1 if the diode 
+
+can be considered a short circuit compared to the 4.7 K resistor on the (-) input. Even if 
+
+the Drive control is set for a gain of 100, the diodes conducting cause 
+
+the gain to drop to 
+
+1 for only those portions of the signal where the product of the input signal and the gain 
+
+exceeds the diode threshold. This means that the signal is "clipped" at the forward voltage 
+
+of the diode; because there are two opposing diodes, this happens for both signal polarities.
+
+<P>
+
+A "typical" guitar signal if there is sch a thing, can be expected to be 
+
+in the range of 30 
+
+to 100mV for most pickups when the string is picked, trailing off as the 
+
+note decays. For such signals, and especially in the lower notes, with the 
+
+drive control turned down the sound out of the TS is fairly clean as the 
+
+signal hardly 
+
+breaks over the clipping diodes. With the drive control turned up, even a 
+
+30mv signal would 
+
+be boosted to 3V if not limited by the clipping diodes, so there is enough gain here to give 
+
+some distortion at least on the pedal's own to any reasonable guitar signal.
+
+<P>
+
+The small 51pf capacitor across the diodes acts to soften the "corners" of 
+
+the clipped 
+
+waveform somewhat. This softens the distortion somewhat. The action of the 
+
+51pf  is most 
+
+noticeable when the drive control is maxxed out, so it softens the distortion most when 
+
+the gain (and distortion) is highest. Put another way, the capacitor's impedance goes down 
+
+with increasng frequencies, so it starts cutting the gain of the stage when the impedance 
+
+of the capacitor is equal to the resistance of the 51K resistor plus the 
+
+setting of the drive 
+
+control. This rolloff frequency is lowest in the audio range and most noticeable when the 
+
+resistance of the drive control is highest.
+
+<P>
+
+<IMG SRC="tsxtech3.gif" ALIGN=LEFT width="385" height="455">
+
+<A NAME="tone_vol"><H4>Tone and volume control stages</H4></A>
+
+Cutting out 
+
+harsh 
+
+high frequency harmonics seems to be one of the underlying principles of 
+
+the TS series. Following the clipping stage there is a 1K resistor leading to a 0.22uF 
+
+capacitor to ground. This acts like a simple RC lowpass filter, with the rolloff point 
+
+being 723Hz. This means that the output of this stage is down 20db (10:1) at 7230 Hz, and 
+
+another 6db (20:1) at 14KHz, close to the top of the audio range. From this simple lowpass 
+
+filter, the signal goes to the active tone control stage. The control is a 20K potentiometer 
+
+strung from the (-) to the (+) input of the second opamp section. The wiper of the control 
+
+is tied to a series RC combination to ground. This RC is a 220 ohm resistor and a 0.22uF 
+
+capacitor. As a series network, at frequencies above the point at where the capacitive 
+
+impedance is less than 220 ohms (which happens at about 3.2KHz), the network just looks 
+
+like the 220 ohm resistor. At frequencies below that point, the capacitor impedance gets 
+
+larger as the frequency goes down until at some point the capacitor impedance is large 
+
+even compared with the full resistace of the tone control (20K); this happens at about 
+
+36Hz, below guitar frequencies.
+
+<P>
+
+The tone control operations are easiest to see if you assume that the tone control is at 
+
+one end or the other of its range. When fully toward the (+) end, the capacitor shunts the 
+
+frequencies above 3.2KHz to ground; when fully toward the (-) end, the capacitor shunts 
+
+feedback frequencies above 3.2KHz to ground. This means that at the (+) side, the signal 
+
+gets another -6db/octave high frequency rolloff, while when it's at the (-) side the 
+
+signal finally gets some treble boost, +6db/octave above 3.2KHz. Note that the "boost" 
+
+actually just levels off  the -6db/octave induced by the 1K/0.22uF network ahead of the 
+
+active control stage, so the treble is just not being cut any more above the turnover 
+
+frequency for the tone control stage when fully at "treble".
+
+<P>
+
+The opamp is set up as a noninverting buffer, which just means that there is no net 
+
+signal loss through the tone control stage, a gain of 1 - if you can find a frequency 
+
+where there isn't otherwise a boost or cut from something else.
+
+<P>
+
+The volume control is fairly standatd, a 100K audio control with the output of the tone 
+
+control stage connected to the "hot" lug, the "cold" lug connected to AC ground, and the 
+
+signal taken from the wiper.
+
+<P>
+
+<IMG SRC="tsxtech5.gif" ALIGN=LEFT width="535" height="585">
+
+<A NAME="bypass"><H4>"Bypass" operations</H4></A>
+
+"Bypass" is a misnomer for the TS series. They all use JFET electronic switching, and all 
+
+of them have at least the two signal buffers and a JFET switch (plus the 
+
+additional emitter follower in the TS10) in series with the signal even when 
+
+"bypassed". 
+
+<P>
+
+I have deliberately super simplified the footswitching arrangement in the 
+
+schematic, as this is the thing least likely to 
+
+need modification. In addition I show a conceptual drawing for the switching, replacing
+
+the FETs with idealized switches. 
+
+<P>
+
+The electronic switching is done by two JFETs, 2SK30A in early pedals and 2SK118 in later 
+
+ones. These FETs are set up with both source and drain tied to the 4.5V bias source through 
+
+high value resistors. Since they are N-channel devices, they are "on" and look like about a 
+
+100 ohm resistor when  the voltage between gate and source is 0, and "off", looking like a 
+
+multimegohm resistor, when the voltage from gate to source is negative. The gate of each 
+
+fet is tied through a diode to the electronic switch control flipflop so the gate can be 
+
+pulled to ground, which is -4.5V compared to the source. When the gate is allowed to float 
+
+by the voltage on the other side of the gate diode being higher than the 4.5V on the source, 
+
+leakage effects let the gate drift up to the 4.5v of the source over a period of a few 
+
+milliseconds. This allow the switch to turn on softly with no audible click. An RC network 
+
+on the outboard side of the gate diode does the same for the turn off. 
+
+<P>
+
+The two JFETs are connected to out-of-phase outputs of a simple discrete flipflop made from 
+
+two more NPN transistors. The flipflop is set up so it changes state once each time the 
+
+"bypass" footswitch is pressed, and so it is "biased" to come up in the "bypassed" state. 
+
+The actual footswitch is a sealed dome momentary switch, a fugitive from computer keyboard 
+
+technology. The switches are available on the surplus market at very low prices. The two 
+
+out-of-phase outputs (when one is high, the other is low, and vice-versa) are connected to 
+
+the two gate control networks for the JFETs so that only one JFET is on at a time.
+
+<P>
+
+One JFET is connected to the signal at the emitter of the input buffer transistor, and the 
+
+other is connected to the output of the volume control. The other side of both JFETs connect 
+
+to the base of the output buffer transistor. Because of the flipflop action, one and only 
+
+one JFET is conducting signal at any time, so the output buffer gets only the buffered input 
+
+signal or the processed signal through the clipping stage and tone controls, but not both. 
+
+The buffered input stage signal is the sound you hear when the effect is "bypassed".
+
+<P>
+
+<IMG SRC="tsxtech4.gif" ALIGN=LEFT width="345" height="315">
+
+<A NAME="obuffer"><H4>Output Buffer Stage</H4></A>
+
+The output stage is again an emitter follower with a 10K emitter resistor, biased from the 
+
+4.5V bias source. At the output of the emitter follower is one of the few systemic 
+
+differences between the members of the TS series. From the emitter of the transistor, 
+
+there is a low-value resistor in series with a 10uF signal coupling capacitor, then a 
+
+shunt resistor to ground. The following chart has the values of these resistors from 
+
+model to model:
+<div align="right">
+  <table border="1" cellspacing="1" width="508">
+    <tr>
+      <td width="98">Model</td>
+      <td width="56">808 </td>
+      <td width="39">9 </td>
+      <td width="65">9RI </td>
+      <td width="56">10 </td>
+      <td width="55">5</td>
+    </tr>
+    <tr>
+      <td width="98">Series res. </td>
+      <td width="56">100 </td>
+      <td width="39">470</td>
+      <td width="65">470 </td>
+      <td width="56">470</td>
+      <td width="55">470</td>
+    </tr>
+    <tr>
+      <td width="98">Shunt res. </td>
+      <td width="56">10K </td>
+      <td width="39">100K</td>
+      <td width="65">100K </td>
+      <td width="56">100K </td>
+      <td width="55">100K</td>
+    </tr>
+  </table>
+</div>
+
+
+
+<P>
+
+So how do these differences affect the sound?
+
+<P>
+
+To start with, the series resistance at the emitter limits the amount of drive available 
+
+to drive an amplifier input (although not by much), and in concert with the series 
+
+capacitor forms a voltage divider with the output shunt resistor and the input impedance 
+
+of the amplifier plugged into it. This drops the available signal only a trivial amount, 
+
+probably inaudibly so. The input resistance of a typical tube amp is most often 1M or over. 
+
+This is not a serious contributor to the loading of the output follower. 
+
+<P>
+
+However, the 10K shunt resistor load on the TS808 output does have an effect on the 
+
+follower's operation. An emitter follower with a resistor load is often assumed to have 
+
+a very low output impedance, which is true, as long as the signal is going up. However, 
+
+when the signal is going down, the transistor can only turn off, and the signal is pulled 
+
+down by the net loading, DC and AC on the emitter. The 10K shunt resistor effectively 
+
+halves the emitter loading on the output buffer. This does two things; trivially, it 
+
+reduces the input impedance of the emitter follower; more importantly it reduces the 
+
+negative going output impedance of the stage by half to about 5K. This means that the 
+
+output stage can drive the following stage off about twice as  hard. 
+
+<P>
+
+Can this account for the admittedly very subtle audible differences between the TS 9 
+
+and 808? It pretty much has to, as the operating current for both stages is the same, 
+
+the series resistance is only trivially different compared to the forward biased input 
+
+impedance of a triode grid (10's of K's for the typical duotriode input), and the 
+
+voltage divider ratio difference between 100/10K and 470/100K is 0.990099 versus 
+
+0.995322, an inaudible amplitude difference.
+
+<P>
+
+<A NAME="9_to_8">In terms of differences among the models: </A> 
+
+ the TS808, the TS9, and the TS9 reissue are 
+
+in fact built on the same circuit board pattern. For these three, THE ONLY DIFFERENCES 
+
+ARE THE OPAMP TYPE AND THE TWO OUTPUT RESISTORS. This is how the 
+
+various conversions to  "TS808 specs" are done - two resistors are changed in value, and 
+
+the opamp maybe changed  to another type. Conversions to "brown sound" or other mystical turbocharging are done by twiddling the values of the resistor and capacitor frequency 
+
+determining components.
+
+<P>
+
+The TS5 is a circuit copy of the TS9, excepting the opamp and a few components in the bias 
+
+supply section.
+
+<P>
+
+The TS10 is the "sleeper". Available on the used market for as low as $20 in working order, 
+
+it differs from the TS9 In only a few ways:
+
+<UL>
+
+<LI>extra 220 ohm resistor in series with the (+) input of the clipping amp
+
+<LI>extra emitter follower in series from the input buffer amp to the 
+
+JFET switch for the bypassed condition
+
+<LI>Different bias voltage for the input buffer transistor.
+
+</UL>
+
+If you jumper the 220 ohm, clip out the extra buffer transistor and 
+
+connect the jfet signal coupling cap to the emitter of the input buffer, 
+
+and change one resistor in the input buffer biasing circuit, 
+
+you have a working TS9 in the TS10 case. From there, two 
+
+resistor changes get you an 808 circuit. Both of these assume that you'll change out what 
+
+is probably a dreadful opamp.
+
+
+
+<A NAME="opamp"><H4>The Opamp</H4></A>
+
+<P>
+
+The TS808, the TS9, most TS9 Reissues, and some of the 10's and perhaps a few 5's came with 
+
+the "JRC4558" dual opamp. Most 10's, almost all 5's and a few 9 RI's came with other opamps. 
+
+The JRC4558 is a dual opamp with "industry standard" pinouts which means that there are 
+
+perhaps fifty different dual opamps from different manufacturers that will fit in the same 
+
+holes and work. 
+
+<P>
+
+There seems to be a difference in sound depending on what opamp is actually in the circuit. 
+
+In fact, this may be the single biggest effect on the sound of the TS circuit. The JRC 
+
+parts were undoubtedly chosen by the design engineer primarily because they were cheap. 
+
+During the time the 808 was in production, the JRC was oneof the cheapest dual opamps on 
+
+the market with acceptable audio performance. As such, it was used in huge volumes of 
+
+Japanese audio equipment. The opamp is described in some Japan Radio Corporation (JRC...) 
+
+literature as "an improved dual 741 type opamp with better noise, drive capability, and 
+
+slew rate than the original 741 type opamps". Note that this is not saying much, as the 
+
+741 is a fairly abysmal audio part.
+
+<P>
+
+For some reason, the JRC4558's seem to be well suited to duty in the TS type circuit. 
+
+JRC later changed its name to New Japan Radio Corporation and made parts 
+
+titled &quot;NJM4558&quot;. When you order these, you get parts that are labeled
+&quot;JRC4558&quot;.&nbsp; By all reports, these sound as good as the original.
+The tube screamers made with 72558A are reported to sound abysmal.  From the brave souls who took the suggestions in the tube screamer 
+
+clone section over on GEO and put in a socket to swap parts, the following types of opamps 
+
+DO seem to sound good.
+
+<UL>
+
+<LI>new manufacture JRC4558D
+
+<LI>LM833
+
+<LI>RC4558, made by a couple of US firms
+
+<LI>TLC2202
+
+<LI>TLC2272
+
+<LI>OP275
+
+<LI>LT1214
+
+</UL>
+
+<P>
+
+What makes for a good opamp versus a bad one? I dug through the data books on the ones 
+
+that people told me sound good, and came up with a common factor. The ones that sound 
+
+good seem to all make a point that they recover from overdrive gracefully. I can hear 
+
+you asking "what the devil does that mean for opamps?" It's like this - in a feedback 
+
+configuration, an opamp's enormous gain keeps both inputs within a few millivolts of 
+
+each other all the time, every nanosecond. When the opamp is driven to the point where 
+
+the output is near a power supply voltage and cannot swing any further, the feedback is 
+
+no longer keeping the inputs together, and one input is driven further toward a power 
+
+supply than the other. This can cause some ugly things to happen. In some opamps, the 
+
+output inverts polarity for a few microseconds. I'll leave it to you to imagine how 
+
+ugly those little "blatts" sound. In other opamps, the recovery time from overload is 
+
+slew rate limited; the output does not follow a multiple of the input, but "slews" at 
+
+a fixed rate until it catches up to the amplified input. This also sounds bad.
+
+<P>
+
+While the clipping opamp is not driven into overload, I theorize that the sudden change 
+
+of gain every time the diodes go into and out of conduction can cause a similar although 
+
+briefer recovery period at each "corner" of the clipped waveform. In this period, you'd 
+
+get non-harmonically related artifacts that would neve be very big (all that lowpass 
+
+filtering, remember) but which would be audible as a harshness or edginess.
+While this 
+
+is just a theory, it does seem to meet the only observed facts, and has predicted a 
+
+couple of opamps that did sound good. You're free to come up with your own theory, of 
+
+course, but I like this one. It has worked so far.<P>== This section has been
+updated based on newer information ==
+
+<P>
+
+There is some confusion at present over what is a true or "vintage" JRC4558. Several 
+
+electronics suppliers list the JRC4558. These are sometimes listed in their
+catalogs as &quot;NJM4558&quot;, but what you get are marked
+&quot;JRC4558D&quot;. By all reports, the current manufacture JRC4558D's sound
+just as good as the ones current with the manufacture of the original tube
+screamers.<P> There were zillions of the real "JRC4558" made when it was current. They 
+
+are still available in isolated caches of parts, although they can sometimes be hard to 
+
+find. Does true &quot;New Old Stock&quot; matter? probably not. In addition, the JRC4558D was 
+
+used in tons of Japanese audio equipment at about the same time, so a junky cheap Japanese 
+
+stereo or clock radio could have several hidden inside it.&nbsp;
+
+<P>
+
+============================================
+
+<P>
+
+The best thing to do, I believe, if you're hunting the Tube Screamer Holy Grail is to 
+
+stick in an 8 pin socket on the board, noting the orientation of the original chip 
+
+carefully, and then just plug in various dual opamps until you find one that conjures 
+
+up images of your own personal guitar deity.
+
+<P>
+
+<A NAME="maint"><H4>Maintenance problems in the basic TS series</H4></A>
+
+<P>The TS series as a whole has a couple of weaknesses that you should know about if 
+
+you own one of them. 
+
+<P>
+
+In the TS 808 and 9, and probably the TS10 as well, the external 
+
+DC adapter connector is prone to craciking either the solder or the board where it's 
+
+soldered on. This can lead to intermittent operation of the unit, as the normal battery
+
+power goes through there as well. To fix this, open the unit up and examine the 
+
+power jack and board immediately around it. If you have solder cracking, ust remelting
+
+the solder with a touch of an iron and a little fresh rosin core solder will fix it 
+
+right up. 
+
+<P>
+
+If the board itself is cracked, just remelting the solder will temporarily
+
+fix it by bridging over the crack, but solder is a very poor mechanical material and 
+
+it is likely to crack again through the solder. In this case, use a bit of resistor lead
+
+on the tracs, bent to shape and soldered in place for a ways back from the connector
+
+leads. It's a good idea to shape the resistor lead into a tight loop around the power
+
+connector leads for more support. Solder the resistor lead along it's entire length for
+
+1/4" or so along the trace leading away from the connector. The resistor lead is 
+
+tin/solder plated soft steel, and will mechanically support the connection. 
+
+<P>
+
+It's not a bad idea to simply do this reinforcement in any case unless your soldering 
+
+skills are not quite up to doing it without shorting out other traces.
+
+<P>
+
+The "bypass" switch module seems to be prone to failure and intermittency as well. This
+
+switch is a sealed keyswitch module, and inside is a dished metal dome that clicks over 
+
+to make contact when the button is pressed. There is also a rubber ring inside that keeps
+
+things apart. The intermittency seems to come either from corrosion of the disk or 
+
+contamination of the contact points from gook coming from the rubber part. My friend the 
+
+amp tech actually takes the switch apart - if you're careful this can be non-destructive - 
+
+and cleans the contacts up, getting rid of any loose debris. He claims a 70-80% success
+
+rate at doing this. 
+
+<P>
+
+Of course, he's also sitting on a pile of replacement switches from the local 
+
+electronics surplus house, too, so failures of technique are not fatal. The switches are 
+
+not particularly hard to find or expensive if you have a good surplus outlet nearby. If 
+
+you don't have this advantage but do have some electronics skills, you can put any one of 
+
+a number of other miniature snap action ("tactile feel") switches in there if you can adapt
+
+them mechanically to the small circuit board and the activation spring from the foot treadle.
+
+
+
+<A NAME="mods"><H4>Mods and Modified Versions </H4></A>
+
+<P>
+
+<BOLD>Conversion to TS808</BOLD> - this seems to be a perennial hot one. 
+
+Simple... just locate the 
+
+470 ohm and 100k resistors on the output buffer transistor, tracing back from the output 
+
+jack, and replace them with a 100 ohm and a 10K. Bang, instant 808. If you're doing this 
+
+to a TS 10, short out the 1K resistor leading to pin 3 of the dual opamp as well. A variation 
+
+of this mod is to add more bass response as in the next mod. This is sometimes referred to
+
+as making it have a "browner" sound.
+
+<P>
+
+<BOLD>More bass</BOLD>  - remember that 4.7K/0.047uF network on the (-) input of the clipping amp? To give yourself more bass, increase that cap to about 0.1uF. The (-) input is pin 2.
+
+<P>
+
+<BOLD>More distortion</BOLD>  - everybody's favorite. No problem here. If you want more distortion, 
+
+lower that 4.7K to get more gain when the drive control is maxxed out. If you don't 
+
+also want to change the bass/treble response, you will need to change the capacitor 
+
+as well. If you half the resistor, double the capacitor to keep the same overall frequency 
+
+response. 
+
+<P>
+
+It is theoretically possible to just use a higher value pot in the drive control, 
+
+but you're unlikely to find a replacement for the micro-sized pots used in the original 
+
+case. This is a possibility if you rip the circuit board out of the original box and 
+
+install it in another box of your own choosing. This is not as crazy as it sounds, 
+
+especially for the potato-bug TS5 as the plastic case is essentially useless no matter 
+
+how good the circuit sounds. This leaves room for a true bypass switch as well. 
+
+<P>
+
+Note that if you take the step to go to a box that lets you use different pots, you can also
+
+add switches for other functions like changing the bass response by switching in another
+
+capacitor, switching in other gain resistors or pots for various degrees of gain, or other
+
+tone control pots for changing the treble response.
+
+<P>
+
+Note that in going to higher gains, you will inevitably increase the noise in the output. 
+
+This may be curable to a degree by changing the input transistor to a quieter part (MPSA18 
+
+or 2N5089 is good) as well as swapping to a more modern and quieter opamp like the LM833
+
+or both.
+
+<P>
+
+<BOLD>Sweeter distortion</BOLD>  - the stock units use a pair of silicon signal diodes, which look 
+
+identical to the 1N914/1N4148 devices. If you change one of these diodes, chances are that
+
+the resulting pair will not clip at the same voltage for positive and negative signals, 
+
+giving you asymetrical clipping, and the resulting even order distortion. If you pick 
+
+something close, like maybe a silicon power diode like the 1N400x series for the second
+
+diode, the resulting second harmonic will be very subtle, not audible as an octave effect
+
+at all, just a "sweeter" or more liquid tone. 
+
+<P>
+
+You can try a number of things like putting
+
+one germanium (1N34A from Radio Shack works) diode in series with one of the silicons to
+
+add a bit more threshold voltage to one side. A more radical treatment would replace one 
+
+of the silicons with three germaniums; even more radical would replace one of the silicons 
+
+with TWO silicons. These last will start to make an octave effect just barely audible at 
+
+some notes on the guitar neck.
+
+<P>
+
+I've even heard of using LED's in there for the clipping diodes. Go wild here.
+
+<P>
+
+<b>
+
+True bypass </b>  - to get untainted sound when the effect is bypassed,  guitarists like true 
+
+bypass switching. One way to get this simply is to make a true bypass box external to 
+
+the effect, and just use short cords to connect the original effect up to it. If you 
+
+are dexterous and can mechanically get a DPDT stomp switch inside the TS box, you can 
+
+convert it to true bypass. This conversion is simple in concept. The two switch JFETs 
+
+are pulled off the circuit board. The one from the input buffer is ignored, the drain 
+
+and souce holes for the one at the volume control are shorted with bit of wire. This 
+
+disables the electronic switching and makes it permanently "on". Then the external 
+
+DPDT switch is wired for true bypass around the whole mess. There are diagrams for 
+
+bypass switching on my web page at <A HREF="http://www.geofex.com/"> http://www.geofex.com/</A>.
+
+<P>
+
+<b>
+
+Parts Substitutions</b> - If you just want to tweak the existing TS pedals, a good place to start is replacing the 
+
+1uF/50V NP electrolytic capacitors with 1uF/50V polyester film capacitors and the 0.22uF
+
+tantalum capacitors in the tone control section with 0.22uF film capacitors as well. The 
+
+film caps are a little larger but there is room if you put some work into finding miniature parts. 
+
+Mouser Electronics stocks suitable parts if you substitute a pair of 0.47uF caps for the 1uF 
+
+electrolytics. 
+
+<P>
+
+The electrolytics have a large dielectric absorption and cause a muffling of the sound. Ceramic
+
+caps are reputed to cause a harsh graininess, so are not a good choice for replacements.
+
+
+
+<A NAME="clones"><H4>Send in the Clones</H4></A>
+
+<P>
+
+There are several clones or semi-clones of the TS series on the market. The  schematic
+
+of the signal path of the TS series on my web page, as I mentioned, and it is entirely 
+
+reasonable to hand wire one, using a DPDT stomp switch for bypass and applying 
+
+your own personal Guitar God Mods along the way. 
+
+<P>
+
+I also have a stripboard (Vero-board) layout there if you'd like to use that board 
+
+technology, as well as toner transfer sheets to iron on a circuit board for the TS circuit. 
+
+In these versions, I used the whole audio path, input and output emitter followers and 
+
+everything. They fit nicely inside the Hammond 1590BB cast aluminum box, and come with 
+
+wiring diagrams to wire the box up. 
+
+<P>
+
+I used the emitter followers for both the toner sheet versions and for the vero board versions
+
+in case there was some subtle effect from them being there, on
+
+the theory that those folks who claim to hear sonic differences between the 808 and 9 can't
+
+ALL be wrong. Strictly speaking, if you do a good job of setting up the biasing for the 
+
+clipping opamp with a high value resistor of about half a meg or so instead of the 10K that is used
+
+in the stock unit, the input emitter follower is probably not needed. 
+
+<P>
+
+If you decide that the
+
+808/9 folks are all wet, the output one isn't either, and if you delete these and use the DPDT 
+
+stomp switch, you come up with a single chip version that is remarkably easy to build. 
+
+Mark Amundson  
+
+proposed this idea to me about a year and a half ago, using a CMOS opamp for the relative
+
+softness of the clipping that CMOS based amps give. 
+
+<IMG SRC="tsxtech6.gif" width="685" height="455">
+
+<P>Jack Orman seems to have rediscovered this
+
+concept later to come up with his "Son of Screamer"
+
+article, which does not use the CMOS opamp.
+
+<P>
+
+If you decide that the magic might be in that output buffer, you can also just leave off the 
+
+input buffer with appropriate circuit changes.
+
+<P>
+
+If you want to experiment with either of these, you can use either the toner layout or the 
+
+veroboard layout, and just leave the input and output followers off, using instead a 510K
+
+biasing resistor at the (+) input to the clipping amp, and returning the volume control "cold"
+
+lug to ground instead of to the bias voltage, as some models of the TS series do.
+
+<P>
+
+Apparently the good sound of the TS series has not been lost on the boutique effects makers.
+
+Reportedly, there are a number of TS clones available in that market. 
+
+</BODY>
+
+</HTML>
+
+
+

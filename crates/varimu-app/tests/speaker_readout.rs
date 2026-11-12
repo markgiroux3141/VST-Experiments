@@ -121,7 +121,10 @@ fn the_supply_apart_cranked() {
     let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
     let cores = s.cores().unwrap();
     let load = || Circuit::load(&config(), dev.circuit, cores).unwrap();
-    let x: Vec<f64> = strums(s.host() as f64, 1.6).iter().map(|v| 2.0 * v).collect();
+    let x: Vec<f64> = strums(s.host() as f64, 1.6)
+        .iter()
+        .map(|v| 2.0 * v)
+        .collect();
     let with = |partition: &[&str]| {
         let mut t = s.clone();
         t.partition = partition.iter().map(|p| p.to_string()).collect();
@@ -131,13 +134,23 @@ fn the_supply_apart_cranked() {
     let from = (0.4 * s.host() as f64) as usize;
     let sig = rms(&one[from..]);
     let db = |y: &[f64]| {
-        let d: Vec<f64> = y[from..].iter().zip(&one[from..]).map(|(a, b)| a - b).collect();
+        let d: Vec<f64> = y[from..]
+            .iter()
+            .zip(&one[from..])
+            .map(|(a, b)| a - b)
+            .collect();
         20.0 * (rms(&d) / sig).log10()
     };
     let readout = db(&with(&["SPK readout"]));
     let supply = db(&with(&["SPK readout", "|", "power supply"]));
     println!("cranked vs one solve: readout apart {readout:.1} dB, and the supply {supply:.1} dB");
     // Measured 2026-11-12 at draft-1x: -39.1 / -38.9 dB.
-    assert!(readout < -35.0 && supply < readout + 1.0, "{readout:.1} {supply:.1}");
-    assert_eq!(dev.partition, Some(&["SPK readout", "|", "power supply"][..]));
+    assert!(
+        readout < -35.0 && supply < readout + 1.0,
+        "{readout:.1} {supply:.1}"
+    );
+    assert_eq!(
+        dev.partition,
+        Some(&["SPK readout", "|", "power supply"][..])
+    );
 }

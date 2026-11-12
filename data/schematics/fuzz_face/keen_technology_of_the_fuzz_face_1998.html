@@ -1,0 +1,382 @@
+
+<HTML>
+
+<HEAD>
+<TITLE>The Technology of the Fuzz Face</TITLE>
+</HEAD>
+
+<BODY>
+<A NAME="top"><h3 align="center">The Technology of the Fuzz Face</h3></A>
+<P>
+Copyright 1998 R.G. Keen All Rights Reserved.
+The term "Fuzz Face" is a registered trademark of Dunlop.<br>
+<a href="#Picking transistors">[Picking Transistors]</a> [<a href="#peek">A Peek
+at the Circuit</a>] [Mods]<P><b>Introduction</b><P>
+The Fuzz Face remains an enigma today, perhaps three decades after it first 
+hit the market.  
+This simple, two transistor circuit remains for many the very definition of 
+the guitar effects stomp pedal.  What makes such a simple circuit the stuff 
+of legend?
+<P>For one thing, it's got a reputation. There can't be many guitarists that 
+don't know that a lot  of Jimi Hendrix' songs were cut with a Fuzz Face. But 
+Jimi had, above all else, a good ear. If it didn't sound good, he wouldn't 
+have used it, and furthermore, it didn't have a rep when he picked it up. A 
+reputation is  good reason to look at it today, but not in the beginning. 
+<A NAME="peek"><H4>A Peek at the Circuit</H4></A>
+<P> 
+<IMG SRC="fftech1.gif" ALT="Fuzz Face Circuit Diagram" ALIGN=LEFT width="355" height="310">
+<P>
+Let's look at the circuit. This is simple almost beyond belief for 
+distortion devices. Two transistors, four resistors, three capacitors, and 
+two controls make all that tone. The first transistor is set up with the 
+simplest of arrangements - input through a DC blocking capacitor directly 
+to the base, emitter grounded, and a single collector resistor; the driven 
+load is a second transistor base, directly coupled. Ordinarily this would 
+be the maximum possible gain arrangement, except that there is that resistor 
+coming from the second transistor's emitter - what's that do?
+<P>For DC purposes, the second transistor acts as an emitter follower. The 
+voltage at it's emitter must follow the first transistor's collector, 
+although it is lower by the amount of the base emitter drop of the second 
+transistor. To the first transistor, that means that the 100K resistor from 
+the emitter of the second transistor to the first transistor's base is 
+effectively a feedback resistor, passing a current proportional to the 
+first transistor's collector voltage to the first transistor's base. This 
+arrangement is called the "voltage feedback biasing" circuit, and some of 
+the Fuzz Face's unique properties stem from this. 
+<P>The Voltage Feedback (VF) circuit has the properties that it offers the 
+potential for the highest possible gain from any given transistor - good for 
+a distortion device. It also has a very low input impedance, which means that 
+it heavily loads anything trying to drive it. This will be an important point 
+later. Finally, it can't really hard saturate like many other transistor 
+hookups. When driven with a large signal on the base, the collector voltage 
+moves toward the emitter. This lowers the bias voltage through the 100K 
+biasing resistor, and steals some of the input signal. Saturation is mushy 
+- again, very good for a musical sounding device. 
+<P>
+Was this intentional on 
+the part of the designer? Probably not. It's likely it was a happy accident, 
+as the VF circuit was common in the early days of circuit design to wring 
+more gain from poor transistors. 
+<P>The voltage swing in the other direction, when the input is trying to 
+turn the first transistor off, is not as constrained as the swing towards 
+saturation. Fuzz Faces naturally tend to bias with only about half a volt 
+on the collector of the first transistor, so there is a lot of room upwards. 
+The input stage will first hit mushy saturation on one polarity  of signal 
+and then if driven hard enough, hit cutoff on the other polarity. The 
+Fuzz Face has asymetrical clipping designed into it! 
+<P>The second transistor serves a couple of purposes. The base is directly 
+coupled to the collector of the first transistor; the bias current then is 
+largely set by the value of the emitter resistor - in this case a 1K pot. 
+The pot forces the static current through the device to be equal to the 
+first collector voltage minus the base emitter voltage of the second transistor, 
+divided by the 1K resistance. That same current, essentially, flows through 
+the collector resistance of the device, and the voltage across the two 
+collector resistors is equal to the static current times the sum of the resistances. 
+Because the first transistor biases up so close to ground, there is still plenty 
+of room for the second transistor to have some collector-emitter voltage left 
+over for a linear swing. 
+<P>The gain of the second stage is approximately determined by the ratio of the AC load 
+in the collector to the AC load on the emitter. The AC collector load is just 
+the sum of the collector  resistors, and the emitter load to AC is the portion 
+of the 1K pot not "shorted" to ground through the 20uF capacitor. So the 
+gain can vary from a low of about 8 to as high as the transistor's basic internal 
+gain when the pot is maxxed out. There is a secondary effect in that the AC 
+gain of the FIRST stage is also set by the AC feedback from that pot through 
+the 100K resistor, so when the control is turned full down, the feedback 
+reduces the first stage's gain most. As the control is turned up more, less 
+AC is fed back to the input, so the effective gain goes up. 
+<P>As the second stage is driven harder, it can hard clip in cutoff on the 
+same polarity that the first stage clipped softly on, so the clipping begins 
+softly for smaller signals (and gains) and then transistions to hard clipping 
+with harder playing - the thing gets touch sensitivity!
+<P> The split collector load resistor of the second transistor acts like a 
+volume pot permanently set to a low value. This is because the power
+supply is effectively at AC ground because of the low AC impedance of the
+battery. Incidentally, this is why the FF sounds different with different 
+batteries and with the same battery as it gets run down - the impedance of the
+battery can change the effective value of the  smaller resistor by an significant
+amount.
+<P>
+The amount of signal tapped 
+off at the junction  of the two resistors is deliberately small, not much larger 
+than the input signal to keep the (relatively!) huge amount of signal available 
+from overdriving the input of the amp following it. The output volume 
+control is an entirely ordinary volume pot. The output capacitor blocks 
+the DC level from saturating any device following the Fuzz Face, as well 
+as determining the lowest frequency that gets out. Making this cap bigger 
+will let more low frequencies out.
+<P>The value of the output level control has been the subject of some 
+debate. Eric Johnson supposedly favors 100K over the stock 500K. This 
+could have some effect, as the 100K acts as a load on the collector resistor. 
+More importantly, it cuts more lows out by it's interaction with the output 
+coupling cap, and is less subject to stray capacitive loading cutting highs 
+than the 500K; a 100K should sound somewhat brighter.
+<A NAME="sound"><H4>What sounds good in there? </H4></A>
+<P>We've just hand waved the transistors as being there; there is a whole 
+mythology that has grown up around those transistors. The earliest FF's 
+were made with AC128's, a common Euro type at the time the FF was 
+designed. It seems likely that the AC 128 was picked for it's cost and 
+availability (in retrospect) rather than any super sound qualities. 
+<P>It's hard to remember for people who were not into electronics 30 
+years ago, but transistors were not all that good or reliable. The tech 
+community went to silicon for transistors because germanium is prone 
+to leaking (can't turn the thing off!) and heat damage (solder too long 
+and it dies).  Silicon is much better about both of these things, and 
+modern processes turn out closely clustered gains and very high frequency 
+responses routinely.
+<P>The fact is that the AC128 is not a super high quality transistor, 
+and wasn't at the time. It is a moderate gain (90 typical) device with 
+only modest frequency response.  It was HIGHLY variable in gain. 
+I have measured several hundred AC128's for gain, and they vary from 
+a gain of 16 to probably 180. I say probably because the measured 
+gains actually turn in numbers up to 500 or so, which are clearly leaky 
+devices, not high gain devices.  The semiconductor industry was new 
+back then, and had not developed the technologies that let us make 
+cheap, reliable, identical-as-peas-in-a-pod devices like we have become 
+accustomed to. 
+<P>The variation in gain is important because it is crucial to the tone 
+of the FF. Reliable reports from people who actually bought and sold 
+volumes of  FF's in the "golden years" say that out of a case of fifty 
+units, they all distorted all right, but only a few would sound really 
+good, right out of the box. It was common for guitarists to make deals 
+to presort a batch to get a good one. This practice continues today, 
+with Eric Johnson's tech supporters tracking down and interviewing 
+FF's to find the few "magic" ones. Fuzz Faces per se do not necessarily
+sound good without tweaking and transistor selection.
+<P>We can understand this today. I've done a lot of circuit simulation 
+on the FF, twiddling the values of the transistor gains, and looking at 
+the clipping waveforms and resulting harmonic spectra. There is a 
+definite sweet spot for musical sounding clipping  at transistor gains 
+of about  
+80-110. If you allow combinations of one high and one low gain 
+device, the range widens out to 70 or so on the low end and perhaps 
+130 on the high end. Keeping in mind that preferences for distortion 
+tone are definitely a matter of personal taste, the range of gains for 
+unselected AC128's in this circuit would produce some really 
+clunky-sounding devices. 
+<P>This seems to be borne out in practice. Mike Fuller, maker of 
+the Fulltone "69" pedal, posted his preferences for Fuzz Face transistor 
+gain to the usenet news groups, and they fall right in this range. 
+He noted that he feels that he can affect the relative amount of 
+symetrical versus asymetrical distortion by selecting for non-identical 
+gains in the two positions. (Mike also prefers transistors with only 
+certain colored epoxy sealant, which I can't see making any 
+difference except coincidentally, but then, who knows?)
+<P>The frequency response of the transistors matters, too. The 
+AC128 originals were not particularly stellar; this also turns out to 
+be a happy combination, as we now know that clipping with razor 
+edges sounds -- well, like listening to razor blades. Most guitarists 
+(there's that personal preference thing again) seem to want the 
+rough edges smoothed off. At highest gain, any amplifier exhibits 
+frequency response limited by the device characteristics. The 
+AC128 has parasitic capacitances typical for then-current germanium 
+devices, meaning that it was working hard to do the full audio range. 
+This almost certainly has something to do with the softened edges of 
+the sound. In simulation, I could play with the parasitic capacitances 
+of the simulated devices, and found that adding high junction capacitances 
+from collector to base made for softer distortion. The lesson here is that 
+you can soften the sound of a FF even further by connecting a 10-100pF 
+capacitor from the collector to base of the transistors. This dodge 
+was used in later silicon versions of the FF.
+<P><b><a name="Picking transistors">Picking transistors for FF Clones</a></b><P>If
+you have a batch of germanium transistors, how do you tell which are going to
+sound good and which will not?&nbsp; To a first order, you can just gain select
+them in a DMM that has a transistor checking range. However, all modern DMM's
+assume that the transistor being testing has no leakage at all. They just put a
+metered amount of base current in and look for how much collector current comes
+out. With germanium's inherently higher leakage, this just makes a leaky device
+look like a higher gain device.&nbsp;
+<p><img border="0" src="../../FX_images/xstrtest.gif" align="left" width="320" height="240">This
+is one way to sift the leakage from true gain. You hook up a couple of resistors
+and a DMM to the device, and the resistors set up conditions you can control to
+see what is what. If you really want to do this, get a 2.2M resistor and a 2.4K
+; better, get one each 2.2M and 2.49K metal film 1% resistors. This will set you
+back about US$0.30 if you get them from Mouser, and slightly more or less than
+that from other sources. If you're going to do much of this, get a transistor
+socket to, so you can easily test a large number of devices.&nbsp;
+<p>If you are satisfied with an indication of gain but are willing to settle for
+lower accuracy, you can carbon film at 5%, but recognize that the accuracy will
+be less. If you can, get several 2.4K resistors and measure them. You may find
+one that's closer to 2.472 ohms, which would be ideal. I'm being picky about the
+ohms because if you get exactly 2.2M and 2472 ohms, and use a 9.0V battery,&nbsp;
+you'll find that the voltage across the resistor will be numerically equal to
+the indicated gain! That's why the somewhat odd resistor values, and the
+discussion on the values. It makes the final numbers on your DMM come out about
+right - multiply the voltage by 100, and that's the gain.
+<p>To do the test, stick the transistor in the socket, and read the DC voltage
+across the 2.4K resistor. The resistor will convert any leakage current from the
+transistor into a voltage that you can then read on your meter. A 2472 ohm
+resistor is 2.472 volts per milliamp, so a milliamp of leakage will cause 2.472
+volts to display. That is incredibly too much leakage, so any transistor that
+does that is not going to be useful for a FF. In fact, although it will differ a
+bit, any transistor that shows more than a few micro amps of leakage is suspect.
+Because of the resistor scaling, the indicated value on your meter is
+&quot;false leakage gain&quot; and will have to be subtracted from the total
+reading that you do next.
+<p>To test the total gain, press the switch that connects the 2.2M resistor to
+the base. This causes a touch more than 4 microamps of base current to flow in
+the base. The transistor multiplies this by its internal gain, and the sum of
+the leakage (which doesn't change with base current) and the amplified base
+current. If the transistor has a gain of 100 and no leakage, the voltage across
+the 2.4K resistor is then (4uA)*(100)*(2472) =&nbsp; 0.9888V - which is almost
+exactly 1/ 100 of the actual gain. Pretty neat, huh?&nbsp;
+<p>But we know that germanium really does have leakage - that's why were doing
+this little dance in the first place. So, let's say that the device leaks 100uA
+to start with. We stick the device into the socket, and read the voltage before
+we press the switch. It reads (100E-6)*(2472) = 247mV. So the leakage is making
+the meter believe that there's a &quot;gain&quot; of almost 25 with no current
+into the base at all.
+<p>How much leakage is too much? 100uA is common, 200 happens pretty often. More
+than 300uA means the device is suspicious, and more than 500uA I would say is
+bad.
+<p>Let's say the device really leaks 93uA, and has a gain of 110 - a prime
+specimen. What happens when we test? We chuck the thing in the socket, and read
+(93uA)*(2472) = .229V. Then we press the switch, and read 1.330V. To get the
+real gain, we subtract 0.229V from 1.330V and get 1.101V. The true gain is just
+100 times the reading.&nbsp;
+<p>Hey! How come it's 110.1, and not 110? Well, that's from this being an
+imperfect world, and from this tester being built with some approximations. The
+exact base current is 4.046...uA, assuming that the transistor's base conducts
+that much with a forward voltage of 0.1V (reasonable with germanium at these
+currents) and that the battery is *exactly* 9.0000V, and that the resistors are
+2.20000M, and...&nbsp;&nbsp; well, you get the picture. 0.5% accuracy is doggone
+fine for work with such blunt tools, and much better than you actually need to
+make a fine sounding FF. Besides - if you're clever, you'll flip the switch and
+watch the voltage while you&nbsp; put your finger on the transistor. Simple
+finger heat will make the gain rise rapidly. What's the real gain? All of them
+are - at the temperature and conditions of the moment.
+<p>Don't get too hung up on the exact numbers - they'll change in a second
+anyway as the device heats or cools. Look for low leakage, and approximately the
+right gains.
+<p>The right *real* gains are from 70 to about 130. Within that range, people
+report the best sounds. Some people prefer equal gains, others prefer having a
+lower gain of 70-100 for the first transistor and 90 to 130 for the
+second.&nbsp;
+<P><b>Silicon versions of the FF???</b>&nbsp;
+<P> Yes. The FF was built with several 
+transistor types, including silicon. The first ones seem to have been 
+all AC128's, a PNP germanium device, followed by runs with the 
+Newmarket NKT275, which is very similar. I obtained a 
+batch of NKT275's and they seem to be much more consistent than 
+the AC128, but in other respects very similar. There were several 
+versions with the BC108C and/or BC109/BC109C. These are NPN 
+silicon devices, and the BC108C in particular is a HIGH gain device, 
+typically 500. The reputation of the NPN silicon devices is spotty, 
+although some owners (there's that preferences thing again...) do like 
+them very much.
+<P>
+<IMG SRC="fftech5.gif" ALIGN=LEFT width="355" height="310">
+<IMG SRC="fftech6.gif" ALIGN=LEFT width="355" height="310">
+<P>At one point in the past, Dunlop made FF clones. The JH1 and JH2 
+were both attempts to combine the Fuzz Face circuit with the purchased
+rights to Jimi's name (bought from the JH estate, as noted on 
+the bottom of the pedal). Both were made 
+with high gain silicon transistors and sounded dreadful (IMHO). 
+The JH2 used the MPSA18, with 
+a typical gain of 900! To my ear, these seem to have a "sticky" or 
+"constricted" quality about them.
+
+<P>Later, Dunlop bought the FF trademarks and 
+began manufacturing the FF as a reissue.  Dunlop actually arranged 
+for new manufactured "NKT275" germanium devices to be made for them, and 
+is shipping these in its latest reissues. Reports are that these are
+OK sounding, much better than the ill-fated JH series.
+<P> The JH1 and JH2 are a great value for the DIY'er. 
+You get that neato round case for cheap 
+because they sound horrible. You can then rebuild the real FF circuit 
+onto the circuit board in less than an hour, and have your own great 
+sounding FF. 
+<P>This all makes good sense - in any device that has so few parts, 
+the qualities of the parts will show through.
+<P>I've also done some experimentation with germanium devices 
+other than the AC128 and NKT275. I found a number of germanium 
+types, measured their gains, and then listened to them. The results 
+are pretty consistent - get the right gain and frequency response and 
+the numbers printed on the cases don't matter. I like the 2N527 from 
+GE (very consistent!) and the 2N508, also GE. The 508 is a little 
+hotter, for more of a metal tone. Reports of results on the ECG158 
+are mixed. Some people are very happy with it, some not. I suspect 
+that this can be put down to the variablility of the devices. Measure 
+what you get!!
+<A NAME="mods"><H4>Mods and Magic</H4></A>
+<P>OK, what about things other than the transistors? Roger Mayer 
+is reputed to have tweaked Jimi's gear heavily, so maybe there's 
+some tone to be wrung from the stones there. 
+<P>
+<IMG SRC="fftech2.gif" ALT="Roger Mayer Modified Fuzz Face" ALIGN=LEFT width="355" height="310">
+<P>There is a set of changes 
+collectively referred to as the "Hendrix" mods or the "Roger Mayer" 
+mods. These are 
+<UL>
+<LI>Replace the 470 ohm output resistor with 1K
+<LI>Replace the 8.2K resistor at the collector of the second transistor 
+with 18K
+<LI>Replace the 1K control in the emitter of the second transistor 
+with 2K.
+</UL>
+This mod primarily seems to increase the output level and gain of 
+the second transistor.
+<P>Changing the input and output capacitors changes the bass response 
+of the unit.  To allow more bass response, you can double each of these 
+capacitors. In the case of the output 0.1uF capacitor, raising it to 0.47uF 
+may be useful. This will prevent the bass signal from being lost by the 
+impedance of the coupling capacitor. 
+<P>Mike Fuller posted some recommendations on the Fuzz Face to 
+the net. Among those are to add a 1K linear pot in series with the 470 
+ohm resistor in the collector circuit of the second transistor, still taking 
+the output from the top end of the 8.2 K resistor. The pot is set up so it 
+is acting as a variable resistor, wiper shorted to one end lug. Another is 
+to connect a 50K pot, again as a series resistor, in series with the input 
+of the circuit, before the 2.2uF input capacitor. 
+<P>
+<IMG SRC="fftech3.gif" ALT="Fuller Suggested Modified Fuzz Face" ALIGN=LEFT width="355" height="310">
+<P>If that last one seems a little odd, think back to what I said about 
+the low input impedance. With a low input impedance, the input loads 
+a guitar significantly; the base can only move a few tens of millivolts 
+before cutting off or saturating the first transistor. If you put a resistor 
+in series with the guitar pickup, it raises the apparent source impedance 
+of the pickup, making it look more like a current source (albeit a tiny 
+one) and less like a voltage source. A signal from a current source lets 
+the input of the effect seek it's own voltage level, and merely supplies 
+a varying current. This can be much more linear than a voltage source 
+drive. As a result, the variable resistor allow you to radically clean up 
+the distortion that the FF produces,  producing subtle shades of softer 
+distortion. 
+<P>In effect, the output mod is a "more" control, and the input mod 
+is a "less" control. As you would expect, the two added controls can 
+interact to produce many shades of distortion.
+<P>One person reverse engineered the Fulltone "69" pedal and has posted 
+the <A HREF="http://members.tripod.com/~Bonej/69_Pedal.gif">
+69 pedal schematic</A> to his web page. In this schematic, you can see Fuller's
+application of his earlier suggestions. The "69" pedal does enjoy a good
+tone reputation.
+<P>If you like softer distortion, you might also like to add some high 
+end taming capacitors. Adding 10 to 100pF from collector to base on 
+the second transistor or 100-680pF across the collector resistor of the 
+first transistor will soften things up a bit.
+<P>
+<IMG SRC="fftech4.gif" ALIGN=RIGHT width="355" height="310">
+<p>The Fuzz Face also attracted a number of clones even in the Golden Age. 
+The  Vox Tone Bender (not to be confused with
+the Colour Sound Tone Bender) was a copy with only minimal changes to the
+the component values, and adapted to NPN silicon transistors. There have been 
+several versions of the Vox Tone Bender and the Vox Distortion Booster, all
+variants on the basic circuit.
+<P>There is also a new
+<A HREF="http://www.geocities.com/CollegePark/Library/1355/rmclassicfuzz.gif">
+Roger Mayer "Classic Fuzz"</A> which employs germanium transistors 
+and essentially the FF circuit, only a few component value changes. I 
+suspect that there are many other boutique clones, considering the ease and
+simplicity of making the FF circuit. In fact, any of the circuits shown 
+in this article (with the possible exception of the Fulltone "69" pedal 
+because of the trimmer pots) can be built on the toner transfer/ready to 
+solder boards sold at GEO.
+<A NAME="summary"><H4>In summary...</H4></A>
+<P>So - the Fuzz Face is a fortuitous combination of  circuits that 
+combine initial soft clipping with asymetrical clipping that changes 
+toward symetrical clipping under drive. It's easy to build, easy to 
+modify, and has a very wide range of tones possible. This thing offers 
+what I consider the most bang for the buck for the enterprising effects 
+hacker.  Dig in.... see what magic you can wring out of it.</P>
+</BODY>
+</HTML>

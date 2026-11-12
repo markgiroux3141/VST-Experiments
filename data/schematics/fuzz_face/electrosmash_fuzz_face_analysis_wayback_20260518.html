@@ -1,0 +1,871 @@
+
+<!DOCTYPE html>
+<html lang="en-gb" dir="ltr"
+	  class='com_content view-article itemid-435 home j31 mm-hover '>
+
+<head>
+	<base href="https://electrosmash.com/" />
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<meta name="keywords" content="fuzz, face, fuzzface, fuzz-face, fuzz face, analysis, study, technology, electronics, circuit, schematic, bias, transistors, AC128, NKT275, germanium, silicon, npn, pnp, dallas, arbitrer, dunlop, layout, components, resistor, cap, input, output, asymmetri" />
+	<meta name="rights" content="Creative Commons: Attribution-NonCommercial 3.0 Unported (CC BY-NC 3.0) " />
+	<meta name="author" content="Ray" />
+	<meta name="description" content="The Fuzz Face is a distortion guitar pedal designed in London by Arbitrer Electronics Ltd in the autumn of 1966. This analysis covers the first Arbitrer Fuzz Face model equipped with PNP germanium transistors from the first releases." />
+	<meta name="generator" content="Joomla! - Open Source Content Management" />
+	<title>ElectroSmash - Fuzz Face Analysis</title>
+	<link href="https://electrosmash.com/fuzz-face" rel="canonical" />
+	<link href="/templates/purity_iii/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
+	<link href="/t3-assets/css/css-0ef93-36470.css" rel="stylesheet" type="text/css" media="all" />
+	<link href="/t3-assets/css/css-3adb1-14225.css" rel="stylesheet" type="text/css" media="all" />
+	<link href="/t3-assets/css/css-44530-66594.css" rel="stylesheet" type="text/css" media="all" />
+	<script type="application/json" class="joomla-script-options new">{"csrf.token":"3031967bc0b007ccb241a531f69371b4","system.paths":{"root":"","base":""}}</script>
+	<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+	<script src="/t3-assets/js/js-44af3-14225.js" type="text/javascript"></script>
+	<script src="https://electrosmash.com/media/com_acymailing/js/acymailing_module.js?v=5104" type="text/javascript" async="async"></script>
+	<script type="text/javascript">
+window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });jQuery(function($){ initTooltips(); $("body").on("subform-row-add", initTooltips); function initTooltips (event, container) { container = container || document;$(container).find(".hasTooltip").tooltip({"html": true,"container": "body"});} });jQuery(window).on('load',  function() {
+				new JCaption('img.caption');
+			});window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });	if(typeof acymailingModule == 'undefined'){
+				var acymailingModule = [];
+			}
+			
+			acymailingModule['emailRegex'] = /^[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+)*\@([a-z0-9-]+\.)+[a-z0-9]{2,10}$/i;
+
+			acymailingModule['NAMECAPTION'] = 'Name';
+			acymailingModule['NAME_MISSING'] = 'Please enter your name';
+			acymailingModule['EMAILCAPTION'] = 'example@email.com';
+			acymailingModule['VALID_EMAIL'] = 'Please enter a valid e-mail address';
+			acymailingModule['ACCEPT_TERMS'] = 'Please check the Terms and Conditions';
+			acymailingModule['CAPTCHA_MISSING'] = 'The captcha is invalid, please try again';
+			acymailingModule['NO_LIST_SELECTED'] = 'Please select the lists you want to subscribe to';
+		
+acymailingModule['excludeValuesformAcymailing49041'] = [];
+acymailingModule['excludeValuesformAcymailing49041']['name'] = 'Name';
+acymailingModule['excludeValuesformAcymailing49041']['email'] = 'example@email.com';
+window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });
+	</script>
+
+	
+<!-- META FOR IOS & HANDHELD -->
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+	<style type="text/stylesheet">
+		@-webkit-viewport   { width: device-width; }
+		@-moz-viewport      { width: device-width; }
+		@-ms-viewport       { width: device-width; }
+		@-o-viewport        { width: device-width; }
+		@viewport           { width: device-width; }
+	</style>
+	<script type="text/javascript">
+		//<![CDATA[
+		if (navigator.userAgent.match(/IEMobile\/10\.0/)) {
+			var msViewportStyle = document.createElement("style");
+			msViewportStyle.appendChild(
+				document.createTextNode("@-ms-viewport{width:auto!important}")
+			);
+			document.getElementsByTagName("head")[0].appendChild(msViewportStyle);
+		}
+		//]]>
+	</script>
+<meta name="HandheldFriendly" content="true"/>
+<meta name="apple-mobile-web-app-capable" content="YES"/>
+<!-- //META FOR IOS & HANDHELD -->
+
+
+
+
+<!-- Le HTML5 shim and media query for IE8 support -->
+<!--[if lt IE 9]>
+<script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
+<script type="text/javascript" src="/plugins/system/t3/base-bs3/js/respond.min.js"></script>
+<![endif]-->
+
+<!-- You can add Google Analytics here or use T3 Injection feature -->
+
+<!--[if lt IE 9]>
+<link rel="stylesheet" href="/templates/purity_iii/css/ie8.css" type="text/css" />
+<![endif]-->
+	</head>
+
+<body>
+
+<div class="t3-wrapper corporate"> <!-- Need this wrapper for off-canvas menu. Remove if you don't use of-canvas -->
+
+	
+<!-- MAIN NAVIGATION -->
+<header id="t3-mainnav" class="wrap navbar navbar-default navbar-fixed-top t3-mainnav">
+
+	<!-- OFF-CANVAS -->
+		<!-- //OFF-CANVAS -->
+
+	<div class="container">
+
+		<!-- NAVBAR HEADER -->
+		<div class="navbar-header">
+
+			<!-- LOGO -->
+			<div class="logo logo-image">
+				<div class="logo-image">
+					<a href="/" title="ElectroSmash">
+													<img class="logo-img" src="/images/banners/logo-electrosmash.png" alt="ElectroSmash" />
+						
+												
+						<span>ElectroSmash</span>
+					</a>
+				</div>
+			</div>
+			<!-- //LOGO -->
+
+											<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".t3-navbar-collapse">
+					<i class="fa fa-bars"></i>
+				</button>
+			
+	    
+		</div>
+		<!-- //NAVBAR HEADER -->
+
+		<!-- NAVBAR MAIN -->
+				<nav class="t3-navbar-collapse navbar-collapse collapse"></nav>
+		
+		<nav class="t3-navbar navbar-collapse collapse">
+			<div  class="t3-megamenu"  data-responsive="true">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="nav navbar-nav level0">
+<li itemprop='name' class="current active" data-id="435" data-level="1">
+<a itemprop='url' class=""  href="/"   data-target="#">Home </a>
+
+</li>
+<li itemprop='name' class="dropdown mega" data-id="510" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Chips<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="492" data-level="2">
+<a itemprop='url' class=""  href="/jrc4558-analysis"   data-target="#">JRC4558  </a>
+
+</li>
+<li itemprop='name'  data-id="519" data-level="2">
+<a itemprop='url' class=""  href="/mn3007-bucket-brigade-devices"   data-target="#">MN3007 BBDs </a>
+
+</li>
+<li itemprop='name'  data-id="468" data-level="2">
+<a itemprop='url' class=""  href="/lm386-analysis"   data-target="#">LM386 </a>
+
+</li>
+<li itemprop='name'  data-id="1643" data-level="2">
+<a itemprop='url' class=""  href="/pt2399-analysis"   data-target="#">PT2399 </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="dropdown mega" data-id="444" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Amps<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="993" data-level="2">
+<a itemprop='url' class=""  href="/1wamp"   data-target="#">1Wamp </a>
+
+</li>
+<li itemprop='name'  data-id="489" data-level="2">
+<a itemprop='url' class=""  href="/little-gem-analysis"   data-target="#">Little Gem Amp </a>
+
+</li>
+<li itemprop='name'  data-id="526" data-level="2">
+<a itemprop='url' class=""  href="/marshall-mg10"   data-target="#">Marshall MG10 </a>
+
+</li>
+<li itemprop='name'  data-id="491" data-level="2">
+<a itemprop='url' class=""  href="/noisy-cricket-analysis"   data-target="#">Noisy Cricket  </a>
+
+</li>
+<li itemprop='name'  data-id="490" data-level="2">
+<a itemprop='url' class=""  href="/ruby-amp-analysis"   data-target="#">Ruby Amp  </a>
+
+</li>
+<li itemprop='name'  data-id="488" data-level="2">
+<a itemprop='url' class=""  href="/smokey-amp-analysis"   data-target="#">Smokey Amp  </a>
+
+</li>
+<li itemprop='name'  data-id="746" data-level="2">
+<a itemprop='url' class=""  href="http://www.electrosmash.com/schematics#amps"   data-target="#">Amps Schematics.</a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="dropdown mega" data-id="511" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Pedals<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  style="width: 600px"  data-width="600"><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-6 mega-col-nav" data-width="6"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="515" data-level="2">
+<a itemprop='url' class=""  href="/back-talk-analysis"   data-target="#">Back Talk Reverse Delay </a>
+
+</li>
+<li itemprop='name'  data-id="518" data-level="2">
+<a itemprop='url' class=""  href="/big-muff-pi-analysis"   data-target="#">Big Muff Pi  </a>
+
+</li>
+<li itemprop='name'  data-id="524" data-level="2">
+<a itemprop='url' class=""  href="/boss-ce-2-analysis"   data-target="#">Boss CE-2 Chorus </a>
+
+</li>
+<li itemprop='name'  data-id="1088" data-level="2">
+<a itemprop='url' class=""  href="/boss-ds1-analysis"   data-target="#">Boss DS-1 Distortion </a>
+
+</li>
+<li itemprop='name'  data-id="1713" data-level="2">
+<a itemprop='url' class=""  href="/dallas-rangemaster"   data-target="#">Dallas Rangemaster </a>
+
+</li>
+<li itemprop='name'  data-id="905" data-level="2">
+<a itemprop='url' class=""  href="/crybaby-gcb-95"   data-target="#">Dunlop CryBaby GCB-95  </a>
+
+</li>
+<li itemprop='name'  data-id="842" data-level="2">
+<a itemprop='url' class=""  href="/fuzz-face"   data-target="#">Fuzz Face </a>
+
+</li>
+<li itemprop='name'  data-id="1664" data-level="2">
+<a itemprop='url' class=""  href="/germanium-fuzz"   data-target="#">Germanium Fuzz </a>
+
+</li>
+<li itemprop='name'  data-id="512" data-level="2">
+<a itemprop='url' class=""  href="/tube-screamer-analysis"   data-target="#">Ibanez Tube Screamer </a>
+
+</li>
+<li itemprop='name'  data-id="1433" data-level="2">
+<a itemprop='url' class=""  href="/klon-centaur-analysis"   data-target="#">Klon Centaur </a>
+
+</li>
+</ul>
+</div></div>
+<div class="col-xs-6 mega-col-nav" data-width="6"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="548" data-level="2">
+<a itemprop='url' class=""  href="/mxr-microamp"   data-target="#">MXR MicroAmp </a>
+
+</li>
+<li itemprop='name'  data-id="1667" data-level="2">
+<a itemprop='url' class=""  href="/marshall-guvnor-analysis"   data-target="#">Marshall Guvnor </a>
+
+</li>
+<li itemprop='name'  data-id="1632" data-level="2">
+<a itemprop='url' class=""  href="/mxr-distortion-plus-analysis"   data-target="#">MXR Distortion + </a>
+
+</li>
+<li itemprop='name'  data-id="1244" data-level="2">
+<a itemprop='url' class=""  href="/mxr-dyna-comp-analysis"   data-target="#">MXR Dyna Comp </a>
+
+</li>
+<li itemprop='name'  data-id="573" data-level="2">
+<a itemprop='url' class=""  href="/mxr-phase90"   data-target="#">MXR Phase 90 </a>
+
+</li>
+<li itemprop='name'  data-id="553" data-level="2">
+<a itemprop='url' class=""  href="/proco-rat"   data-target="#">ProCo Rat </a>
+
+</li>
+<li itemprop='name'  data-id="520" data-level="2">
+<a itemprop='url' class=""  href="/sitar-swami-analysis"   data-target="#">Sitar Swami </a>
+
+</li>
+<li itemprop='name'  data-id="525" data-level="2">
+<a itemprop='url' class=""  href="/vox-v847-analysis"   data-target="#">Vox V847 Wah Wah </a>
+
+</li>
+<li itemprop='name'  data-id="547" data-level="2">
+<a itemprop='url' class=""  href="/emg81"   data-target="#">EMG81 Pickup </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="dropdown mega" data-id="796" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Projects<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="1108" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield-uno"   data-target="#">pedalSHIELD UNO </a>
+
+</li>
+<li itemprop='name'  data-id="797" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield"   data-target="#">pedalSHIELD DUE </a>
+
+</li>
+<li itemprop='name'  data-id="1437" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield-mega"   data-target="#">pedalSHIELD MEGA </a>
+
+</li>
+<li itemprop='name'  data-id="1312" data-level="2">
+<a itemprop='url' class=""  href="/pedal-pi"   data-target="#">Pedal-Pi </a>
+
+</li>
+<li itemprop='name'  data-id="1662" data-level="2">
+<a itemprop='url' class=""  href="/1wamp"   data-target="#">1Wamp </a>
+
+</li>
+<li itemprop='name'  data-id="1663" data-level="2">
+<a itemprop='url' class=""  href="/germanium-fuzz"   data-target="#">Germanium Fuzz </a>
+
+</li>
+<li itemprop='name'  data-id="1668" data-level="2">
+<a itemprop='url' class=""  href="/time-manipulator"   data-target="#">Time Manipulator </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name'  data-id="745" data-level="1">
+<a itemprop='url' class=""  href="/forum-electrosmash?lang=en"   data-target="#">Forum </a>
+
+</li>
+<li itemprop='name'  data-id="816" data-level="1">
+<a itemprop='url' class=""  href="https://www.electrosmash.com/shop"   data-target="#">Shop</a>
+
+</li>
+</ul>
+</div>
+
+		</nav>
+    <!-- //NAVBAR MAIN -->
+
+	</div>
+</header>
+<!-- //MAIN NAVIGATION -->
+
+
+
+
+
+
+  
+
+
+  
+
+
+	
+<div id="t3-mainbody" class="container t3-mainbody">
+	<div class="row">
+
+		<!-- MAIN CONTENT -->
+		<div id="t3-content" class="t3-content col-xs-12 col-sm-8  col-md-9">
+						<div class="item-page clearfix">
+
+
+<!-- Article -->
+<article>
+	<meta itemprop="inLanguage" content="en-GB" />
+	<meta itemprop="url" content="/fuzz-face" />
+
+      
+<header class="article-header clearfix">
+	<h1 class="article-title" itemprop="headline">
+					<a href="/fuzz-face" itemprop="url" title="Fuzz Face Analysis">
+				Fuzz Face Analysis</a>
+			</h1>
+
+			</header>
+    
+    
+  <!-- Aside -->
+    <!-- //Aside -->
+
+  
+  
+  
+	
+  
+	
+	<section class="article-content clearfix">
+		<p><span style="font-size: 10pt; color: #333333;">The Fuzz Face is a distortion guitar pedal designed in London by Arbitrer Electronics Ltd in the autumn of 1966. It produces a characteristic high distorted sound called <em>fuzz</em>.</span><br /><span style="font-size: 10pt; color: #333333;">Ivor Arbiter took the round shaped enclosure idea from a microphone stand and it was the first pedal including a DPDT stomp-switch. The effect became very popular because Jimi Hendrix played it and there were not many distortion pedals around at that time.</span><a href="/images/tech/fuzz-face/fuzz-face-pedal.jpg"><img src="/images/tech/fuzz-face/fuzz-face-pedal-small.jpg" alt="fuzz face pedal" width="336" height="270" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face pedal" /></a><span style="font-size: 10pt; color: #333333;"></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The gist of the Fuzz Face remains in the simple circuit that uses eleven components (2 transistors, 4 resistors, 3 caps and 2 pots) and the astonishing tones created with them; delivering a soft asymmetrical clipping that changes to hard clipping in both semi-cycles under the fuzz pot action.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">Arbitrer Electronics manufactured the pedal from 1966 to 1975, Dallas Music Industries did a final batch in 1975-77, after that the production stopped. During its lifetime the pedal went through some minor cosmetic but major sonic changes. The fuzz face was re-issued from 1986 to 2000. In 1993 Dunlop took over the production selling the fuzz face in different flavors. Today, both the <em>Dallas Arbiter</em> and<em> Fuzz Face</em> trademarks are owned by Dunlop Manufacturing Inc.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">This analysis covers the first Arbitrer Fuzz Face model equipped with PNP germanium transistors from the first releases which are considered the best sounding.</span></p>
+ 
+<p>&nbsp;</p>
+<p><strong><span style="font-size: 14pt; color: #000000;">Table of Contents.</span></strong></p>
+<p><a href="/fuzz-face#link1"><span style="font-size: 10pt;">1. The Fuzz Face Models.</span></a><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link11">1.1 The transistors.</a></span><br /><a href="/fuzz-face#link2"><span style="font-size: 10pt;">2. Fuzz Face Circuit.</span></a><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link21">2.1 Fuzz Face Layout.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link22">2.2 Components Part List / Bill of Materials.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link23">2.3 Circuit Bias Points.</a></span><br /><a href="/fuzz-face#link3"><span style="font-size: 10pt;">3. Fuzz Face Input Stage.</span></a><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link31">3.1 Input Impedance.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link32">3.2 Voltage Gain.</a></span><br /><a href="/fuzz-face#link4"><span style="font-size: 10pt;">4. Fuzz Face Output Stage.</span></a><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link41">4.1 Output Impedance.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link42">4.2 Voltage Total Gain.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp;&nbsp;&nbsp; <a href="/fuzz-face#link43">4.3 Power Supply.</a></span><br /><a href="/fuzz-face#link5"><span style="font-size: 10pt;">5. Fuzz Face Global Feedback Network.</span></a><br /><a href="/fuzz-face#link6"><span style="font-size: 10pt;">6. Fuzz Face Frequency Response.</span></a><br /><a href="/fuzz-face#building-the-perfect-fuzz"><span style="font-size: 10pt;">7. Building the Perfect Fuzz Face</span></a><br /><a href="/fuzz-face#link7"><span style="font-size: 10pt;">8. Resources.</span></a><br /><span style="font-size: 10pt;">&nbsp; &nbsp; &nbsp;<a href="/fuzz-face#link71">8.1 Datasheets.</a></span><br /><span style="font-size: 10pt;"></span></p>
+<p>&nbsp;</p>
+<p><span style="font-size: 14pt; color: #99cc00;"><a id="link1" name="link1"></a></span><span style="color: #99cc00;"><strong><span style="font-size: 14pt; color: #000000;">1. The Fuzz Face Models:</span></strong><span style="color: #000000;"><br /></span></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The earliest models were covered in red, light or dark gray Hammerite paint with the Fuzz Face logo in white or black, t</span><span style="font-size: 10pt; color: #333333;">he text in the <em>smile</em> reveals the pedal's age. The earliest ones were <em>Arbiter-England</em>, then they became <em>Dallas-Arbiter England</em> sometime in 1968 since then there have been a variety of words in the smile.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">These days Dunlop manufactures a number of different finishes and sizes using various transistor flavors:</span><a href="/images/tech/fuzz-face/fuzz-face-family.jpg"><img src="/images/tech/fuzz-face/fuzz-face-family-small.jpg" alt="fuzz face pedals family" width="678" height="249" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face pedals family" /></a></p>
+<p><span style="font-size: 14pt; color: #000000;"><a name="link11"></a></span><strong><span style="font-size: 14pt; color: #000000;"><span style="font-size: 12pt;">1.1 The Fuzz Face Transistors.</span></span></strong></p>
+<p><span style="font-size: 10pt; color: #333333;">The transistors are the most sensitive part of the design with a whole mythology </span><span style="font-size: 10pt; color: #333333;">that has grown up around them. There are two main possibilities:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">Germanium transistors:</span> are claimed to have a warmer, creamier smoother sound.</span></li>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">Silicon transistors:</span> with higher gain are a bit harsher with some more high end.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">Germanium transistors are considered to have an overall better sounding to this effect with some drawbacks: germanium manufacturing is not as consistent and controlled as silicon and they have shorter lifespan and more <span style="text-decoration: underline;">temperature sensitivity.</span></span></p>
+<p style="margin-left: 60px;"><span style="font-size: 10pt; color: #000080;"><span style="text-decoration: underline;">Dennis Cornell</span>: <em>"All the transistors worked in a very similar way and all did the job, but they did give a slightly different tone. I think the Arbiter-England one didn&rsquo;t use the NKT275 germanium transistor; in those days we used the AC128</em>."</span></p>
+<p style="margin-left: 60px;"><em><span style="font-size: 10pt; color: #000080;">"There were always problems with them, so I&rsquo;d get involved in testing and repairing because they just didn&rsquo;t all work right!"</span></em><a href="/images/tech/fuzz-face/ac128.jpg"><img src="/images/tech/fuzz-face/ac128-small.jpg" alt="ac128-small" width="196" height="194" style="display: block; margin-left: auto; margin-right: auto;" /> </a></p>
+<p><span style="font-size: 10pt; color: #333333;">This last quote from D. Cornell explains why the production switched to the modern, temperature independent, cheaper and stable silicon transistors like the BC183L, BC183KA, BC130C, BC108C, BC109C, BC209C, and BC239C. <br /></span></p>
+<p><span style="color: #000000;"><strong><span style="font-size: 10pt;">Germanium Transistor Selection: </span></strong></span><span style="font-size: 10pt; color: #333333;">It is important to select the right transistor from the whole batch in order to archive the best effect performance. Germanium transistors tend to have high leakage current and an inconsistent gain value. </span><span style="font-size: 10pt; color: #333333;">This gain variation is crucial in the design, the best match uses a low gain in the first stage (&beta;=70-80 approx.) and a high gain in the second stage (&beta;=110-130 approx.).</span><br /><span style="font-size: 10pt; color: #333333;">However, there are some other options, for a more compressed sound you can use &beta;=90-120 for Q<sub>1</sub> and &beta;=150-190 Q<sub>2</sub>.</span><br /><span style="font-size: 10pt; color: #333333;">There are <a href="http://www.geofex.com/article_folders/fuzzface/fftech.htm"><span style="color: #333333;">some circuits</span></a> that help to measure the transistor gain.</span></p>
+<p>&nbsp;</p>
+<p><span style="font-size: 14pt; color: #000000;"><a id="link2" name="link2"></a><strong>2. The Fuzz Face Circuit.</strong></span></p>
+<p><span style="color: #333333; font-size: 10pt;">The circuit is a simple 2 stage amplifier with a feedback network path. It can be broken down into three parts:<span style="color: #000000;"> Input Stage</span>, <span style="color: #000000;">Output Stage</span> and <span style="color: #000000;">Feedback Network</span>.</span> <span style="font-size: 10pt; color: #333333;">The last block (the Feedback Network) will affect the rest of the analysis because it will influence the most important parameters: voltage gain, input impedance, output impedance and frequency response.</span><a href="/images/tech/fuzz-face/fuzz-face-original-schematic-parts.png"><span style="font-size: 10pt; color: #333333;"><img src="/images/tech/fuzz-face/fuzz-face-original-schematic-parts-small.png" alt="fuzz face original schematic parts" width="522" height="371" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face schematic parts" /></span></a></p>
+<p><span style="font-size: 10pt; color: #333333;">The fuzz face design was inspired in other contemporary fuzz pedals like the Maestro Fuzz Tone (designed by Glen Snotty) and the Sola Sound ToneBender (designed by Gary Hurst) although the Fuzz Face was an easier circuit than the competitors with only 2 transistors instead of 3.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">There is some controversy of when and where the 2-transistor topology appeared: the Tone Bender MK1.5 is similar to the Dick Denney designed Vox Distortion Booster circuit, nearly identical to the Italian made Vox Tone Bender circuit, and the Arbiter Fuzz Face circuit.</span></p>
+<p>&nbsp;</p>
+<p><span style="font-size: 12pt; color: #000000;"><a id="link21" name="link21"></a><strong>2.1 Fuzz Face Layout.</strong></span></p>
+<p><span style="color: #333333; font-size: 10pt;">The single layer PCB with through-hole components fits without problems inside the oversized cast iron enclosure. In the picture below you can see the original enclosure (left) compared with the new compact Dunlop box (right):<br /></span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-guts-by-spayne99.jpg"><img src="/images/tech/fuzz-face/fuzz-face-guts-by-spayne99-small.jpg" alt="fuzz face guts" width="547" height="319" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face guts" /></a><span style="color: #333333; font-size: 10pt;">The original Fuzz Face uses single layer PCB with through-hole components. The right side of the board have all the pads to attach the cables to the battery clip, jacks, potentiometers and the DPDT foot-switch.</span></p>
+<p><span style="color: #800000; font-size: 10pt;"><a href="/images/tech/fuzz-face/fuzz-face-pcb.jpg"><img src="/images/tech/fuzz-face/fuzz-face-pcb-small.jpg" alt="fuzz face pcb layout" width="729" height="173" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face pcb layout" /></a></span></p>
+<p><span style="font-size: 12pt; color: #000000;"><a id="link22" name="link22"></a><strong>2.2 Fuzz Face Components Part List / Bill of Materials:</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">This is the reduced list of components needed to build a Fuzz Face:<br /></span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; C<sub>1</sub>: &nbsp;&nbsp; 2.2 uF</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp; &nbsp;C<sub>2</sub>: &nbsp;&nbsp; 20 uF</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; C<sub>3</sub>: &nbsp;&nbsp; 0.01 uF</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>1</sub>: &nbsp;&nbsp; 33K</span><span style="font-size: 10pt; color: #333333;">&Omega;</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>2</sub>: &nbsp;&nbsp; 470</span><span style="font-size: 10pt; color: #333333;">&Omega;</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>3</sub>: &nbsp;&nbsp; 8.K</span><span style="font-size: 10pt; color: #333333;">&Omega;</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>4</sub>: &nbsp;&nbsp; 100K</span><span style="font-size: 10pt; color: #333333;">&Omega;</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>vol</sub>: &nbsp;&nbsp; 500K<span style="font-size: 10pt; color: #333333;">&Omega;</span> (Audio tap)</span><br /><span style="font-size: 10pt; color: #333333;">1&nbsp;&nbsp;&nbsp; R<sub>fuzz</sub>: &nbsp;&nbsp; 1<span style="font-size: 10pt; color: #333333;"></span>K<span style="font-size: 10pt; color: #333333;">&Omega;</span> (Linear tap)</span><br /><span style="font-size: 10pt; color: #333333;">2&nbsp;&nbsp;&nbsp; Q<sub>1</sub>, Q<sub>2</sub>: &nbsp;&nbsp; AC128</span><br /><span style="font-size: 10pt; color: #333333;">&nbsp;&nbsp;&nbsp;&nbsp; Jack in, Jack out, battery clip, DPDT foot-switch.</span><br /><br /><span style="font-size: 10pt; color: #333333;"></span></p>
+<p><span style="color: #000000; font-size: 12pt;"><a id="link23" name="link23"></a><strong>2.3 Fuzz Face Circuit Bias:</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">These are the most important DC bias points of the circuit.</span><a href="/images/tech/fuzz-face/fuzz-face-bias.jpg"><img src="/images/tech/fuzz-face/fuzz-face-bias-small.jpg" alt="fuzz face bias circuit" width="629" height="447" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face bias circuit" /></a><strong><span style="font-size: 10pt; color: #333333;"><span style="text-decoration: underline; color: #000000;">note:</span> </span></strong></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">For the bias values showed above, the fuzz potentiometer is set to the midpoint (500&Omega;)</span></li>
+<li><span style="font-size: 10pt; color: #333333;">The DC voltages might change due to transistor <span class="st">&beta;</span> variations, in this case, we are using a Q<sub>1</sub> with &beta;=85 and Q<sub>2</sub> with &beta;=120. If you want the see the <a href="/fuzz-face#link71">AC128 PSpice simulation model, check the last part of this article</a>.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">The important settings to get the best sound out of a Fuzz Face is to have Q1<sub>VC</sub>=-0.5 to -0.7 and Q2<sub>VC</sub>=-4.5V. For this purpose, some designers&nbsp;include trimmer resistors to substitute R1 and R3 so the VC of the transistors can be easily adjusted. More info on&nbsp;<a href="http://www.physics.mcgill.ca/~grant/Stuff/fuzzface.txt">physics.mcgill.ca/~grant/Stuff/fuzzface.txt</a></span></li>
+</ul>
+<p>&nbsp;</p>
+<p><span style="font-size: 14pt; color: #000000;"><a id="link3" name="link3"></a><strong>3. Fuzz Face Input Stage.</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The input stage is a Common Emitter (Collector Follower) PNP amplifier, it provides a high voltage gain with low input impedance and high output impedance. It is not the ideal input stage for signal integrity but the best for simplicity and fast high gain.</span><br /><a href="/images/tech/fuzz-face/fuzz-face-input-stage.png"><span style="font-size: 10pt; color: #333333;"><img src="/images/tech/fuzz-face/fuzz-face-input-stage-small.png" alt="fuzz face input stage" width="357" height="294" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face input stage" /></span></a></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">The 2.2uF input capacitor<span style="font-size: 10pt; color: #333333;"></span> <span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">C<sub>1</sub></span></span> blocks any DC level, removing hum and protecting the pedal/guitar against dangerous DC levels.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">The 33K<span style="font-size: 10pt; color: #333333;">&Omega;</span> R<sub>1</sub> resistor sets the main input stage parameters like the voltage gain, bias points, and maximum collector current.</span></li>
+</ul>
+<p>&nbsp;</p>
+<p><a name="link31"></a><strong><span style="font-size: 12pt; color: #000000;">3.1 Fuzz Face Input Impedance:</span></strong></p>
+<p><span style="font-size: 10pt; color: #333333;">Is equal to the input impedance of a common emitter stage. It can be calculated as:</span></p>
+<p>Zin = Zin of PNP Common Emitter = r&pi;</p>
+<p><div class="latex " >\[\\r_{\pi } = \frac{(\beta +1)\cdot Vt}{I_{EQ}}=\frac{(\beta +1)}{gm}= \frac{(70+1)}{0.0088}= 8K\]</div></p>
+<p><span style="font-size: 10pt; color: #333333;">For this math calculation the feedback network is ignored but in practice, it will lower the input impedance to 5K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">&Omega;</span></span> approx. The Fuzz Face has a very low input impedance that will change with the position of the R<sub>FUZZ</sub> potentiometer (between <span style="font-size: 10pt; color: #333333;">5.2K<span style="font-size: 10pt; color: #333333;">&Omega;</span> and 8.4K<span style="font-size: 10pt; color: #333333;">&Omega; in the simulation</span></span>). So the feedback network has a negative impact on this parameter.<br /></span></p>
+<p><span style="font-size: 10pt; color: #333333;">A<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">s a rule of thumb, Z<sub>in</sub> should be at least 1 M&Omega;. In other pedals with <em>similar</em> input stages<a href="/big-muff-pi-analysis#link23"> like the one in the Big Muff Pi</a> a series resistor is placed at the input in order to higher the impedance (at the cost of creating a <span style="font-size: 10pt; color: #333333;">voltage divider that reduces </span><span style="font-size: 10pt; color: #333333;">the available input signal</span>).&nbsp;</span></span> </span></p>
+<p><span style="font-size: 10pt; color: #333333;">The Fuzz Face low input impedance will <span style="font-size: 10pt; color: #333333;">load the guitar pickups. This is the reason why t</span>hey do not respond well when they are placed after other pedals. A practical advice is to put your Fuzz Face first on the pedal chain, just after the guitar. The germanium transistor needs to see the inductance/impedance from the guitar pickups. If they see a buffer at the input, they tend to sound awful.<br /></span></p>
+<p>&nbsp;</p>
+<p><strong><a name="link32"></a><span style="font-size: 12pt; color: #000000;">3.2 Voltage Gain of the Input Stage:</span></strong></p>
+<p><span style="font-size: 10pt; color: #333333;">In a <a href="http://en.wikipedia.org/wiki/Common_emitter">Common Emitter</a> transistor the voltage gain can be calculated following the equation:</span></p>
+<p style="margin-left: 30px;"><div class="latex " >\[A_{V}=-g_{m}\cdot R_{C}= -g_{m}\cdot R_{1}= 0.0088 \cdot 33K = 290\: (49dB)\]</div></p>
+<p><span style="font-size: 10pt; color: #333333;"><span style="text-decoration: underline;"><span style="color: #000000; text-decoration: underline;">note:</span></span> The gm value of a transistor is defined as:</span></p>
+<p style="margin-left: 30px;"><div class="latex " >\[g_{m}=\frac{I_{e}}{V_{T}}= \frac{0.22mA}{25mV}= 0.0088\]</div></p>
+<p><span style="color: #333333; font-size: 10pt;">where:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">I<sub>E</sub> is the DC emitter current, can be calculated looking at the <a href="/fuzz-face#link23">bias points</a> of the circuit, in a simplified form I<sub>E</sub>=(V<sub>CC</sub>-V<sub>C</sub>)/R<sub>1</sub>=(9V-1.6V)/33K= 0.22mA</span></li>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">V</span><sub>T</sub> is the thermal voltage of a transistor, at room temperature the value is approximately 25mV.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">In the real life, the input stage will not reach 49dB of gain, the feedback network will reduce this levels to 18.6 dB approx. In the image below the voltage gain of the input stage is shown varying the fuzz potentiometer.&nbsp;</span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-input-stage-voltage-gain.png"><img src="/images/tech/fuzz-face/fuzz-face-input-stage-voltage-gain.png" alt="fuzz face input stage voltage gain" width="804" height="285" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face input stage voltage gain" /></a><span style="color: #333333; font-size: 10pt;">The above graph shows a high pass filter with a cut-off frequency of 14Hz (18.6 -15. 6 = 3dB) all frequencies below 14Hz will suffer an attenuation 6dB/oct. This is due to the RC filter created by C<sub>1</sub> and the input impedance (5K<span style="font-size: 10pt; color: #333333;">&Omega;</span> approx.):</span></p>
+<p style="margin-left: 30px;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><div class="latex " >\[fc=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot Z_{in}\cdot&nbsp; C_{1}}=\frac{1}{2\pi \cdot 5K \cdot 2.2uF}= 14Hz\]</div></span><br /></span></p>
+<p><span style="color: #333333; font-size: 10pt;"><span style="text-decoration: underline; color: #000000;">note:</span> The <em>hump</em> originated when the fuzz control is set to minimum (the <em>lowest</em> dark green trace) is due to the C<sub>2</sub> bypass capacitor which creates also filter (C<sub>2</sub> - R<sub>FUZZ</sub>). This effect is more noticeable when the gain of the pedal is low because it has more signal feedback coming from the output through R<sub>4</sub>. When the gain goes high the feedback is smaller and the high pass filter influence is less important. The relationship between feedback and gain is explained in the <a href="/fuzz-face#link5">Feedback Network Section.</a><br /></span></p>
+<p>&nbsp;</p>
+<p><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;"><strong><em>FF Sound Signature I: Asymmetrical Clipping:</em></strong></span><span style="color: #000000;"><strong><em>&nbsp; </em></strong></span>For maximum dynamic range Common Emitter amplifiers are usually biased to have a collector voltage (V<sub>C</sub>) equal to V<sub>CC</sub>/2, in this case, it should be -4.5V. In the Fuzz Face the Q<sub>1</sub> collector voltage sits around -1.6V,&nbsp; so the voltage swing on the positive semi-cycle is much bigger than in the negative semi-cycle. </span></p>
+<p><span style="font-size: 10pt; color: #333333;">For small signals (less than 50mV<sub>pp</sub>), the input stage will first hit soft saturation on the negative semi-cycle of signal like in the image below, this asymmetric clipping distortion is very <em>musical</em>.</span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-input-stage-signals-small.png"><img src="/images/tech/fuzz-face/fuzz-face-input-stage-signals-small.png" alt="fuzz face input stage signals" width="595" height="269" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face input stage signals" /></a></p>
+<p><span style="font-size: 10pt; color: #333333;"> When the input signal has a higher level, the input stage will soft-saturate in both semi-cycles like in the image below. This feature of giving soft asymmetric distortion to small signals and clipping harder in both semi-cycles on big input signals (strong chords) gives a nice touch sensitivity which enhances the expressive possibilities.<br /></span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-input-stage-signals.png"><img src="/images/tech/fuzz-face/fuzz-face-input-stage-signals.png" alt="fuzz face input stage signals" width="595" height="271" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face input stage signals" /></a></p>
+<p><span style="font-size: 14pt; color: #000000;"><a id="link4" name="link4"></a><strong>4. Output Stage.</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The output stage is again a PNP Common Emitter Amplifier, this time with a variable emitter degeneration resistor (R<sub>FUZZ</sub>=1K<span style="color: #333333; font-size: 10pt;">&Omega;</span>).</span><br /><a href="/images/tech/fuzz-face/fuzz-face-output-stage.png"><img src="/images/tech/fuzz-face/fuzz-face-output-stage.png" alt="fuzz face output stage" width="454" height="450" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face output stage" /></a></p>
+<p><a name="link41"></a><span style="color: #000000;"><strong><span style="font-size: 12pt;">4.1 Fuzz Face Output Impedance:</span></strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The value of the output impedance can be calculated using the formula</span>:<br /><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"></span></span></span></span></span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;">Z<sub>out </sub>= R<sub>VOL</sub>//470<span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span><br /><span style="font-size: 10pt; color: #333333;">Z<sub>out MAX </sub>= R<sub>VOL</sub>//470<span style="color: #333333; font-size: 10pt;">&Omega;</span>=500K//<span style="font-size: 10pt; color: #333333;">470<span style="color: #333333; font-size: 10pt;">&Omega; </span></span>= 469<span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The fuzz face output impedance is affected by the feedback network and has a real value of 15K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">&Omega;</span></span> (measured at 1KHz with R<sub>VOL</sub>=500K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">&Omega;</span></span>). This value varies with the volume control level and the fuzz control position. However, it can be considered as a bad output impedance, it is too high and can carry problems when it is placed in the pedal chain.<br /></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The output capacitor C<sub>3</sub> blocks the DC level from saturating any device following the Fuzz Face. It creates a high pass filter together with R<sub>VOL</sub> that will determine the lowest frequency that gets out of the pedal. Making this cap bigger will let more low frequencies out. The cut frequency of this HPFilter is:</span></p>
+<p style="margin-left: 30px;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><div class="latex " >\[fc=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot R_{vol}\cdot&nbsp; C_{3}}=\frac{1}{2\pi \cdot 500K \cdot 0.01uF}= 31Hz\]</div></span></span></p>
+<p><span style="color: #333333; font-size: 10pt;">The minimum cut frequency is 31Hz, it goes higher when R<sub>VOL</sub> goes down. It means that with low volume levels, the amount of bass frequencies of the signal are slightly reduced, making C<sub>3</sub> bigger will let more low harmonics out. You can read more about it in the <a href="/fuzz-face#link6">Frequency Response section.</a></span></p>
+<p>&nbsp;</p>
+<p>&nbsp;<a name="lin42"></a><span style="color: #000000;"><strong><span style="font-size: 12pt;">4.2 Fuzz Face Total Voltage Gain:</span></strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The emitter degeneration resistor <span style="font-size: 10pt; color: #333333;">R<sub>FUZZ</sub></span> creates a local negative feedback, making the second amplifier stage more stable and immune to gain variations due to temperature, bias current and transistor intrinsic properties.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">With this emitter resistance added, the Common Emitter PNP major parameters (ignoring by the moment the feedback network) can be determined by the </span><span style="font-size: 10pt;"><span style="color: #333333;">ratio between the collector resistors (R</span><span style="color: #333333;"><sub>2</sub> + R<sub>3</sub>) to and the emitter resistor (the portion of R<sub>FUZZ</sub> not <em>shorted</em> to ground through the 20uF cap).</span></span></p>
+<p style="margin-left: 30px;"><div class="latex " >\[A_{V}=\frac{R_{C}}{R_{E}}= \frac{R_{2}+R_{3}}{R_{pot1}}\]</div></p>
+<p style="margin-left: 30px;"><div class="latex " >\[A_{V}min=\frac{470+8K2}{1K}= 8.2\: (18dB)\]</div></p>
+<p><span style="color: #333333; font-size: 10pt;">The voltage gain (A<sub>V</sub>) can go from 8.2 to as high as the transistor's basic internal gain (when R<sub>FUZZ</sub> is maxed out).</span></p>
+<p><span style="font-size: 10pt; color: #333333;">If we take into consideration the feedback network, once again the second stage will not reach values as 18dB. In this case, the total voltage gain measured at Q<sub>2</sub> collector is around 19.5dB. Remember that the input stage had a gain of 18.6 dB, that leaves the second stage a total amount of 1dB of gain (19.5-18.6=0.9dB). The general amount of gain is considerably reduced due to the feedback network.</span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-output-stage-voltage-gain-at-collector.png"><img src="/images/tech/fuzz-face/fuzz-face-output-stage-voltage-gain-at-collector.png" alt="fuzz-face-output-stage-voltage-gain-at-collector" width="809" height="255" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz-face-output-stage-voltage-gain-at-collector" /></a></p>
+<p><span style="font-size: 10pt; color: #333333;">In the above image, the output voltage at Q<sub>2</sub> is shown under the action of the R<sub>FUZZ</sub> potentiometer (the volume is set to max). It exhibits an attenuation in the low frequencies (high pass filter) with a f<sub>c</sub>=14Hz inherited from the input stage.</span></p>
+<p><span style="color: #333333; font-size: 10pt;"><strong>BUT</strong> the output of the pedal is not <span style="color: #333333;">directly</span> taken from Q<sub>2</sub> collector, there is a voltage divider created by R<sub>2</sub> and R<sub>3</sub> (the power supply is effectively at AC ground). This divider reduces the gain by a factor of R<sub>2</sub>/(R<sub>2</sub>+R<sub>3</sub>) = 470/(470+8K2) = 0.054 (-25dB), so the real gain of the output stage is:</span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;">G<sub>VTOTAL</sub> = GV<sub>PEDAL</sub> - Attenuation of R2/(R2+R3)= 19.5 - 25 = -5.5dB</span></p>
+<p><span style="font-size: 10pt; color: #333333;">This voltage divider created by R2 and R3 will greatly reduce the output level. The value usually does not get as low as -5.5dB, the series resistor of the battery should be taken into consideration and will raise the output level. </span></p>
+<p><span style="font-size: 10pt; color: #333333;">It might look funny but It has a reason: the output signal is not much larger than the input signal to keep the huge amount of signal available from over-driving the input of the pedal or amplifier following it. The fuzz is not designed to overdrive the following <em>system</em> by level.<br /></span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-output-stage-voltage-gain.png"><img src="/images/tech/fuzz-face/fuzz-face-output-stage-voltage-gain.png" alt="fuzz face output stage voltage gain" width="807" height="254" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face output stage voltage gain" /></a></p>
+<p><span style="color: #333333; font-size: 10pt;"><span style="text-decoration: underline; color: #000000;">note:</span> FF sounds different with different batteries and with the same battery as it gets run down. The internal series resistance of the battery is added to the 470&Omega; R<sub>3</sub> resistor, modifying the value by a significant amount.</span></p>
+<p>&nbsp;</p>
+<p><span style="color: #000000;"><strong><span style="font-size: 10pt;">Emitter degeneration capacitor C<sub>2</sub>:</span></strong></span><br /><span style="font-size: 10pt; color: #333333;">Any impedance between C<sub>2</sub> emitter and ground (R<sub>FUZZ</sub>) will reduce the gain of the output stage, it is a form of local negative feedback. Increasing this impedance will reduce the gain. </span><span style="font-size: 10pt; color: #333333;">If we are looking for high gain it is a common practice to have part or all of the emitter resistor grounded with a bypass capacitor. </span></p>
+<p><span style="font-size: 10pt; color: #333333;">Capacitors present an impedance that decreases with frequency, the bias (DC) points will remain the same but high guitar (AC) signals will get higher voltage gain. In terms of design, the bypass capacitor C<sub>2</sub> should have a reactance, at the lowest frequency you are interested to amplify, less than the value of R<sub>FUZZ</sub>. We can use<span style="font-size: 10pt; color: #333333;"> the formula</span>:<br /></span></p>
+<p style="margin-left: 30px;"><div class="latex " >\[f_{c}=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot R_{pot1}\cdot&nbsp; C_{2}}=\frac{1}{2\pi \cdot 1K \cdot 20uF}= 7.9Hz\]</div></p>
+<p><br /><span style="font-size: 10pt; color: #333333;">All the frequencies over 8Hz get full amplification. T</span><span style="font-size: 10pt; color: #333333;">he 20uF is so big that almost all the frequencies get full amplification.<br /></span></p>
+<p>&nbsp;</p>
+<p><span style="color: #000000;"><em><strong><span style="font-size: 10pt;">FF Sound Signature II: Soft Clipping - Hard Clipping: </span></strong></em></span><span style="font-size: 10pt; color: #333333;">As the second stage is driven harder, it can reach hard clipping in both semi-cycles of the signal. The clipping begins softly for smaller signals (and gains) and then with the fuzz potentiometer action the clipping goes harder with harder playing. The second amplifier stage can make the clipping harder, with sharper <em>squared</em> corners under the fuzz potentiometer action.</span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-output-stage-soft-hard-clipping.png"><img src="/images/tech/fuzz-face/fuzz-face-output-stage-soft-hard-clipping.png" alt="fuzz face soft hard clippping" width="806" height="285" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face soft hard clippping" /></a></p>
+<p><a name="link43"></a><span style="color: #000000;"><strong><span style="font-size: 12pt;">4.3 Fuzz Face Power Supply.</span></strong></span></p>
+<p><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #000000;"><span style="color: #333333;">For component economy, the power supply does not include any capacitors to remove ripple from the power line which is something common in <em>raw</em> fuzz pedals. The usual solution in guitar pedals is to add some power filtering by placing 47~100uF cap together with a 100nF from the +9v to ground.</span></span></span></p>
+<p>&nbsp;</p>
+<p><a name="link5"></a><span style="color: #000000;"><strong><span style="font-size: 14pt;">5. Fuzz Face Global Feedback Network.</span></strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">Amplifiers use current or voltage as input or outputs, you can check the <a href="http://en.wikipedia.org/wiki/Negative_feedback_amplifier#Two-port_analysis_of_feedback"><span style="color: #333333;">amplifier classification</span></a>. The fuzz face has a negative feedback called <a href="http://en.wikipedia.org/wiki/Negative_feedback_amplifier#Two-port_analysis_of_feedback"><em>shunt-series feedback</em></a> (Current Controlled Current Source <strong>CCCS</strong>). Part of the output current is taken from Q<sub>2</sub> emitter and introduced as current in Q<sub>1</sub> base, so the feedback resistor R<sub>4</sub> is shunt connected with the input and in series connected with the output</span><a href="/images/tech/fuzz-face/fuzz-face-feedback-network.png"><img src="/images/tech/fuzz-face/fuzz-face-feedback-network.png" alt="fuzz face feedback network" width="321" height="264" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face feedback network" /></a></p>
+<p><span style="font-size: 10pt; color: #333333;">Why using feedback?</span></p>
+<p><span style="font-size: 10pt; color: #333333;">In amplifier design the degenerative (negative) feedback is used to:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">Desensitize the gain: make the gain value less sensitive to transistors (i.e component variation caused by temperature).</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Reduce nonlinear distortion: make the gain constant.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Reduce the noise: minimizing the contribution to the output of unwanted electrical signals.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Control the input/output impedance: raising or lowering their values.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Extend the bandwidth of the amplifier.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">The properties above are obtained at the expense of a reduction of gain. As a rule of thumb with more feedback, there is less global gain, following&nbsp; the formula:</span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;"><div class="latex " >\[\\A_{FB}=\frac{A_{OL}}{1+B_{FB}A_{OL}}\]</div><br /></span></p>
+<p><span style="font-size: 10pt; color: #333333;">Where</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">A<sub>FB </sub>= Total current gain of the amp in the closed loop.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">A<sub>OL </sub>= Current gain of the amp in open loop</span></li>
+<li><span style="font-size: 10pt; color: #333333;">B = Feedback constant (not to be confused with the transistors&nbsp;<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt;">&beta;</span></span> parameter).</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<p><span style="color: #000000;"><strong><span style="font-size: 10pt;">How does the feedback work in the Fuzz Face?</span></strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The job of the feedback network is basically to reduce the huge gain of the Fuzz Face stages, making the whole circuit more stable and independent from problematic germanium transistors:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;"> When the fuzz control (1K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span></span> pot) is set to minimum, a big amount of signal is sent back to the input, creating a big feedback loop and reducing the total pedal gain (left image below).</span></li>
+<li><span style="font-size: 10pt; color: #333333;">When the fuzz control increases the attack, the 20uF C<sub>2</sub> cap will gradually shunt the negative feedback to the ground, thus letting the circuit operate with more gain (right image below).</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;"><a href="/images/tech/fuzz-face/fuzz-face-feedback-options.png"><img src="/images/tech/fuzz-face/fuzz-face-feedback-options.png" alt="fuzz face feedback network action" width="657" height="283" id="fuzz face feedback network action" style="display: block; margin-left: auto; margin-right: auto;" /></a><br /></span></p>
+<p><span style="font-size: 14pt; color: #000000;"><a id="link5" name="link6"></a><strong>6. Fuzz Face Frequency Response.</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The FF frequency response is shaped by the three capacitors C<sub>1</sub>, C<sub>2</sub> and C<sub>3</sub>:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">C<sub>1</sub></span>: The 2.2uF input cap creates a high pass filter together with the input pedal impedance (5K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span></span> approx.), removing dangerous DC levels, hum and overloading bass. </span></li>
+</ul>
+<p style="margin-left: 60px;"><span style="font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><div class="latex " >\[f_{c}=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot Z_{in}\cdot&nbsp; C_{1}}=\frac{1}{2\pi \cdot 5K \cdot 2.2uF}= 14Hz\]</div></span><br /></span></p>
+<p style="margin-left: 60px;"><span style="font-size: 10pt; color: #333333;">All harmonics below 14Hz will have 6dB/oct of attenuation</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">C<sub>2</sub></span>: Shunts part of the signal to ground, but its value is so high (20uF) that in the worst case only signals below 8Hz (and the audio spectrum) will be affected, so the contribution for the general frequency response can be discarded.<br /></span></li>
+<li><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">C<sub>3</sub></span>: The output cap creates also a high pass filter, removing the excess of bass that the Fuzz Face delivers:<br /></span></li>
+</ul>
+<p style="margin-left: 60px;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><div class="latex " >\[f_{c}=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot R_{vol}\cdot&nbsp; C_{3}}=\frac{1}{2\pi \cdot 500K \cdot 0.01uF}= 31Hz\]</div></span></span><br /></span></p>
+<p style="margin-left: 60px;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">All harmonics below 31Hz will have 6dB/oct of attenuation</span>. If the level goes down, the 500K<span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span></span></span> resistor will be reduced and the filter will remove more bass.</span></p>
+<p style="margin-left: 60px;"><span style="color: #333333; font-size: 10pt;"><a href="http://www.guitarworld.com/interview-eric-johnson-discusses-his-dunlop-signature-fuzz-face-pedal">Eric Johnson</a> seems to prefer a 100K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega; level resistor</span></span></span></span></span></span> over the stock 500<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"></span></span></span></span></span></span>K<span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;"><span style="color: #333333; font-size: 10pt;">&Omega;</span></span></span></span></span></span>. Using a smaller resistor, the filter will cut more lows out (f<sub>c</sub>=160Hz) which will result in a brighter sound.</span></p>
+<p>&nbsp;</p>
+<p><span style="color: #333333; font-size: 10pt;">The plot below represents the total frequency response of the fuzz face, the different lines show the effect of the volume potentiometer.&nbsp; As the volume goes lower (blue line), the graph shows a steeper slope with more high content. This is due to the C<sub>3</sub> output high pass filter effect ( C<sub>3</sub> - R<sub>VOL</sub>)</span></p>
+<p><span style="color: #333333; font-size: 10pt;">The graph also shows a general roll off of the bass harmonics under 14Hz, this is due to the high pass filter created by C<sub>2</sub> and Z<sub>in </sub></span><span style="font-size: 10pt; color: #333333;">(input impedance of the pedal).</span></p>
+<p><span style="font-size: 10pt; color: #333333;">Broadly speaking the frequency response of the Fuzz Face is not very innovative, it just removes some bass and keeps all the highs which contribute to have&nbsp;powerful distortion. Other fuzz pedals like the <a href="/big-muff-pi-analysis#link41"><span style="color: #333333;">Big Muff Pi have a more distinctive frequency response</span></a> that could shape the tone in a more innovative way.</span></p>
+<p><a href="/images/tech/fuzz-face/fuzz-face-output-signal.png"><img src="/images/tech/fuzz-face/fuzz-face-frequency-response.png" alt="fuzz face frequency response" width="801" height="256" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face frequency response" /></a></p>
+<p><span style="font-size: 10pt; color: #333333;">This last image below shows in red color the typical output signal, characterized by an asymmetric waveform and a hard-clipping when the fuzz potentiometer is maxed. The big amount of gain will clip the signal easily creating large amounts of higher harmonic content. Note that the output signal is not completely flat when it clips (it is slightly tilted), this feature adds more character to the sound .</span></p>
+<p>&nbsp;<a href="/images/tech/fuzz-face/fuzz-face-output-signal.png"><img src="/images/tech/fuzz-face/fuzz-face-output-signal.png" alt="fuzz face output signal" width="806" height="286" style="display: block; margin-left: auto; margin-right: auto;" title="fuzz face output signal" /></a></p>
+<p>&nbsp;</p>
+<p><span style="font-size: 14pt;"><a id="building-the-perfect-fuzz" style="background-image: url('/img/anchor.gif');" name="link6"></a><span style="color: #000000;"><strong>7. Building the Perfect Fuzz.</strong></span></span></p>
+<p><span style="color: #444444; font-family: verdana, geneva; font-size: 13.3333px;">The Fuzz Face circuit has 9 components. Seems like simple stuff, and in principle it is, but the actual implementation of the pedal has plenty of black magic and mystery associated, and it takes a lot of effort to get the things sounding just right.</span></p>
+<p><span style="color: #444444; font-family: verdana, geneva; font-size: 13.3333px;"><span style="color: #3366ff;"><a href="/germanium-fuzz" style="color: #3366ff;"><strong>We have created a project</strong></a></span> so you can build the perfect Fuzz with all the knowledge and experience that we have while&nbsp;keeping the tweaks and character that make this vintage pedal distortion to sound round and harmonically pleasant.</span></p>
+<p><a href="/germanium-fuzz"><img src="/images/tech/fuzz-face/perfect-fuzz-face.jpg" alt="the perfect fuzz face" width="1097" height="304" style="display: block; margin-left: auto; margin-right: auto;" title="the perfect fuzz face" /></a></p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p><span style="color: #000000; font-size: 14pt;"><a id="link9" name="link7"></a></span><span style="color: #000000; font-size: 14pt;"><strong>8. Resources.</strong></span></p>
+<p style="margin-left: 30px;"><span style="line-height: 17.993px; color: #333333; font-size: 10pt;"><a href="http://www.geofex.com/article_folders/fuzzface/fftech.htm">The Technology of the Fuzz Face</a> by R.G Keen.</span><br style="line-height: 17.992992401123047px;" /><span style="line-height: 17.992992401123047px; color: #333333; font-size: 10pt;"><a href="http://www.bossarea.com/loadpage.asp?file=boxes/ce-2.xml"></a></span><span style="font-size: 10pt;"><a href="http://screaminfx.com/tech/what-is-the-best-fuzz-pedal.htm">Fuzz Face Description</a> <span style="color: #333333;">by ScreaminFX.</span></span> <br style="line-height: 17.992992401123047px;" /><span style="line-height: 17.992992401123047px; color: #333333; font-size: 10pt;"><a href="/images/tech/fuzz-face/fuzz%20face%20overton_william_e_200605_mast.pdf.pdf">Electrical Engineering Thesis by William E. Overton</a> focused on the Fuzz Face. </span><br style="line-height: 17.993px;" /><span style="line-height: 17.993px; color: #333333; font-size: 10pt;"><a href="http://www.dingotone.com/wordpress/wp-content/uploads/2012/06/Discussion-about-fuzzface-batteries-V1.pdf">Discussion Paper About Fuzz FAce Batteries</a> by DingoTone.com</span><span style="font-size: 10pt;"><span style="color: #333333;"></span></span> <br style="line-height: 17.993px;" /><span style="line-height: 17.993px; color: #333333; font-size: 10pt;"><a href="http://fuzzcentral.ssguitar.com/fuzzface.php">Arbitrer Fuzz Face</a> by Fuzzcentral. </span><br />&nbsp;</p>
+<p><span style="color: #000000; font-size: 12pt;"><a id="link91" name="link71"></a></span><span style="color: #000000;"><strong><span style="font-size: 12pt;">8.1 Datasheets.</span></strong></span></p>
+<p style="margin-left: 30px;"><a href="/images/tech/fuzz-face/ac128_datasheet1.pdf"><span style="font-size: 10pt;">AC128 Transistor datasheet 1 pdf</span></a><br /><a href="/images/tech/fuzz-face/ac128_datasheet2.pdf"><span style="font-size: 10pt;">AC128 Transistor datasheet 2 pdf</span></a></p>
+<p style="margin-left: 30px;">&nbsp;</p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;">PsPice models used for AC128 Fuzz Face simulation:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #000000;">AC128 with <span style="font-size: 10pt;">&beta;</span>=85</span></li>
+</ul>
+<p style="padding-left: 60px;">.MODEL GERPNP_LOWGAIN PNP(IS=85.8N BF=85.000 NF=1.000 VAF=102.207 <br />+IKF=9.981M ISE=0.435N NE=1.200 BR=20.000 NR=1.000 VAR=20.000 <br />+IKR=1.248M ISC=120.8N NC=1.200 RB=173.312 IRB=5.000U RBM=43.328 <br />+RE=20.000 RC=60.000 CJE=6.000P VJE=0.400 MJE=0.400 TF=0.150U<br />+XTF=9.996 VTF=2.000 ITF=9.983M PTF=1.000 CJC=3.750P<br />+VJC=0.600 MJC=0.330 XCJC=0.650 TR=2.865U<br />+CJS=0.0 VJS=0.700 MJS=0.500 XTB=1.000 EG=0.670<br />+XTI=4.000 KF=5.000F AF=1.000 FC=0.750)<br />.END</p>
+<ul>
+<li><span style="font-size: 10pt; color: #000000;">AC128 with <span style="font-size: 10pt;">&beta;</span>=120</span><span style="font-family: Calibri,sans-serif; font-size: 10pt;">.</span></li>
+</ul>
+<p style="padding-left: 60px;">.MODEL GERPNP_HIGHGAIN PNP(IS=120.8N BF=120.000 NF=1.000 VAF=102.207 <br />+IKF=9.981M ISE=0.435N NE=1.200 BR=20.000 NR=1.000 VAR=20.000 <br />+IKR=1.248M ISC=120.8N NC=1.200 RB=173.312 IRB=5.000U RBM=43.328 <br />+RE=20.000 RC=60.000 CJE=6.000P VJE=0.400 MJE=0.400 TF=0.150U<br />+XTF=9.996 VTF=2.000 ITF=9.983M PTF=1.000 CJC=3.750P<br />+VJC=0.600 MJC=0.330 XCJC=0.650 TR=2.865U<br />+CJS=0.0 VJS=0.700 MJS=0.500 XTB=1.000 EG=0.670<br />+XTI=4.000 KF=5.000F AF=1.000 FC=0.750)<br />.END</p>
+<p>&nbsp;</p>
+<p style="margin-left: 30px;">&nbsp;<span style="text-align: center; color: #333333; font-size: 13.3333px;">My sincere appreciation for D.Clark support.</span><span style="text-align: center;"></span><span style="font-size: 10pt;"><span style="font-size: 12pt; color: #000000;"><span style="color: #333333; font-size: 10pt;">Thanks for reading, all feedback is appreciated&nbsp; <span id="cloak17cc33522020672571d5c2cdb75830c7">This email address is being protected from spambots. You need JavaScript enabled to view it.</span><script type='text/javascript'>
+				document.getElementById('cloak17cc33522020672571d5c2cdb75830c7').innerHTML = '';
+				var prefix = '&#109;a' + 'i&#108;' + '&#116;o';
+				var path = 'hr' + 'ef' + '=';
+				var addy17cc33522020672571d5c2cdb75830c7 = '&#105;nf&#111;' + '&#64;';
+				addy17cc33522020672571d5c2cdb75830c7 = addy17cc33522020672571d5c2cdb75830c7 + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';
+				var addy_text17cc33522020672571d5c2cdb75830c7 = '&#105;nf&#111;' + '&#64;' + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';document.getElementById('cloak17cc33522020672571d5c2cdb75830c7').innerHTML += '<a ' + path + '\'' + prefix + ':' + addy17cc33522020672571d5c2cdb75830c7 + '\'>'+addy_text17cc33522020672571d5c2cdb75830c7+'<\/a>';
+		</script></span></span></span></p>
+<p style="text-align: right;"><span style="font-size: 10pt;"><span style="font-size: 12pt; color: #000000;"><span style="color: #333333; font-size: 10pt;"></span></span></span></p>
+<p>&nbsp;</p>
+<p style="text-align: center;"><span style="color: #0000ff;"><a href="/rights"><span style="color: #0000ff;">Some Rights Reserved</span></a></span><span style="color: #808080; font-size: 8pt;">, you are free to copy, share, remix and use all material.</span></p>
+<p style="text-align: center;"><span style="color: #808080; font-size: 8pt;">Trademarks, brand names and logos are the property of their respective owners.</span></p>
+<p>&nbsp;&nbsp;&nbsp;</p>	</section>
+  
+  <!-- footer -->
+    <!-- //footer -->
+
+			<hr class="divider-vertical" /><ul class="pager pagenav">
+	<li class="previous">
+		<a class="hasTooltip" title="Boss DS-1 Distortion Analysis" aria-label="Previous article: Boss DS-1 Distortion Analysis" href="/boss-ds1-analysis" rel="prev">
+			<span class="icon-chevron-left" aria-hidden="true"></span> <span aria-hidden="true">Prev</span>		</a>
+	</li>
+	<li class="next">
+		<a class="hasTooltip" title="Pro Co Rat Analysis" aria-label="Next article: Pro Co Rat Analysis" href="/proco-rat" rel="next">
+			<span aria-hidden="true">Next</span> <span class="icon-chevron-right" aria-hidden="true"></span>		</a>
+	</li>
+</ul>
+	
+	
+	</article>
+<!-- //Article -->
+
+
+</div><div><a href="http://www.artio.net" style="font-size: 8px; visibility: visible; display: inline;" title="Web development, Joomla, CMS, CRM, Online shop software, databases">Joomla SEF URLs by Artio</a></div>
+		</div>
+		<!-- //MAIN CONTENT -->
+
+		<!-- SIDEBAR RIGHT -->
+		<div class="t3-sidebar t3-sidebar-right col-xs-12 col-sm-4  col-md-3 ">
+			<div class="t3-module module " id="Mod28"><div class="module-inner"><h3 class="module-title "><span>New Updates</span></h3><div class="module-ct"><ul class="latestnews mod-list">
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/arduino-audio-meter" itemprop="url">
+			<span itemprop="name">
+				Arduino Audio Meter			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/dallas-rangemaster" itemprop="url">
+			<span itemprop="name">
+				Dallas Rangemaster Treble Booster Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/time-manipulator" itemprop="url">
+			<span itemprop="name">
+				Time Manipulator - Arduino Delay/Echo/Reverb			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/marshall-guvnor-analysis" itemprop="url">
+			<span itemprop="name">
+				Marshall The Guvnor Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/germanium-fuzz" itemprop="url">
+			<span itemprop="name">
+				You Can Build the Perfect Germanium Fuzz			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/mxr-distortion-plus-analysis" itemprop="url">
+			<span itemprop="name">
+				MXR Distortion + Analysis			</span>
+		</a>
+	</li>
+</ul>
+</div></div></div><div class="t3-module module " id="Mod29"><div class="module-inner"><h3 class="module-title "><span>Most Visited</span></h3><div class="module-ct"><ul class="mostread mod-list">
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/tube-screamer-analysis" itemprop="url">
+			<span itemprop="name">
+				Tube Screamer Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/fuzz-face" itemprop="url">
+			<span itemprop="name">
+				Fuzz Face Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/proco-rat" itemprop="url">
+			<span itemprop="name">
+				Pro Co Rat Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/boss-ds1-analysis" itemprop="url">
+			<span itemprop="name">
+				Boss DS-1 Distortion Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/klon-centaur-analysis" itemprop="url">
+			<span itemprop="name">
+				Klon Centaur Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/big-muff-pi-analysis" itemprop="url">
+			<span itemprop="name">
+				Big Muff Pi Analysis			</span>
+		</a>
+	</li>
+</ul>
+</div></div></div><div class="t3-module module " id="Mod184"><div class="module-inner"><h3 class="module-title "><span>Follow us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><span style="font-size: 10pt; color: #333333;">You can also follow us on:</span></p>
+<p><a href="https://www.facebook.com/ElectroSmash"><img src="/images/banners/facebook.png" alt="facebook" /></a>&nbsp;&nbsp; <a href="https://plus.google.com/+Electrosmash/about"><img src="/images/banners/google.png" alt="google" /></a>&nbsp;&nbsp; <a href="https://www.instagram.com/electro.smash/"><img src="/images/banners/instagram.png" alt="instagram" /></a></p>
+<p><a href="https://www.pinterest.com/electrosmash/"><img src="/images/banners/pinterest.png" alt="pinterest" /></a>&nbsp;&nbsp; <a href="https://www.youtube.com/user/ElectroSmashTV"><img src="/images/banners/youtube.png" alt="youtube" /></a>&nbsp;&nbsp; <a href="https://twitter.com/electro_smash"><img src="/images/banners/twitter.png" alt="twitter" /></a></p></div>
+</div></div></div>
+		</div>
+		<!-- //SIDEBAR RIGHT -->
+
+	</div>
+</div> 
+
+
+
+  
+
+
+  
+
+
+	
+<!-- BACK TOP TOP BUTTON -->
+<div id="back-to-top" data-spy="affix" data-offset-top="300" class="back-to-top hidden-xs hidden-sm affix-top">
+  <button class="btn btn-primary" title="Back to Top"><i class="fa fa-caret-up"></i></button>
+</div>
+<script type="text/javascript">
+(function($) {
+	// Back to top
+	$('#back-to-top').on('click', function(){
+		$("html, body").animate({scrollTop: 0}, 500);
+		return false;
+	});
+    $(window).on('load', function(){
+        // hide button to top if the document height not greater than window height*2;using window load for more accurate calculate.    
+        if ((parseInt($(window).height())*2)>(parseInt($(document).height()))) {
+            $('#back-to-top').hide();
+        } 
+    });
+})(jQuery);
+</script>
+<!-- BACK TO TOP BUTTON -->
+
+<!-- FOOTER -->
+<footer id="t3-footer" class="wrap t3-footer">
+
+			<!-- FOOTER SPOTLIGHT -->
+		<div class="container hidden-xs">
+				<!-- SPOTLIGHT -->
+	<div class="t3-spotlight t3-footer-sl  row">
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod185"><div class="module-inner"><h3 class="module-title "><span>About us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><a href="https://shop.electrosmash.com/about-us/">&nbsp;&nbsp;<img src="/images/banners/smash-electro.jpg" alt="smash electro" /></a></p>
+<p><a href="https://shop.electrosmash.com/about-us/"><span style="font-size: 10pt; color: #333333;">Smashing audio electronics since MMXIII</span></a></p>
+<p>&nbsp;</p></div>
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod183"><div class="module-inner"><h3 class="module-title "><span>Email Newsletter</span></h3><div class="module-ct"><div class="acymailing_module" id="acymailing_module_formAcymailing49041">
+	<div class="acymailing_fulldiv" id="acymailing_fulldiv_formAcymailing49041"  >
+		<form id="formAcymailing49041" action="/" onsubmit="return submitacymailingform('optin','formAcymailing49041')" method="post" name="formAcymailing49041"  >
+		<div class="acymailing_module_form" >
+						<table class="acymailing_form">
+				<tr>
+												<td class="acyfield_email acy_requiredField">
+								<input id="user_email_formAcymailing49041"  onfocus="if(this.value == 'example@email.com') this.value = '';" onblur="if(this.value=='') this.value='example@email.com';" class="inputbox" type="text" name="user[email]" style="width:90%" value="example@email.com" title="example@email.com"/>
+							</td> </tr><tr>
+					
+					<td  class="acysubbuttons">
+												<input class="button subbutton btn btn-primary" type="submit" value="Subscribe" name="Submit" onclick="try{ return submitacymailingform('optin','formAcymailing49041'); }catch(err){alert('The form could not be submitted '+err);return false;}"/>
+											</td>
+				</tr>
+			</table>
+						<input type="hidden" name="ajax" value="0" />
+			<input type="hidden" name="acy_source" value="module_183" />
+			<input type="hidden" name="ctrl" value="sub"/>
+			<input type="hidden" name="task" value="notask"/>
+			<input type="hidden" name="redirect" value="https%3A%2F%2Felectrosmash.com%2Ffuzz-face"/>
+			<input type="hidden" name="redirectunsub" value="https%3A%2F%2Felectrosmash.com%2Ffuzz-face"/>
+			<input type="hidden" name="option" value="com_acymailing"/>
+						<input type="hidden" name="hiddenlists" value="1"/>
+			<input type="hidden" name="acyformname" value="formAcymailing49041" />
+									</div>
+		</form>
+	</div>
+	</div>
+
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod186"><div class="module-inner"><h3 class="module-title "><span>Contact us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><a href="/contact-us"><span style="font-size: 10pt; color: #333333;">e-mail us at <span id="cloak950f6ef2414b9e5c656f327182fa3149">This email address is being protected from spambots. You need JavaScript enabled to view it.</span><script type='text/javascript'>
+				document.getElementById('cloak950f6ef2414b9e5c656f327182fa3149').innerHTML = '';
+				var prefix = '&#109;a' + 'i&#108;' + '&#116;o';
+				var path = 'hr' + 'ef' + '=';
+				var addy950f6ef2414b9e5c656f327182fa3149 = '&#105;nf&#111;' + '&#64;';
+				addy950f6ef2414b9e5c656f327182fa3149 = addy950f6ef2414b9e5c656f327182fa3149 + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';
+				var addy_text950f6ef2414b9e5c656f327182fa3149 = '&#105;nf&#111;' + '&#64;' + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';document.getElementById('cloak950f6ef2414b9e5c656f327182fa3149').innerHTML += '<a ' + path + '\'' + prefix + ':' + addy950f6ef2414b9e5c656f327182fa3149 + '\'>'+addy_text950f6ef2414b9e5c656f327182fa3149+'<\/a>';
+		</script></span></a></p>
+<p>&nbsp;</p></div>
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod188"><div class="module-inner"><h3 class="module-title "><span>Rights</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p style="text-align: left;">&nbsp;&nbsp;<a href="https://creativecommons.org/licenses/by-nc/3.0/"><img src="/images/banners/88x31.png" alt="88x31" /></a></p>
+<p style="text-align: left;"><img src="/images/banners/open_source_logo.png" alt="open source logo" width="180" height="38" /></p>
+<p style="text-align: left;"><img src="/images/banners/open_hardware_logo.png" alt="open hardware logo" width="180" height="38" /></p>
+<p style="text-align: left;">&nbsp;</p></div>
+</div></div></div>
+							</div>
+			</div>
+<!-- SPOTLIGHT -->
+		</div>
+		<!-- //FOOTER SPOTLIGHT -->
+	
+	<section class="t3-copyright">
+		<div class="container">
+			<div class="row">
+				<div class="col-md-12 copyright ">
+					
+          <small>
+            <a href="http://twitter.github.io/bootstrap/" title="Bootstrap by Twitter" target="_blank">Bootstrap</a> is a front-end framework of Twitter, Inc. Code licensed under <a href="https://github.com/twbs/bootstrap/blob/master/LICENSE" title="MIT License" target="_blank">MIT License.</a>
+          </small>
+          <small>
+            <a href="http://fortawesome.github.io/Font-Awesome/" target="_blank">Font Awesome</a> font licensed under <a href="http://scripts.sil.org/OFL">SIL OFL 1.1</a>.
+          </small>
+				</div>
+							</div>
+		</div>
+	</section>
+
+</footer>
+<!-- //FOOTER -->
+
+</div>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-29544239-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>
