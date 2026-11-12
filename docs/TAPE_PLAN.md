@@ -1154,3 +1154,205 @@ value; head wear (spacing after alignment: the circuit's EQ trims are fixed part
 head plays as on a real machine, not re-aligned away). Also wanted for "trash": dropouts
 (lost head contact), print-through, azimuth error, magnetized heads. Render only (no live
 audition; prints ~50x real time).
+
+**Over-bias options (2026-11-12, overnight study; a study, no default changed: the user
+decides).** No. 21's curves are narrower in bias than #111's (TM2 step 7: the 1 kHz rise too
+steep, -5.5 against -11.0 dB at 3 mA; the 15k - 1k spread at 8 mA -6.6 against -10.4), and
+Sharrock switching was closed ("Gaps" 3). The cheap terms left (the plan's untried list, the
+literature study's mean field, the particle bench's astroid), each built as an opt-in
+variant and measured out of sample with the switching study's checks: no variant's
+parameter is fitted to No. 21, every ensemble is refitted to Bulletin 20 and Eilers' Hc with
+the variant on.
+- Code: `varimu/tape_variants.py` (outside varimu/devices on purpose: runner.RESULT_CODE
+  hashes devices/*.py, so no IR, render, cache key or alignment moves;
+  `export_circuit_fixtures.py --golden` shows no diff); circuitsim's opt-in
+  `tape::record_mean_field` (the moving model and the astroid drive), `tape::moving_history`,
+  `tape::astroid_drive` (Python: `tape_record(..., threads=, mean_field=, ms_a_m=,
+  astroid=)`, `tape_moving_along_x`, `tape_moving_stats`; all off is the old kernel bit for
+  bit); `tests/test_tape_variants.py` (10 tests: the forward memory against the corner
+  formula within 2e-6, the tables' diagonal interpolation; circuitsim's moving and astroid
+  recordings and the moving loops against the Python references within 1e-10; the 3D axes;
+  the head law); `scripts/tape_overbias_study.py` -> `reports/tape/overbias_study.{json,png}`
+  (merged from the parallel runs' `overbias_moving.json` and `overbias_print.json`).
+- Sources beyond the bulletins: the parallel literature study D:/Claude Code Projects/
+  VST-chirp/docs/TAPE_PARTICLE_RESEARCH.md (sections 2, 3, 5) and the particle bench, docs/
+  TAPE_PARTICLES.md on branch worktree-agent-a7931fefe46225e86 (its static bench:
+  interactions don't widen the bias curve, rise to -20 dB 6.9-7.4 dB of bias against
+  No. 21's 9.4; the over-bias fall comes from Stoner-Wohlfarth switching in the head's
+  rotating field).
+
+**The checks** (No. 21: one bias scale and an offset per curve, as before, its rms per
+curve, the 1 kHz rise at 3 mA, the over-bias falls and the 15k - 1k spread at 8 mA, the
+peaks' positions against the data's in dB of bias; the knee: the 3% THD level over the 1%
+at 400 Hz, 15 ips, aligned, on the first print's 12.7 um record gap (#111's Sound Talk
+No. 1: ~4.1-4.5 dB of output); `lite`: the same on the medium at the base's aligned bias,
+for the moving kernel, whose alignment costs ~50x; cost: one 1 kHz No. 21 recording
+against the base's):
+
+| variant | Bulletin 20 fit (reading errors) | No. 21 rms 1k / 15k (dB) | 1k at 3 mA (-11.0) | 1k / 15k at 8 mA (-3.3 / -7.1) | 15k - 1k at 8 mA (-10.4) | peaks 1k / 15k, dB of bias | knee: aligned / lite (12.7 um) | knee 51 um: aligned / lite | cost |
+|---|---|---|---|---|---|---|---|---|---|
+| **No. 21 / #111** | | | -11.0 | -3.3 / -7.1 | -10.4 | 0 / 0 | ~4.1-4.5 (No. 1) | | |
+| base (SCOTCH111@3) | 0.57 | 2.25 / 1.74 | -5.5 | -3.2 / -5.1 | -6.6 | -1.3 / -0.8 | 3.33 / 3.22 | 4.00 / 3.97 | 1.0x |
+| astroid_k15 | 0.73 | 1.87 / 1.94 | -8.0 | -1.9 / -8.6 | -15.6 | -0.3 / -2.0 | 3.94 / - | - / - | 2.7x |
+| astroid_k3 | 0.71 | 2.03 / 2.06 | -8.9 | -1.3 / -8.7 | -18.3 | +0.0 / -1.6 | - / - | - / - | 2.1x |
+| astroid_k15_noimage | 0.73 | 2.16 / 2.63 | -5.4 | -2.9 / -8.9 | -15.6 | -1.0 / -1.7 | - / - | - / - | - |
+| moving_p06 | 0.53 | 2.22 / 1.80 | -6.1 | -3.6 / -4.9 | -6.1 | -1.4 / -0.9 | - / 3.05 | - / - | 11.7x |
+| moving_m05 | 0.64 | 2.42 / 2.00 | -5.0 | -3.2 / -6.3 | -7.3 | -1.2 / -0.7 | - / - | - / - | 11.1x |
+| moving_m10 | 0.75 | 2.92 / 2.93 | -3.9 | -3.7 / -10.0 | -8.3 | -2.1 / -1.6 | - / 4.18 | - / 5.18 | - |
+| static_p06 | 0.53 | 1.89 / 1.62 | -6.2 | -2.7 / -4.8 | -7.3 | -1.5 / -1.0 | 3.31 / - | - / - | 0.7x |
+| static_m10 | 0.75 | 3.40 / 2.79 | -3.5 | -5.3 / -8.1 | -4.6 | -2.1 / -1.6 | 3.01 / - | - / - | 1.0x |
+| head_typical | - | 2.26 / 1.78 | -5.5 | -3.2 / -5.1 | -6.7 | -1.2 / -0.8 | 3.38 / - | - / - | 1.2x |
+| head_lossy | - | 2.62 / 1.93 | -5.0 | -3.8 / -6.0 | -7.0 | none to 8 mA / -0.9 | 3.25 / - | - / - | 0.8x |
+| o3d_iso | 3.92 | 3.86 / 4.91 | -4.8 | -4.5 / -17.6 | -19.0 | -2.6 / -2.1 | 3.21 / - | - / - | 1.5x |
+| o3d_k15 | 2.10 | 3.27 / 3.29 | -4.2 | -4.4 / -10.7 | -9.4 | -2.6 / -2.1 | 3.39 / - | - / - | 1.0x |
+| o3d_k15_plane | 1.30 | 2.94 / 2.12 | -4.0 | -3.6 / -5.9 | -6.8 | -2.6 / -1.2 | 3.21 / - | - / - | 1.0x |
+| o3d_k3_plane | 0.64 | 2.40 / 1.76 | -5.1 | -3.1 / -4.2 | -6.1 | -2.1 / -0.6 | 3.15 / - | - / - | 0.7x |
+
+1. **The astroid** (`astroid_k15`, `astroid_k3`; the particle bench's suggestion): each
+   easy axis driven by sign(h_par) |H| / h_sw(psi), h_sw = (cos^{2/3} psi + sin^{2/3}
+   psi)^{-3/2} (Stoner & Wohlfarth 1948) instead of the field's projection h_par: a
+   hysteron switches at its own astroid, so a field at 45 degrees to the axis switches at
+   half the field. The orientation kept at the base's kappa 1.5 (in-plane, x-y) and 3.
+   - The refit: Bulletin 20 needs a harder ensemble, the off-axis axes being easier: Hc
+     median 483 Oe (base 251), sigma_ln 0.30, sigma_Hi 74 Oe; rms 0.73 reading errors, the
+     loop's Hc 296 Oe (Eilers 270: at the +10% edge).
+   - **The only variant that changes the curves' shape.** kappa 1.5: rms 1.87 / 1.94; the 1
+     kHz rise -8.0 dB at 3 mA (base -5.5, No. 21 -11.0), the 1 kHz peak 0.3 dB of bias from
+     the data's (base 1.3); but past the peak 15 kHz now falls too much and 1 kHz too
+     little: 1k / 15k at 8 mA -1.9 / -8.6 (No. 21 -3.3 / -7.1), the spread -15.6 (-10.4).
+     The knee softens: +3.94 dB (base +3.33; #111 ~4.1-4.5).
+   - kappa 3 (refit 0.71 reading errors): further the same way, the rise -8.9 and the 1 kHz
+     peak on the data's (0.0 dB of bias), but the 15 kHz overshoot grows (spread -18.3, 1 kHz
+     at 8 mA only -1.3): rms 2.03 / 2.06.
+   - Without the head's image (`astroid_k15_noimage`, the same fit): the rise goes back to
+     -5.4 and the overshoot stays (spread -15.6): the rise is the astroid and the image
+     together, the 15 kHz overshoot is the astroid's own (switching far downstream in the
+     perpendicular field), not a double count with the image.
+   - Bulletin 14 (7 kHz re 400 Hz at 7.5 ips; 3M +4 dB, base -1.8 / -1.0 at the -40 / -30 dB
+     criteria): not measured (stopped after 80 min at 2 threads; the next run).
+   - Cost: ~2-3x the base kernel per recording (a cube root and a square root per axis and
+     peak; thread-normalized); CPU only for now (the GPU kernel would take the same lines).
+   - Renders moved if adopted: every print through a tape and its alignment, with a new
+     tape version (the refitted ensemble, an astroid flag in its `orientation` block, the
+     kernel's flag through the IR's tape element: both builders and the stream).
+   - The reading: the particles' rule is the one term that widens the rise (2.5-3.4 of the
+     5.5 dB missing at 3 mA) and moves the peaks onto the data's, as the particle bench's
+     rotating-field finding predicts; what it gets wrong is the 15 kHz over-bias loss, now
+     2-8 dB too large. That part of the model was tuned under the projection rule (kappa 1.5
+     fitted to No. 21 in TM2 step 7, the perpendicular demag, the head's image), so it needs
+     re-deriving with the astroid in, not adopting as is.
+2. **The moving model, followed through every bias cycle** (`moving_*`: alpha = +0.03 /
+   +0.06 / +0.09, -0.05 / -0.10; alpha Ms +27 / +55 / +84, -45 / -90 Oe).
+   - Source: Della Torre's moving Preisach model ("Magnetic Hysteresis", 1999, ch. 4);
+     Vajda & Della Torre, IEEE Trans. Magn. 27, 4757 (1991): commercial gamma-Fe2O3 tapes
+     follow the moving model; Cerchez, Stoleriu & Stancu, JOAM 5, 351 (2003): the mean field
+     is "usually positive" in acicular systems, no gamma-Fe2O3 number. The literature
+     study's provisional 0.1-0.3 Hc (~30-80 Oe) is alpha +0.03..+0.09 on #111's Ms; negative
+     alpha for the negative Henkel plots of particulate oxide.
+   - The static loops don't pin alpha: Bulletin 20 plus Hc refit within its reading error
+     at every alpha from -0.10 to +0.09 (rms 0.53-0.75 reading errors), the interaction
+     spread trading against it (sigma_Hi 20 Oe at -0.10, 64 at 0, 125 at +0.09). At -0.20 the
+     fit leaves the physical region (sigma_ln 0.12, Ms 117 kA/m, Hc 227 Oe): Bulletin 20
+     bounds alpha above ~-0.15.
+   - No. 21: the literature's sign moves nothing (+0.06: rms 2.22 / 1.80, rise -6.1, spread
+     -6.1); negative alpha trades the rise for the spread (-0.05: 2.42 / 2.00, rise -5.0,
+     spread -7.3; -0.10: 2.92 / 2.93, rise -3.9, spread -8.3). As the literature study
+     argued from the model's structure and the particle bench found, the mean field moves
+     the transfer, not the width.
+   - The knee: on the ideal anhysteretic (a decaying AC from saturation followed with the
+     mean field) +4.95 (base) -> +5.00 / +5.09 / +5.17 at +0.03 / +0.06 / +0.09, +4.61 /
+     +3.94 at -0.05 / -0.10. On the medium (`lite`, base +3.22): +3.05 / +3.03 at +0.06 /
+     +0.09 (and the 1% level +1.8 / +2.3 dB higher in field: the tape takes more drive);
+     **+4.18 at -0.10** (the 1% level -1.4 dB), inside #111's 4.1-4.5. So a demagnetizing
+     mean field softens the medium's knee by ~1 dB (the opposite of the ideal curve: it acts
+     through the few bias cycles of the freezing, not the anhysteretic), at the price of a
+     worse No. 21. On the 351's 51 um gap (base +4.00 aligned, +3.97 lite) alpha -0.10 gives +5.18 (the 1% level -2.6 dB): past #111's range, where the base already sits inside it, so the lever is only wanted on the short-gap machine.
+   - Cost: ~12x the base kernel per recording (Newton on the cell's (M_x, M_y) at every bias
+     peak, 11.6-17.4 M solves per 1 kHz recording, none unconverged at 1e-12), 27-60x wall
+     time on No. 21; CPU only.
+3. **The same mean field frozen at the recorded remanence**, inside the medium's
+   demagnetization fixed point (`static_*`, the literature study's cheaper form; the same
+   refits): +0.06 rms 1.89 / 1.62, rise -6.2, spread -7.3, knee +3.31; -0.10 worse everywhere
+   (rms 3.40 / 2.79, rise -3.5; knee +3.01). Cost ~1x. Not the moving model's knee: the
+   softening needs the mean field inside the bias cycles.
+4. **The record head's field against current** (`head_*`): a magnetic circuit with
+   mumetall's measured amplitude permeability (data/datasheets/matthey_mumetall_mu_a.csv),
+   eddy-limited at the bias frequency (laminations 0.1 / 0.35 mm, provisional), saturating
+   toward 0.8 T; the core's reluctance ratio 250 / 1000 and a flux concentration at the pole
+   tips 1 / 3 (bounds: the Ampex 300's head isn't documented).
+   - Linear to ~1% over No. 21's range, and the departure goes the wrong way: the deep-gap
+     field at 8 mA (~670 Oe, 0.067 T in the gap) is a tenth of mumetall's saturation, where
+     its permeability still rises, so the efficiency rises with current: Hg ~ I^1.003-1.008
+     (typical), I^1.06 (the lossy bound, eta 0.57 -> 0.69). `head_typical` moves every
+     check by <= 0.05 dB; `head_lossy` worsens No. 21 (rms 2.62 / 1.93).
+   - The diagnostic `stretch` (a power law fitted to No. 21 on the base's curves: not
+     physics): the best, Hg ~ I^0.82, gives rms 1.58 / 1.66 but the rise only -6.1 and the
+     over-bias falls shrink (1 kHz -1.3 at 8 mA against -3.3). No bias axis fixes the shape
+     (a cliff and a plateau where #111's is round). Closed: the head's current law isn't the
+     mechanism. (The particle bench points at the head's field per mA; this says its law
+     can't, only its field's shape could.)
+5. **The easy axes in 3D** (`o3d_*`, a Bingham density exp(kappa u_x^2 - lam u_y^2), lam > 0
+   keeping the axes in the tape's plane; refitted). Bulletin 20 needs orientation here too:
+   isotropic 3D fits at 3.9 reading errors, kappa 1.5 at 2.1, kappa 1.5 in-plane (lam 3) 1.3,
+   kappa 3 in-plane 0.64 (orientation ratio 2.25). No. 21: kappa 3 / lam 3 rms 2.40 / 1.76,
+   rise -5.1, spread -6.1; kappa 1.5 / lam 3 2.94 / 2.12, rise -4.0; the ones with more
+   perpendicular axes (kappa 1.5 / lam 0, isotropic) overshoot the 15 kHz loss (spread -9.4 /
+   -19.0, rms 3.3 / 3.3 and 3.9 / 4.9) and fit Bulletin 20 poorly. The knee +3.15-3.39. Cost
+   ~1x.
+6. **Print-through from a barrier tail** (`print`, the plan's "Later"; an estimate, not a
+   medium change: `tape_variants.PrintThrough` after the literature study's 3.4). The
+   barriers K V / kT lognormal (median 60 / 150 / 400, the switching study's bracket, and the
+   coherent 1950; volume spread 0.6 / 1.0, provisional), Neel activation over the storage
+   time (f0 1e9 Hz), the active tail in equilibrium in the outer turn's stray field (through
+   the base, Sound Talk No. 38; 18 Oe from a 0 VU 1.24 kHz tone, the medium's own pattern at
+   M = 0.37 Ms), read as the master is. Against Manly (Audio, Sept. 1977, redrawing Lippert,
+   Daniel & Axon, Westmijze: -52 dB at 5 min, -40 after a week, 3.45 dB per decade, 1.8 dB
+   per 10 K, the peak at 2 pi x the overall thickness, level-linear) and 3M (No. 10: 1 dB per
+   10 F, "2 dB per 1 dB"; No. 38: a fresh print drops >= 6 dB within minutes):
+   - The moment against the barrier decides the level law: with the switching study's
+     convention (mu0 Ms_p V / kT = 2 kappa / H0, H0 ~1.1 Hc) the active tail saturates in 18
+     Oe and the print grows 0.4-0.5 dB per dB (neither period law); with the shape
+     anisotropy field (160 kA/m, the literature study's 1.4) it is linear, 0.97 dB per dB
+     (Manly's), and peaks at 1.006 x 2 pi x the overall thickness (Manly's 2 pi d).
+   - The tail is everything (-12 to -240 dB at 5 min across the bracket), but the bracket
+     contains the data with Neel's law alone for time and temperature: median 150 / spread
+     0.6 gives -49 dB at 5 min, -37 after a week, 3.9 dB per decade, 1.5 dB per 10 K; 400 /
+     1.0 gives -46, -38, 2.5, 0.8. The particle bench's thermal estimate agrees (3.6-4.2 dB
+     per decade, -50 / -36 dB at K V_act / kT 150).
+   - Misses: the decay after parting is too fast (-19 to -25 dB 3 min after a 5-minute
+     print, against ~-6: a tail with no memory of its own), pre / post 4.6 dB against "up to
+     12" (the orientation's x / y share only).
+   - Cost: none per sample (a filter on the recorded tape per storage condition).
+
+**The reduced live tier** (`varimu/delay/reduced.py`): its tables (M_x against a constant
+field per layer, the apertures) are recorded by the real kernel with demagnetization off,
+which is one linear correction filter there. So the astroid, the moving model, the 3D axes
+and the head law are carried by regenerating the tables (no runtime cost; ~3 h per
+machine, not done); the static mean field only at low level. A new tape version is needed
+either way (the reduction files are refused for another medium).
+
+**Recommendation** (the user decides):
+- Of the six, only **the astroid** changes No. 21's shape the way the data want (the rise
+  -5.5 -> -8.0 of -11.0 at 3 mA, the 1 kHz peak to 0.3 dB of bias) and softens the knee
+  (+3.33 -> +3.94, of ~4.1-4.5), and it is a physical rule the particles show, not a fitted
+  term. It overshoots the 15 kHz over-bias loss (its own downstream switching, with or
+  without the image). My recommendation: take the astroid as the next model change to study
+  properly rather than adopt it as is: re-derive what TM2 tuned under the projection rule
+  (the orientation, kappa 1.5 fitted to No. 21; an out-of-plane share of the axes, which the
+  3D runs show lowers the perpendicular response; the perpendicular demagnetization the
+  particle bench flags as unconverged) with the astroid in, on the same checks, No. 21 held
+  out where it can be.
+- The moving mean field: don't adopt at the literature's sign (nothing measurable, ~12x
+  cost). At alpha -0.10 it puts the 12.7 um knee in #111's range but worsens No. 21 and
+  overshoots the knee on the 351's 51 um gap; worth keeping only as a knee lever if the
+  astroid's knee falls short.
+- The static mean field, the head's current law, the 3D axes: close them.
+- Print-through: build it as a condition dial from the literature study's linear model
+  (3.4, the period laws) with this barrier tail as its physical check; it doesn't touch
+  No. 21.
+
+Unfinished: Bulletin 14 for the astroid (the first check to run next); the astroid with
+other orientations or an out-of-plane share; No. 21 for alpha
++0.03 / +0.09 (only their knees: +3.03 lite at +0.09); Bulletin 14 and the 51 um knee for
+the variants other than those named above; the moving model's zone floor (120 Oe, the
+base's) not re-checked lower.
