@@ -131,6 +131,18 @@ than today's coupling. It is poor only on a fast node whose load is the stiff si
 matched case agreeing to roundoff is suspicious; it may be an exact equivalence of the link
 line with trapezoidal in a symmetric circuit, or a bug in the toy. Settle that first.
 
+**Settled (2026-11-12, W1 step 1): the matched case is an exact equivalence, and the table's
+line column is optimistic.** A link line driven alike at both ends (its even mode) is two open
+stubs of delay T / 2, each exactly a trapezoidal C / 2; driven in antiphase (its odd mode) it is
+two shorted stubs, the parasitic inductance. The toy reported the mean of the two copies,
+(va + vb) / 2, which is the even mode alone when R1 = R2: hence roundoff. The mean hides the odd
+mode in every case. Measured on each part's own copy (what its elements see;
+`scripts/methodology/tlm_cut2.py`), the line has a floor of about (w T / 2)^2 relative to the cut
+node's own response: -99 / -59 / -19 dB at 100 Hz / 1 kHz / 10 kHz at 96 kHz, whatever the
+time constant (not -116 / -96 / -76). It still beats hold and extrapolate by 30-50 dB from
+~10 samples of time constant up, stays stable with a diode on either side, and a series-L cut
+is its dual (the same numbers).
+
 **Where it applies.** A line replaces a node's shunt capacitance (a filter capacitor, a
 timing capacitor, a rail, a node with a stated stray), or a series inductance (Z0 = L / T: a
 choke, a transformer's leakage inductance). It does **not** replace a series coupling
@@ -172,6 +184,58 @@ Done when:
 
 Don't apply it to production: this is the draft's bend of "one coupled simulation", like
 the existing partitions.
+
+**Status (2026-11-12): built, the done-when met; on the amps it doesn't buy what was hoped.**
+
+- **The engine.** A partition list's `cut:ELEMENT` entry (circuitsim `partition::LineCut`,
+  `partition::cuts`; stream.rs `Feed::Line`): a capacitor to ground at a node two parts have,
+  or an inductor (not coupled) between nodes of two parts. The element is removed; each part
+  gets a resistor Z0 into a source `VLINE_<element>`, the waves exchanged at the per-sample
+  barrier (a part's source runs from twice the other end's wave at n - 1 to twice it at n).
+  Lines mix with held / extrapolated shared nodes in one split. The DC start is the whole
+  circuit's: an inductor's current, or the current through a capacitor's node from one part
+  to the other (read on a copy of the circuit with the node split by a short,
+  `Split::dc_meter`; `ir::Element::nodes_mut`). Opt-in: without `cut:` entries the split,
+  its IRs and runs are as before (`tests/partition.rs`, `tests/stream.rs` pass).
+  The app passes cuts through `Settings::partition_sections`; Python's
+  `fast.partition_sections` doesn't yet (an edit there moves every render's cache key).
+- **The reference** `varimu/line_cut.py` (a dense trapezoidal MNA with the same ends and
+  waves; outside the render cache key). `tests/test_line_cut.py`: circuitsim's cut runs
+  within 1e-9 of it, a capacitor cut and an inductor cut each with a diode, and both start at
+  the whole circuit's DC point. `crates/circuitsim/tests/line_cut.rs`: what can be cut, and
+  E3's hard case (tau 0.3 samples behind a stiff source) stable at -50 dB from the one solve.
+- **The 670's supply cut** (`scripts/methodology/line_cut_670.py`, 3 s of the arpeggio at the
+  draft): its five rails with reservoir capacitors as lines (`ur` has none and stays
+  extrapolated) **-103.2 dB** from the one solve, the same as extrapolate (-103.2), CV max
+  3.8 mV against 4.2 (held: -89.6 dB).
+- **The amps** (draft-1x, 48 kHz; `examples/cut_error.rs`, the Dry Guitar take's heaviest 8 s
+  at the panels' defaults, VOLUME 0.5):
+  - *The output transformer's leakage* can't be cut at this step: its L / R is a few
+    hundredths of a sample (AC30: primary 1.3 mH plate to plate, secondary 9.6 uH), so the
+    line's parasitic capacitance h^2 / L (0.3 uF, 45 uF) swamps the windings: -3 / 0 / 0 dB
+    in the toy (`tlm_cut2.py`, part 4).
+  - *The speaker's moving mass* (`C<P>_m`, the motional node's capacitor; the mechanics moved
+    to `<P> mechanics` by `varimu_circuit::speaker::mechanics_apart`) cuts cleanly and moves
+    ~18 states off the amp thread. AC30, against the one solve:
+
+    | partition | load | blocks > 1.0 | error at `out` | above 2 kHz | at `spk` |
+    |---|---|---|---|---|---|
+    | the device's today (readout, supply apart) | 0.79x | 145 / 800 | -35.3 dB | -28.7 | -62.7 |
+    | + mechanics, the mass as a line | 0.65x | 96 / 800 | -23.8 dB | -17.1 | -46.1 |
+    | + mechanics, extrapolated at the mass | 0.67x | 98 / 800 | -22.6 dB | -16.0 | -44.6 |
+
+    The line is the more accurate of the two, but at 48 kHz its floor ((w h / 2)^2 re the cut
+    node) sits on the cone's velocity, which is the output: 11 dB of accuracy for 18% of load.
+    Not put in panel.rs.
+  - *The worst blocks* are Newton's, at the power tubes, and no partition removes them. The
+    whole take (62 s): the AC30 averages 0.70x on one amp thread but its heavy blocks run 2-4x
+    (8-10 factorizations and 8 iterations a sample, "contraction" refactors); the Plexi
+    averages 1.17x, 14% of its blocks over 2x, the worst 9x (40 factorizations, Newton at its
+    50-iteration cap, step halvings). In those passages the plates fly back to 1.14 kV (AC30,
+    a 373 V rail) and 1.48 kV (Plexi, 451 V) at the default VOLUME. The Plexi split at its
+    cathode follower (held) with its mechanics apart: the power amp's thread 0.71x mean, still
+    1207 of 6234 blocks over 1.0.
+- Not measured: the 670 at T104's leakage, the tube synth at a filter capacitor.
 
 ### W2. A sparse-state DK (from E1)
 

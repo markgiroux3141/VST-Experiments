@@ -168,7 +168,13 @@ Methodology review ([docs/METHODOLOGY_REVIEW.md](docs/METHODOLOGY_REVIEW.md), 20
 in the engine built): what not to redo, three toys (`scripts/methodology/`: the DK step matrix
 is sparse, 1.5-5.8x fewer operations where states dominate; stage values as free oversampling,
 10-13 dB of aliasing; partition cuts as transmission lines, never unstable) and work packages
-W1-W7, transmission-line cuts first.
+W1-W7, transmission-line cuts first. **W1 built (2026-11-12; the doc's W1 "Status"):** a partition
+list's `cut:ELEMENT` cuts a capacitor to ground or an uncoupled inductor as a link line (circuitsim
+`partition::LineCut`; Python reference `varimu/line_cut.py`, `tests/test_line_cut.py`); the 670's
+rails as lines -103.2 dB, as extrapolate. On the amps: the OT's leakage can't be cut at 48 kHz;
+the speaker's mass can (`speaker::mechanics_apart`, `<P> mechanics`) but costs 11 dB of accuracy
+for 18% of load (not adopted); their worst blocks are Newton spikes at the plate flyback.
+`examples/cut_error.rs` measures a partition's error and load.
 
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
