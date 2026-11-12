@@ -993,6 +993,17 @@ cold start (power on) skips the settle; the app's "Power on (cold)" button.
 the carried-in derivative). Live streams only; renders never update. No pot end resistance
 (the user's call: inaudible at realistic values). DEVICE_BUILDER_PLAN.md B6 has the numbers.
 
+**Tape at the particle level** ([docs/TAPE_PARTICLES.md](docs/TAPE_PARTICLES.md), 2026-11-12,
+one unattended night, a study: nothing in the tape model changed): Stoner-Wohlfarth needles with
+thermally activated switching (`varimu/tape_particles/`, outside the render cache key;
+`crates/tapeparticles`: f64 CPU references, the GPU in WGSL f32; binary `tpsim`), fitted to
+No. 20 + Hc only, then asked No. 21. Found: dynamic dipolar interactions don't widen the bias
+curves (the research's question, VST-chirp's TAPE_PARTICLE_RESEARCH.md); the particles fall
+faster past the peak (SW switching in the rotating head field, which vector Preisach lacks);
+the moving head's blind prediction is not better than the Preisach medium's, and the coating's
+full field doesn't converge with particles (only the cell's own perpendicular part, solved
+implicitly). Tests `tests/test_tape_particles.py`; reports `reports/tape/particles/`.
+
 **Tape** ([docs/TAPE_PLAN.md](docs/TAPE_PLAN.md), started 2026-10-31 ahead of the queue, the
 user's call; milestones TM1-TM7): an **Ampex 351** (tubes; the Sun slapback family) with
 **Scotch 111**, saturation from simulated particles, not curves. The user: quality before real

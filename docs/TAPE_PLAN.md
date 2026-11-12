@@ -304,6 +304,11 @@ What the bias curves taught (Sound Talk No. 21, Type B on an Ampex 300: 15 ips, 
      70 kHz isn't printed; a sublinear law would stretch the data's bias axis), and the
      particles' dynamic coercivity (switching under a 70 kHz bias is harder and broader
      than in bulletin 20's 60 Hz loops: thermal activation, Sharrock's law).
+   - **A particle bench (2026-11-12, a study: [TAPE_PARTICLES.md](TAPE_PARTICLES.md)):**
+     interacting Stoner-Wohlfarth needles fitted to the same static data don't widen the
+     bias curves (dynamic interactions included); they fall faster past the peak (switching
+     under the head's rotating field), and on the moving head their prediction of No. 21 is
+     not better than this model's. Nothing here changed.
 - Each cell is a point sample. Averaging cells over a particle's length was tested and
   changes nothing: the ± asymmetry seen at one bias phase is the locked phase, not
   aliasing.
