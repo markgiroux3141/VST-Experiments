@@ -66,9 +66,20 @@ def main() -> int:
     jobs = []
     for fb in fbs:
         for kind in ("now", "matched", "fine"):
-            ds = {"now": med.speed_m_s / (100e3 * 7.62), "matched": med.speed_m_s / (fb * 7.62), "fine": 0.25e-6}[kind]
-            jobs.append((fb, kind, dataclasses.replace(
-                med, bias_substeps=M, ds_m=ds, f_bias_hz=fb, flutter=(), flutter_noise=())))
+            ds = {
+                "now": med.speed_m_s / (100e3 * 7.62),
+                "matched": med.speed_m_s / (fb * 7.62),
+                "fine": 0.25e-6,
+            }[kind]
+            jobs.append(
+                (
+                    fb,
+                    kind,
+                    dataclasses.replace(
+                        med, bias_substeps=M, ds_m=ds, f_bias_hz=fb, flutter=(), flutter_noise=()
+                    ),
+                )
+            )
 
     def run(job):
         fb, kind, md = job
@@ -84,10 +95,19 @@ def main() -> int:
         f, db = worst_line(y)
         cell = md.speed_m_s / md.ds_m
         beat = abs(8 * fb - cell)
-        print(f"  f_b {fb / 1e3:6.1f} kHz {kind:8s} ds {md.ds_m * 1e6:.3f} um: worst {f:7.0f} Hz "
-              f"{db:6.1f} dB (first-order beat {beat / 1e3:.1f} kHz)", flush=True)
-        return {"f_bias_hz": fb, "kind": kind, "ds_m": md.ds_m, "worst_hz": f, "worst_db": db,
-                "beat_hz": beat}
+        print(
+            f"  f_b {fb / 1e3:6.1f} kHz {kind:8s} ds {md.ds_m * 1e6:.3f} um: worst {f:7.0f} Hz "
+            f"{db:6.1f} dB (first-order beat {beat / 1e3:.1f} kHz)",
+            flush=True,
+        )
+        return {
+            "f_bias_hz": fb,
+            "kind": kind,
+            "ds_m": md.ds_m,
+            "worst_hz": f,
+            "worst_db": db,
+            "beat_hz": beat,
+        }
 
     with ThreadPoolExecutor(4) as ex:
         rows = list(ex.map(run, jobs))
@@ -102,7 +122,9 @@ def main() -> int:
     for kind in ("now", "matched", "fine"):
         r = [x for x in rows if x["kind"] == kind]
         ax[0].plot([x["f_bias_hz"] / 1e3 for x in r], [x["worst_db"] for x in r], "o-", label=kind)
-        ax[1].plot([x["f_bias_hz"] / 1e3 for x in r], [x["worst_hz"] / 1e3 for x in r], "o", label=kind)
+        ax[1].plot(
+            [x["f_bias_hz"] / 1e3 for x in r], [x["worst_hz"] / 1e3 for x in r], "o", label=kind
+        )
     ax[0].axvline(92.99, color="k", lw=0.5)
     ax[0].axvline(95.86, color="r", lw=0.5)
     ax[0].set_xlabel("oscillator (kHz); black the 351, red the 300-4")

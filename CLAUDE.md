@@ -937,7 +937,14 @@ Session view's Tape deck window; `examples/tape_print.rs`); the user's assignmen
 **The song printed (2026-11-11, the user's OK for the 3 hours):** 2 h 58 min, MT6's done-when met; then mixed like a 1968
 Lightfoot record with and without the tape (`scripts/lightfoot_mix.py`: EQP-1A / 670 prints by `examples/print.rs`, which
 now writes a stereo last insert as two channels; faders by loudness, rides, the stereo plate as a send) ->
-`reports/lightfoot_mix/` (NOTES.md, a loudness-matched pair; open: the user listens). PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
+`reports/lightfoot_mix/` (NOTES.md, a loudness-matched pair; open: the user listens). **The tape tracks' 5.4 kHz chirp
+(found 2026-11-12, PERIOD_GEAR_BACKLOG.md PG1):** the deck's, not the 351's: its master oscillator runs at 95.86 kHz (the
+351's 92.99), and the record island on P4's TR-BDF2 with tube tables at 20 substeps beats with it at m |fs - 2 f_b| =
+5.4 kHz (the 351's beat 65.7 kHz); clean at 40 substeps or on esdirk4 without tables (each ~2x the island): the choice
+and the song's reprint are the user's. Also found: the tape's cells alias the literal bias's peak pattern at
+|8 f_b - v / ds| (0.5 um cells sized for the nominal 100 kHz; TAPE_PLAN.md Gaps 8): the tape part's optional `cell_m`
+(both builders; absent, IRs unchanged), the deck at 0.25 um (re-aligned: PLAYBACK LEVEL 0.432 -> 0.442).
+PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
 the Langevin EQ-251A. A mix from scratch starts from `stems/Did she mention my name/full/` (the user's call).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
@@ -998,11 +1005,18 @@ one unattended night, a study: nothing in the tape model changed): Stoner-Wohlfa
 thermally activated switching (`varimu/tape_particles/`, outside the render cache key;
 `crates/tapeparticles`: f64 CPU references, the GPU in WGSL f32; binary `tpsim`), fitted to
 No. 20 + Hc only, then asked No. 21. Found: dynamic dipolar interactions don't widen the bias
-curves (the research's question, VST-chirp's TAPE_PARTICLE_RESEARCH.md); the particles fall
+curves (the research's question, docs/TAPE_PARTICLE_RESEARCH.md); the particles fall
 faster past the peak (SW switching in the rotating head field, which vector Preisach lacks);
 the moving head's blind prediction is not better than the Preisach medium's, and the coating's
 full field doesn't converge with particles (only the cell's own perpendicular part, solved
 implicitly). Tests `tests/test_tape_particles.py`; reports `reports/tape/particles/`.
+The same night's cheap variants of the Preisach medium (TAPE_PLAN.md's last section "Over-bias
+options"; `varimu/tape_variants.py` the references, opt-in in circuitsim's `tape.rs`, off = the
+old kernel bit for bit; `scripts/tape_overbias_study.py`, `tests/test_tape_variants.py`): a
+moving mean field, astroid switching, the head's current law, 3D axes; none adopted (the
+astroid moves No. 21 the right way but overshoots 15 kHz). The head's exact gap field
+(docs/TAPE_HEAD_RESEARCH.md: Karlqvist is worst at No. 21's 51 um gap over a 12.7 um coating;
+the exact field widens the bias sweep by about the missing ~2.3 dB) is the untested lead.
 
 **Tape** ([docs/TAPE_PLAN.md](docs/TAPE_PLAN.md), started 2026-10-31 ahead of the queue, the
 user's call; milestones TM1-TM7): an **Ampex 351** (tubes; the Sun slapback family) with

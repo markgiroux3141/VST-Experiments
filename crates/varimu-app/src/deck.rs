@@ -159,10 +159,14 @@ impl DeckInput {
     }
 }
 
+/// A lane as [`place`] takes it: its signature, where it starts, its left and a stereo
+/// lane's right.
+pub type LaneIn<'a> = (String, i64, &'a [f32], Option<&'a [f32]>);
+
 /// The lanes `lanes` (each a lane's signature, where it starts, its left and a stereo
 /// lane's right) placed for the deck: each mono (a stereo lane's mid), from the earliest
 /// start. None when no lane sounds.
-pub fn place(lanes: [Option<(String, i64, &[f32], Option<&[f32]>)>; TRACKS]) -> Option<DeckInput> {
+pub fn place(lanes: [Option<LaneIn<'_>>; TRACKS]) -> Option<DeckInput> {
     let start = lanes.iter().flatten().map(|l| l.1).min()?;
     let mut out: [Option<(String, Arc<Vec<f32>>)>; TRACKS] = Default::default();
     for (k, l) in lanes.into_iter().enumerate() {

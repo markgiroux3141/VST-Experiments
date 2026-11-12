@@ -20,7 +20,7 @@ import threading
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import resample_poly, welch
+from scipy.signal import welch
 
 from varimu.circuit import builder, spec
 from varimu.measure import tape_align as ta
@@ -90,10 +90,16 @@ def main() -> int:
     for name, v in res.items():
         print(f"== {name}")
         if "v(ers)" in v:
-            print("  ers (oscillator):", [(round(f), round(d, 1)) for f, d in lines(v["v(ers)"], 50e3, 96e3, 3)])
+            print(
+                "  ers (oscillator):",
+                [(round(f), round(d, 1)) for f, d in lines(v["v(ers)"], 50e3, 96e3, 3)],
+            )
         for k in ("v(rh)", "v(out)"):
             if k in v:
-                print(f"  {k} 20-96 kHz:", [(round(f), round(d, 1)) for f, d in lines(v[k], 20e3, 96e3)])
+                print(
+                    f"  {k} 20-96 kHz:",
+                    [(round(f), round(d, 1)) for f, d in lines(v[k], 20e3, 96e3)],
+                )
     return 0
 
 

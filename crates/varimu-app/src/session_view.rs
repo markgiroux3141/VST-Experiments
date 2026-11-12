@@ -2747,10 +2747,11 @@ impl SessionView {
                     true,
                 ));
             }
-            if printing && ui.button("Cancel").clicked() {
-                if let Some(j) = &self.deck_job {
-                    j.cancel();
-                }
+            if printing
+                && ui.button("Cancel").clicked()
+                && let Some(j) = &self.deck_job
+            {
+                j.cancel();
             }
             if ui
                 .add_enabled(idle && !printing, egui::Button::new("Remove the deck"))

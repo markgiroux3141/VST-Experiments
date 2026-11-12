@@ -57,12 +57,22 @@ def main() -> int:
     ap.add_argument("--head-a-m-per-a", type=float, default=8.0e6)
     ap.add_argument("--fb", type=float, nargs="+", default=[92_994.0, 95_865.0])
     ap.add_argument("--machines", nargs="+", default=["deck", "351"])
-    ap.add_argument("--substeps", type=int, nargs="+", default=None,
-                    help="override the literal bias's substeps (default: the circuit's)")
+    ap.add_argument(
+        "--substeps",
+        type=int,
+        nargs="+",
+        default=None,
+        help="override the literal bias's substeps (default: the circuit's)",
+    )
     ap.add_argument("--out", default="medium.json")
     ap.add_argument("--tone-hz", type=float, default=60.0)
-    ap.add_argument("--ds-um", type=float, nargs="+", default=None,
-                    help="override the cells' length (default: the circuit's)")
+    ap.add_argument(
+        "--ds-um",
+        type=float,
+        nargs="+",
+        default=None,
+        help="override the cells' length (default: the circuit's)",
+    )
     a = ap.parse_args()
     import circuitsim
 
@@ -88,11 +98,17 @@ def main() -> int:
         hb = a.bias_ma * 1e-3 * math.sqrt(2) * a.head_a_m_per_a
         ha = a.audio_ma * 1e-3 * math.sqrt(2) * a.head_a_m_per_a
         env = np.clip(t / 0.02, 0.0, 1.0)
-        h = env * (ha * np.sin(2 * math.pi * a.tone_hz * t) + hb * np.sin(2 * math.pi * fb * t + 0.3))
+        h = env * (
+            ha * np.sin(2 * math.pi * a.tone_hz * t) + hb * np.sin(2 * math.pi * fb * t + 0.3)
+        )
         y = np.asarray(circuitsim.tape_stream_run(params, FS, h, chunk=20 * m * 48))
         d = int(med.head_distance_m / med.speed_m_s * FS) + int(0.05 * FS)
         y = y[d:]
-        np.save(OUT / f"emf_{mach}_m{m}_ds{round(med.ds_m * 1e9)}_fb{int(fb)}_a{int(a.tone_hz * 10)}.npy", y)
+        np.save(
+            OUT
+            / f"emf_{mach}_m{m}_ds{round(med.ds_m * 1e9)}_fb{int(fb)}_a{int(a.tone_hz * 10)}.npy",
+            y,
+        )
         w = np.hanning(len(y))
         sp = np.abs(np.fft.rfft(y * w)) ** 2
         f = np.fft.rfftfreq(len(y), 1 / FS)
