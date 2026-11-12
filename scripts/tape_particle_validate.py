@@ -21,7 +21,7 @@ from varimu.tape_particles import sw
 OUT = REPO_ROOT / "reports" / "tape" / "particles"
 
 
-def loop(psi: float, e0_kt: float, f_hz: float, m: int = 4000, hmax: float = 1.5):
+def loop(psi: float, e0_kt: float, f_hz: float, m: int = 1000, hmax: float = 1.5):
     """One particle's M along the field over a sinusoidal loop (reduced field h = H / H_K)."""
     spec = ens.ParticleSpec(f0_hz=1e9)
     n = np.array([[math.cos(psi), math.sin(psi), 0.0]])
@@ -85,11 +85,11 @@ def main() -> int:
         res[f"loop_{deg}_max_err"] = float(np.max(np.abs(m[: len(desc)] - analytic_loop(p, desc, 1))))
     ax[1].set(xlabel="h", ylabel="m along the field", title="single-particle loops")
     # Thermal: the switching field against K V / kT and rate, psi = 0 (Sharrock n = 1/2).
-    kvs = np.geomspace(40, 4000, 12)
+    kvs = np.geomspace(40, 4000, 6)
     for f, c in ((60.0, "C0"), (70e3, "C3")):
         hsw = []
         for kv in kvs:
-            h, m = loop(0.0, 2.0 * kv, f, m=8000, hmax=1.2)
+            h, m = loop(0.0, 2.0 * kv, f, m=2000, hmax=1.2)
             desc = slice(0, len(h) // 2)
             j = int(np.argmax(m[desc] < 0))
             hsw.append(-h[desc][j])

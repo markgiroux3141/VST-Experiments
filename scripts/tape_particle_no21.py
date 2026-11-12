@@ -5,8 +5,10 @@ medium's geometry, against SCOTCH111@3's Preisach medium in the same configurati
 model then gets No. 21's one bias scale (scripts/tape_switching_study.py's protocol).
 
 Configurations: `nodemag` (no coating field: every cell independent; the Preisach medium's
-`demag_iterations=0`) and `demag` (the medium's demagnetization fixed point, Anderson; see
-the doc for whether it converges with particles).
+`demag_iterations=0`), `demag` (the medium's demagnetization fixed point, Anderson: it
+doesn't converge with particles, see the doc), `causal` (the coating's field from the
+present pattern, every cell in absolute time: `strip.tone_coupled`, the medium's wavelength
+cut) and `causal_full` (the same from the whole pattern).
 
     uv run --extra fast python scripts/tape_particle_no21.py [--configs nodemag demag]
         [--n 512] [--points 16] [--parts particles preisach plot]
@@ -65,10 +67,14 @@ def run_particles(config, n, points, log, seed=1, m=16):
         amps, infos = [], []
         for b in biases(points):
             t0 = time.time()
-            r, info = sp.tone(spec, parts, mach, num, f, LOW, b)
+            if config.startswith("causal"):
+                lm = "none" if config == "causal_full" else "medium"
+                r, info = sp.tone_coupled(spec, parts, mach, num, f, LOW, b, lam_min=lm)
+            else:
+                r, info = sp.tone(spec, parts, mach, num, f, LOW, b)
             amps.append(abs(r))
             infos.append({"seconds": time.time() - t0, "steps": info["steps"],
-                          "demag_changes": info["demag_changes"]})
+                          "demag_changes": info.get("demag_changes")})
             log(f"  particles {config} {f:g} Hz bias {b / HC_REF:.2f} Hc: {20 * math.log10(abs(r)):.2f} dB ({time.time() - t0:.0f} s)")
         out[f"{f:g}"] = {"amp": amps, "db": (20 * np.log10(amps)).tolist(), "runs": infos}
     out["no21"] = no21.fit(biases(points), out["1000"]["db"], out["15000"]["db"])

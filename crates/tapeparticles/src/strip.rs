@@ -152,7 +152,7 @@ struct U {
     fs_dt: f32,
     inv_m: f32,
     vsum: f32,
-    pad0: u32,
+    coupled: u32,
     pad1: u32,
     pad2: u32,
 }
@@ -164,10 +164,18 @@ fn v4(x: impl Iterator<Item = [f32; 4]>) -> Vec<u8> {
 
 /// `run_cpu` on the GPU (f32).
 pub fn run_gpu(s: &Strip) -> Result<Vec<f64>, String> {
+    run_gpu_with(s, None)
+}
+
+/// The coupled run's extra inputs (`Coupled`), or None.
+pub fn run_gpu_with(s: &Strip, cp: Option<&Coupled>) -> Result<Vec<f64>, String> {
     let g = gpu()?;
     let n = s.n();
     let reps = s.reps;
-    let steps = s.s_steps + s.e_steps;
+    let steps = match cp {
+        Some(c) => c.total_steps,
+        None => s.s_steps + s.e_steps,
+    };
     let vsum: f64 = s.v.iter().map(|v| v * 1e18).sum();
     let axis = g.storage(
         "axis",
@@ -187,17 +195,22 @@ pub fn run_gpu(s: &Strip) -> Result<Vec<f64>, String> {
         "tab",
         &v4((0..s.s_steps * s.layers).map(|k| [s.tab[2 * k] as f32, s.tab[2 * k + 1] as f32, 0.0, 0.0])),
     );
-    let repc = g.storage(
-        "repc",
-        &v4((0..reps).flat_map(|r| {
+    let k0 = |r: usize| cp.map_or(0.0, |c| c.k0[r] as f32);
+    let repc_bytes = |hs: Option<(&[f64], &[f64])>| {
+        v4((0..reps).flat_map(|r| {
             let c = &s.repc[7 * r..7 * r + 7];
+            let (sx, sy, ex, ey) = match hs {
+                Some((a, b)) => (a[2 * r], a[2 * r + 1], b[2 * r], b[2 * r + 1]),
+                None => (c[2], c[3], c[4], c[5]),
+            };
             // The phases' fractions in f64 (f32 holds them to ~1e-7 of a cycle).
             [
-                [c[0].fract() as f32, c[1].fract() as f32, c[2] as f32, c[3] as f32],
-                [c[4] as f32, c[5] as f32, c[6] as f32, 0.0],
+                [c[0].fract() as f32, c[1].fract() as f32, sx as f32, sy as f32],
+                [ex as f32, ey as f32, c[6] as f32, k0(r)],
             ]
-        })),
-    );
+        }))
+    };
+    let repc = g.storage("repc", &repc_bytes(None));
     let outm = g.zeros("outm", (reps * 16) as u64);
     let src = include_str!("head.wgsl");
     let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..8)
@@ -267,7 +280,7 @@ pub fn run_gpu(s: &Strip) -> Result<Vec<f64>, String> {
         fs_dt: s.fs_dt as f32,
         inv_m: s.inv_m as f32,
         vsum: vsum as f32,
-        pad0: 0,
+        coupled: cp.is_some() as u32,
         pad1: 0,
         pad2: 0,
     };
@@ -292,8 +305,12 @@ pub fn run_gpu(s: &Strip) -> Result<Vec<f64>, String> {
     } else {
         (65535, (reps as u32).div_ceil(65535))
     };
-    // Steps per dispatch: ~2e8 particle-steps (well under Windows' GPU timeout).
-    let per = ((2e8 / (n * reps) as f64) as usize).clamp(1, steps.max(1));
+    // Steps per dispatch: ~2e8 particle-steps (well under Windows' GPU timeout); coupled,
+    // the cells' field is updated every `update_every` steps.
+    let mut per = ((2e8 / (n * reps) as f64) as usize).clamp(1, steps.max(1));
+    if let Some(c) = cp {
+        per = per.min(c.update_every.max(1));
+    }
     let mut j = 0;
     while j < steps {
         let j1 = (j + per).min(steps);
@@ -301,9 +318,73 @@ pub fn run_gpu(s: &Strip) -> Result<Vec<f64>, String> {
         un.j1 = j1 as u32;
         g.queue.write_buffer(&ubuf, 0, bytemuck::bytes_of(&un));
         g.run(&p_step, &group, (wx, wy, wz))?;
+        if let Some(c) = cp {
+            g.run(&p_reduce, &group, ((reps as u32).div_ceil(64), 1, 1))?;
+            let o: Vec<[f32; 4]> =
+                bytemuck::cast_slice(&g.read(&outm, (reps * 16) as u64)?).to_vec();
+            let (hs, he) = c.fields(&o);
+            g.queue.write_buffer(&repc, 0, &repc_bytes(Some((&hs, &he))));
+        }
         j = j1;
     }
     g.run(&p_reduce, &group, ((reps as u32).div_ceil(64), 1, 1))?;
     let o: Vec<[f32; 4]> = bytemuck::cast_slice(&g.read(&outm, (reps * 16) as u64)?).to_vec();
     Ok(o.iter().flat_map(|x| [x[0] as f64, x[1] as f64, x[2] as f64]).collect())
+}
+
+/// The coupled run (`strip.py`'s `tone_coupled`): every cell steps in absolute time, cell c
+/// entering the zone at k0 = c q; every `update_every` steps the cells' (M_x, M_y) give the
+/// coating's field (with the head's image for the cells in the zone, free for the rest),
+/// the Preisach medium's kernels (`field.rs`).
+pub struct Coupled {
+    pub k0: Vec<f64>,
+    pub total_steps: usize,
+    pub update_every: usize,
+    pub ncx: usize,
+    pub layers: usize,
+    pub ms_coat: f64,
+    pub img: crate::field::Kernels,
+    pub free: crate::field::Kernels,
+    pub cf: crate::field::CellField,
+}
+
+impl Coupled {
+    pub fn read(dir: &Path, s: &Strip) -> Result<Self, String> {
+        let m = Meta::read(dir)?;
+        let ncx = m.usize("ncx")?;
+        Ok(Coupled {
+            k0: read_f64(dir, "k0", s.reps)?,
+            total_steps: m.usize("total_steps")?,
+            update_every: m.usize("update_every")?,
+            ncx,
+            layers: s.layers,
+            ms_coat: m.f64("ms_coat")?,
+            img: crate::io::read_kernels(dir, "img", s.layers)?,
+            free: crate::io::read_kernels(dir, "free", s.layers)?,
+            cf: crate::field::CellField::new(m.usize("n_fft")?, ncx, s.layers),
+        })
+    }
+
+    /// (hs, he) per replica (x, y) from the replicas' M / M_sat (reps = signs x ncx x
+    /// layers, the GPU's f32 sums).
+    pub fn fields(&self, o: &[[f32; 4]]) -> (Vec<f64>, Vec<f64>) {
+        let per = self.ncx * self.layers;
+        let signs = o.len() / per;
+        let mut hs = vec![0.0; 2 * o.len()];
+        let mut he = vec![0.0; 2 * o.len()];
+        for sg in 0..signs {
+            let mx: Vec<f64> = (0..per).map(|c| self.ms_coat * o[sg * per + c][0] as f64).collect();
+            let my: Vec<f64> = (0..per).map(|c| self.ms_coat * o[sg * per + c][1] as f64).collect();
+            let (ix, iy) = self.cf.apply(&self.img, &mx, &my);
+            let (fx, fy) = self.cf.apply(&self.free, &mx, &my);
+            for c in 0..per {
+                let r = sg * per + c;
+                hs[2 * r] = ix[c];
+                hs[2 * r + 1] = iy[c];
+                he[2 * r] = fx[c];
+                he[2 * r + 1] = fy[c];
+            }
+        }
+        (hs, he)
+    }
 }

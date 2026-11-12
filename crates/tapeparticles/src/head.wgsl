@@ -26,7 +26,7 @@ struct U {
     fs_dt: f32,
     inv_m: f32,
     vsum: f32,
-    pad0: u32,
+    coupled: u32,
     pad1: u32,
     pad2: u32,
 }
@@ -203,16 +203,22 @@ fn step_head(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(workgroup_i
     let pr = prm[i];
     var p = state[base + i];
     var m = mom[base + i];
-    for (var j = u.j0; j < u.j1; j = j + 1u) {
+    for (var k = u.j0; k < u.j1; k = k + 1u) {
+        // Coupled: k is absolute, the replica's own step k - k0 (it enters the zone at k0).
+        var jj = i32(k);
+        if (u.coupled == 1u) {
+            jj = i32(k) - i32(c1.w);
+        }
         var h = vec3<f32>(c1.x, c1.y, 0.0);
-        if (j < u.s_steps) {
+        if (jj >= 0 && u32(jj) < u.s_steps) {
+            let j = u32(jj);
             let f = tab[j * u.layers + l];
             let pb = fract(c0.x + f32(j) * u.inv_m);
             let ps = fract(c0.y + f32(j) * u.fs_dt);
             let hg = c1.z * u.a_sig * sin(TWO_PI * ps) + u.bias * sin(TWO_PI * pb);
             h = vec3<f32>(hg * f.x + c0.z, hg * f.y + c0.w, 0.0);
         }
-        let rnd = hash_uniform(u.seed, base + i, j);
+        let rnd = hash_uniform(u.seed, base + i, k);
         let o = sw_step(ax.xyz, pr.x, pr.y, h, p, rnd);
         p = o.w;
         m = vec4<f32>(o.xyz, 0.0);

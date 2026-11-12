@@ -257,3 +257,71 @@ def tone(spec, parts, mach, num, f_sig, a_sig, bias, gpu=True, log=None):
         m[..., :2] = x.reshape(m[..., :2].shape)
     r = [readback(m[si, :, :, 0].T, m[si, :, :, 1].T, x_cells, mach, num, f_sig) for si in range(2)]
     return 0.5 * (r[0] - r[1]), {"demag_changes": hist, "cells": ncx, **info}
+
+
+def tone_coupled(spec, parts, mach, num, f_sig, a_sig, bias, q: int = 2, update_every: int = 4,
+                 lam_min: str = "medium", log=None, demag_scale: float = 1.0):
+    """A tone with the coating's field causal: every cell steps in absolute time (the step
+    dt = ds / (v q), so cell c enters the zone at step c q), and every `update_every` steps
+    the cells' present (M_x, M_y) give the field on all of them (imaged for the cells in the
+    zone, free for the rest: `tpsim strip --coupled`). This replaces the fixed point of
+    `tone`, which with particles settles into a limit cycle (docs/TAPE_PARTICLES.md).
+    lam_min: "medium" (the Preisach medium's: wavelengths above 3 bias wavelengths) or
+    "none" (the whole pattern). Returns (the antithetic fundamental, info)."""
+    from pathlib import Path
+
+    from varimu.devices.tape import _demag_kernels
+
+    n, hk, e0, v = parts
+    lam = mach.speed_m_s / f_sig
+    ds = num.ds_m(mach)
+    length = (2 * num.guard_waves + num.read_waves) * lam
+    x_cells = (np.arange(int(round(length / ds))) + 0.5) * ds
+    ncx, nl = len(x_cells), num.layers
+    dt = ds / (mach.speed_m_s * q)
+    z = zone_m(mach, abs(a_sig) + bias, num.floor_a_m)
+    s_steps = int(math.ceil(2 * z / (mach.speed_m_s * dt)))
+    rel = z - mach.speed_m_s * dt * np.arange(s_steps)
+    dy = mach.coating_m / nl
+    heights = mach.spacing_m + (np.arange(nl) + 0.5) * dy
+    tab = np.zeros((s_steps, nl, 2))
+    for li, y in enumerate(heights):
+        fx, fy = head_field(mach.rec, rel, np.full_like(rel, y))
+        tab[:, li, 0], tab[:, li, 1] = fx, fy
+    t_c = (x_cells - z) / mach.speed_m_s
+    repc = np.zeros((2, ncx, nl, 7))
+    repc[..., 0] = np.mod(mach.f_bias_hz * t_c, 1.0)[None, :, None]
+    repc[..., 1] = np.mod(f_sig * t_c, 1.0)[None, :, None]
+    repc[0, ..., 6], repc[1, ..., 6] = 1.0, -1.0
+    k0 = np.broadcast_to((np.arange(ncx) * q)[None, :, None], (2, ncx, nl)).astype(float)
+    total = (ncx - 1) * q + s_steps + num.e_steps
+    n_fft = 1 << int(math.ceil(math.log2(2 * ncx)))
+    slab = Slab(mach.coating_m, nl, ds, mach.spacing_m)
+    lm = mach.lam_min_m if lam_min == "medium" else None
+    arrays = {"n": n, "hk": hk, "e0_kt": e0, "v": v, "p0": np.full(len(hk), 0.5), "tab": tab,
+              "repc": repc, "k0": k0}
+    for name, img in (("img", mach.spacing_m if num.image else None), ("free", None)):
+        keep, kern = _demag_kernels(n_fft, slab, lm, 16, img)
+        arrays[f"{name}_kept"] = np.nonzero(keep)[0]
+        arrays[f"{name}_k"] = np.stack([np.stack(kern).real, np.stack(kern).imag], axis=-1)
+    meta = {
+        "n_particles": len(hk), "reps": 2 * ncx * nl, "layers": nl, "s_steps": s_steps,
+        "e_steps": num.e_steps, "a_sig": a_sig, "bias": bias, "fs_dt": f_sig * dt,
+        "inv_m": mach.f_bias_hz * dt, "dt": dt, "f0": spec.f0_hz, "grid": num.grid,
+        "iters": num.iters, "stochastic": False, "seed": 1, "ncx": ncx, "n_fft": n_fft,
+        "total_steps": total, "update_every": update_every,
+        "ms_coat": demag_scale * spec.packing * spec.ms_p_a_m,
+    }
+    d = tempfile.mkdtemp(prefix="tp_cstrip_")
+    try:
+        dd = Path(d)
+        runner.write(dd, meta, arrays)
+        r = subprocess.run([str(runner.tpsim()), "strip", d, "--coupled"], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"tpsim strip --coupled failed: {r.stderr}")
+        m = runner.read(dd, "out_m").reshape(2, ncx, nl, 3)
+        info = json.loads((dd / "out.json").read_text())
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    rb = [readback(m[si, :, :, 0].T, m[si, :, :, 1].T, x_cells, mach, num, f_sig) for si in range(2)]
+    return 0.5 * (rb[0] - rb[1]), {"cells": ncx, "steps": total, "zone_m": z, **info}

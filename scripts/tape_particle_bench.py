@@ -276,6 +276,70 @@ def preisach_curve(biases, s_a_m, ys, m, floor, tape=None, demag_iters=12):
     return out
 
 
+# --- The anhysteretic remanence (the recording's transfer curve) -------------------------
+
+ARM_DC_OE = np.array([2.0, 5.0, 10.0, 20.0, 40.0, 70.0, 110.0, 160.0, 230.0, 320.0])
+
+
+def arm_history(dc_a_m, ac_a_m=1500.0 * OE, cycles=40, m=16):
+    """steps x len(dc): a 70 kHz AC field along the tape decaying linearly to 0 over
+    `cycles`, a steady dc_a_m on it, then (2 steps) the dc removed."""
+    k = np.arange(1, cycles * m + 1)
+    ac = ac_a_m * (1 - k / len(k)) * np.sin(2 * math.pi * k / m)
+    h = ac[:, None] + np.asarray(dc_a_m, float)[None, :]
+    return np.vstack([h, np.zeros((2, h.shape[1]))])
+
+
+def bench_arm(box, spec, seeds, m=16, gpu=True, log=print):
+    dc = np.r_[ARM_DC_OE, -ARM_DC_OE] * OE
+    h = arm_history(dc, m=m)
+    happ = np.zeros((h.shape[0], h.shape[1], 3))
+    happ[:, :, 0] = h
+    out = []
+    for sd in seeds:
+        p0 = erased(box, spec, sd, gpu)
+        fin, _, _ = runner.bench_run(box, spec, happ, 1 / (F_BIAS * m), seed=sd, gpu=gpu, p0=p0)
+        k = len(ARM_DC_OE)
+        out.append(0.5 * (fin[:k, 0] - fin[k:, 0]))
+    a = np.array(out)
+    return a.mean(axis=0), (a.std(axis=0, ddof=1) / math.sqrt(len(seeds)) if len(seeds) > 1 else None)
+
+
+def preisach_arm(tape=None, m=16):
+    tape = tape or library.load_tape("SCOTCH111@3")
+    pre = tape.ensemble()
+    cs, _, wt = tape.orientation.axes()
+    dc = ARM_DC_OE * OE
+    h = arm_history(np.r_[dc, -dc], m=m).T  # histories x steps
+    mx = sum(w * c * pre.state_after(c * h) for c, w in zip(cs, wt, strict=True))
+    k = len(dc)
+    return 0.5 * (mx[:k] - mx[k:])
+
+
+def knee_db(dc_a_m, arm) -> float | None:
+    """The 3% THD level over the 1% level of a sine through the odd transfer curve arm(dc)
+    (the switching study's `erf_level`, on this curve)."""
+    x = np.r_[-dc_a_m[::-1], 0.0, dc_a_m]
+    y = np.r_[-arm[::-1], 0.0, arm]
+    th = np.linspace(0, 2 * math.pi, 4096, endpoint=False)
+
+    def thd(a):
+        sp_ = np.abs(np.fft.rfft(np.interp(a * np.sin(th), x, y)))
+        return float(np.hypot(sp_[3], sp_[5]) / sp_[1])
+
+    def level(target):
+        lo, hi = dc_a_m[0], dc_a_m[-1]
+        if thd(hi) < target:
+            return None
+        for _ in range(50):
+            mid = math.sqrt(lo * hi)
+            lo, hi = (mid, hi) if thd(mid) < target else (lo, mid)
+        return math.sqrt(lo * hi)
+
+    a1, a3 = level(0.01), level(0.03)
+    return None if a1 is None or a3 is None else 20 * math.log10(a3 / a1)
+
+
 def width_numbers(biases, amp) -> dict:
     """Peak position and the rise / fall widths (dB of bias) of a bias curve amp(B)."""
     db = 20 * np.log10(np.maximum(np.abs(amp), 1e-12))
@@ -355,6 +419,21 @@ def main() -> int:
             cur[v] = {"m": mean.tolist(), "se": None if se is None else se.tolist(),
                       "seconds": time.time() - t0, **width_numbers(biases, mean[:, 0])}
             log(f"{v} ({time.time() - t0:.0f} s): {json.dumps(width_numbers(biases, mean[:, 0]))}")
+            save()
+    if "arm" in a.parts:
+        arm = res.setdefault("arm", {"dc_a_m": (ARM_DC_OE * OE).tolist()})
+        pa = preisach_arm()
+        arm["preisach"] = {"m": pa.tolist(), "knee_db": knee_db(ARM_DC_OE * OE, pa)}
+        log(f"preisach ARM: {np.round(pa, 4)} knee {arm['preisach']['knee_db']}")
+        for v in a.variants:
+            f = STRONG if v == "dynamic_strong" else res["fit"][v]
+            spec = spec_of(v, hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"],
+                           interaction_scale=f.get("interaction_scale", 1.0))
+            box = bn.make_box(spec, a.n, seed=a.seed)
+            mean, se = bench_arm(box, spec, list(range(1, a.seeds + 1)), gpu=not a.cpu, log=log)
+            arm[v] = {"m": mean.tolist(), "se": None if se is None else se.tolist(),
+                      "knee_db": knee_db(ARM_DC_OE * OE, mean)}
+            log(f"{v} ARM: {np.round(mean, 4)} knee {arm[v]['knee_db']}")
             save()
     if "plot" in a.parts:
         plot(res)

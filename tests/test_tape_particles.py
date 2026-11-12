@@ -107,3 +107,30 @@ def test_bench_rust_matches_python_on_a_short_loop():
     except RuntimeError as e:
         pytest.skip(f"no GPU: {e}")
     assert np.abs(trg[:, 0, :] - tr).max() < 0.08
+
+
+def test_moving_head_rust_and_gpu_agree_with_python():
+    """The strip's pass (head field, static fields, the master equation) in numpy, Rust f64
+    and the GPU's f32, on a few cells."""
+    from varimu.tape_particles import strip as sp
+
+    _runner_or_skip()
+    spec = bn.BenchSpec(hk_median_a_m=730 * bn.OE, sigma_ln_hk=0.25, interactions="none")
+    mach = sp.Machine()
+    num = sp.Numerics(layers=2, steps_per_cycle=8, floor_a_m=200 * bn.OE)
+    parts = sp.sample(spec, 24, seed=2)
+    x = np.array([1e-6, 2e-6])
+    rng = np.random.default_rng(0)
+    hs = rng.normal(0, 500, (2, 2, 2, 2))
+    he = rng.normal(0, 500, (2, 2, 2, 2))
+    args = (parts, spec, mach, num, 15e3, 999.0, 400 * bn.OE, x, hs, he)
+    ref = sp.reference(*args)
+    cpu, _ = sp.run(*args, gpu=False)
+    # f64 against f64: a particle at a basin's edge may flip one step apart (master
+    # equation's sure switch), 1e-6 of saturation here.
+    assert np.abs(cpu - ref).max() < 1e-5
+    try:
+        gpu, _ = sp.run(*args, gpu=True)
+    except RuntimeError as e:
+        pytest.skip(f"no GPU: {e}")
+    assert np.abs(gpu - ref).max() < 1e-3

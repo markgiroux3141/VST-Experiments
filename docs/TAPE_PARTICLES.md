@@ -63,13 +63,86 @@ transport), then the moving head only if the bench leaves the question open.
 - **The erased state** is made, not assumed: from random signs, an AC field along the tape
   decaying from 2000 Oe to 0 over 60 cycles at 100 kHz, interactions live.
 
-### The moving head (`varimu/tape_particles/medium.py`; Rust `medium.rs`)
+### The moving head (`varimu/tape_particles/strip.py`; Rust `strip.rs`, GPU `head.wgsl`)
 
-TBD
+The Preisach medium's geometry with its Preisach cells replaced by particles, so that the
+two models differ only in the particles:
+- **No. 21's machine** (scripts/tape_switching_study.py's `no21_spec`): 15 ips, 70 kHz bias,
+  the Ampex 300's 51 um record gap, 3 mm poles relaxing over 3 mm, a 6.35 um repro gap,
+  0.5 um spacing, the 12.7 um coating in 6 layers, cells of 1/7.62 bias wavelength
+  (0.714 um), the same small signal (0.05 x SCOTCH111@3's Hc median, 999 A/m deep-gap peak)
+  and the same bias grid in units of that Hc.
+- **Every cell holds the same particle sample** (512 particles of the `none` fit; the
+  variation with the sample is in "Convergence") and sees the head's field (Hx, Hy of
+  `head_field`) at its height while it is within the zone where the head can switch a
+  particle (60 Oe at the peak field), 16 steps per bias cycle, then the free field. The
+  particles switch by the master equation (the expectation over thermal histories), so the
+  antithetic +-signal difference has no Monte Carlo noise.
+- **The readback** is `tone_harmonics`' (each layer's M_x and M_y through the repro head's
+  Hx and Hy spectra, the fundamental over whole wavelengths).
+- **The coating's field**, three ways:
+  - `nodemag`: none (every cell independent). The Preisach medium run the same way
+    (`demag_iterations=0`) is the like-for-like comparison.
+  - `demag`: the Preisach medium's fixed point (each cell sees the final pattern's field,
+    with the head's image during its pass, free after; Anderson as
+    `record_demagnetized_vector`). **With particles it doesn't converge:** a period-2 limit
+    cycle (the 15 kHz output alternating -35.8 / -39.1 dB after 27 damped iterations, rms
+    change 0.11 of saturation, not falling; Anderson the same). A cell's response to a
+    steady field is a sum of SW steps, far steeper than the Preisach tables' smooth one, and
+    the M_y part of the field (the coating's perpendicular demagnetization, N ~ 1 at long
+    wavelengths) feeds it back hard. The approximation (a cell seeing a pattern recorded
+    after it) is what fails, so:
+  - `causal`: every cell steps in absolute time (dt = ds / 2v, cell c entering the zone at
+    step 2c), and every 4 steps the cells' present (M_x, M_y) give the field on all of them
+    (imaged for the cells in the zone, free for the rest), with the Preisach medium's kernels
+    and wavelength cut (> 3 bias wavelengths). `causal_full`: the whole pattern's field.
 
 ## Parameters and what was fitted to what
 
-TBD
+| Value | Used | Source |
+|---|---|---|
+| Ms_p | 360 kA/m | research 1.2 (74 emu/g x 4.86 g/cm^3) |
+| packing | 0.35 | research 1.5 (0.28-0.40); SCOTCH111@3's noise block |
+| needle length, aspect | 0.5 um median, 5:1 | research 1.3 (Westmijze 1956's micrograph) |
+| length log spread | 0.3 (volume 0.9) | research 1.3, provisional (0.3-0.5) |
+| orientation | isotropic in 3D | research 1.5 (#111 predates orientation), provisional |
+| K V_act / kT median | 150 | research 1.6 (no period value; bracket 60-2000), provisional |
+| f0, T | 1e9 Hz, 293 K | research 1.6 |
+| softening, contact | 0.05 um, 0.8 width | provisional (half the end face; needles touching) |
+| **H_K median, log spread** | fitted | **No. 20 + Eilers' Hc** |
+| **interaction strength** | fitted (`interaction_scale`, the share of the dipolar field of Ms_p at that packing) | **No. 20 + Eilers' Hc** |
+
+Fitted on the bench (N = 2000, 60 Hz meter: 32 steps a cycle for No. 20's loops, each loop
+and its mirror on the same erased state; a 1000 Oe loop at 160 steps a cycle for Hc; a grid
+then Nelder-Mead; `scripts/tape_particle_bench.py --parts fit`):
+
+| variant | H_K median | log spread | interactions | No. 20 rms (reading errors) | Hc (270 +-10%) | saturation remanence | evaluations |
+|---|---|---|---|---|---|---|---|
+| dynamic | 726 Oe | 0.224 | 0.110 of physical | 0.87 | 255 Oe | 0.544 | 81 (17 min) |
+| frozen | 669 Oe | 0.247 | 0.188 | 0.72 | 244 Oe | 0.507 | 81 |
+| none | 705 Oe | 0.226 | - | 0.72 | 262 Oe | 0.508 | 48 |
+| SCOTCH111@3 (Preisach) | Hc median 251 Oe | 0.283 | sigma_Hi 64 Oe | 0.57 | 279 Oe | 0.872 (x component) | - |
+
+Nothing was fitted to No. 21 except, as for the Preisach model, its one bias scale (the
+Ampex 300's unprinted field per mA) and an offset per curve.
+
+What the static fit says on its own:
+- **The physical dipolar interactions are ~9x too strong for No. 20.** At their full strength
+  (packing 0.35, Ms_p 360 kA/m, needles as end charges) the interaction field on a needle is
+  ~150-200 Oe rms per component, and the remanence curve rises from 2% of saturation at
+  100 Oe to 87% at 900 Oe, far wider than No. 20's (0.5% to 100%). The best fit with them at
+  0.6 of that is 4.4 reading errors; the fit takes them to 0.11. Either the period oxide's
+  near fields are much weaker than point end charges (porous, polycrystalline needles,
+  flux closure in chains and clumps: research 1.3, 4) or the coating is far less dense in
+  contact than random packing: the static data can't say which, and the bench's question has
+  to be asked at both strengths (below).
+- **No. 20 can't tell interactions from a switching-field spread:** all three variants fit it
+  within a reading error, with the same H_K (~700 Oe) and spread (0.22-0.25).
+- **An unfitted check passes:** the saturation remanence of a random 3D SW ensemble is 0.5
+  (0.51-0.54 here with interactions), so Mr = 0.35 x 360 kA/m x 0.51-0.54 = 64-69 kA/m:
+  No. 20's top (62.7 kA/m over 12.7 um) and Eilers' 900 G (71.6 kA/m) bracket it.
+- The effective H_K (~700 Oe) is 0.35 of the ideal coherent field of a 5:1 needle (research
+  1.4: ~2000 Oe), the incoherence reduction the research expects (0.13-0.4).
 
 ## The validation ladder
 

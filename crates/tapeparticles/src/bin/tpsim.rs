@@ -72,7 +72,11 @@ fn run() -> Result<(), String> {
         }
         "strip" => {
             let st = strip::Strip::read(&dir)?;
-            let m = if flag("--gpu") {
+            let m = if flag("--coupled") {
+                info.insert("backend".into(), "gpu, coupled".into());
+                let cp = strip::Coupled::read(&dir, &st)?;
+                strip::run_gpu_with(&st, Some(&cp))?
+            } else if flag("--gpu") {
                 info.insert("backend".into(), "gpu".into());
                 strip::run_gpu(&st)?
             } else {
