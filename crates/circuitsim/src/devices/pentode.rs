@@ -18,6 +18,18 @@ use crate::ir;
 /// Python's `_VG2_MIN`: avoids division by zero when the screen is at 0 V.
 const VG2_MIN: f64 = 1e-3;
 
+/// Newton step limiting ([`Device::limit`]): a port moves at most this far per iteration
+/// from its last linearization (the plate and the screen; the control grid
+/// [`GRID_STEP_V`]), or [`STEP_FRACTION`] of its distance from the cathode there, whichever
+/// is more. Numerics only: the solution is the same, the path to it shorter where the
+/// plate's conductance vanishes (an output transformer's plate far from the knee, where a
+/// small current mismatch asked for a step of kilovolts: the EL34s of the Marshall 1987 at
+/// their flyback cycled between -6 and +6 kV until the iteration cap,
+/// METHODOLOGY_REVIEW.md W1 "Status").
+const PLATE_STEP_V: f64 = 50.0;
+const GRID_STEP_V: f64 = 10.0;
+const STEP_FRACTION: f64 = 0.5;
+
 #[derive(Debug, Clone)]
 pub struct Pentode {
     inv_mu: f64,
@@ -52,6 +64,22 @@ impl Pentode {
 impl Device for Pentode {
     fn ports(&self) -> usize {
         3
+    }
+
+    fn limit(&self, v: &mut [f64], v_old: &[f64]) -> bool {
+        let mut limited = false;
+        for (j, floor) in [PLATE_STEP_V, PLATE_STEP_V, GRID_STEP_V]
+            .into_iter()
+            .enumerate()
+        {
+            let max = floor.max(STEP_FRACTION * v_old[j].abs());
+            let d = v[j] - v_old[j];
+            if d.abs() > max {
+                v[j] = v_old[j] + max.copysign(d);
+                limited = true;
+            }
+        }
+        limited
     }
 
     fn eval(&self, v: &[f64], i: &mut [f64], g: &mut [f64]) {
@@ -116,5 +144,46 @@ impl Device for Pentode {
             .map_or((0.0, 0.0), |gc| grid_current(gc, vg1));
         i[2] = ig;
         g[2 * 3 + 2] = dig;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn el34() -> Pentode {
+        Pentode::new(&ir::Pentode {
+            name: "EL34".into(),
+            model: ir::KorenPentode {
+                mu: 11.0,
+                ex: 1.35,
+                kg1: 650.0,
+                kg2: 4200.0,
+                kp: 60.0,
+                kvb: 24.0,
+                screen: None,
+            },
+            grid: None,
+            c_g1k: 0.0,
+            c_g1p: 0.0,
+            c_pk: 0.0,
+        })
+    }
+
+    /// A Newton iterate kilovolts away (the flyback's cycling) is pulled back to the step
+    /// limits; small steps pass untouched.
+    #[test]
+    fn newton_steps_are_limited() {
+        let t = el34();
+        let old = [40.0, 430.0, -22.0];
+        let mut v = [-6400.0, 431.0, 18.0];
+        assert!(t.limit(&mut v, &old));
+        assert_eq!(v, [40.0 - PLATE_STEP_V, 431.0, -22.0 + 0.5 * 22.0]);
+        let mut v = [1800.0, 430.0, -30.0];
+        assert!(t.limit(&mut v, &[1000.0, 430.0, -22.0]));
+        assert_eq!(v[0], 1500.0, "half the plate's voltage when that is more");
+        let mut v = [45.0, 429.0, -21.0];
+        assert!(!t.limit(&mut v, &old));
+        assert_eq!(v, [45.0, 429.0, -21.0]);
     }
 }
