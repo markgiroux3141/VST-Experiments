@@ -277,10 +277,11 @@ def print_part(tape, base_row: dict) -> dict:
     f = spec.speed_m_s / lam
     ds = spec.ds_m
     cells = 600e-6 + np.arange(int(round(5 * lam / ds))) * ds
-    mx, _ = _record(
-        spec, tape, lambda t: a0 * np.sin(2 * math.pi * f * t), bias, 0.0,
-        (cells[-1] + 600e-6) / spec.speed_m_s, cells, a0,
-    )  # fmt: skip
+    with tv.variant_kernel(threads=2):
+        mx, _ = _record(
+            spec, tape, lambda t: a0 * np.sin(2 * math.pi * f * t), bias, 0.0,
+            (cells[-1] + 600e-6) / spec.speed_m_s, cells, a0,
+        )  # fmt: skip
     mid = (cells >= cells[0] + lam) & (cells < cells[0] + 4 * lam)
     ph = np.exp(-1j * 2 * math.pi * cells[mid] / lam)
     m0 = float(np.abs((mx[:, mid] * ph).mean(axis=1) * 2).mean()) * tape.ms_a_m
@@ -289,32 +290,36 @@ def print_part(tape, base_row: dict) -> dict:
     out = {"m0_a_m": m0, "m0_over_ms": m0 / tape.ms_a_m, "f_hz": f, "lam_m": lam,
            "cos2_x": c2x, "cos2_y": c2y, "data": PRINT_DATA, "cases": {}}  # fmt: skip
     k = 2 * math.pi / lam
-    out["h_stray_oe"] = 0.5 * m0 * (1 - math.exp(-k * tape.coating_m)) * math.exp(
-        -k * tape.base_m
-    ) / OE
+    out["h_stray_oe"] = (
+        0.5 * m0 * (1 - math.exp(-k * tape.coating_m)) * math.exp(-k * tape.base_m) / OE
+    )
     week, five = 7 * 86400.0, 300.0
-    for km in (60.0, 150.0, 400.0, 1950.0):
-        for sg in (0.6, 1.0):
-            pt = tv.PrintThrough(km, sg, 1.1 * hc, 0.35 * 3.6e5, c2x, c2y)
+    # The moment against the barrier: mu0 Ms_p V / kT = 2 kappa / H0, H0 the athermal
+    # switching field (the switching study's ~1.1 Hc) or the particle's shape anisotropy
+    # field (160 kA/m, aspect 5: the literature study's 1.4).
+    for h0n, h0 in (("hc", 1.1 * hc), ("hk", 160e3)):
+        for km in (60.0, 150.0, 400.0, 1950.0):
+            for sg in (0.6, 1.0):
+                pt = tv.PrintThrough(km, sg, h0, 0.35 * 3.6e5, c2x, c2y)
 
-            def db(t, temp=293.15, apart=0.0, sense=1, m=m0, lam_m=lam, pt=pt):
-                return tv.print_ratio_db(
-                    pt, m, lam_m, tape.coating_m, tape.base_m, t, temp, apart, sense
-                )
+                def db(t, temp=293.15, apart=0.0, sense=1, m=m0, lam_m=lam, pt=pt):
+                    return tv.print_ratio_db(
+                        pt, m, lam_m, tape.coating_m, tape.base_m, t, temp, apart, sense
+                    )
 
-            lams = np.geomspace(0.03, 3.0, 60) * lam
-            peak = lams[int(np.argmax([db(1000.0, lam_m=x) for x in lams]))]
-            out["cases"][f"k{km:g}_s{sg:g}"] = {
-                "db_5min": db(five),
-                "db_1week": db(week),
-                "db_per_decade": (db(1e5) - db(1e3)) / 2,
-                "db_per_10k": db(1000.0, 303.15) - db(1000.0),
-                "decay_db_3min_after_5min_print": db(five, apart=180.0) - db(five),
-                "pre_over_post_db": db(five) - db(five, sense=-1),
-                "level_law_db_per_db": (db(five) - db(five, m=m0 * 10 ** (-0.5))) / 10.0 + 1.0,
-                "peak_lambda_over_2pi_total": float(peak / lam),
-            }
-            print(f"  print k{km:g} s{sg:g}:", json.dumps(out["cases"][f"k{km:g}_s{sg:g}"],
+                lams = np.geomspace(0.03, 3.0, 60) * lam
+                peak = lams[int(np.argmax([db(1000.0, lam_m=x) for x in lams]))]
+                out["cases"][f"{h0n}_k{km:g}_s{sg:g}"] = {
+                    "db_5min": db(five),
+                    "db_1week": db(week),
+                    "db_per_decade": (db(1e5) - db(1e3)) / 2,
+                    "db_per_10k": db(1000.0, 303.15) - db(1000.0),
+                    "decay_db_3min_after_5min_print": db(five, apart=180.0) - db(five),
+                    "pre_over_post_db": db(five) - db(five, sense=-1),
+                    "level_law_db_per_db": (db(five) - db(five, m=m0 * 10 ** (-0.5))) / 10.0 + 1.0,
+                    "peak_lambda_over_2pi_total": float(peak / lam),
+                }
+                print(f"  print {h0n} k{km:g} s{sg:g}:", json.dumps(out["cases"][f"{h0n}_k{km:g}_s{sg:g}"],
                   default=float), flush=True)  # fmt: skip
     return out
 
@@ -340,7 +345,9 @@ def plot(res: dict) -> None:
             for n in ns:
                 a.plot(NO21_MA, res[n]["no21"][key], "o-", ms=3, lw=1, label=n)
             if row == 1 and "stretch" in res:
-                a.plot(NO21_MA, res["stretch"][key], "k:", label=f"stretch p {res['stretch']['p']:.2f}")
+                a.plot(
+                    NO21_MA, res["stretch"][key], "k:", label=f"stretch p {res['stretch']['p']:.2f}"
+                )
             a.set(xlabel="bias (mA; scale fitted)", ylabel="dB re peak", title=f"{f}: {title}")
             a.legend(fontsize=7)
             a.grid(alpha=0.3)
