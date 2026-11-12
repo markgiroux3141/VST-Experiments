@@ -8,7 +8,9 @@
 //!
 //! Each `--device` starts an insert; `--set`, `--trim` and `--quality` after it apply to
 //! it (`--quality` before the first applies to all). The file is read as mono, resampled
-//! to `--rate` (the session's, 48 kHz by default) and cut to `--seconds`.
+//! to `--rate` (the session's, 48 kHz by default) and cut to `--seconds`. When the last
+//! insert prints a right channel (a stereo device, e.g. the plate with STEREO on), `--out`
+//! is a two-channel WAV.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -91,6 +93,7 @@ fn main() -> Result<(), String> {
         cur.len() as f64 / rate as f64
     );
     let no = AtomicBool::new(false);
+    let mut right: Option<Arc<Vec<f32>>> = None;
     for s in &slots {
         let p = Prepared::load(&config, &s.device, s.quality, s.noise)?;
         let t0 = std::time::Instant::now();
@@ -124,10 +127,19 @@ fn main() -> Result<(), String> {
             r.key
         );
         cur = r.audio;
+        right = r.right;
     }
     if let Some(o) = out {
-        let y: Vec<f64> = cur.iter().map(|&v| v as f64).collect();
-        audio::write_wav(&o, &y, rate)?;
+        match &right {
+            Some(r) => {
+                let y: Vec<[f32; 2]> = cur.iter().zip(r.iter()).map(|(&a, &b)| [a, b]).collect();
+                audio::write_wav_stereo(&o, &y, rate)?;
+            }
+            None => {
+                let y: Vec<f64> = cur.iter().map(|&v| v as f64).collect();
+                audio::write_wav(&o, &y, rate)?;
+            }
+        }
         println!("wrote {}", o.display());
     }
     Ok(())

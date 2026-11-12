@@ -504,3 +504,12 @@ HLF-3C wait.
   26 %); the user will decide between four islands, a reduced deck tier, or printing
   overnight. MT6's done-when (the song printed and played) is open; so are the seam check,
   Sel-Sync overdubs, bounces and punch-in.
+- 2026-11-11 (the user: "I can afford a 3 hour run"): **the song printed**, MT6's done-when met.
+  `examples/tape_print.rs --session "sessions/did she mention my name (tape)" --out
+  reports/lightfoot_mix/tape`: 10,656 s (67.8x real time, six pieces at once while other
+  renders ran), key `ac920f35...`; the session plays its tape tracks. Measured against the lanes
+  (`scripts/lightfoot_tape_effect.py`): levels -0.6 to -1.2 dB, the response within -1.8 / +2.0
+  dB from 31 Hz to 6.3 kHz, the silent harmonies track at -72.6 dBFS rms (hiss, a trace of the
+  lead's crosstalk). Then mixed with and without tape (HEADLESS_MIX_PLAN.md's status;
+  `reports/lightfoot_mix/NOTES.md`). Still open: the seam check, Sel-Sync overdubs, bounces,
+  punch-in.

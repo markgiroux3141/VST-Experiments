@@ -928,8 +928,10 @@ ampex_300_4` (`varimu/measure/deck_suite.py`: every spec passes; channel 1, the 
 control inputs (`render::render_pieces_controls`, `fast.run_transient_chunked(controls=)`); MT6's deck as a session
 property (`varimu_app::deck`: `Session::deck`, `Track::tape` plays in place of the lane, inserts print the tape; the
 Session view's Tape deck window; `examples/tape_print.rs`); the user's assignment 1 bass, 2 guitar, 3 lead, 4 harmonies.
-**Parked by the user:** the song's print takes ~3 hours (stopped at 26 %); options in the doc (four islands, a reduced deck
-tier, overnight). PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
+**The song printed (2026-11-11, the user's OK for the 3 hours):** 2 h 58 min, MT6's done-when met; then mixed like a 1968
+Lightfoot record with and without the tape (`scripts/lightfoot_mix.py`: EQP-1A / 670 prints by `examples/print.rs`, which
+now writes a stereo last insert as two channels; faders by loudness, rides, the stereo plate as a send) ->
+`reports/lightfoot_mix/` (NOTES.md, a loudness-matched pair; open: the user listens). PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
 the Langevin EQ-251A. A mix from scratch starts from `stems/Did she mention my name/full/` (the user's call).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks

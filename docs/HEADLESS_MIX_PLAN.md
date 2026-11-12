@@ -140,3 +140,13 @@ using U47, U67, AKG C24, RCA 44, Coles 4038 and a Neve 8014 with 1073s, on an un
 - 2026-11-10: a brainstorm on the stems (measured from `stems/Did she mention my name/full/`,
   the user's wish: start from them, not the session's setup). The gear it wants that no plan
   has is in [PERIOD_GEAR_BACKLOG.md](PERIOD_GEAR_BACKLOG.md) (the 1960s multitrack deck first).
+- 2026-11-11 (unattended, the user's ask: mix it like a Lightfoot record and hear it through the
+  4-track): an early H3 without H0 or H1. `scripts/lightfoot_mix.py` (`--version dry|tape`,
+  `--stage match`): inserts printed by `examples/print.rs` at production (the guitar's boom cut
+  with the EQP-1A, the vocal's presence and a 670 at ~3 dB median GR, the harmonies on a 670),
+  faders by loudness re the lead, constant-power pans (guitar half left, harmonies half right),
+  vocal rides by rule (+-3 dB max), a post-fader send into the stereo EMT 140; no bus
+  processing. The same moves on the dry lanes and on PERIOD_GEAR_BACKLOG.md's tape print, each
+  insert's trim offset by the track's level so both drive the inserts alike; the pair
+  loudness-matched. Every move and its measurement: `reports/lightfoot_mix/NOTES.md`. Next: the
+  user listens (H4).
