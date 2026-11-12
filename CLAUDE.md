@@ -164,6 +164,12 @@ mismatch) tested where a device misses its published figures, the 670 first (its
 under spec; TC 6's sustained-program release 11 s vs 25 s, whose test burst is only 1 s);
 milestones CD0-CD6, the cheap checks CD0-CD2 first.
 
+Methodology review ([docs/METHODOLOGY_REVIEW.md](docs/METHODOLOGY_REVIEW.md), 2026-11-12; nothing
+in the engine built): what not to redo, three toys (`scripts/methodology/`: the DK step matrix
+is sparse, 1.5-5.8x fewer operations where states dominate; stage values as free oversampling,
+10-13 dB of aliasing; partition cuts as transmission lines, never unstable) and work packages
+W1-W7, transmission-line cuts first.
+
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
 devices that never existed from parts we model, ten instruments (the Nickel Organ, a
