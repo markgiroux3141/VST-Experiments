@@ -1173,7 +1173,9 @@ sections:
       - vb
       - g2a
       c: c_mix_bright_f
-- title: v2 and tone stack
+- title: v2
+  owns:
+  - k2b
   parts:
     XV2A:
       device:
@@ -1207,6 +1209,8 @@ sections:
       - k2b
       - '0'
       r: r_follower_ohm
+- title: tone stack
+  parts:
     CTR:
       C:
       - k2b

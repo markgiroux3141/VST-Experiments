@@ -1038,8 +1038,8 @@ class CircuitIR:
                     f"section {s.title!r}: decimate {s.decimate!r} (one of {DECIMATIONS},"
                     " in a multi-rate section)"
                 )
-            if s.owns is not None and (not multirate or not s.owns):
-                raise IRError(f"section {s.title!r}: owns needs nodes, in a multi-rate section")
+            if s.owns is not None and not s.owns:
+                raise IRError(f"section {s.title!r}: owns needs nodes")
             if s.lag_samples is not None and (
                 not isinstance(s.lag_samples, int)
                 or isinstance(s.lag_samples, bool)

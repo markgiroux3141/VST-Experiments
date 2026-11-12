@@ -263,7 +263,11 @@ sections:
       RMXB: {R: [vb, g2a], r: r_mix_ohm}
       CMXB: {C: [vb, g2a], c: c_mix_bright_f}
 
-  - title: v2 and tone stack
+  - title: v2
+    # The cathode follower drives k2b stiffly (~600 ohm): this section keeps it when a live
+    # partition puts the tone stack on with the inverter and the output (the stack sees it
+    # a sample late; the stack's capacitors leave it no DC path of its own there).
+    owns: [k2b]
     parts:
       XV2A: {device: [p2a, g2a, k2a], model: V2A}
       RPL2: {R: [b4, p2a], r: r_plate2_ohm}
@@ -273,6 +277,9 @@ sections:
       # ground (sch: GW87).
       XV2B: {device: [b4, p2a, k2b], model: V2B}
       RKF: {R: [k2b, "0"], r: r_follower_ohm}
+
+  - title: tone stack
+    parts:
       # The TMB stack: 500 pF to the treble pot's top tt, 33K to the slope node ts; ts
       # through .022 to the treble pot's bottom tb (the bass rheostat's top) and through
       # .022 to the middle rheostat's top tm; the treble wiper tw drives the inverter.

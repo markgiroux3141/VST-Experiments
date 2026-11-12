@@ -413,8 +413,9 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                 continue;
             }
         };
+        // (`owns` may be a single-rate section's too: circuitsim's partition.rs "A
+        // single-rate claim".)
         if (m.contains("decimate")
-            || m.contains("owns")
             || m.contains("lag_samples")
             || m.contains("method")
             || m.contains("tube_tables")
@@ -422,8 +423,8 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             && substeps.unwrap_or(1) < 2
         {
             errors.push(format!(
-                "sections[{i}]: decimate, owns, lag_samples, method, tube_tables and \
-                 substeps_in are for a multi-rate section"
+                "sections[{i}]: decimate, lag_samples, method, tube_tables and substeps_in \
+                 are for a multi-rate section"
             ));
             continue;
         }

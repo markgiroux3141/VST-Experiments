@@ -26,7 +26,8 @@ varimu.circuit.builder, which expands its parts with the parts library
                                     # multi-rate part: circuitsim's partition.rs);
                                     # decimate: fir (what it hands on through an
                                     # anti-alias low-pass); owns: [node, ...] (shared nodes
-                                    # it owns: an island's output); lag_samples: N
+                                    # it owns in a partition: an island's output, or a
+                                    # single-rate stiff driver's); lag_samples: N
                                     # (it reads the others N samples late and runs
                                     # ahead: a cut only through stiff rails);
                                     # method: its own integration method (e.g.
@@ -291,12 +292,14 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
-        elif {"decimate", "owns", "lag_samples", "method", "tube_tables", "substeps_in"} & set(
+        elif {"decimate", "lag_samples", "method", "tube_tables", "substeps_in"} & set(
             s
         ) and s.get("substeps", 1) < 2:
+            # (`owns` may be a single-rate section's too: a stiff driver keeping a node a
+            # partition's other part only sees, circuitsim's partition.rs "A single-rate claim")
             errors.append(
-                f"sections[{i}]: decimate, owns, lag_samples, method, tube_tables and"
-                " substeps_in are for a multi-rate section"
+                f"sections[{i}]: decimate, lag_samples, method, tube_tables and substeps_in"
+                " are for a multi-rate section"
             )
         elif "substeps_in" in s and s["substeps_in"] != "events":
             errors.append(f"sections[{i}]: substeps_in {s['substeps_in']!r} (events)")
