@@ -45,7 +45,13 @@ def biases(points: int) -> np.ndarray:
 
 
 def particle_spec() -> bn.BenchSpec:
-    f = json.loads((OUT / "bench_none.json").read_text())["fit"]["none"]
+    """The bench's `none` fit (scripts/tape_particle_bench.py --parts fit; this night's
+    runs kept it in bench_none.json / bench_curves.json, a plain run in bench.json)."""
+    for name in ("bench_none.json", "bench_curves.json", "bench.json"):
+        path = OUT / name
+        if path.exists() and "none" in json.loads(path.read_text()).get("fit", {}):
+            break
+    f = json.loads(path.read_text())["fit"]["none"]
     return bn.BenchSpec(
         interactions="none", hk_median_a_m=f["hk_median_a_m"], sigma_ln_hk=f["sigma_ln_hk"]
     )
