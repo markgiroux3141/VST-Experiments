@@ -225,12 +225,222 @@ impl Corner {
         self.nmin = self.nmin.min(x);
     }
 
-    fn finish(mut self, p: &Preisach) -> f64 {
+    fn finish(self, p: &Preisach) -> f64 {
+        2.0 * self.finish_up(p) - 1.0
+    }
+
+    /// The up weight (M / Ms = 2 up - 1).
+    fn finish_up(mut self, p: &Preisach) -> f64 {
         let (top, bot) = (self.nmax, self.nmin);
         let x = top.max(-bot);
         self.up += p.q(x, bot) - p.q(top, bot) + p.d(x);
-        2.0 * self.up - 1.0
+        self.up
     }
+}
+
+// --- The moving model (an opt-in variant: TAPE_PLAN.md "Over-bias options") ------------
+//
+// Della Torre's moving Preisach model: each hysteron sees H + alpha M, M the cell's own
+// (irreversible) magnetization, so the state must be followed forward: the wiping-out
+// memory as a stack of the history's alternating dominant extrema, each with the up weight
+// after it. The erased start is the limit of a decaying alternating history, so below the
+// stack's first entry e lies a virtual extremum of the other kind at -e. A new extremum x
+// pops what it wipes out; then the up weight is the entry's below it plus (rising from a
+// minimum m) T(x, m) or less (falling from a maximum m) T(m, x), T(a, b) = Q(a, a) - Q(a,
+// b) the triangle b <= beta < alpha <= a; past the stack's first entry it is the corner
+// formula on what is left (at most one entry) and x. The reference is
+// `varimu.tape_variants.Stack`.
+
+/// The wiping-out memory of one easy axis's ensemble.
+#[derive(Debug, Clone, Default)]
+struct Stack {
+    v: Vec<f64>,
+    up: Vec<f64>,
+    max: Vec<bool>,
+}
+
+/// The state if `x` came next: its up weight, the entries kept below it, its kind.
+#[derive(Debug, Clone, Copy)]
+struct Trial {
+    x: f64,
+    up: f64,
+    keep: usize,
+    max: bool,
+}
+
+impl Stack {
+    fn clear(&mut self) {
+        self.v.clear();
+        self.up.clear();
+        self.max.clear();
+    }
+
+    fn trial(&self, p: &Preisach, x: f64) -> Trial {
+        let n = self.v.len();
+        if n > 0 && x == self.v[n - 1] {
+            return Trial {
+                x,
+                up: self.up[n - 1],
+                keep: n - 1,
+                max: self.max[n - 1],
+            };
+        }
+        let rising = if n == 0 { x > 0.0 } else { x > self.v[n - 1] };
+        let mut i = n;
+        loop {
+            if i == 0 {
+                let mut c = Corner::new(p.h_max);
+                c.push(p, x);
+                return Trial {
+                    x,
+                    up: c.finish_up(p),
+                    keep: 0,
+                    max: rising,
+                };
+            }
+            let t = i - 1;
+            if self.max[t] == rising {
+                // Of the move's own kind, passed by x.
+                i -= 1;
+                continue;
+            }
+            let e = self.v[t];
+            let below = if t >= 1 { self.v[t - 1] } else { -e };
+            if (rising && x >= below) || (!rising && x <= below) {
+                // Wiped out with the entry below it (past the first entry: the corner
+                // formula on x alone).
+                i = t.saturating_sub(1);
+                continue;
+            }
+            let up = if rising {
+                self.up[t] + (p.q(x, x) - p.q(x, e))
+            } else {
+                self.up[t] - (p.q(e, e) - p.q(e, x))
+            };
+            return Trial {
+                x,
+                up,
+                keep: t + 1,
+                max: rising,
+            };
+        }
+    }
+
+    fn commit(&mut self, t: Trial) {
+        self.v.truncate(t.keep);
+        self.up.truncate(t.keep);
+        self.max.truncate(t.keep);
+        self.v.push(t.x);
+        self.up.push(t.up);
+        self.max.push(t.max);
+    }
+}
+
+/// The moving model's solver counters since the last [`moving_stats`]: (samples solved,
+/// samples not converged, the largest residual left in M / Ms).
+static MOVING_SOLVES: AtomicUsize = AtomicUsize::new(0);
+static MOVING_FAILS: AtomicUsize = AtomicUsize::new(0);
+static MOVING_WORST: Mutex<f64> = Mutex::new(0.0);
+
+/// (samples solved, not converged, largest residual) since the last call; resets them.
+pub fn moving_stats() -> (usize, usize, f64) {
+    let worst = std::mem::take(&mut *MOVING_WORST.lock().expect("worst"));
+    (
+        MOVING_SOLVES.swap(0, Ordering::Relaxed),
+        MOVING_FAILS.swap(0, Ordering::Relaxed),
+        worst,
+    )
+}
+
+/// The solver's tolerance on M / Ms and its iteration limit.
+const MOVING_TOL: f64 = 1e-12;
+const MOVING_ITER: usize = 400;
+
+/// One sample of the moving model: the cell's M (in Ms) that the axes' states give when each
+/// axis sees its share of (hx, hy) + a M, a = alpha Ms; commits the axes' states. `m0` is
+/// the start (the previous sample's M). Newton for a < 0 (the map is monotone, its Jacobian
+/// I + |a| sum w chi u u^T definite); fixed-point iteration from the previous state for a > 0
+/// (it follows the branch the field moves along, an avalanche where a chi > 1).
+fn moving_step(
+    p: &Preisach,
+    axes: &[[f64; 3]],
+    stacks: &mut [Stack],
+    trials: &mut [Trial],
+    (hx, hy): (f64, f64),
+    a: f64,
+    m0: (f64, f64),
+) -> (f64, f64) {
+    let eval = |m: (f64, f64), trials: &mut [Trial]| -> (f64, f64) {
+        let (fx, fy) = (hx + a * m.0, hy + a * m.1);
+        let (mut ox, mut oy) = (0.0, 0.0);
+        for ((st, ax), tr) in stacks.iter().zip(axes).zip(trials.iter_mut()) {
+            *tr = st.trial(p, ax[0] * fx + ax[1] * fy);
+            let mj = 2.0 * tr.up - 1.0;
+            ox += ax[2] * ax[0] * mj;
+            oy += ax[2] * ax[1] * mj;
+        }
+        (ox, oy)
+    };
+    let mut m = m0;
+    let mut f = eval(m, trials);
+    let mut res = (f.0 - m.0).abs().max((f.1 - m.1).abs());
+    let mut done = res <= MOVING_TOL;
+    let mut it = 0;
+    while !done && it < MOVING_ITER {
+        it += 1;
+        let next = if a < 0.0 {
+            // Newton on G = M - F(M), F's Jacobian from each axis's slope (a difference).
+            let (fx, fy) = (hx + a * m.0, hy + a * m.1);
+            let (mut j11, mut j12, mut j22) = (1.0, 0.0, 1.0);
+            for (st, ax) in stacks.iter().zip(axes) {
+                let x = ax[0] * fx + ax[1] * fy;
+                let dx = 1e-6 * (x.abs() + p.h_max * 1e-3);
+                let chi = 2.0 * (st.trial(p, x + dx).up - st.trial(p, x).up) / dx;
+                let k = -a * ax[2] * chi;
+                j11 += k * ax[0] * ax[0];
+                j12 += k * ax[0] * ax[1];
+                j22 += k * ax[1] * ax[1];
+            }
+            let (gx, gy) = (m.0 - f.0, m.1 - f.1);
+            let det = j11 * j22 - j12 * j12;
+            let mut step = ((j22 * gx - j12 * gy) / det, (j11 * gy - j12 * gx) / det);
+            // Damped: halve while the residual grows.
+            let mut cand = (m.0 - step.0, m.1 - step.1);
+            let mut fc = eval(cand, trials);
+            let mut rc = (fc.0 - cand.0).abs().max((fc.1 - cand.1).abs());
+            let mut halvings = 0;
+            while rc > res && halvings < 30 {
+                step = (0.5 * step.0, 0.5 * step.1);
+                cand = (m.0 - step.0, m.1 - step.1);
+                fc = eval(cand, trials);
+                rc = (fc.0 - cand.0).abs().max((fc.1 - cand.1).abs());
+                halvings += 1;
+            }
+            f = fc;
+            res = rc;
+            cand
+        } else {
+            let cand = f;
+            f = eval(cand, trials);
+            res = (f.0 - cand.0).abs().max((f.1 - cand.1).abs());
+            cand
+        };
+        m = next;
+        done = res <= MOVING_TOL;
+    }
+    // The trials hold the states at m (the last evaluation).
+    for (st, tr) in stacks.iter_mut().zip(trials.iter()) {
+        st.commit(*tr);
+    }
+    MOVING_SOLVES.fetch_add(1, Ordering::Relaxed);
+    if !done {
+        MOVING_FAILS.fetch_add(1, Ordering::Relaxed);
+        let mut w = MOVING_WORST.lock().expect("worst");
+        if res > *w {
+            *w = res;
+        }
+    }
+    f
 }
 
 /// Tables built recently, by their parameters (a demag iteration records many times).
@@ -401,7 +611,25 @@ pub fn record(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
     if r.gpu {
         return record_gpu(r);
     }
-    Ok(record_cpu(r))
+    Ok(record_cpu(r, 0.0))
+}
+
+/// [`record`] with the moving model's mean field (an opt-in variant, TAPE_PLAN.md "Over-bias
+/// options"): every hysteron of a cell sees the field plus `alpha` Ms M, M the cell's own
+/// magnetization (`ms` A/m its saturation), followed forward sample by sample. On the CPU
+/// only; `alpha` 0 is [`record`] itself.
+pub fn record_mean_field(
+    r: &Recording<'_>,
+    alpha: f64,
+    ms: f64,
+) -> Result<(Vec<f64>, Vec<f64>), String> {
+    if alpha == 0.0 {
+        return record(r);
+    }
+    if r.gpu {
+        return Err("tape: the moving model runs on the CPU only".into());
+    }
+    Ok(record_cpu(r, alpha * ms))
 }
 
 /// Each layer's head field table, if the recording tabulates it.
@@ -486,7 +714,7 @@ fn record_gpu(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
 }
 
 /// [`record`] on the CPU, in f64.
-fn record_cpu(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
+fn record_cpu(r: &Recording<'_>, a: f64) -> (Vec<f64>, Vec<f64>) {
     let layers = r.heights.len();
     let cells = r.s_cells.len();
     let chunks = cells.div_ceil(CHUNK);
@@ -504,6 +732,7 @@ fn record_cpu(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
         for _ in 0..threads {
             scope.spawn(|| {
                 let mut corners = vec![Corner::new(0.0); r.axes.len()];
+                let mut stacks = vec![Stack::default(); r.axes.len()];
                 loop {
                     let t = next.fetch_add(1, Ordering::Relaxed);
                     if t >= tasks {
@@ -515,7 +744,11 @@ fn record_cpu(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
                     let mut mx = vec![0.0; c1 - c0];
                     let mut my = vec![0.0; c1 - c0];
                     for ci in c0..c1 {
-                        let (x, y) = cell(r, l, ci, &mut corners, tables[l].as_ref());
+                        let (x, y) = if a == 0.0 {
+                            cell(r, l, ci, &mut corners, tables[l].as_ref())
+                        } else {
+                            cell_moving(r, l, ci, &mut stacks, tables[l].as_ref(), a)
+                        };
                         mx[ci - c0] = x;
                         my[ci - c0] = y;
                     }
@@ -581,6 +814,79 @@ fn cell(
         my += a[2] * a[1] * m;
     }
     (mx, my)
+}
+
+/// (M_x, M_y) / Ms after a history of applied fields (h_x, h_y) under the moving model
+/// (a = alpha Ms), from the erased state: the static loops' (Sound Talk Nos. 20 / 22) with
+/// the mean field on. The reference is `varimu.tape_variants.along_x`.
+pub fn moving_history(p: &Preisach, axes: &[[f64; 3]], h: &[(f64, f64)], a: f64) -> (f64, f64) {
+    let mut stacks = vec![Stack::default(); axes.len()];
+    let mut trials = vec![
+        Trial {
+            x: 0.0,
+            up: 0.0,
+            keep: 0,
+            max: false,
+        };
+        axes.len()
+    ];
+    let mut m = (0.0, 0.0);
+    for &x in h {
+        m = moving_step(p, axes, &mut stacks, &mut trials, x, a, m);
+    }
+    m
+}
+
+/// One cell's (M_x, M_y) / Ms under the moving model (a = alpha Ms): the history forward,
+/// the pass's samples, the steady field alone, then the field it is left in (as [`cell`]
+/// reads them backward).
+fn cell_moving(
+    r: &Recording<'_>,
+    l: usize,
+    ci: usize,
+    stacks: &mut [Stack],
+    table: Option<&FieldTable>,
+    a: f64,
+) -> (f64, f64) {
+    let cells = r.s_cells.len();
+    let s = r.s_cells[ci];
+    let y = r.heights[l];
+    let (k0, k1) = peak_range(r, l, ci);
+    let at = |h: Option<(&[f64], &[f64])>| match h {
+        Some((hx, hy)) => (hx[l * cells + ci], hy[l * cells + ci]),
+        None => (0.0, 0.0),
+    };
+    let (hsx, hsy) = at(r.h_static);
+    let (hex, hey) = if r.h_end.is_some() {
+        at(r.h_end)
+    } else {
+        (hsx, hsy)
+    };
+    let p = r.preisach;
+    for st in stacks.iter_mut() {
+        st.clear();
+    }
+    let mut trials = vec![
+        Trial {
+            x: 0.0,
+            up: 0.0,
+            keep: 0,
+            max: false,
+        };
+        r.axes.len()
+    ];
+    let mut m = (0.0, 0.0);
+    for j in k0..k1.max(k0) {
+        let x = s - r.s_rec[j];
+        let (fx, fy) = match table {
+            Some(t) => t.at(x),
+            None => head_field(&r.head, x, y),
+        };
+        let h = (r.hg[j] * fx + hsx, r.hg[j] * fy + hsy);
+        m = moving_step(p, r.axes, stacks, &mut trials, h, a, m);
+    }
+    m = moving_step(p, r.axes, stacks, &mut trials, (hsx, hsy), a, m);
+    moving_step(p, r.axes, stacks, &mut trials, (hex, hey), a, m)
 }
 
 #[cfg(test)]

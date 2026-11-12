@@ -474,10 +474,13 @@ fn tape_gpu() -> (Option<String>, Option<String>) {
 /// `s_rec`, `hg`: per bias sample; `axes`: (cos, sin, weight) per easy-axis direction,
 /// flattened; `h_static_x` / `_y` (during the pass), `h_end_x` / `_y` (after it): layers x
 /// cells, flattened, or None; `table_step`: the head field's table step over the layer's
-/// height (0: exact); `gpu`: on the GPU in f32 (the `gpu` feature). Returns (M_x, M_y)
-/// / Ms, layers x cells flattened. Releases the GIL.
+/// height (0: exact); `gpu`: on the GPU in f32 (the `gpu` feature); `threads`: the CPU
+/// kernel's threads (0: every logical core; the result doesn't depend on it); `mean_field`
+/// (alpha) and `ms_a_m`: the moving model's mean field alpha Ms M on every hysteron (an
+/// opt-in variant, `crate::tape::record_mean_field`; 0: off). Returns (M_x, M_y) / Ms,
+/// layers x cells flattened. Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0, gpu = false))]
+#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0, gpu = false, threads = 0, mean_field = 0.0, ms_a_m = 0.0))]
 #[allow(clippy::too_many_arguments)]
 fn tape_record<'py>(
     py: Python<'py>,
@@ -495,6 +498,9 @@ fn tape_record<'py>(
     h_end_y: Option<PyReadonlyArray1<'py, f64>>,
     table_step: f64,
     gpu: bool,
+    threads: usize,
+    mean_field: f64,
+    ms_a_m: f64,
 ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let (heights, zones) = (heights.as_array().to_vec(), zones.as_array().to_vec());
     let (s_rec, hg) = (s_rec.as_array().to_vec(), hg.as_array().to_vec());
@@ -550,10 +556,10 @@ fn tape_record<'py>(
                     _ => None,
                 },
                 table_step,
-                threads: 0,
+                threads,
                 gpu,
             };
-            crate::tape::record(&rec)
+            crate::tape::record_mean_field(&rec, mean_field, ms_a_m)
         })
         .map_err(invalid)?;
     Ok((
@@ -576,6 +582,13 @@ fn tape_record<'py>(
 /// "sync" and "sync_cross" (Sel-Sync), those it has}.
 /// With the literal bias (`bias_substeps` M), `h` is the head's whole field, M samples per
 /// step (`chunk` a multiple of M). Releases the GIL.
+/// The moving model's solver counters since the last call: (samples solved, samples not
+/// converged, the largest residual left in M / Ms); resets them.
+#[pyfunction]
+fn tape_moving_stats() -> (usize, usize, f64) {
+    crate::tape::moving_stats()
+}
+
 #[pyfunction]
 #[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0, gpu = false, readouts = false))]
 #[allow(clippy::too_many_arguments)]
@@ -688,6 +701,39 @@ fn tape_state_after<'py>(
     Ok(out.into_pyarray(py).into_any())
 }
 
+/// The moving model's M_x / Ms after field histories along x (`crate::tape::moving_history`;
+/// the reference is `varimu.tape_variants.along_x`): `h` histories x samples, flattened
+/// row-major with `samples` per history; `axes` (cos, sin, weight) per easy axis,
+/// flattened; `a` = alpha Ms (A/m).
+#[pyfunction]
+fn tape_moving_along_x<'py>(
+    py: Python<'py>,
+    preisach: (f64, f64, f64, f64, usize),
+    axes: PyReadonlyArray1<'py, f64>,
+    h: PyReadonlyArray1<'py, f64>,
+    samples: usize,
+    a: f64,
+) -> PyResult<Bound<'py, PyAny>> {
+    let h = h.as_array().to_vec();
+    let flat = axes.as_array().to_vec();
+    if samples == 0 || !h.len().is_multiple_of(samples) || !flat.len().is_multiple_of(3) {
+        return Err(invalid(
+            "tape_moving_along_x: h must be histories x samples",
+        ));
+    }
+    let axes: Vec<[f64; 3]> = flat.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let out: Vec<f64> = py.detach(|| {
+        let p = crate::tape::preisach(preisach.0, preisach.1, preisach.2, preisach.3, preisach.4);
+        h.chunks(samples)
+            .map(|c| {
+                let hist: Vec<(f64, f64)> = c.iter().map(|&x| (x, 0.0)).collect();
+                crate::tape::moving_history(&p, &axes, &hist, a).0
+            })
+            .collect()
+    });
+    Ok(out.into_pyarray(py).into_any())
+}
+
 #[pymodule]
 fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", crate::VERSION)?;
@@ -699,6 +745,8 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(harp_render, m)?)?;
     m.add_function(wrap_pyfunction!(clav_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_moving_stats, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_moving_along_x, m)?)?;
     m.add_function(wrap_pyfunction!(tape_gpu, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;
