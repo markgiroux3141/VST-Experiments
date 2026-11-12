@@ -600,6 +600,29 @@ up, in order:
 3. Then `6V6GT@2` against `@1` through the speaker, then C2
    (DEVICE_BUILDER_PLAN.md, "Devices and components together").
 
+*Play's speed, option 1 built (2026-11-11/12, the user: work through the options in turn,
+sound changes OK live while production stays):* the back wave on a thread of its own.
+`varimu_circuit::speaker::readout_apart` moves a speaker part's directivity pole and delay
+line (`<P>_b`, `<P>_d*`, `<P>_dt`) into a section `<P> readout` right after its own, and the
+driver's section claims the front pressure node `<p>_pf` (`owns`; circuitsim now takes a
+claim in a single-rate section, and the stream's DC start solves with held nodes whenever an
+owner has a higher-numbered user). The front wave and the listener's sum stay with the
+driver: moving the whole readout made it differentiate a sample-late velocity (-19.4 dB re
+signal against the one solve, -33.7 at its best lag; held coupling +4.5 dB). The app's
+`Device::live` splits the speakers its partition names (`fender_5e3`: `["SPK readout"]`);
+prints and production are one solve as before. `tests/speaker_readout.rs`: the split IR in
+one solve is bit for bit the same; partitioned, -55.8 dB re signal on strummed chords.
+Load (`load_profile`, the guitar take, volume 0.6, back to back, another job running): one
+solve 1.79x, every block over; split 0.78-0.81x, 314-609 of 5844 blocks over. Part 0 (the
+amp and driver: 58 states, 16 ports) is now the limit, busy ~all the wall time; the back wave
+(60 states, no ports) ~0.33x. So the shorter delay line and a one-way engine step (options
+below) only speed up the part with slack; fewer cone modes or draft-1x relieve part 0. Split
+at draft-1x: 0.44x, 2 of 5844 blocks over. **The 5E3 plays at draft-1x since 2026-11-12**
+(the user's choice; they compare a production render of a recorded take): aliasing -29.8
+dB re the harmonics through the speaker (draft-2x -34.5); the split -43.7 dB from the one
+solve there (a sample's lag on the back wave). Fewer cone modes (option 5 below) would
+make draft-2x fit, untried.
+
 *Future optimizations and options (none built):*
 - *Speed, keeping the model:* the readout as a one-way partition (exact up to one sample's
   latency; or, without latency, the engine stepping a one-way linear subnetwork after the

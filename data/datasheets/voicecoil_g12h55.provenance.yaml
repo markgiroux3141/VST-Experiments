@@ -1,0 +1,26 @@
+device: G12H(55) (Celestion Heritage), for the G12M's voice coil
+document: "Vance Dickason, 'Test Bench: Celestion G12H(55) Heritage Series guitar speaker', Voice Coil, February 2015, Figure 16"
+publisher: Voice Coil magazine (republished by Celestion)
+date: 2015-02
+local_copy: ../schematics/marshall_1987/voicecoil_2015-02_g12h55_testbench.pdf
+local_copy_sha256: b0590f732a25b640b64942c4002c6dc61e3a3f00cc1be854d24b7b76f8cbcb23
+scan_source: "web: https://celestion.com/wp-content/uploads/2019/10/141.pdf"
+digitized_with: >-
+  the curve's vector path on PDF page 2 (PyMuPDF; scripts/digitize_g12h55_impedance.py):
+  its line and Bezier control points mapped through the plot frame (10 Hz to 20 kHz, 10 to
+  300 ohm, both logarithmic; the 20 Hz grid line falls 0.01 pt from where the mapping puts
+  it), points closer than 0.05% in frequency dropped
+digitized_by: Claude Code
+digitized_on: 2026-11-12
+files:
+  voicecoil_g12h55_impedance.csv:
+    figure: "Figure 16, 'Celestion G12H(55) 1-V free-air impedance plot' (LMS, sample 1 by its 57 Hz peak)"
+    columns: "f_hz, z_ohm (magnitude)"
+    coverage: "10 Hz to 20 kHz, 341 points (Bezier control points included: they lie near the curve, not on it, in the fast-curving resonance)"
+estimated_error: "below 1% in frequency and impedance on the smooth stretches (the path itself); checks: 245.7 ohm at 57 Hz (the plot's peak ~245), 14.1 ohm at 300 Hz, 20.1 at 1 kHz, 39.4 at 5 kHz, 55.9 at 10 kHz, 82.8 at 20 kHz, read by eye on a 400 dpi render"
+notes: >-
+  Used for the G12M (data/schematics/marshall_1987/README.md 'Speaker'): Celestion publishes no
+  G12M impedance curve; the G12H shares its 44.5 mm round-copper 16 ohm voice coil family, frame
+  and cone (provisional), so above its resonance (300 Hz up) its curve stands in for the G12M's
+  coil (varimu.devices.library.build_g12m). Not its resonance: the G12H's magnet and suspension
+  differ.

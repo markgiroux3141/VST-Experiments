@@ -1,0 +1,108 @@
+device: EL34
+documents:
+  mullard:
+    document: "Mullard EL34 Output pentode, data sheets D1-D5 and curves C1-C14"
+    publisher: Mullard
+    date: "D1-D2 Jan 1964, C1-C2 Jan 1960 (1)"
+    local_copy: sources/mullard_el34.pdf
+    local_copy_sha256: 2e7de7adde4147ce298eea3a2d35103bf433f34fa5a134ab205f495ae6964453
+    scan_source: "web: https://frank.pocnet.net/sheets/129/e/EL34.pdf (Frank's Electron Tube Data Sheets)"
+    note: "the same local copy as mullard_el34.provenance.yaml (the triode curves, sheet C4)"
+  philips:
+    document: "Philips EL 34 output pentode, data sheets (21 PDF pages; sheet dates 1949-1961)"
+    publisher: Philips
+    date: "p.1 7.7.1959; p.10 sheet B drawing 7R02614 'EL 34 3-11-'49'; p.11 sheet C dated 2.2.1952, drawing 7R02404 'EL 34 22-6-'49'"
+    local_copy: sources/philips_el34.pdf
+    local_copy_sha256: 0d2d73430a7584bd5576e17aa98c1c9c1958d18634b0768e2571b169f9002a21
+    scan_source: "web: https://frank.pocnet.net/sheets/030/e/EL34.pdf (copied from data/schematics/marshall_1987/philips_el34.pdf, byte-identical)"
+digitized_with: >-
+  each page's embedded scan extracted at its native resolution (PyMuPDF; Mullard 1504 x 2432
+  px, Philips 1248 x 1952 px, both 1-bit, ~300 dpi; no vector content); axes by a
+  least-squares fit of every grid line, measured in 8 bands, to a regular grid with a skew
+  term (the scans are rotated 0.1-0.4 deg); grid lines removed by a disk opening (radius 2
+  px) and small components; curves followed as stroke centres per pixel row (plate figures,
+  rotated on the page: Va runs up the page) or column (transfer figure), with a local-fit
+  prediction to cross the Pa = 25 W line and neighbouring curves, merged runs skipped; the
+  dashed screen-current curves of C1 by chaining dashes (principal axis per dash) after
+  erasing the solid anode curves; values read at round abscissas by local linear (anode
+  tails: quadratic) fits within +-6 V (plate) or +-0.6-0.8 V (grid); every overlay of
+  traces and final points on the page checked by eye and mistraces re-seeded (Claude Code
+  subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-12
+files:
+  el34_plate.csv:
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    figures:
+      vg2_v 250: "Mullard sheet C2 (PDF p.7, drawing 3936): anode current against anode voltage, Vg2 = 250 V, Vg1 = 0, -5, -10, -15, -20, -25 V"
+      vg2_v 360: "Philips p.11, sheet C (drawing 7R02404): Ia against Va, Vg2 = 360 V, Vg3 = 0 V, Vg1 = 0, -4, -8, -12, -16, -20, -24, -28, -32 V"
+    abscissas: "Va every 10 V from 20-30 V to 100 V, then every 25 V"
+    points_per_curve:
+      vg2_250: "0 V 14, -5 V 18, -10 V 20, -15 V 22, -20 V 23, -25 V 15"
+      vg2_360: "0 V 12, -4 V 14, -8 V 19, -12 V 25, -16 V 31, -20 V 35, -24 V 33, -28 V 34, -32 V 25"
+    coverage: >-
+      Vg2 250 V: Va 30 V up to each curve's drawn end (0 V to 250 V, -5 V to 350, -10 V to
+      425, -15 V to 450, -20 and -25 V to 475); below 30 V the curves run into a common rise
+      from the origin and weren't traced; -10 V has no 200 V point (its corner on the 25 W
+      line); -25 V only from 125 V (C2 draws it only above ~106 V). Vg2 360 V: Va 20 V (0,
+      -4 and -24 V from 30 V) up to each curve's drawn end (0 V 200, -4 V 250, -8 V 350,
+      -12 V 500, -16 V 650, -20 to -28 V 750); -32 V only to 500 V (above ~520 V it merges
+      with the drawn 25 W line); points dropped where a curve crosses the 25 W line (-24 V
+      at 325 V, -28 V at 475 V). The low-Va dips of the -24 to -32 V curves at 40-60 V are
+      on the sheet and digitized as drawn. The dashed parts (above 25 W) are included.
+  el34_transfer.csv:
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    figure: "Mullard sheet C1 (PDF p.6, drawing 4130): anode (solid) and screen-grid (dashed) currents against control-grid voltage, Va = Vg2 = 400, 325, 250 V (labels ordered left to right: 400 V draws the most current at a given Vg1)"
+    abscissas: "Vg1 every 1 V"
+    points_per_curve: "400 V 42 (Vg1 -50 to -9 V), 325 V 40 (-40 to -1 V), 250 V 29 (-30 to -1 V)"
+    coverage: >-
+      Ia >= ~1.4 mA up to each curve's drawn end (400 mA at -8.3 V for 400 V, 400 mA at
+      -0.9 V for 325 V, 280 mA at 0 V for 250 V); 250 V has no -22 V point (merged there
+      with the dashed 400 V screen curve; its -25 to -18 V points from a row-wise trace).
+  el34_screen.csv:
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    figure: "Mullard sheet C1 (PDF p.6), the dashed curves, Va = Vg2 = 400, 325, 250 V"
+    abscissas: "Vg1 every 1 V"
+    points_per_curve: "400 V 18 (Vg1 -36 to -16 V), 325 V 24 (-36 to -10 V), 250 V 26 (-27 to -2 V)"
+    coverage: >-
+      Ig2 >= 0.5 mA up to each curve's drawn end (~39 mA at -15.9, -9.8 and -1.4 V); gaps
+      where a dashed curve runs along a solid anode curve: 400 V -23 to -21 V, 325 V -29 to
+      -27 V. Values below ~1-2 mA, where the tails of all six curves converge, are the
+      least certain.
+axis_calibration: >-
+  grid-line fits (rms residual of the lines): C2 Ia 0-350 mA (10 mA lines), Va 0-500 V (10 V
+  lines), 0.28 / 0.36 px; C1 Vg1 -70-0 V (2 V lines), I 0-400 mA (10 mA lines), 0.32 /
+  0.28 px; Philips p.11 Ia 0-500 mA (10 mA), Va 0-750 V (10 V), 0.58 / 0.73 px; Philips p.10
+  Ia 0-350 mA (10 mA), Va 0-500 V (10 V), 0.67 / 0.55 px. One pixel is 0.31 mA / 0.31 V on
+  C2, 0.32 mA / 0.064 V on C1, 0.53 mA / 0.53 V on Philips p.11.
+estimated_error: >-
+  Reading the drawings: about +-1 mA (+-0.3% of full scale) on the plate curves, +-1 mA or
+  +-2% on the transfer curves, +-0.5 mA on the screen currents (worse below ~2 mA and next
+  to crossings); worse in the knee. The drawings disagree with each other by more than
+  that: Philips p.10 (Vg2 = 250 V, the same family as C2, drawn separately) traced the same
+  way differs from C2 by 3.9 mA rms over 111 points (mean +1.1 mA; up to +11 mA on the 0 V
+  curve at Va 60-125 V and -4 to -14 mA on the flatter -5 V curve above 250 V; the -10 to
+  -25 V curves within ~1-3 mA); C2 and C1 at Va = Vg2 = 250 V agree within 1 mA at Vg1 =
+  -10 and -15 V, but C2 reads 203.6 / 29.6 / 9.8 mA against C1's 197.5 / 32.3 / 14.0 mA at
+  -5 / -20 / -25 V. Philips p.10 is not in the CSVs (a cross-check only).
+checks: >-
+  Printed operating points (screen shifts by mu_g1g2 = 11, D1, where Vg2 differs from the
+  curve's): Mullard D1 class A (Va = Vg2 = 250 V, Vg1 -12.2 V: 100 mA, Ig2 15 mA): C1 gives
+  97.9 mA and 13.3 mA, C2 interpolated linearly between -10 and -15 V at 250 V 100.1 mA.
+  Philips class A (p.2-3; Va 250 V): Vg2 265 V, -13.5 V: 100 / 14.9 mA printed, C1 98.7 /
+  13.4 mA; Vg2 245 V (2 k screen resistor), -14.5 V: 70 / 10 mA printed, C1 68.9 / 9.3 mA.
+  Mullard D2 fixed-bias push-pull at idle, 400 V, -36 V, 800 ohm common screen resistor (Vg2
+  ~393 V): 30 / 4.5 mA per valve printed, C1 36.0 / 4.4 mA at Vg2 = 400 V, 33.1 / 4.4 mA
+  shifted to 393 V; at 375 V, -33 V, Vg2 ~369 V: 30 mA printed, Philips p.11 (Vg2 360 V,
+  shifted) 28.9 mA. Philips class B idle (p.2-3): 470 ohm common screen resistor, Va 370 V,
+  Vg2 ~371 V, -32 V: 35 mA printed, p.11 33.8 mA (28.8 mA without the screen shift); 1 kohm,
+  Va 420 V, Vg2 ~416 V, -38 V: 30 / 4.4 mA printed, C1 (400 V curve, shifted) 33.7 / 4.4
+  mA. One printed point disagrees with every curve: D2's distributed-load cathode-bias
+  condition (Vb 430 V, Rk 470 ohm, 62.5 + 10 mA, so Vg1 ~ -34 V at Va ~ 396 V, Vg2 ~ 386 V)
+  reads 39 / 5.2 mA on C1. Between the figures: Philips p.11 at Va = Vg2 = 360 V against
+  C1's 325 V curve shifted to 360 V: 180.6 / 124.5 / 81.2 / 49.0 / 28.7 mA against 187.6 /
+  127.5 / 81.5 / 48.5 / 27.7 mA at Vg1 -16 / -20 / -24 / -28 / -32 V (from the 400 V curve
+  shifted down, 7-14 mA higher).
+notes: >-
+  Va = Vg2 on C1, so its curves move both voltages together. Vg3 (g3) is at the cathode on
+  every figure. Philips p.10's Vg2 = 250 V family was traced only to check C2.

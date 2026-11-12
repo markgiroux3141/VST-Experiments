@@ -96,6 +96,15 @@
     gm_s: 11.5e-3
     ra_ohm: 910
     mu: 10.5
+  class_a1:           # sheet D1, single valve, class A (pentode): 250 / 250 V
+    vp_v: 250
+    vg2_v: 250
+    vg1_v: -12.2
+    ip_a: 100.0e-3
+    ig2_a: 15.0e-3
+  push_pull_fixed_bias:   # sheet D2, two valves, idle per valve (Vg2 ~393 V behind Rg2)
+    - {vb_v: 400, vg1_v: -36, ip_zero_a: 30.0e-3, ig2_zero_a: 4.5e-3, rl_aa_ohm: 3500, power_w: 54}
+    - {vb_v: 375, vg1_v: -33, ip_zero_a: 30.0e-3, ig2_zero_a: 4.7e-3, rl_aa_ohm: 3500, power_w: 48}
   capacitances_f:     # pentode connection (sheet D1); none printed for triode connection
     input: 15.2e-12
     output: 8.4e-12
@@ -103,6 +112,22 @@
   max_ratings: {va_v: 800, pa_w: 25, ik_a: 0.150, rg1k_ohm: 500.0e+3, vhk_v: 100}
   heater: {v: 6.3, a: 1.5}
   pins: "1 g3, 2 h, 3 a, 4 g2, 5 g1, 6 NC, 7 h, 8 k (octal)"
+
+"EL84":
+  # The Vox AC30's output valves (data/schematics/vox_ac30/README.md).
+  source: "Philips EL84 data sheets (3.3.1955 ff.) p.1; local copy sources/philips_el84.pdf (web: frank.pocnet.net); the class-A point printed on Philips' and Mullard's sheets alike (el84.provenance.yaml)"
+  class_a1:           # single valve, 250 / 250 V
+    vp_v: 250
+    vg2_v: 250
+    vg1_v: -7.3
+    ip_a: 48.0e-3
+    ig2_a: 5.5e-3
+  capacitances_f:     # Philips p.1
+    input: 10.8e-12
+    output: 6.5e-12
+    ag1: 0.5e-12      # printed "< 0.5 pF"
+  heater: {v: 6.3, a: 0.76}
+  pins: "1 i.c., 2 g1, 3 k and g3, 4 f, 5 f, 6 i.c., 7 a, 8 i.c., 9 g2 (noval)"
 
 "6084":
   source: "Philips E80F / 6084 data handbook, Dec 1968, p.2-4; local copy sources/philips_e80f_1968.pdf (web: frank.pocnet.net)"
@@ -309,6 +334,62 @@
   voice_coil_diameter_m: 25.0e-3
   flux_density_t: 0.96
   cone: "paper; integrated paper surround; solid paper dust dome; alnico magnet, 200 g"
+
+"P8R":
+  # The Fender 5F1 Champ's speaker (data/schematics/fender_5f1/README.md "Speaker").
+  source: "Jensen P8R (reissue) specification sheet, 4 ohm column; local copy ../schematics/fender_5f1/jensen_p8r_spec_sheet.html (web: https://www.jensentone.com/specification-sheet/44)"
+  thiele_small:
+    re_ohm: 3.0
+    fs_hz: 129.0
+    qms: 8.67
+    qes: 1.71
+    qts: 1.43
+    mms_kg: 9.3e-3
+    cms_m_per_n: 164.0e-6
+    bl_tm: 3.72
+    vas_m3: 10.5e-3
+    xmax_m: 1.0e-3
+    eta0_pct: 1.27
+    sd_m2: 213.8e-4
+    res_ohm: 16
+    le_h_1khz: 0.21e-3
+  nominal_impedance_ohm: 4
+  rated_power_w: 25
+  sensitivity_db_1w_1m: 94.1
+  voice_coil_diameter_m: 25.0e-3
+  flux_density_t: 0.96
+  cone: "paper; integrated paper surround; solid paper dust dome; alnico magnet, 200 g"
+
+"CELESTION_BLUE":
+  # The Vox AC30's speakers (data/schematics/vox_ac30/README.md "Speakers").
+  source: "Celestion G12 Alnico Blue sheet (current), 15 ohm column; local copy ../schematics/vox_ac30/celestion_blue_current.pdf (web: https://celestion.com/product/celestion-blue/); its response curve digitized: celestion_blue.provenance.yaml"
+  printed:
+    fs_hz: 75.0
+    re_ohm: 11.8           # 15 ohm unit (6.4 for the 8 ohm one)
+    sensitivity_db: 100.0  # no reference stated; 1 W 1 m by Celestion's convention (provenance)
+    magnet: "alnico"
+
+"G12M":
+  # The Marshall 1987's 4 x 12 (data/schematics/marshall_1987/README.md "Speaker").
+  source: "Celestion Heritage G12M sheet (2006), 15 ohm column; local copy ../schematics/marshall_1987/celestion_heritage_g12m_2006.pdf (web: https://c3.zzounds.com/media/G12M-bfc794c27a9aa184c14dd6baa7c0e830.pdf); its response curve digitized: celestion_g12m.provenance.yaml"
+  printed:
+    fs_hz: 75.0
+    re_ohm: 12.13          # 15 ohm unit (6.57 for the 8 ohm one)
+    sensitivity_db: 96.0   # no reference stated; 1 W 1 m by Celestion's convention (provenance)
+    voice_coil_diameter_m: 44.5e-3
+    magnet: "ceramic, 35 oz"
+  # Celestion prints no further Thiele-Small figures. The nearest measured relative, the
+  # Heritage G12H(55) (same frame and cone, 50 oz magnet): Vance Dickason, Test Bench, Voice
+  # Coil Feb 2015 (local copy ../schematics/marshall_1987/voicecoil_2015-02_g12h55_testbench.pdf,
+  # web: https://celestion.com/wp-content/uploads/2019/10/141.pdf), two 16 ohm samples.
+  g12h55_measured:
+    fs_hz: [54.7, 67.4]
+    vas_m3: [71.3e-3, 51.45e-3]
+    qms: [15.48, 9.48]
+    qes: [0.39, 0.53]
+    re_ohm: [12.17, 12.54]
+    sd_m2: 543.0e-4
+    sensitivity_db_factory: 100.0   # Celestion's Heritage G12H figure
 
 # --- Tube synth S4 (the oscillator's exponential converter, transcribed 2026-10-30) ---
 

@@ -1,0 +1,891 @@
+
+<!DOCTYPE html>
+<html lang="en-gb" dir="ltr"
+	  class='com_content view-article itemid-512 j31 mm-hover '>
+
+<head>
+	<base href="https://www.electrosmash.com/" />
+	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+	<meta name="keywords" content="guitar, pedal, circuit,tube, screamer, analysis, schematic, calculation, JRC4558, 4558, toggle, bypass, true, clipping, diodes, msa150, opamp, filter, mid-hump, mids, feedback, loop, signature, myth, stages, parts, Ibanez, Maxon" />
+	<meta name="rights" content="Creative Commons: Attribution-NonCommercial 3.0 Unported (CC BY-NC 3.0) " />
+	<meta name="author" content="JR" />
+	<meta name="description" content="Schematic, JFET Bypass Switching, JFET Switch Operation, Toggle Circuit Operation, True Bypass Alternative,Power Supply, Input Stage, Input Impedance Calculation,Input Buffer Gain Calculation, Clipping Amp" />
+	<meta name="generator" content="Joomla! - Open Source Content Management" />
+	<title>ElectroSmash - Tube Screamer Circuit Analysis</title>
+	<link href="https://www.electrosmash.com/tube-screamer-analysis" rel="canonical" />
+	<link href="/templates/purity_iii/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
+	<link href="/t3-assets/css/css-0ef93-36470.css" rel="stylesheet" type="text/css" media="all" />
+	<link href="/t3-assets/css/css-3adb1-14225.css" rel="stylesheet" type="text/css" media="all" />
+	<link href="/t3-assets/css/css-971af-66594.css" rel="stylesheet" type="text/css" media="all" />
+	<script type="application/json" class="joomla-script-options new">{"csrf.token":"31c28b1e116d01c03984204df9c71ef7","system.paths":{"root":"","base":""}}</script>
+	<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+	<script src="/t3-assets/js/js-44af3-14225.js" type="text/javascript"></script>
+	<script src="https://www.electrosmash.com/media/com_acymailing/js/acymailing_module.js?v=5104" type="text/javascript" async="async"></script>
+	<script type="text/javascript">
+window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });jQuery(function($){ initTooltips(); $("body").on("subform-row-add", initTooltips); function initTooltips (event, container) { container = container || document;$(container).find(".hasTooltip").tooltip({"html": true,"container": "body"});} });jQuery(window).on('load',  function() {
+				new JCaption('img.caption');
+			});window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });	if(typeof acymailingModule == 'undefined'){
+				var acymailingModule = [];
+			}
+			
+			acymailingModule['emailRegex'] = /^[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+)*\@([a-z0-9-]+\.)+[a-z0-9]{2,10}$/i;
+
+			acymailingModule['NAMECAPTION'] = 'Name';
+			acymailingModule['NAME_MISSING'] = 'Please enter your name';
+			acymailingModule['EMAILCAPTION'] = 'example@email.com';
+			acymailingModule['VALID_EMAIL'] = 'Please enter a valid e-mail address';
+			acymailingModule['ACCEPT_TERMS'] = 'Please check the Terms and Conditions';
+			acymailingModule['CAPTCHA_MISSING'] = 'The captcha is invalid, please try again';
+			acymailingModule['NO_LIST_SELECTED'] = 'Please select the lists you want to subscribe to';
+		
+acymailingModule['excludeValuesformAcymailing12601'] = [];
+acymailingModule['excludeValuesformAcymailing12601']['name'] = 'Name';
+acymailingModule['excludeValuesformAcymailing12601']['email'] = 'example@email.com';
+window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });window.addEvent('domready', function() {
+            document.getElements('.latex').each(function(item, index) {
+                item.setStyle('display', '');
+            });
+        });
+	</script>
+
+	
+<!-- META FOR IOS & HANDHELD -->
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+	<style type="text/stylesheet">
+		@-webkit-viewport   { width: device-width; }
+		@-moz-viewport      { width: device-width; }
+		@-ms-viewport       { width: device-width; }
+		@-o-viewport        { width: device-width; }
+		@viewport           { width: device-width; }
+	</style>
+	<script type="text/javascript">
+		//<![CDATA[
+		if (navigator.userAgent.match(/IEMobile\/10\.0/)) {
+			var msViewportStyle = document.createElement("style");
+			msViewportStyle.appendChild(
+				document.createTextNode("@-ms-viewport{width:auto!important}")
+			);
+			document.getElementsByTagName("head")[0].appendChild(msViewportStyle);
+		}
+		//]]>
+	</script>
+<meta name="HandheldFriendly" content="true"/>
+<meta name="apple-mobile-web-app-capable" content="YES"/>
+<!-- //META FOR IOS & HANDHELD -->
+
+
+
+
+<!-- Le HTML5 shim and media query for IE8 support -->
+<!--[if lt IE 9]>
+<script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
+<script type="text/javascript" src="/plugins/system/t3/base-bs3/js/respond.min.js"></script>
+<![endif]-->
+
+<!-- You can add Google Analytics here or use T3 Injection feature -->
+
+<!--[if lt IE 9]>
+<link rel="stylesheet" href="/templates/purity_iii/css/ie8.css" type="text/css" />
+<![endif]-->
+	</head>
+
+<body>
+
+<div class="t3-wrapper corporate"> <!-- Need this wrapper for off-canvas menu. Remove if you don't use of-canvas -->
+
+	
+<!-- MAIN NAVIGATION -->
+<header id="t3-mainnav" class="wrap navbar navbar-default navbar-fixed-top t3-mainnav">
+
+	<!-- OFF-CANVAS -->
+		<!-- //OFF-CANVAS -->
+
+	<div class="container">
+
+		<!-- NAVBAR HEADER -->
+		<div class="navbar-header">
+
+			<!-- LOGO -->
+			<div class="logo logo-image">
+				<div class="logo-image">
+					<a href="/" title="ElectroSmash">
+													<img class="logo-img" src="/images/banners/logo-electrosmash.png" alt="ElectroSmash" />
+						
+												
+						<span>ElectroSmash</span>
+					</a>
+				</div>
+			</div>
+			<!-- //LOGO -->
+
+											<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".t3-navbar-collapse">
+					<i class="fa fa-bars"></i>
+				</button>
+			
+	    
+		</div>
+		<!-- //NAVBAR HEADER -->
+
+		<!-- NAVBAR MAIN -->
+				<nav class="t3-navbar-collapse navbar-collapse collapse"></nav>
+		
+		<nav class="t3-navbar navbar-collapse collapse">
+			<div  class="t3-megamenu"  data-responsive="true">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="nav navbar-nav level0">
+<li itemprop='name'  data-id="435" data-level="1">
+<a itemprop='url' class=""  href="/"   data-target="#">Home </a>
+
+</li>
+<li itemprop='name' class="dropdown mega" data-id="510" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Chips<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="492" data-level="2">
+<a itemprop='url' class=""  href="/jrc4558-analysis"   data-target="#">JRC4558  </a>
+
+</li>
+<li itemprop='name'  data-id="519" data-level="2">
+<a itemprop='url' class=""  href="/mn3007-bucket-brigade-devices"   data-target="#">MN3007 BBDs </a>
+
+</li>
+<li itemprop='name'  data-id="468" data-level="2">
+<a itemprop='url' class=""  href="/lm386-analysis"   data-target="#">LM386 </a>
+
+</li>
+<li itemprop='name'  data-id="1643" data-level="2">
+<a itemprop='url' class=""  href="/pt2399-analysis"   data-target="#">PT2399 </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="dropdown mega" data-id="444" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Amps<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="993" data-level="2">
+<a itemprop='url' class=""  href="/1wamp"   data-target="#">1Wamp </a>
+
+</li>
+<li itemprop='name'  data-id="489" data-level="2">
+<a itemprop='url' class=""  href="/little-gem-analysis"   data-target="#">Little Gem Amp </a>
+
+</li>
+<li itemprop='name'  data-id="526" data-level="2">
+<a itemprop='url' class=""  href="/marshall-mg10"   data-target="#">Marshall MG10 </a>
+
+</li>
+<li itemprop='name'  data-id="491" data-level="2">
+<a itemprop='url' class=""  href="/noisy-cricket-analysis"   data-target="#">Noisy Cricket  </a>
+
+</li>
+<li itemprop='name'  data-id="490" data-level="2">
+<a itemprop='url' class=""  href="/ruby-amp-analysis"   data-target="#">Ruby Amp  </a>
+
+</li>
+<li itemprop='name'  data-id="488" data-level="2">
+<a itemprop='url' class=""  href="/smokey-amp-analysis"   data-target="#">Smokey Amp  </a>
+
+</li>
+<li itemprop='name'  data-id="746" data-level="2">
+<a itemprop='url' class=""  href="http://www.electrosmash.com/schematics#amps"   data-target="#">Amps Schematics.</a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="active dropdown mega" data-id="511" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Pedals<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  style="width: 600px"  data-width="600"><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-6 mega-col-nav" data-width="6"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="515" data-level="2">
+<a itemprop='url' class=""  href="/back-talk-analysis"   data-target="#">Back Talk Reverse Delay </a>
+
+</li>
+<li itemprop='name'  data-id="518" data-level="2">
+<a itemprop='url' class=""  href="/big-muff-pi-analysis"   data-target="#">Big Muff Pi  </a>
+
+</li>
+<li itemprop='name'  data-id="524" data-level="2">
+<a itemprop='url' class=""  href="/boss-ce-2-analysis"   data-target="#">Boss CE-2 Chorus </a>
+
+</li>
+<li itemprop='name'  data-id="1088" data-level="2">
+<a itemprop='url' class=""  href="/boss-ds1-analysis"   data-target="#">Boss DS-1 Distortion </a>
+
+</li>
+<li itemprop='name'  data-id="1713" data-level="2">
+<a itemprop='url' class=""  href="/dallas-rangemaster"   data-target="#">Dallas Rangemaster </a>
+
+</li>
+<li itemprop='name'  data-id="905" data-level="2">
+<a itemprop='url' class=""  href="/crybaby-gcb-95"   data-target="#">Dunlop CryBaby GCB-95  </a>
+
+</li>
+<li itemprop='name'  data-id="842" data-level="2">
+<a itemprop='url' class=""  href="/fuzz-face"   data-target="#">Fuzz Face </a>
+
+</li>
+<li itemprop='name'  data-id="1664" data-level="2">
+<a itemprop='url' class=""  href="/germanium-fuzz"   data-target="#">Germanium Fuzz </a>
+
+</li>
+<li itemprop='name' class="current active" data-id="512" data-level="2">
+<a itemprop='url' class=""  href="/tube-screamer-analysis"   data-target="#">Ibanez Tube Screamer </a>
+
+</li>
+<li itemprop='name'  data-id="1433" data-level="2">
+<a itemprop='url' class=""  href="/klon-centaur-analysis"   data-target="#">Klon Centaur </a>
+
+</li>
+</ul>
+</div></div>
+<div class="col-xs-6 mega-col-nav" data-width="6"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="548" data-level="2">
+<a itemprop='url' class=""  href="/mxr-microamp"   data-target="#">MXR MicroAmp </a>
+
+</li>
+<li itemprop='name'  data-id="1667" data-level="2">
+<a itemprop='url' class=""  href="/marshall-guvnor-analysis"   data-target="#">Marshall Guvnor </a>
+
+</li>
+<li itemprop='name'  data-id="1632" data-level="2">
+<a itemprop='url' class=""  href="/mxr-distortion-plus-analysis"   data-target="#">MXR Distortion + </a>
+
+</li>
+<li itemprop='name'  data-id="1244" data-level="2">
+<a itemprop='url' class=""  href="/mxr-dyna-comp-analysis"   data-target="#">MXR Dyna Comp </a>
+
+</li>
+<li itemprop='name'  data-id="573" data-level="2">
+<a itemprop='url' class=""  href="/mxr-phase90"   data-target="#">MXR Phase 90 </a>
+
+</li>
+<li itemprop='name'  data-id="553" data-level="2">
+<a itemprop='url' class=""  href="/proco-rat"   data-target="#">ProCo Rat </a>
+
+</li>
+<li itemprop='name'  data-id="520" data-level="2">
+<a itemprop='url' class=""  href="/sitar-swami-analysis"   data-target="#">Sitar Swami </a>
+
+</li>
+<li itemprop='name'  data-id="525" data-level="2">
+<a itemprop='url' class=""  href="/vox-v847-analysis"   data-target="#">Vox V847 Wah Wah </a>
+
+</li>
+<li itemprop='name'  data-id="547" data-level="2">
+<a itemprop='url' class=""  href="/emg81"   data-target="#">EMG81 Pickup </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name' class="dropdown mega" data-id="796" data-level="1">
+<a itemprop='url' class=" dropdown-toggle"  href="#"   data-target="#" data-toggle="dropdown">Projects<em class="caret"></em></a>
+
+<div class="nav-child dropdown-menu mega-dropdown-menu"  ><div class="mega-dropdown-inner">
+<div class="row">
+<div class="col-xs-12 mega-col-nav" data-width="12"><div class="mega-inner">
+<ul itemscope itemtype="http://www.schema.org/SiteNavigationElement" class="mega-nav level1">
+<li itemprop='name'  data-id="1108" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield-uno"   data-target="#">pedalSHIELD UNO </a>
+
+</li>
+<li itemprop='name'  data-id="797" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield"   data-target="#">pedalSHIELD DUE </a>
+
+</li>
+<li itemprop='name'  data-id="1437" data-level="2">
+<a itemprop='url' class=""  href="/pedalshield-mega"   data-target="#">pedalSHIELD MEGA </a>
+
+</li>
+<li itemprop='name'  data-id="1312" data-level="2">
+<a itemprop='url' class=""  href="/pedal-pi"   data-target="#">Pedal-Pi </a>
+
+</li>
+<li itemprop='name'  data-id="1662" data-level="2">
+<a itemprop='url' class=""  href="/1wamp"   data-target="#">1Wamp </a>
+
+</li>
+<li itemprop='name'  data-id="1663" data-level="2">
+<a itemprop='url' class=""  href="/germanium-fuzz"   data-target="#">Germanium Fuzz </a>
+
+</li>
+<li itemprop='name'  data-id="1668" data-level="2">
+<a itemprop='url' class=""  href="/time-manipulator"   data-target="#">Time Manipulator </a>
+
+</li>
+</ul>
+</div></div>
+</div>
+</div></div>
+</li>
+<li itemprop='name'  data-id="745" data-level="1">
+<a itemprop='url' class=""  href="/forum-electrosmash?lang=en"   data-target="#">Forum </a>
+
+</li>
+<li itemprop='name'  data-id="816" data-level="1">
+<a itemprop='url' class=""  href="https://www.electrosmash.com/shop"   data-target="#">Shop</a>
+
+</li>
+</ul>
+</div>
+
+		</nav>
+    <!-- //NAVBAR MAIN -->
+
+	</div>
+</header>
+<!-- //MAIN NAVIGATION -->
+
+
+
+
+
+
+  
+
+
+  
+
+
+	
+<div id="t3-mainbody" class="container t3-mainbody">
+	<div class="row">
+
+		<!-- MAIN CONTENT -->
+		<div id="t3-content" class="t3-content col-xs-12 col-sm-8  col-md-9">
+						<div class="item-page clearfix">
+
+
+<!-- Article -->
+<article>
+	<meta itemprop="inLanguage" content="en-GB" />
+	<meta itemprop="url" content="/tube-screamer-analysis" />
+
+      
+<header class="article-header clearfix">
+	<h1 class="article-title" itemprop="headline">
+					<a href="/tube-screamer-analysis" itemprop="url" title="Tube Screamer Analysis">
+				Tube Screamer Analysis</a>
+			</h1>
+
+			</header>
+    
+    
+  <!-- Aside -->
+    <!-- //Aside -->
+
+  
+  
+  
+	
+  
+	
+	<section class="article-content clearfix">
+		<p><span style="color: #333333; font-size: 10pt;">The Tube Screamer TS808 by&nbsp;Ibanez&nbsp;is the most famous overdrive guitar pedal.</span><span style="color: #333333; font-size: 10pt;">&nbsp;It is suitable for blues and all range of rock music, adding a classic</span><span style="color: #333333; font-size: 10pt;">&nbsp;standard tone characterized by the&nbsp;tubelike&nbsp;distortion, good sustain</span><span style="color: #333333; font-size: 10pt;">, and smooth overdrive. The frequency response is tailored to emphasize</span><span style="color: #333333; font-size: 10pt;">&nbsp;the mid frequencies, creating a hump that helps to keep the guitar sound</span><span style="color: #333333; font-size: 10pt;">&nbsp;over the general mix of the band.</span></p>
+<p><span style="color: #333333; font-size: 10pt;">In terms of electronic design, the hit of the pedal remains on how the</span><span style="color: #333333;"><span style="font-size: 10pt;">&nbsp;signal is filtered and distorted over the stages. The clever schematic</span><span style="font-size: 10pt;">&nbsp;is easy to understand and prone to modifications. The circuit was</span></span><span style="color: #333333; font-size: 10pt;"><span style="color: #ff6600;">&nbsp;<span style="color: #333333;">designed in 1979-1980 by S.&nbsp;Tamura, a Japanese</span></span> Engineer working for&nbsp;Nisshin</span><span style="color: #333333; font-size: 10pt;">&nbsp;Onpa/Maxon, an Original Equipment Manufacturer for&nbsp;Ibanez.</span></p>
+<p><span style="color: #333333; font-size: 10pt;"><a href="/images/tech/tube-screamer/tube-screamer-all-pedals.png" style="color: #333333;"><img src="/images/tech/tube-screamer/tube-screamer-all-pedals-small.png" alt="Tube Screamer All Pedals" width="661" height="149" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="color: #333333; font-size: 10pt;"><span style="font-size: 10pt;">Due to the pedal success, several versions and reissues were released</span><span style="font-size: 10pt;">&nbsp;over the years with small circuit variations. This article is focused</span><span style="font-size: 10pt;">&nbsp;on the first design, which is considered the most</span><span style="font-size: 10pt;">&nbsp;attractive: the&nbsp;Ibanez&nbsp;Tube Screamer TS808.</span></span></p>
+ 
+<h1><span style="color: #333333; font-size: 10pt;"><strong><span style="font-size: 14pt; color: #000000;">Table of Contents:</span></strong><br /></span></h1>
+<p><span style="font-size: 10pt;"><a href="/tube-screamer-analysis#schematic">1. Tube Screamer Schematic.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#jfet">1.1 JFET Bypass Switching.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#switch">1.1.1 JFET Switch Operation.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#toggle">1.1.2 Toggle Circuit Operation.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#true">1.1.3 True Bypass Alternative.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#power">1.2 Power Supply.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#input">1.3 Input Stage.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#impedance">1.3.1 Input Impedance Calculation.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="#gain">1.3.2 Input Buffer Gain Calculation.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#clip-stage">1.4. Clipping Amplifier Stage.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#non-inverting">1.4.1 Non-Inverting Opamp.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#diodes">1.4.2 Clipping Diodes.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#clip-high-pass">1.4.3 High Pass Filter in the Feedback Loop.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#clip-low-pass">1.4.4 Low Pass Filter in the Feedback Loop.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#tone-stage">1.5 Tone/Volume Control.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#low-pass">1.5.1 Main Low Pass Filter.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#tone">1.5.2 Active Tone Circuit.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#volume">1.5.3 Passive Volume Control.</a></span><br /><span style="font-size: 10pt;">&nbsp;&nbsp; &nbsp;<a href="/tube-screamer-analysis#output-stage">1.6 Output Buffer.</a></span><br /><span style="font-size: 10pt;"><a href="/tube-screamer-analysis#signature">2. The Tube Screamer Sound Signature.</a></span><br /><span style="font-size: 10pt;"><a href="/tube-screamer-analysis#frequency">3. Tube Screamer Frequency Response.</a></span><br /><span style="font-size: 10pt;"><a href="/tube-screamer-analysis#myth">4. Tube Screamer Myth.</a></span><br /><span style="font-size: 10pt;"><a href="/tube-screamer-analysis#resources">5. Resources.</a></span></p>
+<p><span style="color: #333333; font-size: 10pt;"></span></p>
+<h1><span style="color: #333333; font-size: 10pt;"><span style="color: #000000; font-size: 14pt;"><a id="schematic" name="schematic"></a><strong>1. Tube Screamer Schematic.</strong></span></span></h1>
+<p><span style="font-size: 10pt; color: #333333;">The Tube Screamer circuit can be broken down into some simpler</span><span style="font-size: 10pt; color: #333333;">&nbsp;blocks: JFET Bypass Switching, Power Supply, Input Buffer, Clipper</span>&nbsp;<span style="font-size: 10pt; color: #333333;">Amplifier, Tone/Volume Control and Output Buffer. </span></p>
+<p><span style="font-size: 10pt; color: #333333;">The functionality is simple: The input buffer isolates the pedal from the guitar, keeping the signal fidelity. Then, the Clipping Amp stage incorporates the distortion to the signal and the Tone/Volume block will add the tonal bass/treble adjustment. Finally, the Output Buffer will prepare the signal to be injected in other pedal or amplifier. The JFET Bypass Switch task is to activate/deactivate the effect and the Power Supply stage provides energy to all the circuit.<br /></span></p>
+<p><a href="/images/tech/tube-screamer/tube-screamer-block-diagram.png"><span style="font-size: 10pt; color: #333333;"><img src="/images/tech/tube-screamer/tube-screamer-block-diagram.png" alt="Tube Screamer Block Diagram" width="800" height="406" style="display: block; margin-left: auto; margin-right: auto;" /></span></a></p>
+<p><span style="font-size: 10pt; color: #333333;">The pedal has three knobs: Distortion, Tone and a Level. The Distortion knob</span><span style="font-size: 10pt; color: #333333;">&nbsp;controls the level of overdrive, the Tone setting adjusts the amount of</span><span style="font-size: 10pt; color: #333333;">&nbsp;treble and the Level knob controls the output volume of</span><span style="font-size: 10pt; color: #333333;">&nbsp;the pedal.</span></p>
+<h1><strong><span style="font-size: 12pt; color: #000000;"><a id="jfet" name="jfet"></a>1.1 JFET Bypass Switching.</span></strong></h1>
+<p><span style="color: #333333; font-size: 10pt;">The original TS808 Tube Screamer is not True Bypass, so it needs a JFET Switch Circuit in order to activate/deactivate the effect using a simple push button. It can turn the effect on, routing the signal through the circuit core or turn it off, bypassing the pedal and keeping the guitar signal unmodified.<a href="/images/tech/tube-screamer/tube-screamer-jfet-bypass-switch.png"><img src="/images/tech/tube-screamer/tube-screamer-jfet-bypass-switch.png" alt="Tube Screamer Jfet Bypass Switch" width="762" height="630" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The JFET Bypass is formed by two switches and a toggle block to manage these switches:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">To activate the effect: Switch A (Q<sub>2</sub>) is&nbsp;<em>on</em>&nbsp;and Switch B (Q<sub>4</sub>) is&nbsp;<em>off</em>. The signal will pass through all the effect stages.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">To bypass the effect: Switch A (Q<sub>2</sub>) is&nbsp;<em>off</em>&nbsp;and Switch B (Q<sub>4</sub>) is&nbsp;<em>on</em>. The signal will skip the core of the effect but it will still pass through the input and the output buffer.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">In both states, the signal always passes through the input and output buffer, so it will work as a buffer even whether the effect is bypassed. Buffering the guitar signal avoids tone sucking, this is the reason why some players place the Tube Screamer early in the pedal chain before other pedals without input buffer as the&nbsp;Wah&nbsp;Wah, and therefore keeping sound fidelity.</span></p>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<h3><span style="font-size: 10pt; color: #000000;"><a id="switch" name="switch"></a><strong>1.1.1 JFET Switch Operation.</strong></span></h3>
+<p><span style="color: #333333; font-size: 10pt;">The switches are implemented with an N-channel&nbsp;JFETs&nbsp;working in saturation/off mode. The essential part of their operation is to control the biasing of the diodes D<sub>3</sub>&nbsp;and D<sub>4</sub>:</span></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">If the diode D<sub>3</sub>&nbsp;or D<sub>4</sub>&nbsp;is reverse biased, (gate control voltage is at least V<sub>F</sub>&nbsp;higher than most positive input signal amplitude) the JFET switch is on and the signal passes through.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">If the diode&nbsp;D<sub>3</sub>&nbsp;or D<sub>4</sub>&nbsp;is forward biased, (gate control voltage is at least V<sub>F</sub>&nbsp;more negative than the pinch-off voltage of the FET) the switch is off and the FET presents a high impedance.&nbsp;</span></li>
+</ul>
+<p><span style="color: #333333; font-size: 10pt;">Note that V<sub>F</sub>&nbsp;is the forward voltage of the diode.</span></p>
+<p><span style="color: #333333; font-size: 10pt;">In practice:</span></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">JFET is off when V<sub>G</sub>&lt;V<sub>D</sub>&nbsp;and V<sub>G</sub>&lt;V<sub>S</sub>. To do this&nbsp;V<sub>G</sub>&nbsp;must be grounded, being more negative than the V<sub>D</sub>&nbsp;and V<sub>S</sub>&nbsp;and forwarding the diode.&nbsp;The drain and sources are biased to 4.5V with high value 510K resistors R<sub>18</sub>/R<sub>17</sub>/R<sub>12</sub>. The capacitors C<sub>11</sub>&nbsp;and C<sub>8</sub>&nbsp;at the input and output side keep the JFET DC conditions isolated from the rest of the circuit. In order to turn off the JFET, the gate control voltage must go down almost to 0V.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">JFET is on when V<sub>GS</sub>=0. To do this the diode can be reverse-biased applying 9V to the gate control pin (cathode), the resistance between drain and source will go down to the lowest possible value.</span></li>
+</ul>
+<p><span style="color: #333333; font-size: 10pt;">The JFET control signal is applied through 1 M<span style="color: #222222; font-family: arial, sans-serif; font-size: small; line-height: 16px; text-align: -webkit-auto;">&Omega;</span>&nbsp;resistors R<sub>16</sub>&nbsp;and R<sub>47</sub>&nbsp;protecting the gates from high current peaks. The 4.7&nbsp;nF&nbsp;capacitors C<sub>11</sub>&nbsp;and C<sub>12</sub>&nbsp;are used to dampen the switching transients preventing the JFET from switching in nanoseconds. This keeps the switch from popping audibly.</span></p>
+<p><span style="color: #333333; font-size: 10pt;"></span></p>
+<h3><span style="font-size: 10pt; color: #000000;"><a id="toggle" name="toggle"></a><strong>1.1.2 Toggle Circuit Operation.</strong></span></h3>
+<p><span style="color: #333333; font-size: 10pt;">The Toggle Circuit generates from the pedal push button the signals in charge of activating and deactivating the switches A and B. This circuit must always start&nbsp;with the pedal in bypass state and ready to be activated:<a href="/images/tech/tube-screamer/tube-screamer-toggle-circuit.png"><img src="/images/tech/tube-screamer/tube-screamer-toggle-circuit.png" alt="Tube Screamer Toggle Circuit" width="524" height="344" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="color: #333333; font-size: 10pt;">Q<sub>6</sub>&nbsp;and Q<sub>5</sub>&nbsp;are simple DC amplifiers, they are set up so they feed each other in a loop:</span></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">When Q<sub>6</sub>&nbsp;is on, it will be pulling current through R<sub>27</sub>, and its collector potential will be nearly 0. That pulls R40 to ground, and prevents the base of Q5 from getting any drive signal to turn it on, and so the collector of Q<sub>5</sub>&nbsp;nearly at 9V. With the collector of Q<sub>5</sub>&nbsp;off, a current goes through R<sub>26</sub>&nbsp;and R<sub>41</sub>, providing current to the base of Q<sub>6</sub>&nbsp;and keeping it on. So Q<sub>1</sub>&nbsp;stays on as long as nothing else happens.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">If the base of Q<sub>6</sub>&nbsp;is momentarily shorted to ground, it would quit pulling current through R<sub>27</sub>&nbsp;and hold the junction of R<sub>27</sub>&nbsp;and R<sub>40</sub>&nbsp;down. That would let current flow through R40 to the base of Q<sub>5</sub>, and turn on Q<sub>5</sub>, pulling down on R<sub>41</sub>&nbsp;and R<sub>26</sub>, and robbing Q<sub>6</sub>&nbsp;of base drive. We would now find that Q<sub>6</sub>&nbsp;would stay off and Q<sub>5</sub>&nbsp;would stay on.</span></li>
+</ul>
+<p><span style="color: #333333; font-size: 10pt;">This&nbsp;toggle/flip-flop/multivibrator&nbsp;circuit&nbsp;has two exchanged conditions. Every time the active transistor is turned off, the other transistor comes on.&nbsp;</span><span style="color: #333333; font-size: 10pt;">Connecting the collector of Q<sub>6</sub>&nbsp;to Switch A (Q<sub>2</sub>) and the collector of Q<sub>5</sub></span><span style="color: #333333; font-size: 10pt;"><span style="font-size: small;">&nbsp;to Switch B (Q</span><sub style="font-size: 10pt;">4</sub><span style="font-size: small;">) control terminal, the alternating action will activate/bypass the effect.</span></span></p>
+<p><span style="color: #333333; font-size: 10pt;">The rest of the components surrounding the toggle circuit will make it work with a single momentary contact for the&nbsp;footswitch&nbsp;and to operate reliable and fast:</span></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">C<sub>40</sub>&nbsp;and C<sub>41</sub>&nbsp;are&nbsp;<em>speed-up</em>&nbsp;capacitors which make the toggling action faster and surer.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">C<sub>14</sub>&nbsp;and C<sub>15&nbsp;</sub>connect the bases of the transistors to the&nbsp;footswitch&nbsp;signal.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">The&nbsp;footswitch&nbsp;circuit formed by R<sub>21</sub>, R<sub>22</sub>, R<sub>23</sub>, R<sub>24</sub>, SW, and C<sub>13</sub>&nbsp;applies a negative going&nbsp;<em>blip</em>&nbsp;to both of the transistor bases. The blip does not affect the off transistor but the one that is on starts turning off, and that is enough to make</span><span style="color: #333333; font-size: 10pt;">&nbsp;them toggle into the other condition.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">The&nbsp;Zener&nbsp;Diode D<sub>7</sub>&nbsp;and the Resistor R<sub>31</sub>&nbsp;lower the loading on the transistor Q<sub>7</sub>&nbsp;collector, it prevents the LED from disturbing the toggle behavior.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">How to start the pedal up in the same state?: The two halves of the toggle circuit are equal. So a slight difference in the speed-up capacitors C<sub>40</sub>&nbsp;C<sub>41</sub>&nbsp;will unbalance the system and make it starts always in bypassed mode. The transistor with the bigger cap connected to its collector will come on faster.</span></li>
+</ul>
+<p><span style="color: #333333; font-size: 10pt;"></span></p>
+<h3><span style="font-size: 10pt; color: #000000;"><a id="true" name="true"></a><strong>1.1.3 True Bypass Alternative.</strong></span></h3>
+<p><span style="color: #333333; font-size: 10pt;">Most of the clones and expensive boutique pedals use true bypass switches, they give the cleanest possible path for the bypassed signal.&nbsp;</span><br /><span style="color: #333333; font-size: 10pt;">The solution is mechanically arranged using a&nbsp;<em>Triple Pole Double Throw</em>&nbsp;3PDT switch to bypass the signal and light a power-on LED at the same time. The switch toggles the guitar signal to flow either into the effect circuitry or straight from the input jack to the output jack of the&nbsp;stompbox&nbsp;where the guitar signal never even touches the input of the effect.</span><a href="/images/tech/tube-screamer/3PDT.jpg"><img src="/images/tech/tube-screamer/3PDT.jpg" alt="3PDT Switch" width="202" height="161" style="display: block; margin-left: auto; margin-right: auto;" /></a><span style="color: #333333; font-size: 10pt;">The Tube Screamer schematic can be drastically simplified using the 3PDT switch alternative. In terms of mass production, true bypass switches themselves are expensive and labor-intensive, as the wiring has to be done by hand It is not "cost-efficient" to do this in an assembly line. This is why&nbsp;Ibanez&nbsp;avoids the true bypass for the benefit of the complex toggle bypass.</span><a href="/images/tech/tube-screamer/tube-screamer-true-bypass-schematic.png"><img src="/images/tech/tube-screamer/tube-screamer-true-bypass-schematic.png" alt="Tube Screamer True Bypass Schematic" width="801" height="257" style="display: block; margin-left: auto; margin-right: auto;" /></a></p>
+<p><span style="color: #ff6600;"></span></p>
+<p><strong><span style="font-size: 10pt; color: #000000;">Tube Screamer True Bypass Part List / Bill of Materials:</span></strong></p>
+<p><span style="font-size: 10pt; color: #333333;">2 Diode MA150/1N4148/1N914 <span style="color: #000000;">(D<sub>1</sub>, D<sub>2</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Diode W03C/1N4001 <span style="color: #000000;">(D<sub>8</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">2 Transistors 2SC1815/2N5089/MPSA18 <span style="color: #000000;">(Q<sub>1</sub>, Q<sub>3</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 IC JRC4558/RC4559/RC4558</span><br /> <br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 100uF 10V <span style="color: #000000;">(C<sub>17</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 47uF 10V <span style="color: #000000;">(C<sub>16</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 10uF 16V <span style="color: #000000;">(C<sub>9</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">2 Capacitors 1uF NP/50V <span style="color: #000000;">(C<sub>2</sub>, C<sub>7</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">2 Capacitors 0.22uF <span style="color: #000000;">(C<sub>5</sub>, C<sub>6</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 0.1uF <span style="color: #000000;">(C<sub>8</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 0.047uF <span style="color: #000000;">(C<sub>3</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 0.02uF <span style="color: #000000;">(C<sub>1</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Capacitor 51pF <span style="color: #000000;">(C<sub>4</sub>)</span></span></p>
+<p><span style="font-size: 10pt; color: #333333;">2 Resistors 510K<span style="color: #000000;"> (R<sub>2</sub>, R<sub>13</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 <span style="color: #333333; font-size: 13.3333px;">Resistor&nbsp;</span>&nbsp;51K <span style="color: #000000;">(R<sub>6</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">7 <span style="color: #333333; font-size: 13.3333px;">Resistors</span> 10K <span style="color: #000000;">(R<sub>3</sub>, R<sub>5</sub>, R<sub>9</sub>, R<sub>14</sub>, R<sub>C</sub>, R<sub>32</sub>, R<sub>33</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 <span style="color: #333333; font-size: 13.3333px;">Resistor</span>&nbsp; 4K7 <span style="color: #000000;">(R<sub>4</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">4 <span style="color: #333333; font-size: 13.3333px;">Resistors</span> 1K <span style="color: #000000;">(R<sub>1</sub>, R<sub>8</sub>, R<sub>11</sub>, R<sub>12</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 <span style="color: #333333; font-size: 13.3333px;">Resistor&nbsp;</span>&nbsp;220 <span style="color: #000000;">(R<sub>10</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 <span style="color: #333333; font-size: 13.3333px;">Resistor&nbsp;</span>&nbsp;100 <span style="color: #000000;">(R<sub>B</sub>)</span></span></p>
+<p><span style="font-size: 10pt; color: #333333;">1 Potentiometer 500K/470K Log&nbsp;<span style="color: #000000;">(P<sub>1</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Potentiometer 20K/22K Lin <span style="color: #000000;">(P<sub>2</sub>)</span></span><br /><span style="font-size: 10pt; color: #333333;">1 Potentiometer 100K Lin&nbsp;<span style="color: #000000;">(P<sub>3</sub>)</span></span></p>
+<p><span style="font-size: 10pt; color: #333333;">1 Jack 6mm Chassis Stereo </span><br /><span style="font-size: 10pt; color: #333333;">1 Jack 6mm Chassis Mono </span><br /><span style="font-size: 10pt; color: #333333;">1 Jack chassis power supply </span><br /><span style="font-size: 10pt; color: #333333;">1 footswitch 3PDT</span><br /><span style="font-size: 10pt; color: #333333;">1 9V battery clip</span></p>
+<p><span style="font-size: 10pt; color: #333333;"><span style="color: #000000;">Note:</span>&nbsp;&nbsp; R<sub>A</sub> 0</span><span class="st">&Omega;</span><br /><span style="font-size: 10pt; color: #333333;">&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; R<sub>B</sub> 100</span><br /><span style="font-size: 10pt; color: #333333;">&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; R<sub>C</sub> 10K</span></p>
+<h2><span style="font-size: 12pt; color: #000000;"><a id="power" name="power"></a><strong>1.2&nbsp; Power Supply.</strong></span></h2>
+<p><span style="font-size: 10pt; color: #333333;">The Power Supply Stage provides the electrical power and bias voltage to all the circuit:<a href="/images/tech/tube-screamer/tube-screamer-power-supply.png"><img src="/images/tech/tube-screamer/tube-screamer-power-supply.png" alt="Tube Screamer Power Supply" width="361" height="290" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The 9V supply is common to all circuit components, with a simple resistor divider (R<sub>32</sub>, R<sub>33</sub>) 4.5 voltage is generated to be used as a bias voltage in some stages.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">The main supply (+9V) and the resistors junction (+4.5V) are decoupled to ground with a large value electrolytic capacitors C<sub>16</sub>&nbsp;(47uF) and C<sub>17</sub>&nbsp;(100uF) to remove all ripple from the supply voltage. The diode D8 protects the pedal against reverse polarity connections.</span><br /><span style="font-size: 10pt; color: #333333;">The stereo in jack is used as an on-off switch, switching the battery (-) terminal to ground when the guitar jack is connected.</span></p>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<h2><span style="font-size: 12pt; color: #000000;"><a id="input" name="input"></a><strong>1.3&nbsp; Input Stage.</strong></span></h2>
+<p><span style="font-size: 10pt; color: #333333;">The task of the input stage buffer is to create a high input impedance to preserve signal integrity avoiding high-frequency signal loss. It is implemented with a plain Emitter Follower:<a href="/images/tech/tube-screamer/tube-screamer-input-buffer.png"><img src="/images/tech/tube-screamer/tube-screamer-input-buffer.png" alt="Tube Screamer Input Buffer" width="352" height="251" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">The 2SC1815 transistor is a cheap high gain (<span style="color: #222222; font-family: arial, sans-serif; font-size: small; line-height: 16px; text-align: -webkit-auto;">&beta;=350</span>), low noise transistor. It provides unity voltage gain and high input impedance.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">The capacitor C<sub>1</sub>&nbsp;separates the guitar from any pedal DC potential, protecting the pickups in case of circuit failure and filtering the low-frequency humming.<br /></span></li>
+</ul>
+<h3><span style="font-size: 10pt; color: #000000;"><a id="impedance" name="impedance"></a><strong>1.3.1 Tube Screamer Input Impedance Calculation.&nbsp;</strong></span></h3>
+<p><span style="font-size: 10pt; color: #333333;">In order to calculate numerically the input impedance of the emitter follower, the <a href="https://en.wikipedia.org/wiki/Hybrid-pi_model">hybrid-pi model</a> is used for analyzing the small signal behavior:<a href="/images/tech/tube-screamer/tube-screamer-input-buffer-small-signal.png"><img src="/images/tech/tube-screamer/tube-screamer-input-buffer-small-signal.png" alt="Tube Screamer Input Buffer Small Signal" width="324" height="194" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p>&nbsp;<img src="http://latex.codecogs.com/gif.latex?\\Z_{in}=R_{1}+R_{2}//[r_{\pi }+(\beta +1)\cdot R_{3}]\\ Z_{in}=1K + 510K//[r_{\pi }+(350 +1)\cdot 10K]\\ Z_{in}= 446K" alt="" title="\\Z_{in}=R_{1}+R_{2}//[r_{\pi }+(\beta +1)\cdot R_{3}]\\ Z_{in}=1K + 510K//[r_{\pi }+(350 +1)\cdot 10K]\\ Z_{in}= 446K" /></p>
+<p><span style="font-size: 10pt; color: #333333;">So, the Tube Screamer input impedance is 446K, almost the value of the 510K biasing resistor R<sub>2</sub>&nbsp;which accounts for almost all of the signal loading at the input. Apparently, this is a high enough impedance to avoid loading guitar pickups too much. Although the best practice is to interface the guitar to an input impedance that is at least 1 M<span style="color: #222222; font-family: arial, sans-serif; font-size: small; line-height: 16px; text-align: -webkit-auto;">&Omega;</span>.</span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<p><strong><span style="font-size: 10pt; color: #000000;">Impedance Matching/Binding.</span></strong></p>
+<p><span style="font-size: 10pt; color: #333333;">For maximum power transfer, the signal source (guitar pickups) and input buffer impedance should be equal, in other words, they should match each other. This is very useful in radio-frequency and critical systems where the power that is lost in a transfer process is difficult to restore.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">However, in typical audio applications, we do not need maximum power transfer. If low source impedance (pickup) is connected to higher input impedance (pedal) the power transfer is limited, but in turn, the voltage transfer is higher and less prone to suffer from signal corruption. This deliberate mismatching of&nbsp;impedances&nbsp;(usually by at least a ratio of 1:10) is called&nbsp;<em>impedance bridging</em>&nbsp;or&nbsp;<em>impedance matching</em>. The opposite mismatching configuration would lead to signal corruption or tone sucking.</span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<h3><span style="color: #000000;"><a id="gain" name="gain"></a><strong><span style="font-size: 10pt;">1.3.2 Tube Screamer Input Buffer Gain Calculation.</span></strong></span></h3>
+<p><span style="font-size: 10pt; color: #333333;">The voltage gain of an emitter follower is calculated again using the hybrid-pi model:</span></p>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\V_{out}=ib(\beta +1)\cdot R_{3}\\\\ V_{in}=ib(\beta +1)\cdot R_{3} + ib\cdot r_{\pi } \\ \\G_{v}=\frac{V_{out}}{V_{in}}=\frac{ib(\beta +1)\cdot R_{3}}{ib(\beta +1)\cdot R_{3} + ib\cdot r_{\pi }} \\" alt="" title="\\V_{out}=ib(\beta +1)\cdot R_{3}\\\\ V_{in}=ib(\beta +1)\cdot R_{3} + ib\cdot r_{\pi } \\ \\G_{v}=\frac{V_{out}}{V_{in}}=\frac{ib(\beta +1)\cdot R_{3}}{ib(\beta +1)\cdot R_{3} + ib\cdot r_{\pi }} \\" /></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt;"></span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;">With:</span>&nbsp;&nbsp;&nbsp;<img src="http://latex.codecogs.com/gif.latex?ib(\beta +1)\cdot R_{3} \ &gt; &gt; \: ib\cdot r_{\pi }" alt="" title="ib(\beta +1)\cdot R_{3} \ &gt; &gt; \: ib\cdot r_{\pi }" />&nbsp;</p>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\ G_{v}=\frac{V_{out}}{V_{in}}\approx 1" alt="" title="\\ G_{v}=\frac{V_{out}}{V_{in}}\approx 1" /></p>
+<p><span style="font-size: 10pt; color: #333333;">There is no need for a gain amplification at this stage. It is more important to keep the signal uncorrupted as a foundation for the next stages.</span></p>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<h2><strong><span style="font-size: 12pt; color: #000000;"><a id="clip-stage" name="clip-stage"></a>1.4. Clipping Amplifier Stage</span></strong></h2>
+<p><span style="font-size: 10pt; color: #333333;">The Clipping Amplifier is the core of the circuit, it is formed by a variable non inverting&nbsp;opamp&nbsp;amplifier with two diodes to perform the clip action and two filters in the feedback loop ( pass-band = low-pass + high-pass) to shape the amount of clipping and the frequency at which it occurs.<a href="/images/tech/tube-screamer/tube-screamer-clipping-amplifier.png"><img src="/images/tech/tube-screamer/tube-screamer-clipping-amplifier.png" alt="Tube Screamer Clipping Amplifier" width="407" height="317" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The emitter follower output feeds the Clipping Amplifier Stage through a 1uF non-polarized electrolytic coupling cap C<sub>2</sub>, large enough value to not interfere with any guitar frequency</span>.&nbsp;<span style="font-size: 10pt; color: #333333;">The (+) input is biased to the 4V5 voltage source with a single moderate value R<sub>5</sub>&nbsp;resistor (10K).</span></p>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<h3><strong><span style="font-size: 10pt; color: #000000;"><a id="non-inverting" name="non-inverting"></a>1.4.1&nbsp;Non-Inverting&nbsp;Opamp.</span></strong></h3>
+<p><span style="font-size: 10pt; color: #333333;">The gain of a non-inverting&nbsp;opamp&nbsp;stage is defined by the formula:</span></p>
+<p><a href="http://en.wikipedia.org/wiki/Operational_amplifier_applications#Non-inverting_amplifier"><img src="/images/tech/tube-screamer/op-amp_non-inverting-amp.png" alt="Op Amp Non Inverting Amplifier" width="299" height="124" style="display: block; margin-left: auto; margin-right: auto;" /></a><span style="font-size: 10pt; color: #333333;"><img src="http://latex.codecogs.com/gif.latex?\\G_{v}=1+ \frac{Z_{2}}{Z_{1}}" alt="" title="\\G_{v}=1+ \frac{Z_{2}}{Z_{1}}" /></span></p>
+<p>&nbsp;<span style="font-size: 10pt; color: #333333;">Where:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">Z<strong><sub>2</sub></strong>: is the equivalent impedance between the output pin 1 of the&nbsp;opamp&nbsp;and the (-) input. So, it is the parallel combination of the clipping diodes, a 51pF capacitor and the series combination of a 51K resistor and the 500K&nbsp;<em>Distortion</em>&nbsp;control.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Z<strong><sub>1</sub></strong>: is the equivalent impedance from the (-) input pin to ground.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">For this calculations, we are not considering yet the diodes D<sub>1</sub>&nbsp;and D<sub>2</sub>, and the capacitors C<sub>3</sub>&nbsp;and C<sub>4.</sub><br /></span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<p><span style="font-size: 10pt; color: #333333;"><img src="http://latex.codecogs.com/gif.latex?\\G_{v}=1+ \frac{R_{6}+R_{DISTORTION}}{R_{4}}=1+ \frac{51K+R_{DISTORTION}}{4.7K}" alt="" title="\\G_{v}=1+ \frac{R_{6}+R_{DISTORTION}}{R_{4}}=1+ \frac{51K+R_{DISTORTION}}{4.7K}" /></span></p>
+<p><span style="font-size: 10pt; color: #333333;"></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The gain of the whole stage can be varied changing the&nbsp;<em>overdrive</em>&nbsp;control setting from 500K to 0<span style="color: #222222; font-family: arial, sans-serif; font-size: small; line-height: 16px; text-align: -webkit-auto;">&Omega;</span>:</span></p>
+<p><img src="http://latex.codecogs.com/gif.latex?\\G_{v}max=1+ \frac{51K+500K}{4.7K}=118\, \, (41dB)" alt="" title="\\G_{v}max=1+ \frac{51K+500K}{4.7K}=118\, \, (41dB)" /></p>
+<p><img src="http://latex.codecogs.com/gif.latex?\\G_{v}min=1+ \frac{51K}{4.7K}=12\, \, (21dB)" alt="" title="\\G_{v}min=1+ \frac{51K}{4.7K}=12\, \, (21dB)" /></p>
+<p><span style="font-size: 10pt; color: #333333;">However, the voltage gain of this stage will not reach such values as 118 (41dB). As will be seen in the next point, the gain will be limited by the clipping diodes action. The top gain will be around 12 and the additional the range from 12 to 118 will modify the slew rate or shape of the clipped signal.</span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<h3><strong><span style="font-size: 10pt; color: #000000;"><a id="diodes" name="diodes"></a>1.4.2 Clipping Diodes.</span></strong></h3>
+<p><span style="font-size: 10pt; color: #333333;">The symmetric clipping is produced by 2 diodes in the feedback path of the non-inverting op-amp amplifier:</span><br /><span style="font-size: 10pt; color: #333333;">When the voltage difference (positive or negative) between the&nbsp;opamp&nbsp;output and the (-) input is bigger than the diodes forward voltage V<sub>F</sub>&nbsp;the diode will turn on.</span><br /><span style="font-size: 10pt; color: #333333;">As the diode turns on forward biased, the equivalent resistance of the diode goes from an open circuit to a very low value (few ohms), changing the gain of the non-inverting&nbsp;opamp from a high value (12 to 118) down to 1.&nbsp;</span></p>
+<p><span style="font-size: 10pt; color: #333333;">The diode D<sub>1</sub>&nbsp;will clip the positive semi-cycle signal and D<sub>2</sub>&nbsp;will clip the negative signal semi cycle:</span></p>
+<p><a href="/images/tech/tube-screamer/tube-screamer-diodes.png"><img src="/images/tech/tube-screamer/tube-screamer-diodes.png" alt="Tube Screamer Diodes" width="802" height="191" style="display: block; margin-left: auto; margin-right: auto;" /></a></p>
+<p><span style="font-size: 10pt; color: #333333;">The oscilloscope image shown above depicts the difference between the pedal input signal (pink) and the output of the clipping stage (blue), removing any of the diodes D<sub>1</sub>&nbsp;or D<sub>2</sub>&nbsp;will result in an asymmetric clipping. For this test, capacitors C<sub>3</sub>&nbsp;and C<sub>4</sub>&nbsp;are not considered.&nbsp;</span></p>
+<p><span style="font-size: 10pt; color: #333333;">As a rule of thumb, the nominal output amplitude of most pickups is between 60 to 200&nbsp;mV&nbsp;(single coils) and 200 to 600&nbsp;mV&nbsp;(humbuckers&nbsp;and&nbsp;<em>hot</em>&nbsp;pickups), with&nbsp;<em>hot</em>&nbsp;pickups the picking transient can be as high as 2V<sub>peak</sub>. The Tube Screamer&nbsp;</span><span style="color: #333333; font-size: 10pt;">with the gain set to minimum (12) the clipping amplifier is able to give a range of clean/unclipped&nbsp;sounds while Vin&lt; 90mV</span><sub style="color: #333333;">peak</sub><span style="color: #333333; font-size: 10pt;">&nbsp;approx:</span></p>
+<p><span style="font-size: 10pt; color: #333333;">If &nbsp;</span><img src="http://latex.codecogs.com/gif.latex?\\V_{out} - V_{in} &lt; V_{F} \\ \\" alt="" title="\\V_{out} - V_{in} &lt; V_{F} \\ \\" /><span style="color: #333333; font-size: 10pt;">&nbsp;then the signal will be&nbsp;unclipped:</span></p>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\V_{F}&gt; V_{out}-V_{in} \\ V_{F}&gt; (G \cdot V_{in})-V_{in} \\ V_{F}&gt; V_{in} \cdot (G-1)\\ \\ V_{in}&lt; \frac{V_{F}}{G-1}\\\\ V_{in}&lt; \frac{1V}{12-1}\\\\\ V_{in}&lt; 90mV_{peak} \\" alt="" title="\\V_{F}&gt; V_{out}-V_{in} \\ V_{F}&gt; (G \cdot V_{in})-V_{in} \\ V_{F}&gt; V_{in} \cdot (G-1)\\ \\ V_{in}&lt; \frac{V_{F}}{G-1}\\\\ V_{in}&lt; \frac{1V}{12-1}\\\\\ V_{in}&lt; 90mV_{peak} \\" /></p>
+<p><span style="color: #333333; font-size: 10pt;">Where:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">V<sub>F&nbsp;</sub>= Forward voltage of the MA150 diode, which is 1V.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">In the other side, with the drive control turned up to maximum gain (118), even a 60mV signal would be boosted to 6V if not limited by the clipping diodes, so there is enough gain to give distortion at least to any guitar signal.</span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<h3><span style="color: #000000;"><a id="clip-high-pass" name="clip-high-pass"></a><strong><span style="font-size: 10pt;">1.4.3 High Pass Filter in the Feedback Loop.</span></strong></span></h3>
+<p><span style="font-size: 10pt; color: #333333;">The series resistor R<sub>4</sub>&nbsp;and capacitor C<sub>3</sub>&nbsp;from the (-) input to ground act as an active high pass filter, attenuating frequencies below the&nbsp;<em>f<sub>c</sub></em>&nbsp;cut-off frequency:</span></p>
+<p><span style="font-size: 10pt; color: #333333;"><img src="http://latex.codecogs.com/gif.latex?f_{c}=\frac{1}{2\pi RC}=\frac{1}{2\pi \cdot 4.7K\cdot 0.047\mu F}= 720\: Hz" alt="" title="f_{c}=\frac{1}{2\pi RC}=\frac{1}{2\pi \cdot 4.7K\cdot 0.047\mu F}= 720\: Hz" /></span></p>
+<p><span style="font-size: 10pt; color: #333333;">Harmonics above 720Hz get the full gain of the distortion stage, and everything below it gets progressively less gain and distortion. Bass notes are clipped least, so the distortion is frequency selective.<a href="/images/tech/tube-screamer/ts-oscillocope-clipped-signal.png"><img src="/images/tech/tube-screamer/ts-oscillocope-clipped-signal.png" alt="Tube Screamer Oscilloscope Clipped Signal" width="403" height="194" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The oscilloscope image above shows the output signal of the clipping stage (pink). The soft clipped signal is&nbsp;<em>curved</em>&nbsp;asymmetrically due to the phase shift introduced by the high pass filter. &nbsp;</span></p>
+<h3><br /><strong><span style="font-size: 10pt; color: #000000;"><a id="clip-low-pass" name="clip-low-pass"></a>1.4.4&nbsp; Low Pass Filter in the Feedback Loop.</span></strong></h3>
+<p><span style="font-size: 10pt; color: #333333;">The small 51pF C<sub>4</sub>&nbsp;capacitor across the diodes works as a low pass filter, softening the&nbsp;<em>corners</em>&nbsp;of the clipped waveform and mellowing out the high end of the distortion.&nbsp;</span></p>
+<p><span style="font-size: 10pt; color: #333333;">The cut-off frequency of the filter is defined by the formula:</span></p>
+<p style="margin-left: 30px;">&nbsp;<img src="http://latex.codecogs.com/gif.latex?\\f_{c}=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot (51K+R_{DISTORTION})\cdot 51pF}" alt="" title="\\f_{c}=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot (51K+R_{DISTORTION})\cdot 51pF}" /></p>
+<p><span style="font-size: 10pt; color: #333333;">The R<sub>DISTORTION</sub>&nbsp;potentiometer will shift the f<sub>c</sub>&nbsp;frequency, making the action of the 51pF is most noticeable when the distortion control is maxed out, bringing the cut-off frequency to the audible frequencies and then softening the distortion.</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">fc<sub>MAX</sub>&nbsp;when R<sub>DISTORTION</sub>&nbsp;is min = 0</span>:</li>
+</ul>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\f_{c}max=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot 51K\cdot 51pF}= 61.2\, KHz" alt="" title="\\f_{c}max=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot 51K\cdot 51pF}= 61.2\, KHz" /></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">fc<sub>MIN</sub>&nbsp;when R<sub>DISTORTION</sub>&nbsp;is max = 500K:</span></li>
+</ul>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\f_{c}min=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot 551K\cdot 51pF}= 5.6\, KHz" alt="" title="\\f_{c}min=\frac{1}{2\pi\cdot (R_{6}+R_{DISTORTION})\cdot C_{4}}=\frac{1}{2\pi\cdot 551K\cdot 51pF}= 5.6\, KHz" /></p>
+<p>&nbsp;<span style="font-size: 10pt; color: #333333;"><a href="/images/tech/tube-screamer/tube-screamer-51pf-capacitor-effect.png"><img src="/images/tech/tube-screamer/tube-screamer-51pf-capacitor-effect.png" alt="Tube Screamer 51pF Capacitor Graph" width="800" height="564" style="display: block; margin-left: auto; margin-right: auto;" /></a>The images shown above depict the effect of the 51 cap on the clipped signal: The lower graph (with C<sub>4</sub>&nbsp;cap) evidences the attenuation in the high frequencies and how is it more remarkable when the gain is higher (R<sub>DISTORTION</sub>=500K).</span></p>
+<h2><span style="font-size: 12pt; color: #000000;"><a id="tone-stage" name="tone-stage"></a><strong>1.5 Tone/Volume Control.</strong></span></h2>
+<p><span style="color: #333333; font-size: 10pt;">This stage is formed by a passive&nbsp;<em>main</em>&nbsp;low pass filter, an active tone circuit, and a passive volume circuit in order to provide tone adjustment and volume control to the pedal:</span></p>
+<p><a href="/images/tech/tube-screamer/tube-screamer-tone-volume.png"><span style="color: #333333; font-size: 10pt;"><img src="/images/tech/tube-screamer/tube-screamer-tone-volume.png" alt="Tube Screamer Tone Volume control" width="522" height="250" style="display: block; margin-left: auto; margin-right: auto;" /></span></a></p>
+<p><span style="color: #333333; font-size: 10pt;">The functionality is pretty elegant: The&nbsp;<em>main</em>&nbsp;passive low pass filter cut off the harsh overtones previous to the tone circuit. Then the active tone control will boost the treble trying to flatten the response to compensate and level the previous passive filter.</span></p>
+<p><span style="color: #333333; font-size: 10pt;"></span></p>
+<h3><strong><span style="font-size: 10pt; color: #000000;"><a id="low-pass" name="low-pass"></a>1.5.1 Main Low Pass Filter.</span></strong></h3>
+<p><span style="color: #333333; font-size: 10pt;">The&nbsp;C<sub>5</sub>&nbsp;cap 0.22uF and the 1K resistor R<sub>7</sub> act like a first order RC low pass filter that cut out the harsh high-frequency harmonics. That seems to be one of the underlying principles of the Tube Screamer pedal:</span></p>
+<p><span style="color: #333333; font-size: 10pt;"><img src="http://latex.codecogs.com/gif.latex?\\f_{c}=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot 1K\cdot 0.22\mu F}= 723.4\: \: Hz" alt="" title="\\f_{c}=\frac{1}{2\pi R C}=\frac{1}{2\pi \cdot 1K\cdot 0.22\mu F}= 723.4\: \: Hz" /></span></p>
+<p><span style="color: #333333; font-size: 10pt;">The cut-off frequency of the passive low pass filter is 723.4 Hz. All frequencies over it will be attenuated -20dB/dec&nbsp;or -6dB/8ve.</span></p>
+<p><span style="color: #ff6600; font-size: 10pt;"></span></p>
+<h3><span style="font-size: 10pt; color: #000000;"><a id="tone" name="tone"></a><strong>1.5.2 Active Tone Circuit.</strong></span></h3>
+<p><span style="color: #333333; font-size: 10pt;">The control is an RC network: 220 ohm R<sub>8</sub>&nbsp;resistor and a 0.22uF C<sub>6</sub>&nbsp;capacitor, from ground to the wiper of a 20K potentiometer strung from the (-) to the (+) input of the second&nbsp;opamp&nbsp;section.</span><br /><span style="color: #333333; font-size: 10pt;">The behavior of the tone control is easy to understand analyzing the response at the extremes of the Tone Pot rotation:</span><a href="/images/tech/tube-screamer/tube-screamer-tone-graph.png"><img src="/images/tech/tube-screamer/tube-screamer-tone-graph.png" alt="Tube Screamer Tone Settings Graph" width="801" height="632" style="display: block; margin-left: auto; margin-right: auto;" /></a></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;"><span style="color: #000000;">All the way to the bass side:</span>&nbsp;When fully toward the (+) end, the&nbsp;<span style="font-size: 10pt;"><span style="font-size: 10pt;"><span style="font-size: small;">R</span><sub style="font-size: 10pt;">8</sub><span style="font-size: small;">C</span><sub style="font-size: 10pt;">6</sub></span></span>&nbsp;network will be placed in parallel with the low pass filter, resulting in a second order low pass filter, with a very low cut-off frequency that will remove all the treble.</span></li>
+<li><span style="color: #333333; font-size: 10pt;"><span style="color: #000000;">All the way to the treble side:</span><span style="font-size: small;">&nbsp;When fully toward the (-) end,&nbsp;</span>the R<sub>8</sub>C<sub>6</sub>&nbsp;network will be placed as an active high pass filter,&nbsp;<span style="font-size: small;">the network shunts feedback frequencies above 3.2KHz to ground. Resulting in a bandpass filter = R</span><sub style="font-size: 10pt;">7</sub><span style="font-size: small;">C</span><sub style="font-size: 10pt;">5</sub><span style="font-size: small;">&nbsp;(LowPass) +&nbsp;</span><span style="font-size: 10pt;"><span style="font-size: small;">R</span><sub style="font-size: 10pt;">8</sub><span style="font-size: small;">C</span><sub style="font-size: 10pt;">6</sub></span>&nbsp;(HighPass).</span></li>
+</ul>
+<p><a href="/images/tech/tube-screamer/tube-screamer-tone-range.png"><img src="/images/tech/tube-screamer/tube-screamer-tone-range.png" alt="Tube Screamer Tone Range" width="809" height="278" style="display: block; margin-left: auto; margin-right: auto;" /></a></p>
+<p><span style="color: #333333; font-size: 10pt;">The above graph shows the frequency response of the Tone/Volume circuit. The previous Clipping Amplifier Stage frequency response is not added here.</span><br /><span style="color: #333333; font-size: 10pt;">Note that the&nbsp;<em>All Bass</em>&nbsp;(red) tone setting actually just levels off the -20dB/dec&nbsp;induced by the 1K/0.22uF R<sub>7</sub>C<sub>5</sub>&nbsp;network before the active control stage. The&nbsp;<em>All Treble</em>&nbsp;tone setting increase the -20dB/dec&nbsp;inducted by the&nbsp;1K/0.22uF R<sub>7</sub>C<sub>5</sub>&nbsp;network to -40dB/dec resulting in a second-order filter.</span></p>
+<p>&nbsp;</p>
+<p><strong>The 20K Tone Control G Taper Potentiometer:</strong></p>
+<p>The tone control potentiometer in the Tube Screamer is labeled as a "G Taper", meaning that its curve looks like this:</p>
+<p><a href="/images/tech/tube-screamer/g-potentiometer.png"><img src="/images/tech/tube-screamer/g-potentiometer.png" alt="g taper potentiometer" width="340" height="295" style="display: block; margin-left: auto; margin-right: auto;" /></a></p>
+<p>This G tapered potentiometer (also called "W" or "S" tapers) gives to the user more control in the middle of the sweep, so the graphs shown above on the Active Tone Circuit show all the span of the potentiometer and the <em>extreme behavior,</em> but the real usage of this control is focused in the middle area allowing greater control than a linear potentiometer.</p>
+<p><span style="font-size: 10pt;"></span></p>
+<h3><strong><span style="font-size: 10pt; color: #000000;"><a id="volume" name="volume"></a>1.5.3 Passive Volume Control.</span></strong></h3>
+<p><span style="color: #333333; font-size: 10pt;">The volume control is fairly&nbsp;standard, a 100K audio potentiometer P<sub>3</sub>&nbsp;bleeds part of the input signal to AC ground.</span></p>
+<p><span style="color: #000000; font-size: 10pt;"></span></p>
+<h2><span style="font-size: 12pt; color: #000000;"><a id="output-stage" name="output-stage"></a><strong>1.6 Output Buffer.</strong></span></h2>
+<p><span style="color: #333333; font-size: 10pt;">The task of the Output&nbsp; Buffer is to create&nbsp;a unitary gain&nbsp;and a low output impedance to keep the signal integrity in the guitar-pedals-amp chain. Like the Input Stage, it is implemented with a plain Emitter Follower with a 10K emitter resistor R<sub>13</sub>, biased from the 4.5V bias source with R<sub>12</sub>&nbsp;510K.<a href="/images/tech/tube-screamer/tube-screamer-output-buffer.png"><img src="/images/tech/tube-screamer/tube-screamer-output-buffer.png" alt="Tube Screamer Output Buffer" width="392" height="248" style="display: block; margin-left: auto; margin-right: auto;" /></a></span></p>
+<p><span style="color: #333333; font-size: 10pt;">From the emitter of Q<sub>3</sub>&nbsp;there is a low-value 100&Omega; resistor R<sub>B</sub>&nbsp;in series with a 10uF signal coupling capacitor C<sub>9</sub>, and at last a shunt 10K&nbsp;R<sub>C</sub>&nbsp;resistor to ground.</span></p>
+<p><a href="/images/tech/tube-screamer/g-potentiometer.png"><span style="color: #333333; font-size: 10pt;"><img src="/images/tech/tube-screamer/ts-output-signal.png" alt="Tube Screamer Oscilloscope Output Signal" width="400" height="174" style="display: block; margin-left: auto; margin-right: auto;" /></span></a></p>
+<p><span style="color: #333333; font-size: 10pt;">The oscilloscope image above shows the output signal of the Tube Screamer (green).</span></p>
+<p style="margin-left: 30px;"><span style="color: #333333; font-size: 10pt;">In order to calculate the output impedance of the Tube&nbsp;Screamer&nbsp;the hybrid-pi model is used for analyzing the small signal behavior:</span><img src="/images/tech/tube-screamer/tube-screamer-output-buffer-small-signal.png" alt="Tube Screamer Output Buffer Small Signal" width="354" height="188" style="display: block; margin-left: auto; margin-right: auto;" /></p>
+<p style="margin-left: 30px;">&nbsp;<img src="http://latex.codecogs.com/gif.latex?\\Z_{out}= R_{C}//[R_{B}+(R_{13}//\frac{r_{\pi}+R_{12}}{\beta +1})]\\" alt="" title="\\Z_{out}= R_{C}//[R_{B}+(R_{13}//\frac{r_{\pi}+R_{12}}{\beta +1})]\\" /></p>
+<p style="margin-left: 30px;"><span style="color: #333333; font-size: 10pt;">Where&nbsp;</span>&nbsp;&nbsp;<img src="http://latex.codecogs.com/gif.latex?r_{\pi}&lt;&lt;R_{12}\\" alt="" title="r_{\pi}&lt;&lt;R_{12}\\" /></p>
+<p style="margin-left: 30px;"><img src="http://latex.codecogs.com/gif.latex?\\Z_{out}= R_{C}//[R_{B}+(R_{13}//\frac{R_{12}}{\beta +1})]\\ Z_{out}= 10K//[100+(10K//\frac{510K}{350 +1})]\\ Z_{out}= 1.2K" alt="" title="\\Z_{out}= R_{C}//[R_{B}+(R_{13}//\frac{R_{12}}{\beta +1})]\\ Z_{out}= 10K//[100+(10K//\frac{510K}{350 +1})]\\ Z_{out}= 1.2K" />&nbsp;</p>
+<p><span style="color: #333333; font-size: 10pt;">Therefore the output impedance is 1K2, a low value needed to keep the guitar signal uncorrupted.</span></p>
+<p><span style="color: #333333; font-size: 10pt;">The series low value 100&Omega; resistor R<sub>B</sub>&nbsp;at the emitter slightly limits the amount of drive available to drive an amplifier.</span>&nbsp;<span style="color: #333333; font-size: 13px;">R<sub>B</sub>&nbsp;i</span><span style="color: #333333; font-size: 10pt;">n concert with the series C<sub>9</sub>&nbsp;10uF capacitor forms a voltage divider with the output R<sub>c</sub>&nbsp;shunt resistor. This drops the available signal only a trivial amount, an inaudible amplitude difference.</span></p>
+<p><span style="color: #000000; font-size: 10pt;"></span></p>
+<h1><span style="font-size: 14pt; color: #000000;"><a id="signature" name="signature"></a><strong>2. The Tube Screamer Sound Signature.</strong></span></h1>
+<p><span style="color: #333333; font-size: 10pt;">What makes a tube screamer a tube screamer is mainly the frequency selective distortion and the signal filtering:</span></p>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">In the Clipping Amplifier Stage, the bass is rolled off by the active high pass filter in the feedback loop. With this approach, the frequencies above 720Hz get the full distortion, and harmonics below it get&nbsp;progressively&nbsp;less distortion, so the distortion is frequency selective.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">The treble is shaved off after the distortion stage with a passive low pass filter, generating the distinctive mid frequencies boost.</span></li>
+</ul>
+<p><span style="font-size: 10pt; color: #333333;">It should also be mentioned&nbsp;<a href="http://www.bteaudio.com/articles/TSS/TSS.html">The Tube Screamer's Secret</a>&nbsp;article, where&nbsp;Bogac Topaktas&nbsp;highlight&nbsp;how the Tube Screamer clipped output signal contains part of the input signal, preserving the original dynamics of the guitar. Improving the clarity and responsiveness of the distortion.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;">Bogac&nbsp;also claims that part of the sound signature remains in the active high pass filter of the clipping stage which generates a phase shift in the guitar signal, bending it in an&nbsp;<em>exotic</em>&nbsp;asymmetric way.</span></p>
+<p><span style="font-size: 10pt; color: #333333;"><img src="/images/tech/tube-screamer/tube-screamer-all-signals.png" alt="tube-screamer-all-signals" width="800" height="257" style="display: block; margin-left: auto; margin-right: auto;" /></span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<p><span style="color: #000000;"><strong><span style="font-size: 10pt;"><a id="frequency" style="color: #000000;" name="frequency"></a></span><span style="font-size: 14pt;">3. Tube Screamer Frequency Response.</span></strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The frequency response of the Tube Screamer is tailored to empathize the mid frequencies, creating a subtle honky tone.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;">To&nbsp;archive&nbsp;the tonal footprint, the signal is&nbsp;filtered&nbsp;and amplified in different stages, removing the harsh high-freq harmonics and the overloading bass presence:</span></p>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">In the Clipping Amplifier Stage, there is a high pass filter in the feedback loop of the non-inverting amplifier. This active first order filter&nbsp;attenuates&nbsp;20dB/dec&nbsp;harmonics below 720Hz.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">In the Tone/Volume Stage there are two important tone modifiers:</span>
+<ul>
+<li><span style="color: #333333; font-size: 10pt;">The passive first order low pass filter formed by C<sub>5</sub>&nbsp;and R<sub>7</sub>&nbsp;will attenuate frequencies over 723 Hz, adding this effect to the previous filters will result in the&nbsp;famous&nbsp;<em>mid hump</em>.</span></li>
+<li><span style="color: #333333; font-size: 10pt;">The active op-amp filter will provide two&nbsp;different&nbsp;responses depending on the tone pot configuration:</span>
+<ul>
+<li><span style="font-size: 10pt; color: #333333;">Tone pot at treble side: will level the passive first order filter&nbsp;minimizing&nbsp;mid hump effect.</span></li>
+<li><span style="font-size: 10pt; color: #333333;">Tone pot at bass side: will accentuate the passive first order filter increasing the&nbsp;mid&nbsp;hump effect and removing treble harmonics.</span></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p><img src="/images/tech/tube-screamer/tube-screamer-frequency-response-linear.png" alt="Tube Screamer Frequency Response Linear" width="800" height="271" style="display: block; margin-left: auto; margin-right: auto;" /><span style="font-size: 10pt; color: #333333;"><img src="/images/tech/tube-screamer/tube-screamer-frequency-response-logarithmic.png" alt="Tube Screamer Frequency Response Logarithmic" width="800" height="276" style="display: block; margin-left: auto; margin-right: auto;" /></span></p>
+<p><span style="font-size: 10pt; color: #333333;">The images shown above depict the Tube Screamer mid-hump frequency response with a Linear/Logarithmic x-axis base.</span></p>
+<p><br /><span style="font-size: 14pt; color: #000000;"><a id="myth" name="myth"></a><strong>4. The Tube Screamer Myth.</strong></span></p>
+<p><span style="font-size: 10pt; color: #333333;">Despite the simple circuit and cheap components, the Tube Screamer's price has been rising year after year. Some players pay a fortune for pedals from the first 80s releases which in theory contain the original components which give the strongest classic Tube Screamer sound.&nbsp;<a href="/jrc4558-analysis#myth">This myth is strongly linked with the dual&nbsp;opamp&nbsp;JRC4558D</a>&nbsp;by Japan Radio Company produced in the&nbsp;Japanese&nbsp;facilities and used in the first pedal units that were eventually replaced by&nbsp;Malayan&nbsp;clones, Texas Instrument or Toshiba&nbsp;ICs.</span></p>
+<p><span style="font-size: 10pt; color: #333333;">Some people also like to replace components for vintage technology ones, like old carbon comp resistors with horrible tolerances instead of modern metal film <span style="color: #000000;">resistors and also trying with different capacitor technologies: film, poly, metal, silver mica, tantalum, etc.</span></span></p>
+<p><span style="font-size: 10pt; color: #000000;"></span></p>
+<p><span style="font-size: 14pt; color: #000000;"><a id="resources" name="resources"></a><strong>5. Resources.</strong></span></p>
+<p><span style="font-size: 10pt;"><a href="http://www.muzique.com/lab/truebypass.htm">True Bypass&nbsp;</a>by AMZ Guitar</span>.<br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.geofex.com/article_folders/tstech/tsxtech.htm">The Technology of the Tube Screamer</a>&nbsp;by R.G Keen.</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.bteaudio.com/articles/TSS/TSS.html">The Tube Screamer Secret</a>&nbsp;by&nbsp;BogacTopaktas.&nbsp;</span><span style="font-size: 10pt; color: #333333;"></span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://stinkfoot.se/archives/713">The Tube Screamer Genealogy</a>&nbsp;by&nbsp;StinkFoot.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.muzique.com/lab/tstone.htm">Tube Screamer Tone Circuit Study</a>&nbsp;by AMZ Guitar.</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.diystompboxes.com/smfforum/index.php?topic=75576">Tube Screamer Tone Control Discussion</a>&nbsp;in&nbsp;DIYStompBoxes.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.analogman.com/ts9.htm">Tube Screamer</a>&nbsp;by&nbsp;AnalogMan.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.singlecoil.com/docs/tubescreamer.pdf">Tube Screamer Article</a>&nbsp;in Single Coil.&nbsp;</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.thatraymond.com/downloads/solidstate_guitar_amplifiers_teemu_kyttala_v1.0.pdf">Teemuk&nbsp;Kyttala&nbsp;Solid State Guitar Amplifiers</a>,&nbsp;the Holy Scripture.</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.physics.unlv.edu/~bill/PHYS483/op_amp_filt.pdf">OpAmp Filter Examples</a>&nbsp;by University Las Vegas Nevada.</span><br /><span style="font-size: 10pt; color: #333333;"><a href="http://www.geofex.com/Article_Folders/bosstech.pdf">The Technology of Ibanez &nbsp;JFET Switching </a>by AMZ&nbsp;</span></p>
+<p style="margin-left: 30px;"><span style="font-size: 10pt; color: #333333;"><span style="font-size: 10pt; color: #333333;">Our sincere appreciation to Romeo G. Cesar, Vibert Thio, JM Ojeda, B. Parker, A.&nbsp;R&ouml;din and Charles Day for helping us with the article.</span></span></p>
+<p style="margin-left: 30px;">&nbsp;</p>
+<p style="text-align: right;"><span style="color: #333333; font-size: 10pt;">Thanks for reading, all feedback is appreciated&nbsp;<img src="/templates/hot_relief/images/general/mail.jpg" alt="jr(at)ElectroSmash.com " /></span></p>	</section>
+  
+  <!-- footer -->
+    <!-- //footer -->
+
+			<hr class="divider-vertical" /><ul class="pager pagenav">
+	<li class="previous">
+		<a class="hasTooltip" title="Big Muff Pi Analysis" aria-label="Previous article: Big Muff Pi Analysis" href="/big-muff-pi-analysis" rel="prev">
+			<span class="icon-chevron-left" aria-hidden="true"></span> <span aria-hidden="true">Prev</span>		</a>
+	</li>
+	<li class="next">
+		<a class="hasTooltip" title="JRC4558 Analysis" aria-label="Next article: JRC4558 Analysis" href="/jrc4558-analysis" rel="next">
+			<span aria-hidden="true">Next</span> <span class="icon-chevron-right" aria-hidden="true"></span>		</a>
+	</li>
+</ul>
+	
+	
+	</article>
+<!-- //Article -->
+
+
+</div><div><a href="http://www.artio.net" style="font-size: 8px; visibility: visible; display: inline;" title="Web development, Joomla, CMS, CRM, Online shop software, databases">Joomla SEF URLs by Artio</a></div>
+		</div>
+		<!-- //MAIN CONTENT -->
+
+		<!-- SIDEBAR RIGHT -->
+		<div class="t3-sidebar t3-sidebar-right col-xs-12 col-sm-4  col-md-3 ">
+			<div class="t3-module module " id="Mod28"><div class="module-inner"><h3 class="module-title "><span>New Updates</span></h3><div class="module-ct"><ul class="latestnews mod-list">
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/arduino-audio-meter" itemprop="url">
+			<span itemprop="name">
+				Arduino Audio Meter			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/dallas-rangemaster" itemprop="url">
+			<span itemprop="name">
+				Dallas Rangemaster Treble Booster Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/time-manipulator" itemprop="url">
+			<span itemprop="name">
+				Time Manipulator - Arduino Delay/Echo/Reverb			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/marshall-guvnor-analysis" itemprop="url">
+			<span itemprop="name">
+				Marshall The Guvnor Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/germanium-fuzz" itemprop="url">
+			<span itemprop="name">
+				You Can Build the Perfect Germanium Fuzz			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/mxr-distortion-plus-analysis" itemprop="url">
+			<span itemprop="name">
+				MXR Distortion + Analysis			</span>
+		</a>
+	</li>
+</ul>
+</div></div></div><div class="t3-module module " id="Mod29"><div class="module-inner"><h3 class="module-title "><span>Most Visited</span></h3><div class="module-ct"><ul class="mostread mod-list">
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/tube-screamer-analysis" itemprop="url">
+			<span itemprop="name">
+				Tube Screamer Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/fuzz-face" itemprop="url">
+			<span itemprop="name">
+				Fuzz Face Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/proco-rat" itemprop="url">
+			<span itemprop="name">
+				Pro Co Rat Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/boss-ds1-analysis" itemprop="url">
+			<span itemprop="name">
+				Boss DS-1 Distortion Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/klon-centaur-analysis" itemprop="url">
+			<span itemprop="name">
+				Klon Centaur Analysis			</span>
+		</a>
+	</li>
+	<li itemscope itemtype="https://schema.org/Article">
+		<a href="/big-muff-pi-analysis" itemprop="url">
+			<span itemprop="name">
+				Big Muff Pi Analysis			</span>
+		</a>
+	</li>
+</ul>
+</div></div></div><div class="t3-module module " id="Mod184"><div class="module-inner"><h3 class="module-title "><span>Follow us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><span style="font-size: 10pt; color: #333333;">You can also follow us on:</span></p>
+<p><a href="https://www.facebook.com/ElectroSmash"><img src="/images/banners/facebook.png" alt="facebook" /></a>&nbsp;&nbsp; <a href="https://plus.google.com/+Electrosmash/about"><img src="/images/banners/google.png" alt="google" /></a>&nbsp;&nbsp; <a href="https://www.instagram.com/electro.smash/"><img src="/images/banners/instagram.png" alt="instagram" /></a></p>
+<p><a href="https://www.pinterest.com/electrosmash/"><img src="/images/banners/pinterest.png" alt="pinterest" /></a>&nbsp;&nbsp; <a href="https://www.youtube.com/user/ElectroSmashTV"><img src="/images/banners/youtube.png" alt="youtube" /></a>&nbsp;&nbsp; <a href="https://twitter.com/electro_smash"><img src="/images/banners/twitter.png" alt="twitter" /></a></p></div>
+</div></div></div>
+		</div>
+		<!-- //SIDEBAR RIGHT -->
+
+	</div>
+</div> 
+
+
+
+  
+
+
+  
+
+
+	
+<!-- BACK TOP TOP BUTTON -->
+<div id="back-to-top" data-spy="affix" data-offset-top="300" class="back-to-top hidden-xs hidden-sm affix-top">
+  <button class="btn btn-primary" title="Back to Top"><i class="fa fa-caret-up"></i></button>
+</div>
+<script type="text/javascript">
+(function($) {
+	// Back to top
+	$('#back-to-top').on('click', function(){
+		$("html, body").animate({scrollTop: 0}, 500);
+		return false;
+	});
+    $(window).on('load', function(){
+        // hide button to top if the document height not greater than window height*2;using window load for more accurate calculate.    
+        if ((parseInt($(window).height())*2)>(parseInt($(document).height()))) {
+            $('#back-to-top').hide();
+        } 
+    });
+})(jQuery);
+</script>
+<!-- BACK TO TOP BUTTON -->
+
+<!-- FOOTER -->
+<footer id="t3-footer" class="wrap t3-footer">
+
+			<!-- FOOTER SPOTLIGHT -->
+		<div class="container hidden-xs">
+				<!-- SPOTLIGHT -->
+	<div class="t3-spotlight t3-footer-sl  row">
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod185"><div class="module-inner"><h3 class="module-title "><span>About us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><a href="https://shop.electrosmash.com/about-us/">&nbsp;&nbsp;<img src="/images/banners/smash-electro.jpg" alt="smash electro" /></a></p>
+<p><a href="https://shop.electrosmash.com/about-us/"><span style="font-size: 10pt; color: #333333;">Smashing audio electronics since MMXIII</span></a></p>
+<p>&nbsp;</p></div>
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod183"><div class="module-inner"><h3 class="module-title "><span>Email Newsletter</span></h3><div class="module-ct"><div class="acymailing_module" id="acymailing_module_formAcymailing12601">
+	<div class="acymailing_fulldiv" id="acymailing_fulldiv_formAcymailing12601"  >
+		<form id="formAcymailing12601" action="/tube-screamer-analysis" onsubmit="return submitacymailingform('optin','formAcymailing12601')" method="post" name="formAcymailing12601"  >
+		<div class="acymailing_module_form" >
+						<table class="acymailing_form">
+				<tr>
+												<td class="acyfield_email acy_requiredField">
+								<input id="user_email_formAcymailing12601"  onfocus="if(this.value == 'example@email.com') this.value = '';" onblur="if(this.value=='') this.value='example@email.com';" class="inputbox" type="text" name="user[email]" style="width:90%" value="example@email.com" title="example@email.com"/>
+							</td> </tr><tr>
+					
+					<td  class="acysubbuttons">
+												<input class="button subbutton btn btn-primary" type="submit" value="Subscribe" name="Submit" onclick="try{ return submitacymailingform('optin','formAcymailing12601'); }catch(err){alert('The form could not be submitted '+err);return false;}"/>
+											</td>
+				</tr>
+			</table>
+						<input type="hidden" name="ajax" value="0" />
+			<input type="hidden" name="acy_source" value="module_183" />
+			<input type="hidden" name="ctrl" value="sub"/>
+			<input type="hidden" name="task" value="notask"/>
+			<input type="hidden" name="redirect" value="https%3A%2F%2Fwww.electrosmash.com%2Ftube-screamer-analysis"/>
+			<input type="hidden" name="redirectunsub" value="https%3A%2F%2Fwww.electrosmash.com%2Ftube-screamer-analysis"/>
+			<input type="hidden" name="option" value="com_acymailing"/>
+						<input type="hidden" name="hiddenlists" value="1"/>
+			<input type="hidden" name="acyformname" value="formAcymailing12601" />
+									</div>
+		</form>
+	</div>
+	</div>
+
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod186"><div class="module-inner"><h3 class="module-title "><span>Contact us</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p><a href="/contact-us"><span style="font-size: 10pt; color: #333333;">e-mail us at <span id="cloakde8e57df3d59817c427b9ea51074dbe4">This email address is being protected from spambots. You need JavaScript enabled to view it.</span><script type='text/javascript'>
+				document.getElementById('cloakde8e57df3d59817c427b9ea51074dbe4').innerHTML = '';
+				var prefix = '&#109;a' + 'i&#108;' + '&#116;o';
+				var path = 'hr' + 'ef' + '=';
+				var addyde8e57df3d59817c427b9ea51074dbe4 = '&#105;nf&#111;' + '&#64;';
+				addyde8e57df3d59817c427b9ea51074dbe4 = addyde8e57df3d59817c427b9ea51074dbe4 + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';
+				var addy_textde8e57df3d59817c427b9ea51074dbe4 = '&#105;nf&#111;' + '&#64;' + '&#101;l&#101;ctr&#111;sm&#97;sh' + '&#46;' + 'c&#111;m';document.getElementById('cloakde8e57df3d59817c427b9ea51074dbe4').innerHTML += '<a ' + path + '\'' + prefix + ':' + addyde8e57df3d59817c427b9ea51074dbe4 + '\'>'+addy_textde8e57df3d59817c427b9ea51074dbe4+'<\/a>';
+		</script></span></a></p>
+<p>&nbsp;</p></div>
+</div></div></div>
+							</div>
+					<div class=" col-lg-3 col-md-3 col-sm-3 col-xs-12">
+								<div class="t3-module module " id="Mod188"><div class="module-inner"><h3 class="module-title "><span>Rights</span></h3><div class="module-ct">
+
+<div class="custom"  >
+	<p style="text-align: left;">&nbsp;&nbsp;<a href="https://creativecommons.org/licenses/by-nc/3.0/"><img src="/images/banners/88x31.png" alt="88x31" /></a></p>
+<p style="text-align: left;"><img src="/images/banners/open_source_logo.png" alt="open source logo" width="180" height="38" /></p>
+<p style="text-align: left;"><img src="/images/banners/open_hardware_logo.png" alt="open hardware logo" width="180" height="38" /></p>
+<p style="text-align: left;">&nbsp;</p></div>
+</div></div></div>
+							</div>
+			</div>
+<!-- SPOTLIGHT -->
+		</div>
+		<!-- //FOOTER SPOTLIGHT -->
+	
+	<section class="t3-copyright">
+		<div class="container">
+			<div class="row">
+				<div class="col-md-12 copyright ">
+					
+          <small>
+            <a href="http://twitter.github.io/bootstrap/" title="Bootstrap by Twitter" target="_blank">Bootstrap</a> is a front-end framework of Twitter, Inc. Code licensed under <a href="https://github.com/twbs/bootstrap/blob/master/LICENSE" title="MIT License" target="_blank">MIT License.</a>
+          </small>
+          <small>
+            <a href="http://fortawesome.github.io/Font-Awesome/" target="_blank">Font Awesome</a> font licensed under <a href="http://scripts.sil.org/OFL">SIL OFL 1.1</a>.
+          </small>
+				</div>
+							</div>
+		</div>
+	</section>
+
+</footer>
+<!-- //FOOTER -->
+
+</div>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-29544239-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>

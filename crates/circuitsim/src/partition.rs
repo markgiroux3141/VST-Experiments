@@ -69,6 +69,13 @@
 //! sweep cut at its timing capacitor with the 6J7's 1 Mohm input outside: +7 cents at
 //! 18.8 kHz). A grid the island owns returns nothing; so do stiff rails.
 //!
+//! **A single-rate claim.** A single-rate section may claim nodes too: a speaker's driver
+//! keeping the radiating nodes its readout only senses, the readout a part of its own
+//! (`varimu_circuit::speaker::readout_apart`; COMPONENT_EDITOR_PLAN.md C3's speed). The
+//! readout sees the driver's voltages a sample late and draws nothing back (Vccs controls),
+//! so the split costs only that lag. The DC start then solves with held nodes as for an
+//! island's claim.
+//!
 //! **The audio input in a multi-rate part.** The input node may be a multi-rate part's
 //! instead of the first's (a signal path cut through a capacitor into a high impedance
 //! node isn't stable with a sample's lag: the Ampex 351's record side runs at the bias's

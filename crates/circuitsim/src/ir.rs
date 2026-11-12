@@ -155,8 +155,11 @@ pub struct Section {
     /// HYBRID_PHYSICS_PLAN.md H3a, M1). Absent: the average over the sample.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decimate: Option<Decimate>,
-    /// Shared nodes a multi-rate section owns (it publishes their voltages and is fed
-    /// their users' currents). Absent: it owns none.
+    /// Shared nodes a section owns in a partitioned run (it publishes their voltages and is
+    /// fed their users' currents): a multi-rate section's island outputs, or a single-rate
+    /// section keeping nodes another part only senses (a speaker's driver, its readout on a
+    /// thread of its own: `varimu_circuit::speaker::readout_apart`). Absent: it owns none
+    /// (a shared node goes to the highest-numbered single-rate part with it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owns: Option<Vec<String>>,
     /// A multi-rate section that owns nothing and doesn't decimate (its part reading no
@@ -1594,11 +1597,8 @@ impl CircuitIr {
                     s.title
                 ));
             }
-            if s.owns.as_ref().is_some_and(|o| o.is_empty() || !multirate) {
-                return err(format!(
-                    "section {:?}: owns needs nodes, in a multi-rate section",
-                    s.title
-                ));
+            if s.owns.as_ref().is_some_and(Vec::is_empty) {
+                return err(format!("section {:?}: owns needs nodes", s.title));
             }
             if let Some(l) = s.lag_samples
                 && (l == 0 || !multirate || s.decimate.is_some() || s.owns.is_some())

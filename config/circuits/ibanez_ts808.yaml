@@ -1,0 +1,152 @@
+# Ibanez TS808 Tube Screamer (effect on), as a circuit file: the 2SC1815 input buffer, the
+# JRC4558's clipping stage (DRIVE, the MA150 pair in its feedback), its tone stage (TONE),
+# LEVEL, the JFET switch (on) and the output buffer. Built by varimu/circuit/builder.py.
+#
+# Sources (data/schematics/ibanez_ts808/README.md has their provenance and the choices):
+#   "sch: MP ..."     Ibanez's factory service drawing, board MP-D01201A (R101-R133)
+#   "web: <url> ..."  a datasheet or a published measured card
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# Drawn about the 4.5 V bias node Vb (R132 / R133 10K / 10K with C116 47 uF): it is this
+# file's ground "0", the battery's +9 V and 0 V the ideal rails vcc (+4.5 V) and vee (-4.5 V)
+# (AC-exact: Vb's 47 uF puts its impedance below an ohm above ~1 Hz; the battery's internal
+# resistance and sag aren't modeled). So the op-amp macro's swing is about Vb, as the 4558's,
+# and the pedal can join an amp in one netlist (its battery floats).
+#
+# The output `out` is the output jack into an amp's input, loaded by 1 MEG and a 3 m cable
+# (a standalone pedal; a rig file replaces the load with the amp).
+
+title: "Ibanez TS808 Tube Screamer"
+input: in
+probes: [out, eb1, op1, ng, tn, op2, lv, eb3]
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V; as the amps')"}
+  output_volts_peak: {value: 2.0, source: "provisional: model knowledge (the output buffer's swing about Vb, less its 10K / 100 ohm; LEVEL full up)"}
+
+controls:
+  drive: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: MP (DRIVE 500K A, as a rheostat in series with R106 51K)"}
+  tone: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: MP (TONE 20K, between the tone stage's two inputs, its wiper on C106 / R108)"}
+  level: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: MP (LEVEL 100K B, its cold lug on Vb)"}
+
+values:
+  # --- Supply ------------------------------------------------------------------------------
+  rail_v: {value: 4.5, source: "derived: the 9 V battery about Vb, half of it (sch: MP, R132 / R133 10K / 10K)"}
+
+  # --- Input buffer (sch: MP) --------------------------------------------------------------
+  c101_f: {value: 0.02e-6, source: "sch: MP (C101 0.02 uF film)"}
+  r101_ohm: {value: 1000.0, source: "sch: MP (R101 1K)"}
+  r_bias_ohm: {value: 510.0e+3, source: "sch: MP (R102, R112, R117 510K to Vb)"}
+  r_emitter_ohm: {value: 10.0e+3, source: "sch: MP (R103, R113 10K emitter resistors)"}
+  buffer_bjt: {value: 2SC1815@1, source: "sch: MP (Q101, Q103 2SC1815BL); config/components/2sc1815/1.yaml (Kaz-electro's measured BL card)"}
+
+  # --- Clipping stage (sch: MP) ------------------------------------------------------------
+  c102_f: {value: 1.0e-6, source: "sch: MP (C102 1 uF 50 V non-polar into the (+) input)"}
+  r105_ohm: {value: 10.0e+3, source: "sch: MP (R105 10K from (+) to Vb)"}
+  r104_ohm: {value: 4700.0, source: "sch: MP (R104 4.7K from (-) to C103)"}
+  c103_f: {value: 0.047e-6, source: "sch: MP (C103 0.047 uF to ground; Cerutti's redraw returns it to Vr: the same at AC)"}
+  r106_ohm: {value: 51.0e+3, source: "sch: MP (R106 51K in series with DRIVE)"}
+  drive_pot_ohm: {value: 500.0e+3, source: "sch: MP (DRIVE 500K A)"}
+  log_taper_mid: {value: 0.1, source: "sch: MP prints A (log) for DRIVE; ~10% of the track at half rotation: provisional: model knowledge (as the amps' audio taper)"}
+  c104_f: {value: 51.0e-12, source: "sch: MP (C104 51 pF across the feedback)"}
+  clip_diode: {value: 1N4148@1, source: "sch: MP (D101 / D102 MA150, antiparallel in the feedback); config/components/1n4148/1.yaml stands in: provisional (the MA150's IF-VF curve reads 20-40 mV above it at 0.01-10 mA, a similar slope: README)"}
+
+  # --- Tone stage (sch: MP) ------------------------------------------------------------------
+  r107_ohm: {value: 1000.0, source: "sch: MP (R107 1K)"}
+  c105_f: {value: 0.22e-6, source: "sch: MP (C105 0.22 uF tantalum to ground)"}
+  r109_ohm: {value: 10.0e+3, source: "sch: MP (R109 10K from (+) to Vb)"}
+  tone_pot_ohm: {value: 20.0e+3, source: "sch: MP (TONE 20K; its G taper not published: linear, provisional)"}
+  c106_f: {value: 0.22e-6, source: "sch: MP (C106 0.22 uF tantalum from TONE's wiper)"}
+  r108_ohm: {value: 220.0, source: "sch: MP (R108 220 to ground)"}
+  r110_ohm: {value: 1000.0, source: "sch: MP (R110 1K from the output to (-))"}
+
+  # --- Output (sch: MP) ------------------------------------------------------------------------
+  r111_ohm: {value: 1000.0, source: "sch: MP (R111 1K)"}
+  c107_f: {value: 1.0e-6, source: "sch: MP (C107 1 uF non-polar to LEVEL)"}
+  level_pot_ohm: {value: 100.0e+3, source: "sch: MP (LEVEL 100K B: linear)"}
+  jfet_on_ohm: {value: 100.0, source: "provisional: model knowledge (the 2SK44SP switch Q102 on at VGS = 0, ~100 ohm per Keen: README)"}
+  c108_f: {value: 0.1e-6, source: "sch: MP (C108 0.1 uF to the output buffer)"}
+  r114_ohm: {value: 100.0, source: "sch: MP (R114 100; the TS-9's 470)"}
+  c109_f: {value: 10.0e-6, source: "sch: MP (C109 10 uF 16 V)"}
+  r115_ohm: {value: 10.0e+3, source: "sch: MP (R115 10K to ground; the TS-9's 100K)"}
+
+  # --- The op-amp, JRC4558D (both halves) -----------------------------------------------------
+  u_a0: {value: 1.0e+5, source: "web: Nisshinbo NJM4558 datasheet ver. 2026-07-23 (data/schematics/ibanez_ts808/nisshinbo_njm4558_datasheet_ver20260723.pdf: AV 100 dB typ)"}
+  u_gbw_hz: {value: 3.0e+6, source: "web: same sheet (GBW 3 MHz typ)"}
+  u_slew_v_per_s: {value: 1.0e+6, source: "web: same sheet (SR 1 V/us typ)"}
+  u_r_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a 4558's differential input resistance, ~0.3-5 MOhm)"}
+  u_r_out_ohm: {value: 50.0, source: "provisional: model knowledge (a 4558-class op-amp's open-loop output resistance, tens of ohms; as the Portastudio's)"}
+  u_swing_v: {value: 2.3, source: "derived: +-4.5 V rails less ~1.6 V of headroom (the sheet's +-14 V swing on +-15 V into 10K; its swing curve starts at +-6 V: provisional at 9 V), less the clamp diode's ~0.6 V"}
+  u_clamp: {value: SI_RECTIFIER@1, source: "numerical: the op-amp macro's clamp diodes (its output stage saturating; config/components/si_rectifier/1.yaml)"}
+
+  # --- The load (a standalone pedal) ----------------------------------------------------------------
+  r_amp_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a tube amp's input: 1 MEG to ground)"}
+  cable_c_f: {value: 300.0e-12, source: "provisional: model knowledge (a 3 m instrument cable at ~100 pF/m)"}
+
+devices:
+  QBUF1: {device: buffer_bjt}
+  QBUF3: {device: buffer_bjt}
+  DCLIP: {device: clip_diode}
+  DCLAMP: {device: u_clamp}
+
+sections:
+  - title: supply
+    parts:
+      VCC: {V: [vcc, "0"], v: rail_v}
+      VEE: {V: ["0", vee], v: rail_v}
+
+  - title: input buffer
+    parts:
+      C101: {C: [in, n101], c: c101_f}
+      R101: {R: [n101, b1], r: r101_ohm}
+      R102: {R: [b1, "0"], r: r_bias_ohm}
+      Q101: {bjt: [vcc, b1, eb1], model: QBUF1}
+      R103: {R: [eb1, vee], r: r_emitter_ohm}
+
+  - title: clipping stage
+    parts:
+      C102: {C: [eb1, np1], c: c102_f}
+      R105: {R: [np1, "0"], r: r105_ohm}
+      U1A: {opamp: [np1, ng, op1], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v, slew_v_per_s: u_slew_v_per_s}
+      R104: {R: [ng, n104], r: r104_ohm}
+      C103: {C: [n104, "0"], c: c103_f}
+      R106: {R: [op1, n106], r: r106_ohm}
+      RDRIVE: {rheostat: [n106, ng], r: drive_pot_ohm, at: drive, taper_mid: log_taper_mid}
+      C104: {C: [op1, ng], c: c104_f}
+      D101: {device: [op1, ng], model: DCLIP}
+      D102: {device: [ng, op1], model: DCLIP}
+
+  - title: tone stage
+    parts:
+      R107: {R: [op1, tn], r: r107_ohm}
+      C105: {C: [tn, "0"], c: c105_f}
+      R109: {R: [tn, "0"], r: r109_ohm}
+      U1B: {opamp: [tn, nm2, op2], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v, slew_v_per_s: u_slew_v_per_s}
+      # TONE between the (+) input's node and the (-) input; up: the wiper toward (-),
+      # brighter (its C106 / R108 shunting the feedback's highs).
+      RTONE: {pot: [tn, tw, nm2], r: tone_pot_ohm, at: tone}
+      C106: {C: [tw, n108], c: c106_f}
+      R108: {R: [n108, "0"], r: r108_ohm}
+      R110: {R: [op2, nm2], r: r110_ohm}
+
+  - title: output
+    parts:
+      R111: {R: [op2, n111], r: r111_ohm}
+      C107: {C: [n111, lt], c: c107_f}
+      RLEVEL: {pot: ["0", lv, lt], r: level_pot_ohm, at: level}
+      RJFET: {R: [lv, n117], r: jfet_on_ohm}
+      R117: {R: [n117, "0"], r: r_bias_ohm}
+      C108: {C: [n117, b3], c: c108_f}
+      R112: {R: [b3, "0"], r: r_bias_ohm}
+      Q103: {bjt: [vcc, b3, eb3], model: QBUF3}
+      R113: {R: [eb3, vee], r: r_emitter_ohm}
+      R114: {R: [eb3, n114], r: r114_ohm}
+      C109: {C: [n114, out], c: c109_f}
+      # R115 to the battery's 0 V, drawn to this file's ground (Vb): the same at AC (Vb
+      # behind its 47 uF), and the output's DC at the amp's ground when it joins one.
+      R115: {R: [out, "0"], r: r115_ohm}
+
+  # The amp this standalone pedal plays into (a rig file replaces it with the amp).
+  - title: amp input load
+    parts:
+      RAMP: {R: [out, "0"], r: r_amp_in_ohm}
+      CCABLE: {C: [out, "0"], c: cable_c_f}

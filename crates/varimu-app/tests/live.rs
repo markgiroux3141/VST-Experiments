@@ -175,7 +175,9 @@ fn gain_equals_a_louder_clip() {
 #[test]
 fn fender_5e3_oversampled_aliases_less() {
     let dev = DEVICES.iter().find(|d| d.id == "fender_5e3").unwrap();
-    assert_eq!(dev.quality, Quality::Draft2x);
+    // Played at draft-1x since 2026-11-12 (the user's choice, for live play with the
+    // speaker's readout); draft-2x stays the option this measures.
+    assert_eq!(dev.quality, Quality::Draft1x);
     let other_db = |q: Quality| -> f64 {
         let s = Settings::load(&config(), q).unwrap();
         assert_eq!((s.host(), s.sim_rate()), (48_000, 48_000 * s.oversample));

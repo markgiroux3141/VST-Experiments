@@ -166,13 +166,34 @@ def _speaker(x: Sequence[float], base: spk.Speaker) -> spk.Speaker:
     return replace(base, le_h=float(x[0]), l2_h=float(x[1]), r2_ohm=float(x[2]), modes=modes)
 
 
-def fit(ts: Mapping[str, float], curves: Curves, name: str) -> Fit:
+def fit(
+    ts: Mapping[str, float],
+    curves: Curves,
+    name: str,
+    visible_max_hz: float = VISIBLE_MAX_HZ,
+    low_hz: float = 0.0,
+    low_weight: float = 1.0,
+    impedance_min_hz: float = 0.0,
+) -> Fit:
+    """`curves` may have no impedance curve (empty arrays: a sheet without one, the
+    Celestion G12M's); then only the response constrains the voice coil and the modes, and
+    kz, z0 stay at their starts. `visible_max_hz`: where the sheet's printed band ends (the
+    response beyond it weighs HIDDEN_WEIGHT); `low_hz`, `low_weight`: the response below
+    `low_hz` weighs `low_weight` (a sheet whose mounting isn't stated: its low end is the
+    baffle's as much as the speaker's); `impedance_min_hz`: the impedance curve counts from
+    there up (a relative's curve standing in for the voice coil only, not its resonance)."""
     base = base_speaker(ts, name)
     fr, dr = curves.response_hz, curves.response_db
     fz, dz = curves.impedance_hz, curves.impedance_trace
+    if impedance_min_hz > 0:
+        keep = fz >= impedance_min_hz
+        fz, dz = fz[keep], dz[keep]
+    has_z = len(fz) > 0
     f = np.union1d(fr, fz)
     ir_, iz = np.searchsorted(f, fr), np.searchsorted(f, fz)
-    w = np.where(fr <= VISIBLE_MAX_HZ, 1.0, HIDDEN_WEIGHT)
+    w = np.where(fr <= visible_max_hz, 1.0, HIDDEN_WEIGHT)
+    if low_hz > 0:
+        w = np.where(fr < low_hz, w * low_weight, w)
 
     x0 = [
         base.le_h * 0.6,
@@ -180,10 +201,15 @@ def fit(ts: Mapping[str, float], curves: Curves, name: str) -> Fit:
         10.0,
         0.0,
         1.25,
-        float(np.min(dz)) - 1.25 * 20 * math.log10(base.re_ohm),
+        (float(np.min(dz)) if has_z else 0.0) - 1.25 * 20 * math.log10(base.re_ohm),
     ]
     lo = [0.0, 1e-5, 0.5, -4.0, 1.0, 0.0]
     hi = [1e-3, 5e-3, 100.0, 4.0, 1.6, 100.0]
+    if not has_z:
+        x0[5] = 50.0  # unconstrained without an impedance curve: anywhere inside its bounds
+    coil = max(1.0, base.re_ohm / 8.0)  # a higher-impedance coil: more turns, larger L2, R2
+    if coil > 1.0:
+        hi[0], hi[1], hi[2] = hi[0] * coil**2, hi[1] * coil**2, hi[2] * coil
     for fk in MODE_STARTS_HZ:
         x0 += [0.05, fk, 3.0, 0.05]
         lo += [MODE_MIN_KG / base.mms_kg, MODE_MIN_HZ, MODE_Q[0], -1.0]
@@ -196,13 +222,14 @@ def fit(ts: Mapping[str, float], curves: Curves, name: str) -> Fit:
     def resid(x):
         r, t = model(x)
         excess = sum(x[6 + 4 * k] for k in range(len(MODE_STARTS_HZ))) - MODES_MAX_MASS_SHARE
-        return np.concatenate([(r - dr) * w, t - dz, [100.0 * max(0.0, excess)]])
+        return np.concatenate([(r - dr) * w, (t - dz) if has_z else [], [100.0 * max(0.0, excess)]])
 
+    x0 = [min(max(v, a), b) for v, a, b in zip(x0, lo, hi, strict=True)]
     sol = least_squares(resid, x0, bounds=(lo, hi), x_scale="jac", max_nfev=800)
     s = _speaker(sol.x, base)
     r, t = model(sol.x)
     e, ez = r - dr, t - dz
-    vis = fr <= VISIBLE_MAX_HZ
+    vis = fr <= visible_max_hz
     bounded = [
         i for i in range(6, len(sol.x))
         if min(sol.x[i] - lo[i], hi[i] - sol.x[i]) <= 1e-6 * max(1.0, abs(hi[i]))
@@ -211,13 +238,15 @@ def fit(ts: Mapping[str, float], curves: Curves, name: str) -> Fit:
         "response_db": {
             "rms_visible": float(np.sqrt(np.mean(e[vis] ** 2))),
             "max_visible": float(np.max(np.abs(e[vis]))),
-            "rms_beyond_page": float(np.sqrt(np.mean(e[~vis] ** 2))),
-            "visible_band_hz": [float(fr[vis][0]), VISIBLE_MAX_HZ],
+            "rms_beyond_page": float(np.sqrt(np.mean(e[~vis] ** 2))) if (~vis).any() else None,
+            "visible_band_hz": [float(fr[vis][0]), visible_max_hz],
         },
         "impedance_trace": {
             "rms": float(np.sqrt(np.mean(ez**2))),
             "max": float(np.max(np.abs(ez))),
-        },
+        }
+        if has_z
+        else None,
         "impedance": impedance_figures(s),
         "level_offset_db": float(sol.x[3]),
         "impedance_axis": {"kz": float(sol.x[4]), "z0": float(sol.x[5])},
@@ -232,8 +261,12 @@ def fit(ts: Mapping[str, float], curves: Curves, name: str) -> Fit:
 
 
 def load_curves(datasheets: Path, stem: str) -> Curves:
+    """`<stem>_response.csv` and, when the sheet has one, `<stem>_impedance.csv`."""
     r = np.loadtxt(datasheets / f"{stem}_response.csv", delimiter=",", skiprows=1)
-    z = np.loadtxt(datasheets / f"{stem}_impedance.csv", delimiter=",", skiprows=1)
+    zp = datasheets / f"{stem}_impedance.csv"
+    if not zp.exists():
+        return Curves(r[:, 0], r[:, 1], np.zeros(0), np.zeros(0))
+    z = np.loadtxt(zp, delimiter=",", skiprows=1)
     return Curves(r[:, 0], r[:, 1], z[:, 0], z[:, 1])
 
 

@@ -607,9 +607,12 @@ fn ownership_is_checked() {
         |_| Ok(()),
     )
     .unwrap();
-    // in a single-rate section: the IR refuses it
+    // in a single-rate section: a claim too (a speaker's driver keeping what its back wave
+    // senses, `varimu_circuit::speaker::readout_apart`); an empty one is refused
     let mut ir = multirate_ir(None);
     ir.sections[0].owns = Some(vec!["s".into()]);
+    assert!(ir.validate().is_ok());
+    ir.sections[0].owns = Some(Vec::new());
     assert!(ir.validate().is_err());
 }
 

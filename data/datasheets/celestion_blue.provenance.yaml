@@ -1,0 +1,125 @@
+device: Celestion Blue (G12 T530 "Alnico Blue")
+document: >-
+  Two Celestion sheets of the current Blue (Celestion's recreation of the G12 T530 fitted to the
+  Vox AC30), one curve each: (a) "Guitar Speakers Celestion Blue, 12-inch classic alnico guitar
+  speaker", Celestion's current web sheet; (b) "Alnico Celestion Blue", a 2019 Celestion sheet.
+  Both 15 W, 8 or 15 ohm; both plots are the 8 ohm unit's
+publisher: Celestion International Ltd (Claydon Business Park, Great Blakenham, Ipswich)
+date: >-
+  No date printed on either sheet. PDF metadata: (a) generated on request by celestion.com (TCPDF
+  6.4.4), downloaded copy dated 2026-11-12 in its metadata; (b) created 2019-04-30 (PDFlib Lite
+  7.0.5p3), modified 2020-02-07
+local_copy:
+  current: ../schematics/vox_ac30/celestion_blue_current.pdf
+  sheet_2019: ../schematics/vox_ac30/celestion_blue_2019.pdf
+local_copy_sha256:
+  current: e44ca77a9b6861245cc65b77c919c533a21486cfce7d48cde5920defed419111
+  sheet_2019: 4a46836b589662249f7de517112003ac4c0f8273d87369a3f8485c81b391dc92
+scan_source:
+  current: "web: https://celestion.com/productpdf.php?id=896"
+  sheet_2019: "web: https://cf3.zzounds.com/media/Spec_Sheet-5077c09b6f4f4da47e61a0dc28110cc4.pdf"
+digitized_with: >-
+  Both plots are raster images (no vector paths for the curves), traced with numpy / Pillow on the
+  embedded images extracted with PyMuPDF.
+  (a): image xref 16, 886 x 367 px, an analyser's screenshot (the same template as the current
+  G12M Greenback sheet's, traced with the same script): the 28 grey vertical grid lines (20 Hz-20
+  kHz, 252.4 px per decade, least-squares log fit residual 0.0023 decades = 0.57 px) and the 13
+  horizontal lines (110-50 dB every 5 dB, 5.03 px/dB, residual 0.098 dB) by least squares; per
+  pixel column the curve's position is the redness-weighted centroid (r - (g + b) / 2) of the
+  contiguous red run holding the column's maximum.
+  (b): image xref 25, 398 x 198 px, 2 bits per channel (levels 0 / 85 / 170 / 255): the plot is
+  Celestion's 2006-style drawn template (as the G12M sheets' vector plots), rasterized at about 1
+  px per point. Grid lines found as darkness-weighted centroids of runs of grey columns / rows
+  (28 vertical lines 20 Hz-20 kHz including the frame; 7 horizontal lines 110-50 dB every 10 dB,
+  of which only 90 and 70 are labelled: their spacing is uniform at 24.2 px per 10 dB, so the top
+  frame line is 110 dB and the bottom 50 dB, as on the G12M sheets). The grid's rasterization is
+  uneven by up to ~1.5 px (least-squares log fit residual 0.0126 decades; horizontal lines 0.14
+  dB), so frequency and level are interpolated piecewise-linearly (log f) between neighbouring
+  grid lines. Curve per pixel column inside the frame: the centroid of r - (g + b) / 2 over the
+  contiguous red run holding the column's maximum (that weight is the red stroke's coverage over
+  white and over the black grid alike). Scratch scripts, not in the repo (the caller's report has
+  their paths)
+digitized_by: Claude Code
+digitized_on: 2026-11-12
+files:
+  celestion_blue_response.csv:
+    figure: >-
+      sheet (a), the plot titled 'Frequency Response' (label '8' above it: the 8 ohm unit). Its
+      axes are labelled '(dB) Impedance' (left, 50-110) and 'Impedance (dB)' (right, 0-180) by
+      the analyser software, but only one curve is drawn and it is the SPL response (the same
+      shape and level as (b)'s response); there is no impedance curve
+    columns: "f_hz, spl_db (dB SPL as plotted; conditions not printed, see measurement_conditions)"
+    coverage: >-
+      20.6 Hz-19.8 kHz, 754 points (one per pixel column). 66.7-108.4 dB; peak 108.4 dB at 2.43
+      kHz, a second peak 105.8 dB at 3.8 kHz; a dip to 94.9 dB at 1.5 kHz; -10 dB re
+      the 200 Hz-1 kHz mean below 56 Hz; mean 99.6 dB over 200 Hz-1 kHz (sensitivity printed:
+      100 dB). A smooth measured trace (likely smoothed): a steady rise from 77 dB at 20 Hz, no
+      LF plateau
+  celestion_blue_2019_response.csv:
+    figure: "sheet (b), the plot titled '8 Ω Frequency Response' (SPL (dB) vs FREQUENCY (Hz))"
+    columns: "f_hz, spl_db"
+    coverage: >-
+      20.2 Hz-19.8 kHz, 364 points (one per pixel column; the image has 120.7 px per decade).
+      61.5-106.8 dB; peaks 106-106.8 dB across 2.2-4 kHz (largest 106.8 dB at 2.63 kHz); a dip
+      to 95.0 dB at 1.41 kHz; mean 99.4 dB over 200 Hz-1 kHz (sensitivity printed: 100 dB). A
+      different curve from (a), not a copy: below 100 Hz it has a plateau at 79-80.5 dB over 27-45 Hz
+      and a dip to ~69 dB at 22 Hz ((a): a smooth slope, 83.7 dB at 40 Hz), 4.4-5.4 dB less than (a)
+      at 50-75 Hz, -10 dB re the mid mean below 78 Hz ((a) 56 Hz); above 10 kHz its notches lie
+      elsewhere (61.5 dB at 13.8 kHz vs (a)'s 66.7 dB at 14.8 kHz). So a different measurement, and
+      probably a different mounting; between 100 Hz and 6 kHz the two agree within 3.0 dB
+measurement_conditions: >-
+  Neither sheet prints the drive, distance or mounting of its response plot. Printed alongside:
+  sensitivity 100 dB with no reference; Fs 75 Hz; Re 6.4 / 11.8 ohm (8 / 15 ohm units); voice coil
+  44.5 mm (1.75 in) round copper; frequency range 75-5000 Hz. Celestion's convention, as in
+  celestion_g12m.provenance.yaml: Celestion's pro-audio pages state "Sensitivity: Measured on
+  axis at 1W, 1m in 2π anechoic environment" (web: https://celestion.com/product/tf0615/, a
+  different product line), so for the Blue sheets this is provisional: model knowledge (1 W
+  into the nominal 8 ohm = 2.83 V, 1 m, on axis, half-space). Supporting it: each curve's 200
+  Hz-1 kHz mean is within 0.7 dB of the printed 100 dB sensitivity, so the plots are at the
+  sensitivity's drive and distance. The low end of (a) and (b) differs by 4-5 dB at 50-75 Hz,
+  so the mounting (baffle size, closed box or open) is the least certain condition: a fit should
+  weight the region below ~100 Hz less or take the mounting as free
+axis_calibration: >-
+  (a): least squares on 28 vertical and 13 horizontal raster grid lines; (b): piecewise on the
+  rasterized drawn grid (28 vertical lines 20 Hz-20 kHz, 7 horizontal 110-50 dB)
+estimated_error: >-
+  (a): +-0.5 px, i.e. +-0.002 decades and +-0.1 dB on smooth stretches; on steep slopes (5.5-7
+  kHz, the HF notches) the column centroid averages a vertical run, so a notch's bottom can read
+  up to ~1 dB shallow.
+  (b): the image is coarse (2.42 px per dB, 120.7 px per decade) and 2-bit, so +-0.5 px is +-0.2
+  dB and +-0.004 decades (1 % in frequency) on smooth stretches, plus the grid's own rasterization
+  (up to 0.14 dB, absorbed by the piecewise mapping); on the steep HF slopes and notches above
+  ~5 kHz up to ~1-2 dB, notch bottoms reading shallow. The drawn curve is itself a redrawing of a
+  measurement (the 2006 template), so its faithfulness at sharp features is the illustrator's
+checks:
+  - >-
+    Overlays by eye: (a) the traced points drawn on the raster at 3x, (b) at 6x (both halves of
+    each viewed). The points sit on the printed curves everywhere, including the 2.4 kHz peak,
+    the 1.5 kHz dip, the 22 Hz dip and LF plateau of (b), and the HF notches (where, on the
+    steepest segments, the red stroke is visible beside the points because one point per column
+    falls at the run's centroid)
+  - "Mid-band level vs printed sensitivity: (a) 99.6 vs 100 dB, (b) 99.4 vs 100 dB (mean 200 Hz-1 kHz)"
+  - "Grid fits: (a) 0.0023 decades, 0.098 dB; (b) 0.0126 decades, 0.144 dB (piecewise mapping used)"
+impedance: >-
+  No impedance curve on either sheet, so no celestion_blue_impedance.csv. Sheet (a)'s
+  'Impedance' axis labels are the analyser software's defaults, not an impedance curve
+search_2026_11_12: >-
+  One web search (plus a narrower follow-up) for Thiele-Small figures or a measured impedance
+  curve of the Celestion Blue / G12 T530 / Alnico Blue found none. Seen:
+  Celestion's product page (web: https://celestion.com/product/celestion-blue/) and both sheets
+  give Fs 75 Hz and Re only; the bonedo.de review (web:
+  https://www.bonedo.de/artikel/celestion-g12-blue-test) repeats the sheet's figures, no
+  measurements; a music-electronics-forum thread (web:
+  https://music-electronics-forum.com/showthread.php?p=513873) where Mike Sulzer meant to measure
+  a Blue's impedance but the speaker "did not survive" (he measured a GP12-80 instead) and
+  Helmholtz offered to measure a Blue recone kit's voice coil at 1 / 10 kHz (no result posted);
+  voxac100.org.uk's history of the CT3757 / T530 / T1088 (web:
+  https://www.voxac100.org.uk/celestion_silvers.htm), no parameters. A third-party clone, WGS's
+  "Black & Blue" alnico (web: https://wgsusa.com/products/12-black-blue-alnico-15-watts), lists
+  T/S figures (a search summary quoted Fs 106.73 Hz, Qts 1.09; the page itself returned HTTP 429,
+  so unverified): not the Celestion's (its Fs disagrees with the 75 Hz), not to be used as the
+  Blue's. The nearest measured relative stays the Heritage G12H(55) Test Bench in
+  ../schematics/marshall_1987/ (see ../schematics/vox_ac30/README.md, "Speakers")
+notes: >-
+  The sheets' scalars (Fs, Re, sensitivity, voice coil, magnet, dimensions) are in
+  data/schematics/vox_ac30/README.md, "Speakers: two Celestion G12 T530 'Blue'".

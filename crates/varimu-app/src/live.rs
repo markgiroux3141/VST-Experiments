@@ -65,6 +65,8 @@ pub struct Circuit {
     /// Its speakers without their readouts, `out` their terminal voltage at this many volts
     /// full scale (a live build: docs/RHODES_PLAN.md RH3; None: as the file has them).
     live_speaker_v: Option<f64>,
+    /// Speaker parts whose readouts go into sections of their own (`with_readouts_apart`).
+    readouts_apart: Vec<String>,
     /// Its tape's track (`with_track`): None the first, Some a further one's name.
     track: Option<String>,
 }
@@ -85,6 +87,7 @@ impl Circuit {
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
+            readouts_apart: Vec::new(),
             track: None,
         })
     }
@@ -100,6 +103,7 @@ impl Circuit {
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
+            readouts_apart: Vec::new(),
             track: None,
         }
     }
@@ -115,6 +119,16 @@ impl Circuit {
     /// `v` volts at full scale: a device played live, `panel::Device::live_speaker_v`).
     pub fn with_live_speaker(mut self, v: Option<f64>) -> Circuit {
         self.live_speaker_v = v;
+        self
+    }
+
+    /// Speaker parts `parts` with their readouts in sections of their own, titled
+    /// `varimu_circuit::speaker::readout_title` (`<PART> readout`), so a partition can run
+    /// each on a thread of its own: it only senses the driver, a sample late (a live build,
+    /// `panel::Device::live`). One solve of the result is the same circuit. Ignored with
+    /// `with_live_speaker` (no readout).
+    pub fn with_readouts_apart(mut self, parts: &[&str]) -> Circuit {
+        self.readouts_apart = parts.iter().map(|p| p.to_string()).collect();
         self
     }
 
@@ -208,6 +222,15 @@ impl Circuit {
             self.live_speaker_v.is_none(),
         )
         .map_err(|e| e.to_string())
+        .and_then(|mut ir| {
+            if self.live_speaker_v.is_none() {
+                for part in &self.readouts_apart {
+                    varimu_circuit::speaker::readout_apart(&mut ir, part)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            Ok(ir)
+        })
         .map(|mut ir| {
             if let Some(t) = &self.track {
                 for e in ir.sections.iter_mut().flat_map(|s| s.elements.iter_mut()) {

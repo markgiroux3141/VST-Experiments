@@ -1702,6 +1702,129 @@ def build_6v6gt() -> dict[str, Any]:
     }
 
 
+def build_el34() -> dict[str, Any]:
+    """The Marshall 1987's output pair: a Koren pentode fit to Mullard's (Vg2 250 V) and
+    Philips' (Vg2 360 V) plate families, Mullard's transfer and screen-current curves at Va =
+    Vg2 = 250 / 325 / 400 V (data/datasheets/el34.provenance.yaml), weighted as the
+    6V6GT's."""
+    pub = _published()["EL34"]
+    pl = load_csv("el34_plate.csv")  # vg2, vg1, va, ia
+    tr = load_csv("el34_transfer.csv")  # va, vg2, vg1, ia
+    sc = load_csv("el34_screen.csv")  # va, vg1, vg2, ig2
+    plate = np.r_[
+        np.c_[pl[:, 1], pl[:, 0], pl[:, 2], pl[:, 3]],
+        np.c_[tr[:, 2], tr[:, 1], tr[:, 0], tr[:, 3]],
+    ]
+    plate_sigma = np.r_[
+        effective_sigma(pl[:, 2], pl[:, 3], pl[:, 1], 12.0, **V6_PLATE_SIGMA),
+        effective_sigma(tr[:, 2], tr[:, 3], tr[:, 1], 1.5, **V6_TRANSFER_SIGMA),
+    ]
+    screen = np.c_[sc[:, 1], sc[:, 2], sc[:, 3]]
+    screen_sigma = effective_sigma(sc[:, 1], sc[:, 3], sc[:, 2], 1.5, **V6_SCREEN_SIGMA)
+    m, rp, rs = fit_koren_pentode(plate, screen, plate_sigma, screen_sigma)
+    a, dv = pub["class_a1"], 1e-3
+    vg1, vg2, va = a["vg1_v"], a["vg2_v"], a["vp_v"]
+    knee = plate[:, 2] < 60
+    err = m.ip(plate[:, 0], plate[:, 1], plate[:, 2]) - plate[:, 3]
+    caps = pub["capacitances_f"]
+    return {
+        "name": "EL34",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares (effective variance) on the Mullard EL34 "
+        "sheets C2 (plate, Vg2 250 V) and C1 (transfer and screen current, Va = Vg2 = 250 / 325 "
+        "/ 400 V) and the Philips EL34 sheet C (plate, Vg2 360 V), digitized: "
+        "data/datasheets/el34.provenance.yaml. Koren's screen law fits the screen curves only "
+        "roughly (fit_report)",
+        "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (pentode connection)",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate 2% + 0.3 mA with slope x 1 V of Va (0.15 V of Vg1 on the transfer "
+            "curves); screen 3% + 30 uA with slope x 0.15 V (the 6V6GT's)",
+            "plate_rms_a_va_below_60": float(np.sqrt(np.mean(err[knee] ** 2))),
+            "plate_rms_a_va_from_60": float(np.sqrt(np.mean(err[~knee] ** 2))),
+            "class_a1_model": {
+                "ip_a": float(m.ip(vg1, vg2, va)),
+                "gm_s": float((m.ip(vg1 + dv, vg2, va) - m.ip(vg1 - dv, vg2, va)) / (2 * dv)),
+                "rp_ohm": float(2 * dv / (m.ip(vg1, vg2, va + dv) - m.ip(vg1, vg2, va - dv))),
+                "ig2_a": float(m.ig2(vg1, vg2)),
+            },
+            "push_pull_idle_model": [
+                {"va_v": 400, "vg2_v": 393, "vg1_v": -36,
+                 "ip_a": float(m.ip(-36.0, 393.0, 400.0)), "ig2_a": float(m.ig2(-36.0, 393.0))},
+                {"va_v": 375, "vg2_v": 368, "vg1_v": -33,
+                 "ip_a": float(m.ip(-33.0, 368.0, 375.0)), "ig2_a": float(m.ig2(-33.0, 368.0))},
+            ],  # fmt: skip
+        },
+    }
+
+
+def build_el84() -> dict[str, Any]:
+    """The Vox AC30's output valves: a Koren pentode fit to Mullard's (Vg2 250 V, C2) and
+    Philips' (Vg2 300 V, sheet C) plate families, Mullard C1's and Philips A's transfer and
+    screen curves and Mullard C3's screen current at Va >= 150 V (Koren's screen law has no Va:
+    its flat part) (data/datasheets/el84.provenance.yaml), weighted as the 6V6GT's."""
+    pub = _published()["EL84"]
+    pl = load_csv("el84_plate.csv")  # vg2, vg1, va, ia
+    tr = load_csv("el84_transfer.csv")  # va, vg2, vg1, ia
+    sc = load_csv("el84_screen.csv")  # va, vg1, vg2, ig2
+    sc = sc[sc[:, 0] >= 150.0]
+    plate = np.r_[
+        np.c_[pl[:, 1], pl[:, 0], pl[:, 2], pl[:, 3]],
+        np.c_[tr[:, 2], tr[:, 1], tr[:, 0], tr[:, 3]],
+    ]
+    plate_sigma = np.r_[
+        effective_sigma(pl[:, 2], pl[:, 3], pl[:, 1], 12.0, **V6_PLATE_SIGMA),
+        effective_sigma(tr[:, 2], tr[:, 3], tr[:, 1], 1.5, **V6_TRANSFER_SIGMA),
+    ]
+    screen = np.c_[sc[:, 1], sc[:, 2], sc[:, 3]]
+    screen_sigma = effective_sigma(sc[:, 1], sc[:, 3], sc[:, 2], 1.5, **V6_SCREEN_SIGMA)
+    m, rp, rs = fit_koren_pentode(plate, screen, plate_sigma, screen_sigma)
+    a, dv = pub["class_a1"], 1e-3
+    vg1, vg2, va = a["vg1_v"], a["vg2_v"], a["vp_v"]
+    knee = plate[:, 2] < 60
+    err = m.ip(plate[:, 0], plate[:, 1], plate[:, 2]) - plate[:, 3]
+    caps = pub["capacitances_f"]
+    return {
+        "name": "EL84",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares (effective variance) on the Mullard EL84 "
+        "sheets C1 / C2 / C3 (Vg2 250 V) and the Philips EL84 sheets A and C (Vg2 210 / 300 V), "
+        "digitized: data/datasheets/el84.provenance.yaml (Mullard C4 at 300 V reads ~9 mA under "
+        "Philips C and is left out). Koren's screen law fits the screen curves only roughly "
+        "(fit_report)",
+        "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (Cg1, Ca; Cag1 printed as < 0.5 pF, taken at it)",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate 2% + 0.3 mA with slope x 1 V of Va (0.15 V of Vg1 on the transfer "
+            "curves); screen 3% + 30 uA with slope x 0.15 V (the 6V6GT's)",
+            "plate_rms_a_va_below_60": float(np.sqrt(np.mean(err[knee] ** 2))),
+            "plate_rms_a_va_from_60": float(np.sqrt(np.mean(err[~knee] ** 2))),
+            "class_a1_model": {
+                "ip_a": float(m.ip(vg1, vg2, va)),
+                "gm_s": float((m.ip(vg1 + dv, vg2, va) - m.ip(vg1 - dv, vg2, va)) / (2 * dv)),
+                "rp_ohm": float(2 * dv / (m.ip(vg1, vg2, va + dv) - m.ip(vg1, vg2, va - dv))),
+                "ig2_a": float(m.ig2(vg1, vg2)),
+            },
+        },
+    }
+
+
 def build_5y3gt() -> dict[str, Any]:
     """The 5E3's rectifier: a Child-law vacuum diode fit to GE's plate curve (per section)."""
     v, i = load_csv("ge_5y3gt_plate.csv").T
@@ -1767,6 +1890,228 @@ def build_p12r() -> dict[str, Any]:
             "source": "fit: a modal expansion of the cone's breakup (signed radiating "
             "shares, not ring geometry) to the response on the IEC baffle and the impedance "
             "shape; modes from 300 Hz up, each at most the cone's area",
+        },
+        "fit_report": fit.report,
+    }
+
+
+def build_p8r() -> dict[str, Any]:
+    """The 5F1 Champ's speaker: the Jensen P8R reissue (4 ohm), its sheet's Thiele-Small
+    figures with the voice coil's eddy-current pair and breakup modes fitted to its response
+    (IEC baffle, 1 W, 1 m) and free-air impedance (ohm axis), from Jensen's chart data."""
+    from varimu.devices import speaker_fit
+
+    pub = _published()["P8R"]
+    fit = speaker_fit.fit(
+        pub["thiele_small"],
+        speaker_fit.load_curves(DATASHEETS, "jensen_p8r"),
+        "P8R",
+        visible_max_hz=20000.0,
+    )
+    s = fit.speaker
+    sheet = "web: https://www.jensentone.com/specification-sheet/44"
+    return {
+        "name": "P8R",
+        "kind": "speaker",
+        "source": "fit: varimu.devices.speaker_fit on the Jensen P8R reissue (4 ohm): its "
+        "Thiele-Small table (data/datasheets/published_points.yaml P8R) and its response (IEC "
+        "baffle, 1 W, 1 m) and free-air impedance from the product page's chart data "
+        "(data/datasheets/jensen_p8r.provenance.yaml)",
+        "voice_coil": {
+            "re_ohm": s.re_ohm,
+            "le_h": s.le_h,
+            "l2_h": s.l2_h,
+            "r2_ohm": s.r2_ohm,
+            "source": f"Re: {sheet}; Le, L2 || R2 (eddy-current 'LR-2' model): fit to the "
+            "impedance curve and the response",
+        },
+        "moving_system": {
+            "mms_kg": s.mms_kg,
+            "cms_m_per_n": s.cms_m_per_n,
+            "rms_ns_per_m": s.rms_ns_per_m,
+            "bl_tm": s.bl_tm,
+            "sd_m2": s.sd_m2,
+            "source": f"{sheet} (Mms, Cms, BxL, Sd; Rms = 2 pi Fs Mms / Qms with Fs 129 Hz, "
+            "Qms 8.67): free-air figures",
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": m.mass_kg, "f_hz": m.f_hz, "q": m.q, "area_m2": m.area_m2}
+                for m in sorted(s.modes, key=lambda m: m.f_hz)
+            ],
+            "source": "fit: a modal expansion of the cone's breakup (signed radiating "
+            "shares) to the response on the IEC baffle and the impedance; modes from 300 Hz up",
+        },
+        "fit_report": fit.report,
+    }
+
+
+def g12m_thiele_small(key: str = "G12M") -> dict[str, float]:
+    """The Celestion G12M's Thiele-Small table for its fit: Fs and Re printed (Heritage, 15
+    ohm), the rest derived from the measured G12H(55) (published_points.yaml G12M): the same
+    cone and frame, so its Sd and moving mass; its BL lowered by the two Heritage sheets'
+    sensitivities (96 against 100 dB at equal Sd, Mms and Re: BL^2 goes as the efficiency);
+    Cms from Fs; Qms the G12H's mean; Le provisional."""
+    pr = _published()[key]["printed"]
+    h = _published()["G12M"]["g12h55_measured"]
+    sd = h["sd_m2"]
+    from varimu.devices import speaker as spk
+
+    vas_per_cms = spk.RHO_AIR_KG_M3 * spk.C_AIR_M_S**2 * sd * sd
+    mms_h = float(
+        np.mean(
+            [
+                1 / ((2 * math.pi * fs) ** 2 * (vas / vas_per_cms))
+                for fs, vas in zip(h["fs_hz"], h["vas_m3"], strict=True)
+            ]
+        )
+    )
+    fs_h, re_h, qes_h = (float(np.mean(h[k])) for k in ("fs_hz", "re_ohm", "qes"))
+    bl_h = math.sqrt(2 * math.pi * fs_h * mms_h * re_h / qes_h)
+    bl = bl_h * 10 ** ((pr["sensitivity_db"] - h["sensitivity_db_factory"]) / 20)
+    fs = pr["fs_hz"]
+    return {
+        "re_ohm": pr["re_ohm"],
+        "fs_hz": fs,
+        "mms_kg": mms_h,
+        "cms_m_per_n": 1 / ((2 * math.pi * fs) ** 2 * mms_h),
+        "qms": float(np.mean(h["qms"])),
+        "bl_tm": bl,
+        "sd_m2": sd,
+        "le_h_1khz": 0.9e-3,
+    }
+
+
+def build_g12m() -> dict[str, Any]:
+    """The Marshall 1987's speaker: the Celestion Heritage G12M (15 ohm), its moving system
+    from g12m_thiele_small and its voice coil's eddy-current pair and breakup modes fitted to
+    Celestion's response curve (the mounting isn't stated, so below 150 Hz it weighs a third)
+    and, from 300 Hz up, the G12H(55)'s measured impedance (Celestion publishes none for the
+    G12M; the same voice coil family: data/datasheets/voicecoil_g12h55.provenance.yaml)."""
+    from varimu.devices import speaker_fit
+
+    ts = g12m_thiele_small()
+    resp = speaker_fit.load_curves(DATASHEETS, "celestion_g12m")
+    z = load_csv("voicecoil_g12h55_impedance.csv")
+    # The G12H's measured impedance as a trace in dB (kz 1, z0 0 at their bounds' edge).
+    curves = speaker_fit.Curves(
+        resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1])
+    )
+    fit = speaker_fit.fit(
+        ts,
+        curves,
+        "G12M",
+        visible_max_hz=20000.0,
+        low_hz=150.0,
+        low_weight=0.3,
+        impedance_min_hz=300.0,
+    )
+    s = fit.speaker
+    pub = _published()["G12M"]
+    derived = (
+        "derived (provisional): the Heritage G12H(55) measured by Dickason, Voice Coil Feb 2015 "
+        "(web: https://celestion.com/wp-content/uploads/2019/10/141.pdf): Sd, and Mms from its "
+        "Vas, Fs and Sd (mean of two samples), the same cone and frame taken as the G12M's; BL "
+        "from its Qes, Fs, Mms and Re, lowered by the Heritage sheets' sensitivities (G12M 96, "
+        "G12H 100 dB); Cms from the G12M's printed Fs; Qms the G12H's mean"
+    )
+    return {
+        "name": "G12M",
+        "kind": "speaker",
+        "source": "fit: varimu.devices.speaker_fit on the Celestion Heritage G12M sheet (2006): "
+        "Fs and Re printed (15 ohm), its response curve (digitized: data/datasheets/"
+        f"celestion_g12m.provenance.yaml); the rest {derived}",
+        "voice_coil": {
+            "re_ohm": s.re_ohm,
+            "le_h": s.le_h,
+            "l2_h": s.l2_h,
+            "r2_ohm": s.r2_ohm,
+            "source": f"Re: {pub['source']}; Le, L2 || R2 (eddy-current 'LR-2' model): fit to "
+            "the response and, from 300 Hz, the G12H(55)'s measured impedance (Dickason, Voice "
+            "Coil Feb 2015, Figure 16: data/datasheets/voicecoil_g12h55.provenance.yaml)",
+        },
+        "moving_system": {
+            "mms_kg": s.mms_kg,
+            "cms_m_per_n": s.cms_m_per_n,
+            "rms_ns_per_m": s.rms_ns_per_m,
+            "bl_tm": s.bl_tm,
+            "sd_m2": s.sd_m2,
+            "source": derived,
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": m.mass_kg, "f_hz": m.f_hz, "q": m.q, "area_m2": m.area_m2}
+                for m in sorted(s.modes, key=lambda m: m.f_hz)
+            ],
+            "source": "fit: a modal expansion of the cone's breakup (signed radiating "
+            "shares) to the response on the IEC baffle; modes from 300 Hz up",
+        },
+        "fit_report": fit.report,
+    }
+
+
+def build_celestion_blue() -> dict[str, Any]:
+    """The Vox AC30's speaker: the Celestion G12 Alnico Blue (T530, 15 ohm) as the G12M is
+    built (g12m_thiele_small): Fs and Re printed, the rest from the measured G12H(55) scaled
+    by the printed sensitivities (both 100 dB: the G12H's force factor), the coil fitted to the
+    G12H's measured impedance above 300 Hz, the modes to Celestion's current Blue sheet's
+    response. More provisional than the G12M: the Blue's alnico magnet and cone are its own."""
+    from varimu.devices import speaker_fit
+
+    ts = g12m_thiele_small("CELESTION_BLUE")
+    resp = speaker_fit.load_curves(DATASHEETS, "celestion_blue")
+    z = load_csv("voicecoil_g12h55_impedance.csv")
+    curves = speaker_fit.Curves(
+        resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1])
+    )
+    fit = speaker_fit.fit(
+        ts,
+        curves,
+        "CELESTION_BLUE",
+        visible_max_hz=20000.0,
+        low_hz=150.0,
+        low_weight=0.3,
+        impedance_min_hz=300.0,
+    )
+    s = fit.speaker
+    pub = _published()["CELESTION_BLUE"]
+    derived = (
+        "derived (provisional): the Heritage G12H(55) measured by Dickason, Voice Coil Feb 2015 "
+        "(web: https://celestion.com/wp-content/uploads/2019/10/141.pdf): Sd, and Mms from its "
+        "Vas, Fs and Sd, taken as the Blue's (a 12 in Celestion cone; the Blue's own is "
+        "unmeasured); BL its own, the Blue's printed sensitivity being the G12H's (100 dB); Cms "
+        "from the Blue's printed Fs; Qms the G12H's mean"
+    )
+    return {
+        "name": "CELESTION_BLUE",
+        "kind": "speaker",
+        "source": "fit: varimu.devices.speaker_fit on the Celestion Alnico Blue sheet (current): "
+        "Fs and Re printed (15 ohm), its response curve (digitized: data/datasheets/"
+        f"celestion_blue.provenance.yaml); the rest {derived}",
+        "voice_coil": {
+            "re_ohm": s.re_ohm,
+            "le_h": s.le_h,
+            "l2_h": s.l2_h,
+            "r2_ohm": s.r2_ohm,
+            "source": f"Re: {pub['source']}; Le, L2 || R2: fit to the response and, from 300 "
+            "Hz, the G12H(55)'s measured impedance (data/datasheets/"
+            "voicecoil_g12h55.provenance.yaml; the same 44 mm coil family: provisional)",
+        },
+        "moving_system": {
+            "mms_kg": s.mms_kg,
+            "cms_m_per_n": s.cms_m_per_n,
+            "rms_ns_per_m": s.rms_ns_per_m,
+            "bl_tm": s.bl_tm,
+            "sd_m2": s.sd_m2,
+            "source": derived,
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": m.mass_kg, "f_hz": m.f_hz, "q": m.q, "area_m2": m.area_m2}
+                for m in sorted(s.modes, key=lambda m: m.f_hz)
+            ],
+            "source": "fit: a modal expansion of the cone's breakup (signed radiating "
+            "shares) to the response; modes from 300 Hz up",
         },
         "fit_report": fit.report,
     }
@@ -2360,6 +2705,148 @@ def build_2n3707() -> dict[str, Any]:
         "VAR 100, IKR 1.5810, ISC 803.76f, NC 1.5928, RB 9.7439, RC 30, CJE 11.658p, CJC "
         "5.3208p, VJC .42236, MJC .29245)",
     )
+
+
+def build_2sc1815() -> dict[str, Any]:
+    """The 2SC1815-BL (the TS808's input and output buffers, Q101 / Q103): Kaz-electro's
+    measured BL card (data/schematics/ibanez_ts808/README.md 'Q101, Q103')."""
+    return _bjt_from_numbers(
+        "2SC1815",
+        "npn",
+        {
+            "IS": 30.011e-15,
+            "BF": 454.489,
+            "NF": 0.99721,
+            "VAF": 147.783,
+            "IKF": 0.229,
+            "ISE": 100.006e-15,
+            "NE": 1.6551,
+            "BR": 6.004,
+            "VAR": 60.0,
+            "IKR": 0.056,
+            "ISC": 8.417e-12,
+            "NC": 1.6,
+            "RE": 0.523,
+            "RB": 44.0,
+            "RC": 0.279,
+            "CJE": 12.036e-12,
+            "CJC": 5.456e-12,
+            "VJC": 0.395,
+            "MJC": 0.277,
+        },  # fmt: skip
+        "Kaz-electro's 2SC1815-BL card, measured on Toshiba parts (2022, a pulse-mode "
+        "analyzer, Micro-Cap extraction; no Toshiba card exists); hFE ~ 406 at 0.39 mA in the "
+        "DC subset, inside BL's 350-700 (Central Semiconductor's 2SC1815 sheet, data/schematics/"
+        "ibanez_ts808/central_2sc1815_datasheet_r1_2018.pdf). Its RBM / IRB, TF and XTB aren't "
+        "in the model",
+        "web: https://kaz-electro.jp/lab/2sc1815-spice/ (2SC1815-BL: IS 30.011f, BF 454.489, NF "
+        "0.99721, VAF 147.783, IKF 0.229, ISE 100.006f, NE 1.6551, BR 6.004, VAR 60, IKR 0.056, "
+        "ISC 8.417p, NC 1.6, RE 0.523, RB 44, RC 0.279, CJE 12.036p, CJC 5.456p, VJC 0.395, MJC "
+        "0.277; numbers cited, the card itself not redistributed)",
+    )
+
+
+def build_ac128() -> dict[str, Any]:
+    """The AC128 (the Fuzz Face's Q1 / Q2, germanium PNP): Holmes, Holters and van Walstijn's
+    card extracted from one measured vintage AC128 (DAFx-17; data/schematics/fuzz_face/
+    README.md). That one device is leaky (~350 uA open-base at 9 V) against Keen's ~100 uA
+    'common'; its VBE matches Valvo's sheet (106 / 173 mV at 1 / 10 mA in the DC subset)."""
+    return _bjt_from_numbers(
+        "AC128",
+        "pnp",
+        {
+            "IS": 20.66e-6,
+            "BF": 229.6,
+            "BR": 14.66,
+            "NF": 1.133,
+            "NR": 1.140,
+            "VAF": 19.68,
+            "VAR": 88.28,
+            "IKF": 463.0e-3,
+            "IKR": 241.5e-3,
+            "ISE": 2.190e-6,
+            "NE": 1.796,
+            "ISC": 7.546e-6,
+            "NC": 1.364,
+            "RB": 1.885,
+            "RE": 306.4e-3,
+            "RC": 1.727e-6,
+            "CJC": 100.0e-12,
+            "VJC": 0.75,
+            "MJC": 0.0,
+        },  # fmt: skip
+        "B. Holmes, M. Holters, M. van Walstijn, 'Comparison of germanium bipolar junction "
+        "transistor models for real-time circuit simulation', DAFx-17, Table 1 (one measured "
+        "vintage AC128 at ~23 C: its VT 25.5 mV), via G. Whitehead's MIT-licensed germaniumbjts "
+        "library (data/schematics/fuzz_face/whitehead_germaniumbjts.lib); its constant CCB "
+        "100p as CJC (MJC 0); no CJE given",
+        "web: https://github.com/gwhitehead/germaniumbjts (.MODEL AC128 PNP: IS 20.66u, BF "
+        "229.6, BR 14.66, NF 1.133, NR 1.140, VAF 19.68, VAR 88.28, IKF 463.0m, IKR 241.5m, ISE "
+        "2.190u, ISC 7.546u, NE 1.796, NC 1.364, RB 1.885, RE 306.4m, RC 1.727u, CCB 100p)",
+    )
+
+
+# A Fuzz Face's selected pair (data/schematics/fuzz_face/README.md "Transistor gains"):
+# ElectroSmash's and Keen's targets, Q1 hFE ~80 and Q2 ~120 at their operating currents
+# (Q1: (9 - 0.6) V over 33K; Q2: about 4.5 V over 8.2K + 470), open-base leakage ~100 uA at
+# 9 V (Keen: "100uA is common").
+AC128_SELECTIONS = {
+    "AC128_80": {"hfe": 80.0, "ic_a": 0.25e-3, "iceo_a": 100e-6},
+    "AC128_120": {"hfe": 120.0, "ic_a": 0.52e-3, "iceo_a": 100e-6},
+}
+
+
+def build_ac128_selected(name: str) -> dict[str, Any]:
+    """An AC128 as a Fuzz Face builder selects it: the measured card (build_ac128) with IS
+    and ISC scaled together for the position's leakage and ISE for its hFE
+    (AC128_SELECTIONS): germanium's leakage is the base-collector junction's reverse current
+    times the gain (a less leaky device has a higher VBE at the same current, as the scaled
+    IS gives), and its gain at a Fuzz Face's sub-mA currents is set by the base-emitter
+    recombination current ISE, not BF (the card's BF stays). At the model's TNOM."""
+    from scipy.optimize import brentq, fsolve
+
+    base = build_ac128()
+    t = AC128_SELECTIONS[name]
+
+    def device(k_is: float, k_ise: float):
+        d = copy.deepcopy(base)
+        dc = d["dc"]
+        dc["is_a"] *= k_is
+        dc["isc_a"] *= k_is
+        dc["ise_a"] *= k_ise
+        return d, bjt_from_data(d, name)
+
+    def hfe(m) -> float:
+        # PNP: VCE -4.5 V, the base driven until Ic is the target.
+        vbe = brentq(lambda v: -m.currents(-4.5, v)[0] - t["ic_a"], -0.6, 0.0)
+        ic, ib = m.currents(-4.5, vbe)
+        return float(ic / ib)
+
+    def iceo(m) -> float:
+        vbe = brentq(lambda v: m.currents(-9.0, v)[1], -0.6, 0.2)
+        return float(-m.currents(-9.0, vbe)[0])
+
+    def resid(x):
+        _, m = device(math.exp(x[0]), math.exp(x[1]))
+        return [math.log(hfe(m) / t["hfe"]), math.log(iceo(m) / t["iceo_a"])]
+
+    x = fsolve(resid, [-1.0, -1.0], xtol=1e-12)
+    d, m = device(math.exp(x[0]), math.exp(x[1]))
+    d["name"] = name
+    d["source"] = (
+        f"an AC128 selected for a Fuzz Face (hFE {t['hfe']:g} at {1e3 * t['ic_a']:g} mA, VCE "
+        f"-4.5 V; open-base leakage {1e6 * t['iceo_a']:g} uA at -9 V: ElectroSmash's and "
+        "Keen's selection targets, data/schematics/fuzz_face/README.md): the measured card "
+        f"(AC128: {base['source'].split(' (')[0]}) with IS, ISC x {math.exp(x[0]):.4f} and "
+        f"ISE x {math.exp(x[1]):.4f}"
+    )
+    d["dc"]["source"] = (
+        base["dc"]["source"]
+        + f"; selected: IS, ISC x {math.exp(x[0]):.4f}, ISE x {math.exp(x[1]):.4f}"
+    )
+    vbe_1ma = brentq(lambda v: -m.currents(-4.5, v)[0] - 1e-3, -0.6, 0.0)
+    d["selection"] = {"hfe": hfe(m), "iceo_a": iceo(m), "vbe_at_1ma_v": float(vbe_1ma)}
+    return d
 
 
 def build_2n3053() -> dict[str, Any]:
@@ -3759,8 +4246,13 @@ BUILDERS = {
     "6AL5": build_6al5,
     "12AY7": build_12ay7,
     "6V6GT": build_6v6gt,
+    "EL34": build_el34,
+    "EL84": build_el84,
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
+    "G12M": build_g12m,
+    "P8R": build_p8r,
+    "CELESTION_BLUE": build_celestion_blue,
     "BELL_RX": build_bell_rx,
     "ADER_RX": build_ader_rx,
     "PARCHMENT_CONE": build_parchment_cone,
@@ -3776,6 +4268,10 @@ BUILDERS = {
     "BC550C": build_bc550c,
     "BC413C": build_bc413c,
     "BC560C": build_bc560c,
+    "2SC1815": build_2sc1815,
+    "AC128": build_ac128,
+    "AC128_80": lambda: build_ac128_selected("AC128_80"),
+    "AC128_120": lambda: build_ac128_selected("AC128_120"),
     "BC238": build_bc238,
     "2D21": build_2d21,
     "884": build_884,

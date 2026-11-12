@@ -1,0 +1,96 @@
+# Dallas Arbiter Fuzz Face (germanium, c.1966-68), as a circuit file, with the guitar in
+# front of it: two AC128s in the classic two-stage feedback pair on a 9 V battery, negative
+# ground (the battery's + is ground). Built by varimu/circuit/builder.py.
+#
+# Sources (data/schematics/fuzz_face/README.md has their provenance and the choices; no
+# factory drawing survives, so every circuit value is a trace's):
+#   "trace: ES ..."   ElectroSmash's analysis and schematic
+#   "trace: RGK ..."  R. G. Keen, "The Technology of the Fuzz Face" (1998)
+#   "trace: FC ..."   Fuzz Central's germanium trace
+#   "web: <url> ..."  a datasheet or a published measured card
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The guitar: the audio input `in` is the pickup's open-circuit voltage (what a Hi-Z input
+# records), behind the pickup's resistance and inductance, the guitar's VOLUME pot and a
+# cable, because the Fuzz Face's low input impedance loads them (its clean-up with the
+# guitar's volume). The output `out` is the pedal's output jack into an amp's input (1 MEG
+# and a cable).
+
+title: "Dallas Arbiter Fuzz Face (germanium) with a guitar"
+input: in
+probes: [out, pk, gv, b1, c1, e2, c2, tap, vm]
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V; as the amps')"}
+  output_volts_peak: {value: 1.0, source: "provisional: model knowledge (the output tap at -25 dB of Q2's swing, with VOLUME full up)"}
+
+controls:
+  fuzz: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "trace: ES, RGK, FC (FUZZ 1K linear: the wiper toward Q2's emitter, more fuzz)"}
+  volume: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "trace: ES, RGK, FC (VOLUME 500K A)"}
+  guitar_volume: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the guitar's own volume pot, 250K audio: a Stratocaster's)", notes: "the classic Fuzz Face clean-up: rolling it back"}
+
+values:
+  # --- The guitar (provisional: a single-coil Stratocaster) ---------------------------------
+  pickup_r_ohm: {value: 6000.0, source: "provisional: model knowledge (a vintage Stratocaster single coil's DCR, ~5.5-6.5 kOhm)"}
+  pickup_l_h: {value: 2.3, source: "provisional: model knowledge (a vintage Stratocaster single coil's inductance, ~2.2-2.6 H)"}
+  pickup_c_f: {value: 120.0e-12, source: "provisional: model knowledge (a single coil's winding capacitance, ~100-150 pF)"}
+  guitar_pot_ohm: {value: 250.0e+3, source: "provisional: model knowledge (a Stratocaster's 250K audio volume pot)"}
+  audio_taper_mid: {value: 0.1, source: "provisional: model knowledge (~10% of the track at half rotation; as the amps' audio taper)"}
+  guitar_cable_c_f: {value: 300.0e-12, source: "provisional: model knowledge (a 3 m instrument cable at ~100 pF/m)"}
+
+  # --- The Fuzz Face (traces) ------------------------------------------------------------------
+  battery_v: {value: 9.0, source: "trace: ES, RGK, FC (a 9 V battery, no filter capacitor)"}
+  battery_r_ohm: {value: 20.0, source: "provisional: model knowledge (a 1960s carbon-zinc PP3's internal resistance, ~10-35 ohm fresh, rising as it runs down; ES and RGK: it matters, adding to R2's 470: README)"}
+  c1_f: {value: 2.2e-6, source: "trace: ES, RGK, FC (C1 2.2 uF electrolytic)"}
+  r1_ohm: {value: 33.0e+3, source: "trace: ES, RGK, FC (R1 33K, Q1's collector to -9 V)"}
+  r3_ohm: {value: 8200.0, source: "trace: ES, RGK, FC (R3 8.2K, Q2's collector to the output tap)"}
+  r2_ohm: {value: 470.0, source: "trace: ES, FC (R2 470, the tap to -9 V; RGK '330 or 470', 330 the later silicon value per FC)"}
+  r4_ohm: {value: 100.0e+3, source: "trace: ES, RGK, FC (R4 100K, Q2's emitter to Q1's base)"}
+  fuzz_pot_ohm: {value: 1000.0, source: "trace: ES, RGK, FC (FUZZ 1K linear, Q2's emitter to ground)"}
+  c2_f: {value: 20.0e-6, source: "trace: ES, RGK, FC (C2 20 uF from FUZZ's wiper to ground)"}
+  c3_f: {value: 0.01e-6, source: "trace: ES, FC, RGK's drawing (C3 0.01 uF from the tap)"}
+  volume_pot_ohm: {value: 500.0e+3, source: "trace: ES, RGK, FC (VOLUME 500K A)"}
+  q1_bjt: {value: AC128_80@1, source: "trace: ES, RGK (AC128); config/components/ac128_80/1.yaml (the measured AC128 card selected for Q1: hFE 80, 100 uA open-base leakage, ES's and RGK's targets; the card's own device leaks 350 uA and biases Q2's collector at -7.5 V, measured 2026-11-12)"}
+  q2_bjt: {value: AC128_120@1, source: "trace: ES, RGK (AC128); config/components/ac128_120/1.yaml (the measured card selected for Q2: hFE 120, 100 uA leakage)"}
+
+  # --- The load ----------------------------------------------------------------------------------
+  r_amp_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a tube amp's input: 1 MEG to ground)"}
+  cable_c_f: {value: 300.0e-12, source: "provisional: model knowledge (a 3 m instrument cable at ~100 pF/m)"}
+
+devices:
+  QFF1: {device: q1_bjt}
+  QFF2: {device: q2_bjt}
+
+sections:
+  - title: guitar
+    parts:
+      # The pickup: its EMF (`in`) behind its resistance and inductance, its winding
+      # capacitance across; the guitar's volume pot (the pickup on its top, the wiper out),
+      # the cable to the pedal.
+      RPK: {R: [in, pkl], r: pickup_r_ohm}
+      LPK: {L: [pkl, pk], l: pickup_l_h}
+      CPK: {C: [pk, "0"], c: pickup_c_f}
+      RGV: {pot: ["0", gv, pk], r: guitar_pot_ohm, at: guitar_volume, taper_mid: audio_taper_mid}
+      CGC: {C: [gv, "0"], c: guitar_cable_c_f}
+
+  - title: fuzz face
+    parts:
+      # The battery: + to ground, - (vm) through its internal resistance (negative ground).
+      VBAT: {V: ["0", vbat], v: battery_v}
+      RBAT: {R: [vbat, vm], r: battery_r_ohm}
+      C1: {C: [gv, b1], c: c1_f}
+      Q1: {bjt: [c1, b1, "0"], model: QFF1}
+      R1: {R: [c1, vm], r: r1_ohm}
+      Q2: {bjt: [c2, c1, e2], model: QFF2}
+      R3: {R: [c2, tap], r: r3_ohm}
+      R2: {R: [tap, vm], r: r2_ohm}
+      R4: {R: [e2, b1], r: r4_ohm}
+      RFUZZ: {pot: ["0", fw, e2], r: fuzz_pot_ohm, at: fuzz}
+      C2: {C: [fw, "0"], c: c2_f}
+      C3: {C: [tap, vt], c: c3_f}
+      RVOL: {pot: ["0", out, vt], r: volume_pot_ohm, at: volume, taper_mid: audio_taper_mid}
+
+  # The amp this standalone pedal plays into (a rig file replaces it with the amp).
+  - title: amp input load
+    parts:
+      RAMP: {R: [out, "0"], r: r_amp_in_ohm}
+      CCABLE: {C: [out, "0"], c: cable_c_f}

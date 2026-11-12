@@ -750,7 +750,13 @@ impl Stream {
         // nodes held at the whole circuit's DC voltages, laid out as its outputs. An owned
         // node is held through 1 mOhm (a source of its own may already hold it: two in
         // parallel are singular); the currents it gives are the same to that resistance.
-        let loops = (0..n_parts).any(|p| sp.substeps[p] > 1 && !sp.owned(p).is_empty());
+        // So can a single-rate part claiming a node a higher-numbered part has (a speaker's
+        // driver keeping the nodes its readout senses): the order below solves it first.
+        let loops = (0..n_parts).any(|p| sp.substeps[p] > 1 && !sp.owned(p).is_empty())
+            || sp
+                .shared
+                .iter()
+                .any(|s| s.users.iter().any(|&u| u > s.owner));
         let mut held_dc: Vec<Vec<f64>> = Vec::new();
         if loops {
             for p in 0..n_parts {

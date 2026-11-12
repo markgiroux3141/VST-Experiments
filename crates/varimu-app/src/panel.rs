@@ -480,9 +480,17 @@ impl Device {
         !matches!(self.group, Group::Retired | Group::Instruments) && !self.plays_own_oscillator()
     }
 
-    /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`).
+    /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`; or
+    /// with them apart where its partition names them, `<PART> readout`). readouts apart where its partition names them (`<PART> readout`).
     pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
+        let apart: Vec<&str> = self
+            .partition
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|t| t.strip_suffix(" readout"))
+            .collect();
         c.with_live_speaker(self.live_speaker_v)
+            .with_readouts_apart(&apart)
     }
 
     /// The settings it plays at: `s` (its quality's) with its cores.
@@ -576,7 +584,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 33] = [
+pub const DEVICES: [Device; 41] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -645,10 +653,12 @@ pub const DEVICES: [Device; 33] = [
         // blocks at up to 2.3x real time, a backlog of 170 ms at worst (draft-2x,
         // `examples/load_profile.rs`, 2026-10-29); at volume 0.6, 8 ms.
         ahead_s: 0.25,
-        // Hard clipped, it aliases -8 dB re its harmonics at draft-1x, -31 at the draft's
-        // 96 kHz (amp_suite); 0.46x real time there on a guitar take (the user's choice,
-        // 2026-10-29).
-        quality: Quality::Draft2x,
+        // Draft-1x since 2026-11-12 (the user's choice: to play it live; production renders
+        // compare). Through the speaker, aliasing is -29.8 dB re the harmonics at draft-1x,
+        // -34.5 at draft-2x (`tests/live.rs`; on the terminal voltage -7.2 / -24.1, why it
+        // was draft-2x from 2026-10-29). With its back wave apart: 0.44x real time at
+        // draft-1x, 0.78x at draft-2x (COMPONENT_EDITOR_PLAN.md, C3's Play speed).
+        quality: Quality::Draft1x,
         cores: None,
         mod_wheel: None,
         gate: None,
@@ -661,7 +671,14 @@ pub const DEVICES: [Device; 33] = [
         live_speaker_v: None,
         newton: None,
         method: None,
-        partition: None,
+        // The P12R's pressure readout (its back wave's delay line and the cone's modes,
+        // ~60 states) on a thread of its own: it only senses the driver, a sample late
+        // (`Device::live`; COMPONENT_EDITOR_PLAN.md C3's speed). In one solve it took the
+        // amp from 0.48x to 1.61x real time (DK's state update, square in the states).
+        // The power supply on a third (the rails behind the reservoir and filter
+        // capacitors): the amp's thread 23% less busy cranked, -38.9 dB from the one solve
+        // against -39.1 without it (`tests/speaker_readout.rs`).
+        partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
         id: "reactor_filter",
@@ -1845,6 +1862,220 @@ pub const DEVICES: [Device; 33] = [
         method: None,
         partition: None,
     },
+    Device {
+        id: "fender_5e3_mods",
+        label: "Fender Deluxe 5E3 with Mods",
+        short: "5E3 mods",
+        about: "The 5E3 with a bench's mods: VARIAC, RECTIFIER, V1 tube, BIAS, RESERVOIR and             jumpered inputs (scripts/make_fender_5e3_mods.py)",
+        group: Group::Amps,
+        circuit: "fender_5e3_mods",
+        panel: None,
+        ahead_s: 0.25,
+        // As the stock 5E3 (its quality, its split).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
+    Device {
+        id: "marshall_1987",
+        label: "Marshall 1987 Lead 50 W (Plexi)",
+        short: "Plexi",
+        about: "A 1968-70 Marshall 1987 Lead 50 W: two EL34s into a closed 4 x 12 of Celestion             G12Ms (config/circuits/marshall_1987.yaml)",
+        group: Group::Amps,
+        circuit: "marshall_1987",
+        panel: Some(&[
+            "input_jack",
+            "presence",
+            "bass",
+            "middle",
+            "treble",
+            "volume_bright",
+            "volume_normal",
+            "bias_adjust",
+            "mains_v_rms",
+        ]),
+        ahead_s: 0.25,
+        // As the 5E3: draft-1x for live play at a short buffer; prints at production.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        // The supply (with the bias supply) on a thread of its own: its rails sit behind the
+        // reservoir and filter capacitors; the closed box's readout is small (no delay line).
+        partition: Some(&["power supply"]),
+    },
+    Device {
+        id: "fender_5f1",
+        label: "Fender 5F1 Champ",
+        short: "Champ",
+        about: "A late-1950s tweed Champ: one 12AX7, a single-ended 6V6GT, an 8 in speaker             (config/circuits/fender_5f1.yaml)",
+        group: Group::Amps,
+        circuit: "fender_5f1",
+        panel: None,
+        ahead_s: 0.25,
+        // As the 5E3: draft-1x for live play, its speaker's back wave and its supply on
+        // threads of their own (an open back: the readout's delay line).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
+    Device {
+        id: "vox_ac30",
+        label: "Vox AC30/6 Top Boost",
+        short: "AC30",
+        about: "A 1963-64 Vox AC30/6 with Top Boost: four EL84s, no feedback, into two Celestion             Alnico Blues (config/circuits/vox_ac30.yaml)",
+        group: Group::Amps,
+        circuit: "vox_ac30",
+        panel: None,
+        ahead_s: 0.25,
+        // As the 5E3: draft-1x for live play, its speaker's back wave and its supply on
+        // threads of their own (an open back: the readout's delay line).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
+    Device {
+        id: "ibanez_ts808_fender_5e3",
+        label: "Tube Screamer into the 5E3",
+        short: "TS808 > 5E3",
+        about: "An Ibanez TS808 Tube Screamer into the Fender 5E3 Deluxe, one netlist (scripts/make_pedal_rig.py)",
+        group: Group::Amps,
+        circuit: "ibanez_ts808_fender_5e3",
+        panel: None,
+        ahead_s: 0.25,
+        // As its amp (its quality and split); the pedal in the amp's solve.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
+    Device {
+        id: "ibanez_ts808_marshall_1987",
+        label: "Tube Screamer into the Plexi",
+        short: "TS808 > Plexi",
+        about: "An Ibanez TS808 Tube Screamer into the Marshall 1987 Lead 50 W, one netlist",
+        group: Group::Amps,
+        circuit: "ibanez_ts808_marshall_1987",
+        panel: None,
+        ahead_s: 0.25,
+        // As its amp (its quality and split); the pedal in the amp's solve.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["power supply"]),
+    },
+    Device {
+        id: "fuzz_face_marshall_1987",
+        label: "Fuzz Face into the Plexi",
+        short: "Fuzz > Plexi",
+        about: "A germanium Fuzz Face (and the guitar's pickup and volume) into the Marshall 1987, one netlist",
+        group: Group::Amps,
+        circuit: "fuzz_face_marshall_1987",
+        panel: None,
+        ahead_s: 0.25,
+        // As its amp (its quality and split); the pedal in the amp's solve.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["power supply"]),
+    },
+    Device {
+        id: "fuzz_face_fender_5e3",
+        label: "Fuzz Face into the 5E3",
+        short: "Fuzz > 5E3",
+        about: "A germanium Fuzz Face (and the guitar's pickup and volume) into the Fender 5E3, one netlist",
+        group: Group::Amps,
+        circuit: "fuzz_face_fender_5e3",
+        panel: None,
+        ahead_s: 0.25,
+        // As its amp (its quality and split); the pedal in the amp's solve.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&["SPK readout", "|", "power supply"]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2630,7 +2861,21 @@ mod tests {
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
                 (Group::Eq, vec!["pultec_eqp1a"]),
-                (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
+                (
+                    Group::Amps,
+                    vec![
+                        "fender_5e3",
+                        "telefunken_v76",
+                        "fender_5e3_mods",
+                        "marshall_1987",
+                        "fender_5f1",
+                        "vox_ac30",
+                        "ibanez_ts808_fender_5e3",
+                        "ibanez_ts808_marshall_1987",
+                        "fuzz_face_marshall_1987",
+                        "fuzz_face_fender_5e3"
+                    ]
+                ),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
                 (Group::Modulation, vec!["univibe"]),
                 (

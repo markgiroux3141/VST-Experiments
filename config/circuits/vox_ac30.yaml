@@ -1,0 +1,274 @@
+# Vox AC30/6 with Top Boost (1963-64, the copper-panel era), as a circuit file: the Brilliant
+# channel's ECC83 into the Top Boost unit (gain stage, cathode follower, the Treble / Bass
+# network), the mixer, the long-tailed inverter without feedback, CUT, four EL84s in push-pull
+# parallel on one shared cathode resistor, a GZ34 and a choke, into two Celestion Alnico Blues
+# in an open-back cabinet. Built by varimu/circuit/builder.py.
+#
+# Sources (data/schematics/vox_ac30/README.md has their provenance and the choices):
+#   "sch: N64 ..."    JMI drawing OS/065 (AC30/6 Normal), modifications to issue 4, Sep 1964
+#   "sch: TB65 ..."   JMI drawing OS/010 (the Top Boost unit), issue 3, Feb 1965
+#   "sch: A61 ..."    the c.1961-62 issue of OS/065 (cross-check)
+#   "web: <url> ..."  a replacement part's or a datasheet's figure
+#   "derived: ..."    arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# Not modeled: the Vib-Trem channel (its volume at zero: its 0.047 to V2's second grid goes to
+# ground), the heaters, the mains selector (on its 245 V tap for 240 V mains), the fuse. The
+# output (`out`) is the sound pressure 1 m in front of the cabinet: the two 15 ohm Blues in
+# parallel on the 8 ohm tap reflect the load of one Blue on the 15 ohm tap, so one equivalent
+# driver on that tap (the pair together give about 3 dB more on axis at low frequencies).
+#
+# Open (2026-11-12): cranked, the plates fly back to 1.8-2.2 kV in the speaker's resonance
+# band (the Blue's fitted impedance peaks at 262 ohm, its Qms the measured G12H's; no
+# feedback holds the output). A real EL84 would arc first; the pressure at the listener is
+# unaffected (58 Pa peak at VOLUME 0.5 and 1).
+
+title: "Vox AC30/6 Top Boost"
+input: in
+probes: [out, spk, g1b, g1n, k1, p1b, p1n, vtb, gtb, ktb, ptb, kcf, tw, tx, ty, tz, mix, g2a, kt2, kj2, pa2, pb2, ga, gb, ka, pa, pb, b1, b2, b4, bpi, btb, hva, hvb]
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V; as the 5E3)"}
+  output_pascals_peak: {value: 80.0, source: "derived: the pressure's peak, 58.2 / 58.3 Pa at the Brilliant VOLUME 0.5 / 1.0 (production render 2026-11-12: 4 s of the dry guitar take at Play's -11.5 dBFS into the Brilliant input), rounded up for headroom"}
+
+controls:
+  input_jack: {value: 1, choices: [1, 2], unit: position, source: "sch: N64 (two jacks per channel)", notes: "1 Brilliant (through the Top Boost), 2 Normal"}
+  treble: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: TB65 (TREBLE, 1M LOG)"}
+  bass: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: TB65 (BASS, 1M LOG)"}
+  volume_brilliant: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: N64 (VR2, the Brilliant volume, 500K LOG)"}
+  volume_normal: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: N64 (VR1, the Normal volume, 500K LOG)"}
+  cut: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "sch: N64 (CUT, VR3 250K LOG as a rheostat with .0047 between the EL84 grid lines)", notes: "up: less resistance, more treble cut"}
+  mains_v_rms: {value: 240.0, min: 220.0, max: 250.0, unit: V, source: "provisional: model knowledge (UK mains on the selector's 245 V tap)"}
+  mains_hz: {value: 50.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (UK mains)"}
+
+values:
+  # --- Inputs and V1, ECC83 (sch: N64) ------------------------------------------------------
+  r_grid_stop_ohm: {value: 68.0e+3, source: "sch: N64 (68K per jack to the grid)"}
+  r_grid_leak1_ohm: {value: 1.0e+6, source: "sch: N64 (R3, R14 1M to ground)"}
+  r_cathode1_ohm: {value: 1500, source: "sch: N64 (R4 1.5K, one cathode for both triodes)"}
+  c_cathode1_f: {value: 25.0e-6, source: "sch: N64 (C1 25 uF)"}
+  r_plate1_ohm: {value: 220.0e+3, source: "sch: N64 (R5, R6 220K)"}
+  c_couple_b_f: {value: 500.0e-12, source: "sch: N64 (C3 500 pF to VR2; R74 across it deleted, MOD 14-6-63, and on fitting the Top Boost, TB65)"}
+  c_couple_n_f: {value: 0.047e-6, source: "sch: N64 (C2 .047 to VR1)"}
+  volume_pot_ohm: {value: 500.0e+3, source: "sch: N64 (VR1, VR2 500K LOG)"}
+  log_taper_mid: {value: 0.1, source: "sch: N64 prints LOG; ~10% of the track at half rotation: provisional: model knowledge (as the 5E3's audio taper)"}
+  c_bright_f: {value: 100.0e-12, source: "sch: TB65 ('ADD 100pF' across VR2, top to wiper)"}
+
+  # --- Top Boost unit, ECC83 (sch: TB65) ------------------------------------------------------
+  r_tb_plate_ohm: {value: 100.0e+3, source: "sch: TB65 (100K)"}
+  r_tb_cathode_ohm: {value: 1500, source: "sch: TB65 (1.5K)"}
+  c_tb_cathode_f: {value: 25.0e-6, source: "sch: TB65 (25 uF 25 V; OS/013 1969 and later drawings omit it: README)"}
+  r_cf_ohm: {value: 56.0e+3, source: "sch: TB65 (the cathode follower's 56K to ground)"}
+  r_tb_supply_ohm: {value: 10.0e+3, source: "sch: TB65 (10K from the 320 V rail)"}
+  c_tb_supply_f: {value: 32.0e-6, source: "sch: TB65 (32 uF at the unit's node)"}
+  c_tb_treble_f: {value: 50.0e-12, source: "sch: TB65 (50 pF from the follower's cathode to the treble pot)"}
+  tone_pot_ohm: {value: 1.0e+6, source: "sch: TB65 (TREBLE, BASS 1M LOG)"}
+  c_tb_series_f: {value: 0.022e-6, source: "sch: TB65 (.022, .022 after the treble pot)"}
+  r_tb_mid_ohm: {value: 100.0e+3, source: "sch: TB65 (100K from the caps' junction to the follower's cathode)"}
+  r_tb_low_ohm: {value: 10.0e+3, source: "sch: TB65 (10K from the second cap to ground)"}
+
+  # --- Mixer and inverter V2, ECC83 (sch: N64) -------------------------------------------------
+  r_mix_ohm: {value: 220.0e+3, source: "sch: N64, TB65 (R7, R9 220K)"}
+  c_pi_in_f: {value: 0.047e-6, source: "sch: N64 (C5, C7 .047)"}
+  r_pi_grid_ohm: {value: 1.0e+6, source: "sch: N64 (R8, R17 1M to the tail junction)"}
+  r_pi_cathode_ohm: {value: 1200, source: "sch: N64 (R16 1.2K)"}
+  r_pi_tail_ohm: {value: 47.0e+3, source: "sch: N64 (R15 47K)"}
+  r_pi_plate_ohm: {value: 100.0e+3, source: "sch: N64 (R18, R19 100K)"}
+
+  # --- Couplings, CUT, EL84s (sch: N64) ---------------------------------------------------------
+  c_pi_out_f: {value: 0.15e-6, source: "sch: N64 (C6, C9 .15)"}
+  r_grid_leak4_ohm: {value: 220.0e+3, source: "sch: N64 (R20, R21 220K per grid line)"}
+  r_grid_stop4_ohm: {value: 1500, source: "sch: N64 (1.5K per EL84)"}
+  cut_pot_ohm: {value: 250.0e+3, source: "sch: N64 (VR3 250K LOG)"}
+  c_cut_f: {value: 0.0047e-6, source: "sch: N64 (C10 .0047)"}
+  r_screen_ohm: {value: 100.0, source: "sch: N64 (100 ohm per screen)"}
+  r_cathode4_ohm: {value: 50.0, source: "sch: N64 (R24 50 ohm, MOD 14-6-63 'was 80 ohm')"}
+  c_cathode4_f: {value: 250.0e-6, source: "sch: N64 (C11 250 uF 25 V)"}
+  power_tube: {value: EL84@1, source: "sch: N64 (V3-V6 EL84); config/components/el84/1.yaml (Koren pentode fitted to Philips' and Mullard's EL84 sheets: data/datasheets/el84.provenance.yaml)"}
+
+  # --- Output transformer (no JMI-era data) ---------------------------------------------------
+  # 4K anode to anode, 15 / 8 ohm taps printed (N64); Hammond's 1750V (a drop-in for the
+  # vintage AC30) as the winding data.
+  ot_r_half_ohm: {value: 70.3, source: "web: https://www.hammfg.com/files/parts/pdf/1750V.pdf (primary DCR 70.37 / 70.30 ohm per half)"}
+  ot_r_sec_ohm: {value: 0.72, source: "web: same sheet (the 16 ohm winding 0.720 ohm)"}
+  ot_sec_per_half: {value: 0.12247, source: "derived: 4K anode to anode : 15 ohm (sch: N64), secondary turns per primary half 2 / sqrt(4000 / 15)"}
+  ot_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"}
+  ot_core_area_m2: {value: 1.18e-3, source: "provisional: model knowledge (an EI96 core, as Tube Amp Doctor's AC30 replacement after the Woden 76853, web: https://www.tubeampdoctor.com/en/output-transformer-for-vox-ac-30; its stack taken as the Marshall's 1 17/32 in)"}
+  ot_core_path_m: {value: 0.19, source: "provisional: model knowledge (an EI96's mean magnetic path)"}
+  ot_turns_half: {value: 550, source: "provisional: model knowledge (a design rule: 1.2 T at 30 W into 4K at 50 Hz in the core's area)"}
+  ot_gap_m: {value: 281.0e-6, source: "derived: gives 1.575 H per primary half (Hammond's 6.30 H anode to anode at 1 kHz, 1 V, same sheet) in the core's linear limit with ot_turns_half"}
+  ot_leakage_h: {value: 1.285e-3, source: "derived: Hammond's 5.14 mH anode to anode with the secondary shorted (same sheet), a quarter per half"}
+  ot_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF; as the 5E3's)"}
+
+  # --- Speakers and cabinet ------------------------------------------------------------------------
+  speaker_model: {value: CELESTION_BLUE@1, source: "config/components/celestion_blue/1.yaml (the Celestion G12 Alnico Blue, 15 ohm, fitted to Celestion's response curve with the G12H(55)'s measured coil: README 'Speakers')"}
+  listen_distance_m: {value: 1.0, source: "provisional: model knowledge (1 m on axis, as the 5E3's)"}
+  cab_width_m: {value: 0.705, source: "provisional: the AC30HW2X reissue's 705 mm (README 'Cabinet', a search summary of its manual)"}
+  cab_height_m: {value: 0.550, source: "provisional: the AC30HW2X reissue's 550 mm (same)"}
+  cab_depth_m: {value: 0.260, source: "provisional: the AC30HW2X reissue's 260 mm (same)"}
+  cab_offset_x_m: {value: 0.0, source: "provisional: model knowledge (the equivalent driver at the baffle's centre between the two)"}
+  cab_offset_y_m: {value: 0.0, source: "provisional: model knowledge (the equivalent driver at the baffle's centre)"}
+
+  # --- Power supply ----------------------------------------------------------------------------------
+  pt_hv_half_rms_v: {value: 285.5, source: "derived: HT 280-0-280 V at 160 mA (sch: N64, MOD 14-6-63) as a no-load voltage by Hammond 290NX's ratio, 295.7 V no load for 290 V rated (web: https://www.hammfg.com/files/parts/pdf/290NX.pdf): 280 x 295.7 / 290"}
+  pt_r_half_ohm: {value: 42.5, source: "derived: Hammond 290NX's HV DCR 68.30 ohm end to end (half 34.15) + its 240 V primary's 5.90 ohm (its sections summed) referred to a half, 5.90 x (285.5 / 240)^2 = 8.35 (same sheet; provisional for the Woden / Haddon original)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a ~150 VA mains transformer; as the 5E3's)"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier_tube: {value: GZ34@1, source: "sch: N64 (V10 GZ34); config/components/gz34/1.yaml"}
+  c_reservoir_f: {value: 16.0e-6, source: "sch: N64 (C39 16 uF 450 V on the GZ34, the OT's centre tap)"}
+  choke_h: {value: 15.0, source: "sch: N64 prints '10-20 HY. 100 MA.' (the middle; EME 1968 '15H 100MA', partly legible): provisional"}
+  choke_r_ohm: {value: 300.0, source: "provisional: model knowledge (between EME 1968's partly legible 150 / 250 ohm and Tube Amp Doctor's 500 ohm replacement, web: https://www.tubeampdoctor.com/en/choke-100-ma-19-h-vox-ac-30: README 'Power supply')"}
+  c_rail_f: {value: 16.0e-6, source: "sch: N64 (C40 16 uF 450 V, the 320 V rail)"}
+  r_drop_ohm: {value: 22.0e+3, source: "sch: N64 (R10 22K to V1's node, R11 22K to V2's)"}
+  c_drop_f: {value: 8.0e-6, source: "sch: N64 (C4, C8 8 uF)"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the B+ nodes (not physical)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 240.0, source: "provisional: model knowledge (the selector's 245 V tap for 240 V mains; the HT's voltages taken at it)"}
+
+devices:
+  V1B: {device: 12AX7@1}
+  V1N: {device: 12AX7@1}
+  VTB: {device: 12AX7@1}
+  VCF: {device: 12AX7@1}
+  V2A: {device: 12AX7@1}
+  V2B: {device: 12AX7@1}
+  V3: {device: power_tube}
+  V4: {device: power_tube}
+  V5: {device: power_tube}
+  V6: {device: power_tube}
+  V10: {device: rectifier_tube}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      # The GZ34 into C39 (b1, the OT's centre tap), the choke to C40 (b2, the 320 V rail),
+      # 22K to V1's node (b4, 290 V), 22K to V2's (bpi), the Top Boost's 10K to its own (btb).
+      XV10A: {device: [hva, b1], model: V10}
+      XV10B: {device: [hvb, b1], model: V10}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RLEAK: {R: [b1, "0"], r: numerical_leak_ohm}
+      LCH: {L: [b1, chk], l: choke_h}
+      RCH: {R: [chk, b2], r: choke_r_ohm}
+      CB2: {C: [b2, "0"], c: c_rail_f}
+      RD10: {R: [b2, b4], r: r_drop_ohm}
+      CB4: {C: [b4, "0"], c: c_drop_f}
+      RD11: {R: [b2, bpi], r: r_drop_ohm}
+      CBPI: {C: [bpi, "0"], c: c_drop_f}
+      RDTB: {R: [b2, btb], r: r_tb_supply_ohm}
+      CBTB: {C: [btb, "0"], c: c_tb_supply_f}
+
+  - title: inputs and v1
+    parts:
+      # The plugged jack's 68K to its triode's grid, 1M from the grid to ground; the other
+      # channel's grid on its 1M alone.
+      SIN:
+        switch: input_jack
+        parts:
+          RINB: {R: [in, g1b], r: r_grid_stop_ohm, in: [1]}
+          RINN: {R: [in, g1n], r: r_grid_stop_ohm, in: [2]}
+      RGLB: {R: [g1b, "0"], r: r_grid_leak1_ohm}
+      RGLN: {R: [g1n, "0"], r: r_grid_leak1_ohm}
+      XV1B: {device: [p1b, g1b, k1], model: V1B}
+      XV1N: {device: [p1n, g1n, k1], model: V1N}
+      RK1: {R: [k1, "0"], r: r_cathode1_ohm}
+      CK1: {C: [k1, "0"], c: c_cathode1_f}
+      RPLB: {R: [b4, p1b], r: r_plate1_ohm}
+      RPLN: {R: [b4, p1n], r: r_plate1_ohm}
+      # Brilliant: 500 pF to VR2's top, the 100 pF across VR2, its wiper to the Top Boost.
+      CCB: {C: [p1b, vtb], c: c_couple_b_f}
+      RVOLB: {pot: ["0", gtb, vtb], r: volume_pot_ohm, at: volume_brilliant, taper_mid: log_taper_mid}
+      CBRT: {C: [vtb, gtb], c: c_bright_f}
+      # Normal: .047 to VR1's top, its wiper through R7 to the mixer.
+      CCN: {C: [p1n, vtn], c: c_couple_n_f}
+      RVOLN: {pot: ["0", vn, vtn], r: volume_pot_ohm, at: volume_normal, taper_mid: log_taper_mid}
+      RMXN: {R: [vn, mix], r: r_mix_ohm}
+
+  - title: top boost
+    parts:
+      XVTB: {device: [ptb, gtb, ktb], model: VTB}
+      RPTB_L: {R: [btb, ptb], r: r_tb_plate_ohm}
+      RKTB: {R: [ktb, "0"], r: r_tb_cathode_ohm}
+      CKTB: {C: [ktb, "0"], c: c_tb_cathode_f}
+      XVCF: {device: [btb, ptb, kcf], model: VCF}
+      RKCF: {R: [kcf, "0"], r: r_cf_ohm}
+      # The tone network (TB65): kcf -> 50 pF -> the treble pot's top tt; its bottom tx;
+      # tx -> .022 -> ty -> .022 -> tz; ty -> 100K -> kcf; tz -> 10K -> ground; the bass pot
+      # from tx to ground, its wiper on tz (up: the wiper toward ground, more bass: measured
+      # 2026-11-12); the treble wiper tw through R9 to the mixer.
+      CTT: {C: [kcf, tt], c: c_tb_treble_f}
+      RTR: {pot: [tx, tw, tt], r: tone_pot_ohm, at: treble, taper_mid: log_taper_mid}
+      CXY: {C: [tx, ty], c: c_tb_series_f}
+      CYZ: {C: [ty, tz], c: c_tb_series_f}
+      RYK: {R: [ty, kcf], r: r_tb_mid_ohm}
+      RZ: {R: [tz, "0"], r: r_tb_low_ohm}
+      RBS: {pot: [tx, tz, "0"], r: tone_pot_ohm, at: bass, taper_mid: log_taper_mid}
+      RMXB: {R: [tw, mix], r: r_mix_ohm}
+
+  - title: inverter
+    parts:
+      CPI: {C: [mix, g2a], c: c_pi_in_f}
+      # The idle Vib-Trem channel: its volume at zero, C7 from the second grid to ground.
+      CPI2: {C: [g2b, "0"], c: c_pi_in_f}
+      XV2A: {device: [pa2, g2a, kt2], model: V2A}
+      XV2B: {device: [pb2, g2b, kt2], model: V2B}
+      RPK2: {R: [kt2, kj2], r: r_pi_cathode_ohm}
+      RTL2: {R: [kj2, "0"], r: r_pi_tail_ohm}
+      RGA2: {R: [g2a, kj2], r: r_pi_grid_ohm}
+      RGB2: {R: [g2b, kj2], r: r_pi_grid_ohm}
+      RPA2: {R: [bpi, pa2], r: r_pi_plate_ohm}
+      RPB2: {R: [bpi, pb2], r: r_pi_plate_ohm}
+      COA: {C: [pa2, ga], c: c_pi_out_f}
+      COB: {C: [pb2, gb], c: c_pi_out_f}
+      RGLA: {R: [ga, "0"], r: r_grid_leak4_ohm}
+      RGLB4: {R: [gb, "0"], r: r_grid_leak4_ohm}
+      # CUT: VR3 as a rheostat (reverse: up is less resistance, more cut) and .0047 between
+      # the grid lines.
+      RCUT: {rheostat: [ga, gc], r: cut_pot_ohm, at: cut, taper_mid: log_taper_mid, reverse: 1}
+      CCUT: {C: [gc, gb], c: c_cut_f}
+
+  - title: output
+    parts:
+      # Four EL84s: V3 / V5 on ga's line and anode end pa, V4 / V6 on gb's and pb; each with
+      # a 1.5K grid stopper and a 100 ohm screen resistor; all cathodes and g3 on 50 ohm /
+      # 250 uF (sch: N64).
+      RGS3: {R: [ga, g3], r: r_grid_stop4_ohm}
+      RGS5: {R: [ga, g5], r: r_grid_stop4_ohm}
+      RGS4: {R: [gb, g4], r: r_grid_stop4_ohm}
+      RGS6: {R: [gb, g6], r: r_grid_stop4_ohm}
+      RSC3: {R: [b2, s3], r: r_screen_ohm}
+      RSC5: {R: [b2, s5], r: r_screen_ohm}
+      RSC4: {R: [b2, s4], r: r_screen_ohm}
+      RSC6: {R: [b2, s6], r: r_screen_ohm}
+      XV3: {device: [pa, s3, g3, ka], model: V3}
+      XV5: {device: [pa, s5, g5, ka], model: V5}
+      XV4: {device: [pb, s4, g4, ka], model: V4}
+      XV6: {device: [pb, s6, g6, ka], model: V6}
+      RKA: {R: [ka, "0"], r: r_cathode4_ohm}
+      CKA: {C: [ka, "0"], c: c_cathode4_f}
+      T1:
+        transformer:
+          pa: {nodes: [pa, b1], r: ot_r_half_ohm, c: ot_c_half_f}
+          pb: {nodes: [b1, pb], r: ot_r_half_ohm, c: ot_c_half_f}
+          s: {nodes: [spk, "0"], ratio: ot_sec_per_half, r: ot_r_sec_ohm}
+        core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
+        turns: ot_turns_half
+        leakage_h: ot_leakage_h
+      SPK:
+        speaker: [spk, "0", out]
+        component: speaker_model
+        distance_m: listen_distance_m
+        width_m: cab_width_m
+        height_m: cab_height_m
+        depth_m: cab_depth_m
+        offset_x_m: cab_offset_x_m
+        offset_y_m: cab_offset_y_m

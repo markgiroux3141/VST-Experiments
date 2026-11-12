@@ -1,0 +1,21 @@
+device: P8R
+document: "Jensen P8R (reissue) product page and specification sheet, 4 ohm"
+publisher: Jensen Loudspeakers (SICA)
+date: 2026-11-12 (retrieved)
+local_copy: ../schematics/fender_5f1/jensen_p8r_curves.json
+local_copy_sha256: 937bf48bc21bc0100c069d3ab1f3ff38d22811e2c4e8b2d9ba7df0e2b358c228
+scan_source: "web: https://www.jensentone.com/vintage-alnico/p8r (the page's chart data, 'Frequency Response on IEC Baffle (DIN45575) @ 1W, 1 m - Free Air Impedance'); the Thiele-Small table: web: https://www.jensentone.com/specification-sheet/44 (../schematics/fender_5f1/jensen_p8r_spec_sheet.html)"
+digitized_with: "none needed: the chart's series are numbers on the page (Plotly x / y arrays), copied verbatim; scripts/extract_jensen_p8r.py writes them as CSVs"
+digitized_by: Claude Code
+digitized_on: 2026-11-12
+files:
+  jensen_p8r_response.csv:
+    figure: "'Sound Pressure - 4 ohm': SPL on the IEC baffle at 1 W (2 V into 4 ohm), 1 m"
+    columns: "f_hz, spl_db"
+    coverage: "20 Hz to 20 kHz, 121 points"
+  jensen_p8r_impedance.csv:
+    figure: "'Impedance - 4 ohm': free-air impedance, ohm axis (log)"
+    columns: "f_hz, trace_db (20 log10 of the ohm values: the fit's trace form with kz 1, z0 0)"
+    coverage: "20 Hz to 20 kHz, 121 points"
+estimated_error: "the page's own numbers (as exact as the chart Jensen published); their measurement's error is not stated"
+notes: "The Fender 5F1 Champ's speaker stand-in (data/schematics/fender_5f1/README.md 'Speaker'): a reissue P8R for a 1958 P8T / Oxford 8EV"
