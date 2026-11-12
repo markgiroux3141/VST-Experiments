@@ -1,0 +1,116 @@
+device: G12M
+document: >-
+  Three Celestion sheets, one curve each: (a) "Heritage SERIES G12M" (Guitar Loudspeakers),
+  the recreated 1960s 20 W G12M, 8 and 15 ohm; (b) "G12M GREENBACK" (Guitar Loudspeakers),
+  the 25 W production G12M-25, 8 and 16 ohm; (c) "Guitar Speakers G12M Greenback, 12-inch rock
+  guitar speaker", Celestion's current web sheet of the same 25 W speaker
+publisher: Celestion International Ltd (Claydon Business Park, Great Blakenham, Ipswich)
+date: >-
+  No date printed on any sheet. PDF metadata: (a) created 2006-02-09 (Acrobat Distiller 6.0.1
+  for Macintosh); (b) created 2006-05-05 (Acrobat Distiller 7.0 for Macintosh); (c) generated
+  on request by celestion.com (TCPDF 6.4.4), downloaded copy dated 2026-11-12 in its metadata
+local_copy:
+  heritage_2006: ../schematics/marshall_1987/celestion_heritage_g12m_2006.pdf
+  g12m25_2006: ../schematics/marshall_1987/celestion_g12m_greenback_25w_2006.pdf
+  g12m25_current: ../schematics/marshall_1987/celestion_g12m_greenback_current.pdf
+local_copy_sha256:
+  heritage_2006: 0eddf4161750c24b762777da21797e9354d2dd53edefdf50a9df1df7ced73f12
+  g12m25_2006: 9d9c6f97e3ba38424e2cbd282db2ba5d4ac59fa341097df8761f533181651b1e
+  g12m25_current: ef746bedc84763b7c3869152eb1709d5327538ed6caf8f1d2135d851a01409aa
+scan_source:
+  heritage_2006: "web: https://c3.zzounds.com/media/G12M-bfc794c27a9aa184c14dd6baa7c0e830.pdf"
+  g12m25_2006: "web: https://im.static-thomann.de/pics/atg/atgdata/document/specs/g12m20greenback.pdf"
+  g12m25_current: "web: https://celestion.com/productpdf.php?id=899"
+digitized_with: >-
+  (a), (b): PyMuPDF on the PDFs' vector paths, as scripts/digitize_jensen_p12r.py does for the
+  P12R: the curve is one red path (stroke RGB 0.93 / 0.111 / 0.141, width 0.9 pt); its vertices
+  are the data, plus, for each cubic Bezier segment, the points at t = 0.25 / 0.5 / 0.75 (sheet
+  (a) is mostly Beziers: 89 curves and 20 lines; sheet (b) 194 lines and 4 curves). Points that
+  run backwards in frequency (a Bezier overshooting at a sharp peak, a stroke doubling back)
+  are dropped (2 per sheet); vertical steps (two points at one frequency) are kept so the dips'
+  bottoms survive. Axes: the drawn grid is not exactly logarithmic (a least-squares log fit of
+  its 28 vertical lines leaves 0.0136 decades, 3 % in frequency; the horizontal lines 0.10 dB),
+  so frequency and level are interpolated piecewise-linearly (log f) between neighbouring grid
+  lines: 20 Hz (frame), 30-90, 100, 200, 300-900, 1k, 2k, 3k-10k, 20 kHz (frame); 110 dB (frame
+  top), 100, 90, 80, 70, 60, 50 dB (frame bottom; only 110 / 90 / 70 are labelled, the spacing
+  is uniform at 21.7 pt per 10 dB). The piecewise and the least-squares mappings differ by at
+  most 0.0136 decades and 0.10 dB.
+  (c): the plot is a raster (image xref 16, 886 x 367 px, an analyser's screenshot), traced with
+  numpy: the 28 grey vertical grid lines (20 Hz-20 kHz, 252.4 px per decade, log fit residual
+  0.0023 decades = 0.6 px) and the 13 horizontal lines (110-50 dB every 5 dB, 5.03 px/dB,
+  residual 0.10 dB) by least squares; per pixel column the curve's position is the
+  redness-weighted centroid (r - (g + b) / 2) of the contiguous red run holding the column's
+  maximum. Scratch scripts, not in the repo (the caller's report has their paths).
+digitized_by: Claude Code
+digitized_on: 2026-11-12
+files:
+  celestion_g12m_response.csv:
+    figure: "sheet (a), Heritage G12M, the plot titled '8Ω FREQUENCY RESPONSE' (SPL (dB) vs FREQUENCY (Hz))"
+    columns: "f_hz, spl_db (dB SPL as plotted; conditions not printed, see measurement_conditions)"
+    coverage: >-
+      19.6 Hz-19.7 kHz, 375 points (the path starts 1 pt left of the 20 Hz frame line, so its
+      first point is extrapolated from the 20-30 Hz interval). Smooth Beziers below ~5 kHz,
+      straight segments between sparse vertices above ~6 kHz (an illustrator's redraw of a
+      measured curve, not the plotting program's own points). 59.7-107.9 dB; peak 107.9 dB at
+      3.2 kHz; mean 97.1 dB over 200 Hz-1 kHz (sensitivity printed: 96 dB)
+  celestion_g12m25_response.csv:
+    figure: "sheet (b), G12M Greenback 25 W (2006), the plot titled '8Ω FREQUENCY RESPONSE'; same grid as (a)"
+    columns: "f_hz, spl_db"
+    coverage: >-
+      20 Hz-20 kHz, 210 points (straight segments, a polyline; above ~7 kHz long segments
+      between sparse vertices). 57.8-108.3 dB; peak 108.3 dB at 2.35 kHz; mean 97.7 dB over
+      200 Hz-1 kHz (sensitivity printed: 98 dB). A different curve from (a), not a copy
+  celestion_g12m25_current_response.csv:
+    figure: >-
+      sheet (c), current G12M Greenback (25 W), the plot titled 'Frequency Response' (label
+      '8' above it: the 8 ohm unit). Its y axis is labelled '(dB) Impedance' by the analyser
+      software, but the curve is the SPL response (50-110 dB, the same shape and level as (b)'s
+      response; no impedance scale is shown)
+    columns: "f_hz, spl_db"
+    coverage: >-
+      20.6 Hz-19.8 kHz, 754 points (one per pixel column). 68.3-106.8 dB; peaks 105.6 dB at
+      2.39 kHz and 106.8 dB at 3.31 kHz with a dip to 100.7 dB at 2.76 kHz; mean 97.8 dB over
+      200 Hz-1 kHz (sensitivity printed: 98 dB). A different measurement from (b): smoother
+      (a measured trace, likely smoothed), 4.5 dB more output at 75 Hz and a deeper bass
+      (-10 dB re the 200 Hz-1 kHz mean at 54 Hz, (b) at 77 Hz, (a) at 61 Hz), so probably a
+      different mounting as well as a different unit
+measurement_conditions: >-
+  None of the three sheets prints the drive, distance or mounting of its response plot. Printed
+  alongside: sensitivity 96 dB (a) / 98 dB (b, c), with no reference; Fs 75 Hz; Re 6.57 / 12.13
+  ohm (a), 6.7 / 13.1 ohm (b, c); frequency range 75-5000 Hz. Celestion's pro-audio pages state
+  their convention, e.g. the TF0615's: "Sensitivity: Measured on axis at 1W, 1m in 2π
+  anechoic environment" (web: https://celestion.com/product/tf0615/), i.e. half-space, an
+  infinite-baffle equivalent; that page is a different product line, so for the G12M sheets
+  this is provisional: model knowledge (1 W into the nominal 8 ohm = 2.83 V, 1 m, on axis,
+  half-space). Supporting it: each curve's 200 Hz-1 kHz mean is within 1.1 dB of its sheet's
+  sensitivity, so the plots are at the sensitivity's drive and distance. The low end of (a) / (b)
+  vs (c) differs by several dB, so the mounting (baffle size, closed box or open) is the least
+  certain condition: a fit should weight the region below ~100 Hz less or take the mounting
+  as free
+axis_calibration: >-
+  (a), (b): piecewise on the drawn grid (28 vertical lines 20 Hz-20 kHz, 7 horizontal 50-110 dB);
+  (c): least squares on 28 vertical and 13 horizontal raster grid lines
+estimated_error: >-
+  (a), (b): digitizing error nil on the vertices (exact path coordinates); the axes'
+  uncertainty is the drawn grid's own irregularity, up to ~0.014 decades (3 % in frequency) and
+  0.1 dB; the curves themselves are redrawings, so their faithfulness to the measurement is
+  the illustrator's (sharp HF notches drawn as straight segments between sparse vertices).
+  (c): +-0.5 px, i.e. +-0.002 decades and +-0.1 dB on smooth stretches; on steep slopes
+  (5.5-7 kHz, the HF notches) the column centroid averages a vertical run, so a notch's bottom
+  can read up to ~1 dB shallow
+checks:
+  - >-
+    Overlays by eye: (a) and (b) the CSV points mapped back through the grid and drawn on a
+    500 dpi render of each page; (c) the traced points on the raster at 3x. The points sit on
+    the printed curves everywhere, including the peaks, dips and the HF segments
+  - "Mid-band level vs printed sensitivity: (a) 97.1 vs 96 dB, (b) 97.7 vs 98 dB, (c) 97.8 vs 98 dB (mean 200 Hz-1 kHz)"
+  - "Grid fits: (a)/(b) log residual 0.0136 decades, 0.102 dB; (c) 0.0023 decades, 0.098 dB"
+impedance: >-
+  No impedance curve on any of the three sheets (and none found elsewhere from Celestion), so
+  no celestion_g12m_impedance.csv. Sheet (c)'s '(dB) Impedance' axis label is a software
+  default, not an impedance curve
+notes: >-
+  The sheets' scalars (Fs, Re, sensitivity, voice coil, magnet, dimensions) and the nearest
+  measured relative (the Heritage G12H(55), Voice Coil Test Bench Feb 2015) are in
+  data/schematics/marshall_1987/README.md, "Speaker: Celestion G12M". No Thiele-Small set
+  (Qms, Qes, Qts, Vas, BL, Mms, Sd, Le, Xmax) for any G12M was found (search 2026-11-12).

@@ -584,7 +584,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 34] = [
+pub const DEVICES: [Device; 35] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1887,6 +1887,43 @@ pub const DEVICES: [Device; 34] = [
         method: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
+    Device {
+        id: "marshall_1987",
+        label: "Marshall 1987 Lead 50 W (Plexi)",
+        short: "Plexi",
+        about: "A 1968-70 Marshall 1987 Lead 50 W: two EL34s into a closed 4 x 12 of Celestion             G12Ms (config/circuits/marshall_1987.yaml)",
+        group: Group::Amps,
+        circuit: "marshall_1987",
+        panel: Some(&[
+            "input_jack",
+            "presence",
+            "bass",
+            "middle",
+            "treble",
+            "volume_bright",
+            "volume_normal",
+            "bias_adjust",
+            "mains_v_rms",
+        ]),
+        ahead_s: 0.25,
+        // As the 5E3: draft-1x for live play at a short buffer; prints at production.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        // The supply (with the bias supply) on a thread of its own: its rails sit behind the
+        // reservoir and filter capacitors; the closed box's readout is small (no delay line).
+        partition: Some(&["power supply"]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2672,7 +2709,7 @@ mod tests {
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
                 (Group::Eq, vec!["pultec_eqp1a"]),
-                (Group::Amps, vec!["fender_5e3", "telefunken_v76", "fender_5e3_mods"]),
+                (Group::Amps, vec!["fender_5e3", "telefunken_v76", "fender_5e3_mods", "marshall_1987"]),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
                 (Group::Modulation, vec!["univibe"]),
                 (
