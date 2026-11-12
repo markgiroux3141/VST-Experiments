@@ -71,9 +71,11 @@ runs**.
   (`bullet_f5e3`, the amplifier as a chain's stage; a mic's `cable: attached`); WP30's Notes.
 - **In progress:** WP13 (RE20), the last two chains. Steps 1-3 done: the `slotted_line` network
   kind, the `variable_d` body and the exact reduction of its N slot entries to one rear entry
-  (WP13's Decision of 2026-11-11: no N-entry room pipeline). **Next: WP13 step 4**, `R_RE20@1` by
-  a new `scripts/fit_re20.py` (WP13's "Next (step 4)" has the start values and the fit's plan),
-  then step 5. Open options
+  (WP13's Decision of 2026-11-11: no N-entry room pipeline). Step 4 started: the provisional
+  "R_RE20" block and `scripts/fit_re20.py` exist, the first fit is poor (3.8 dB rms) and isn't
+  written. **Next: WP13 step 4's "Next, in this order"** (a near rear path for the mid / high
+  cardioid, the slotted line for the low end, a staged fit), then `fit-devices --only R_RE20`
+  (register `build_r_re20` in `varimu/devices/library.py` like `build_r_520`), then step 5. Open options
   inside done WPs: the Helios EQ (the IA-H9's EQUALIZER,
   VTB9043 / VTB9042 as the inductors), a CK12-family refit to the C414 ULS's curves (its sheet's p.2,
   vector paths), the TG's channel past Amplifier D, the U 47 fet's -6 dB switch (S3), the U
@@ -1461,6 +1463,24 @@ the fit); targets the response, the 180 deg trace, the polars at 90 / 180 above 
 1.5 mV/Pa. Then step 5 (the circuit with the bass-tilt network from the wiring diagram, the list's
 entry, re20_api312 / re20_n1073, no proximity rise at 10 cm).
 
+Step 4 started (2026-11-11, second session): `data/datasheets/published_points.yaml` "R_RE20" (the
+start: grille screen -> diaphragm -> `cav` under the dome -> `damp` (the magnet channel's cloth,
+R + M) -> `vd`, a `slotted_line` of 2 tubes, 8 sections over the body's `slot_m` [15, 100] mm,
+-> `term` cavity on `vd_8`; body `variable_d` 24.6 x 216.7 mm) and `scripts/fit_re20.py` (the
+slot bands' BEM factors cached in cache/re20/, the weights applied per step; targets 0_off,
+180_off (weight 0.5), the 90 deg points 250 Hz -4.2 / 1-4 kHz -5.6, 1.5 mV/Pa). **The first run
+is poor and isn't written** (reports/mics/r_re20_fit.{json,png}): 3.8 dB rms on axis, 4.0 at the
+rear; a notch on axis and a rear bump to -8 dB at ~1 kHz (the rear path's phase there is wrong:
+the near slot's internal delay doesn't match its external path), the bass rolls off below 100 Hz
+and rises +4 dB at 300 Hz; the mode at its bounds; 8 min a run (rear_entry_weights' nodal solves
+and the compile per residual call: cache the compile per x, solve the weights' ladder for every
+frequency at once). Next, in this order: (1) a near rear path that makes the mid / high cardioid
+by itself, the Unidyne / MD 421 way: a `seeler` network (or a tube + cavity) from `u` to entry
+1, with the slotted line's mouth behind a larger `damp` so it carries only the low end (Mawby's
+"low frequencies enter far back"); fit 700 Hz-10 kHz first with the slotted line fixed, then the
+whole band; (2) the 1 kHz reference sits in the model's notch, so judge the shape before the
+level; (3) drop the dome mode's area bound to 0.8 if the 6-14 kHz rise still wants it.
+
 ### WP14. The Sennheiser MD 421
 
 A plain pressure-gradient dynamic (one rear entry through its "bass tubes"), so it fits the
@@ -2102,4 +2122,5 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   `cable: attached`; `bullet_f5e3` composed and rendered; 49 of 51.
 - 2026-11-11: WP13 steps 2-3: the RE20's N slot entries reduce exactly to one rear entry (no
   N-entry room pipeline: the Decision revised); the `slotted_line` kind, the `variable_d` body,
-  the weights at the entry tables' call sites; next the fit (step 4).
+  the weights at the entry tables' call sites; step 4 started (`fit_re20.py`; the first fit
+  poor, not written; WP13's notes say what to try next).
