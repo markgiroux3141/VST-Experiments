@@ -189,7 +189,7 @@ What the static fit says on its own:
 
 Plots in `reports/tape/particles/` (`scripts/tape_particle_validate.py`,
 `tape_particle_bench.py`, `tape_particle_no21.py`); tests in `tests/test_tape_particles.py`
-(12, ~30 s).
+(13, ~2 min with the GPU).
 
 **1. One SW particle** (`sw_validation.png`): the switching field against the astroid
 within 0.36% (the grid's early switch, at angles near 90 degrees); the barrier along the
@@ -247,7 +247,14 @@ self-consistently). Widths in dB of bias from each curve's peak:
 dynamic interactions don't widen the bias curve's rise: -10 dB is reached 5.04 dB of bias
 below the peak against the non-interacting 5.20 and the Preisach model's 5.05; at -20 dB
 6.94 against 7.44 and 7.08. No. 21 needs ~2 dB more at -20 dB (9.39). Interactions held
-static (frozen) don't either. Nor do strong ones: at 0.6 of the physical strength (a poor static fit, 4.4 reading errors) -20 dB is 7.05 dB below the peak. Interactions narrow the rise slightly if anything; the bias curve's width in this geometry is set by the switching-field distribution and the head's field profile, as the research's freezing picture says (2.1).
+static (frozen) don't either. Nor do strong ones: at 0.6 of the physical strength (a
+poor static fit, 4.4 reading errors) -20 dB is 7.05 dB below the peak. Interactions narrow
+the rise slightly if anything; the bias curve's width in this geometry is set by the
+switching-field distribution and the head's field profile, as the research's freezing
+picture says (2.1). (The rows aren't like for like in one respect: the Preisach row has the
+coating's perpendicular demagnetization, the particle rows none or the interactions' share
+of it; the moving head below has it in full, and the widths' answer doesn't change there:
+the 1 kHz rise to -20 dB of the `local` run spans no more bias than the Preisach medium's.)
 
 What the particles do differently is the **over-bias fall**: Stoner-Wohlfarth switching in
 the head's rotating field (the astroid: a field at 45 degrees switches at half the field
@@ -269,25 +276,39 @@ head below solves it implicitly.
 an offset per curve (the switching study's protocol, reproduced: the Preisach medium's
 rms 2.25 / 1.74 dB). dB re each curve's peak:
 
-NO21_TABLE
+| model | bias scale (A/m per mA) | rms 1k / 15k (dB) | peaks 1k / 15k (mA) | 1k at 2 / 3 mA | 1k / 15k at 8 mA | 15k - 1k at 5 / 8 mA |
+|---|---|---|---|---|---|---|
+| **No. 21** (#111, Ampex 300) | - | - | 6 / 5 | -20.4 / -11.0 | -3.3 / -7.1 | -6.0 / -10.4 |
+| Preisach medium, demag + image (SCOTCH111@3; the switching study's base) | 6694 | 2.25 / 1.74 | 5.1 / 4.5 | -20.6 / -5.5 | -3.2 / -5.1 | -4.8 / -6.6 |
+| Preisach medium, no coating field | 6963 | 2.57 / 2.15 | 4.3 / 4.3 | -18.5 / -4.5 | -3.4 / -5.1 | -0.5 / -2.2 |
+| particles, no coating field (3 x 1024; the samples' own fits 1.8-2.2 / 2.3-2.7) | 7819 | 1.92 / 2.51 | 4.6 / 3.8 | -22.2 / -6.7 | -0.8 / -9.1 | -5.4 / -12.4 |
+| **particles, the cell's perpendicular demagnetization (4 x 256; 2.9-4.3 / 1.9-3.5)** | 8062 | 3.54 / 2.49 | 4.5 / 4.5 | -24.4 / -7.9 | -9.2 / -8.2 | -4.3 / -2.6 |
 
 Reading it:
 - **Without a coating field** (`nodemag`) the particles already have what the Preisach
   medium needed its demagnetization for: the 15 kHz curve peaks below the 1 kHz one and
-  the 15k - 1k spread grows with bias (NODEMAG_DIFF at 8 mA, No. 21 -10.4; the Preisach
+  the 15k - 1k spread grows with bias (-12.4 dB at 8 mA, No. 21 -10.4; the Preisach
   ensemble run the same way: -2.2). That is SW switching downstream of the gap, in the
   field's vertical part (Hy falls as g / (pi x), Hx as g y / (pi x^2): TAPE_PLAN.md TM2
   step 4's mechanism, here without a fitted orientation). But the 1 kHz curve doesn't fall
-  past its peak (NODEMAG_1K8 at 8 mA against -3.3): the same downstream switching leaves a
+  past its peak (-0.8 dB at 8 mA against -3.3): the same downstream switching leaves a
   large perpendicular remanence (M_y up to 18x M_x far over-bias in the bench), which a
   coating can't keep: its own field -M_y (Ms_coat ~1580 Oe) is 2-4x the switching fields.
 - **With that field** (`local`: the cell's perpendicular demagnetization, implicit) the
   prediction gets worse, not better: rms 3.54 / 2.49 dB (the Preisach medium 2.25 / 1.74),
   the 1 kHz curve falls too fast past the peak (-9.2 against -3.3 dB at 8 mA), the treble's
   loss with bias nearly gone (15k - 1k -2.6 against -10.4 at 8 mA), both peaks at 4.5 mA
-  (No. 21: 6 / 5). The four samples' own fits spread 2.9-4.3 / 1.9-3.5 dB.
+  (No. 21: 6 / 5). The four samples' own fits spread 2.9-4.3 / 1.9-3.5 dB. On the 1 kHz
+  curve's own bias axis: the rise to -20 dB spans 6.0 dB of bias (the Preisach medium
+  without a coating field 6.9, No. 21 9.4), the fall to -3 dB 2.5 (No. 21 2.4): narrower
+  below the peak, as in the bench, and right for 3 dB past it, then too steep.
 - **The rest of the coating's field** (in-plane, and perpendicular beyond the cell) on top
-  of the local term by the medium's fixed point (`local_fp`, 15 kHz): FP_SENTENCE
+  of the local term by the medium's fixed point (`local_fp`, 15 kHz, 2 x 256,
+  `no21_fp.json`) lowers the 15 kHz output by 6-10 dB, not uniformly, and doesn't
+  converge where it matters: below 2e-3 rms change of saturation up to 0.9 Hc of bias,
+  0.03-0.22 at 1.2-2.6 Hc (the peak's region). Taken as it stands, with the same two
+  samples' local 1 kHz curve, the fit is no better: rms 3.97 / 2.45 dB (local alone
+  3.92 / 2.64), 15k - 1k -1.0 dB at 8 mA.
 
 So the one configuration that is both physical and converged (`local`) predicts No. 21
 worse than the Preisach medium does, and the configuration that matches the treble's loss
@@ -334,7 +355,9 @@ samples (each a different set of cells' particles, as along a real tape): `nodem
 - **the cell's perpendicular demagnetization solved implicitly** (each step's M_y by
   bisection on M_y = F(H - Ms M_y)): stable by construction; the only coupling the `local`
   runs keep. The rest of the coating's field on top of it by the medium's fixed point
-  (`local_fp`): FP_RESULT.
+  (`local_fp`): converged below 2e-3 of saturation up to 0.9 Hc of bias, 0.03-0.22 at
+  1.2-2.6 Hc after 12 Anderson iterations; at 2.2 Hc the residual stays at ~0.1 over
+  iterations 4-12. Not converged.
 
 ## Runtime
 
@@ -372,15 +395,18 @@ carries everything):
    peak (No. 21's 1 kHz: 2.36; Preisach 4.76), with no fitting to No. 21; in the moving
    head the 15 kHz curve's peak sits below the 1 kHz one and the 15k - 1k spread grows with
    bias without any coating field. But:
-3. **The full moving-head prediction is not converged in the coating's field, so it can't
-   be scored as a blind prediction.** With no coating field, M_y (a 3D-random coating's
-   perpendicular remanence) is unopposed and the curves are wrong where it dominates (1 kHz
-   doesn't fall past the peak: -0.8 to -1.0 dB at 8 mA against -3.3). With the cell's own
-   perpendicular demagnetization solved implicitly (`local`), MOVING_HEAD_SENTENCE. The
-   rest of the coating's field doesn't converge with particles in either scheme tried (the
-   medium's fixed point: a limit cycle, or ~0.1 rms change at 2.2 Hc on top of the local
-   term; the explicit causal coupling: unstable), so the 15 kHz curve, where it matters
-   most, is open.
+3. **The blind prediction of No. 21 on the moving head is not better than the Preisach
+   medium's.** With no coating field, M_y (a 3D-random coating's perpendicular remanence)
+   is unopposed and the 1 kHz curve doesn't fall past its peak (-0.8 dB at 8 mA against
+   -3.3), though the 15k - 1k spread comes out near No. 21's (-12.4 against -10.4). With
+   the cell's own perpendicular demagnetization solved implicitly (`local`, the physical
+   and converged configuration) the prediction is worse than the Preisach medium's: rms
+   3.54 / 2.49 against 2.25 / 1.74 dB, the 1 kHz curve falling too fast past the peak
+   (-9.2 dB at 8 mA), the treble's loss with bias nearly gone (15k - 1k -2.6 against
+   -10.4). The rest of the coating's field doesn't converge with particles in any scheme
+   tried (the medium's fixed point: a limit cycle, or a residual ~0.1 of saturation at
+   2.2 Hc on top of the local term; the explicit causal coupling: unstable), so the 15 kHz
+   curve, where the coating's field matters most, is open.
 4. **And the static data underdetermine the particles.** No. 20 + Hc fit all interaction
    strengths equally (0.72-0.87 reading errors), while the anhysteretic susceptibility
    (the recording's small-signal transfer) depends on that strength by an order of
