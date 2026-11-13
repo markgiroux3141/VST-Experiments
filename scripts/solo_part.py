@@ -71,7 +71,8 @@ def main() -> int:
         r["key"], r["source"] = solo.source_for(r["name"], srcs)
         r["provisional"] = r["source"].startswith("provisional")
 
-    out = OUT / a.circuit
+    tag = "__".join(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}" for k, v in ov.items())
+    out = OUT / (a.circuit + (f"__{tag}" if tag else ""))
     (out / "audio").mkdir(parents=True, exist_ok=True)
     from varimu.listen.matching import match_loudness
 
