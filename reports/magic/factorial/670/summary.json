@@ -1,0 +1,36 @@
+{
+ "factors": [
+  "iron",
+  "noise"
+ ],
+ "main": {
+  "iron": {
+   "level_db": -43.91436766172097,
+   "split": {
+    "all": -44.23,
+    "character": -48.5,
+    "tone": -46.46
+   }
+  },
+  "noise": {
+   "level_db": -54.462540597434355,
+   "split": {
+    "all": -54.47,
+    "character": -55.86,
+    "tone": -60.62
+   }
+  }
+ },
+ "interactions": {
+  "iron x noise": {
+   "level_db": -65.1730484407238,
+   "not_separable": false
+  }
+ },
+ "shapley": {
+  "iron": 1.3999124076775399e-05,
+  "noise": 1.712449875620268e-06
+ },
+ "score_all": 1.5711573952395667e-05,
+ "score_all_db": -48.037803060739456
+}

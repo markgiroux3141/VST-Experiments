@@ -1,0 +1,36 @@
+{
+ "factors": [
+  "grain",
+  "transport"
+ ],
+ "main": {
+  "grain": {
+   "level_db": -36.56453867088714,
+   "split": {
+    "all": -36.35,
+    "character": -36.63,
+    "tone": -49.59
+   }
+  },
+  "transport": {
+   "level_db": -6.948086189689228,
+   "split": {
+    "all": -7.18,
+    "character": -9.16,
+    "tone": -11.11
+   }
+  }
+ },
+ "interactions": {
+  "grain x transport": {
+   "level_db": -43.054042879231375,
+   "not_separable": false
+  }
+ },
+ "shapley": {
+  "grain": 0.00016622366188232893,
+  "transport": 0.12492917795986114
+ },
+ "score_all": 0.12509540162174346,
+ "score_all_db": -9.027586542314946
+}

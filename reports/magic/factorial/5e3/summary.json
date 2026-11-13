@@ -1,0 +1,76 @@
+{
+ "factors": [
+  "sag",
+  "iron",
+  "heaters",
+  "noise"
+ ],
+ "main": {
+  "sag": {
+   "level_db": -11.529093133547137,
+   "split": {
+    "all": -19.42,
+    "character": -20.34,
+    "tone": -22.95
+   }
+  },
+  "iron": {
+   "level_db": -54.141706270536545,
+   "split": {
+    "all": -56.7,
+    "character": -64.79,
+    "tone": -57.53
+   }
+  },
+  "heaters": {
+   "level_db": -63.16934539647053,
+   "split": {
+    "all": -64.8,
+    "character": -65.59,
+    "tone": -70.62
+   }
+  },
+  "noise": {
+   "level_db": -35.60883135525242,
+   "split": {
+    "all": -42.33,
+    "character": -43.15,
+    "tone": -48.34
+   }
+  }
+ },
+ "interactions": {
+  "sag x iron": {
+   "level_db": -56.62113707285033,
+   "not_separable": true
+  },
+  "sag x heaters": {
+   "level_db": -63.593084186547735,
+   "not_separable": true
+  },
+  "sag x noise": {
+   "level_db": -43.11099946426711,
+   "not_separable": false
+  },
+  "iron x heaters": {
+   "level_db": -113.04493686125456,
+   "not_separable": false
+  },
+  "iron x noise": {
+   "level_db": -79.10583862186547,
+   "not_separable": false
+  },
+  "heaters x noise": {
+   "level_db": -57.14874548319091,
+   "not_separable": true
+  }
+ },
+ "shapley": {
+  "sag": 0.010005703932581059,
+  "iron": -1.6146729714494552e-06,
+  "heaters": -4.140235346176065e-05,
+  "noise": 0.00045038414477166863
+ },
+ "score_all": 0.010413071050919518,
+ "score_all_db": -19.82421168301809
+}
