@@ -1,0 +1,86 @@
+{
+  "midi": "midi\\classical\\pr2\\prp2_1.mid",
+  "device": "tube_synth",
+  "set": [
+    "resonance=0.4",
+    "attack=0.07",
+    "decay=0.3",
+    "sustain=1",
+    "release=0.3",
+    "wave=1.0",
+    "lfo_rate=0.7",
+    "vibrato=0.25",
+    "wobble=0.2"
+  ],
+  "quality": "draft-2x",
+  "start_s": 0.0,
+  "seconds": 22.0,
+  "mix_peak_fs": 2.5913458317518234,
+  "wall_s": 347.61785969976336,
+  "lines": [
+    {
+      "hand": "Right ch0",
+      "notes": 20,
+      "lead_s": 0.5,
+      "stretches": 2,
+      "rendered_s": 20.982638895833333,
+      "wall_s": 44.74270229972899
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 27,
+      "lead_s": 0.87,
+      "stretches": 1,
+      "rendered_s": 22.0,
+      "wall_s": 39.563062000088394
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 12,
+      "lead_s": 1.24,
+      "stretches": 2,
+      "rendered_s": 16.223959,
+      "wall_s": 41.71339039970189
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 7,
+      "lead_s": 1.6099999999999999,
+      "stretches": 3,
+      "rendered_s": 19.96527779166667,
+      "wall_s": 47.18771260045469
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 6,
+      "lead_s": 1.98,
+      "stretches": 3,
+      "rendered_s": 18.37152779166667,
+      "wall_s": 45.69760019984096
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 3,
+      "lead_s": 2.35,
+      "stretches": 3,
+      "rendered_s": 10.312066895833333,
+      "wall_s": 40.361674199812114
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 5,
+      "lead_s": 2.7199999999999998,
+      "stretches": 2,
+      "rendered_s": 15.267359791666667,
+      "wall_s": 35.657542100176215
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 7,
+      "lead_s": 3.09,
+      "stretches": 3,
+      "rendered_s": 19.965277791666665,
+      "wall_s": 52.32445099949837
+    }
+  ]
+}

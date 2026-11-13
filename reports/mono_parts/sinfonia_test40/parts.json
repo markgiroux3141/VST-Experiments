@@ -1,0 +1,92 @@
+{
+  "midi": "midi\\classical\\pr2\\prp2_1.mid",
+  "device": "tube_synth",
+  "set": [
+    "resonance=0.4",
+    "attack=0.07",
+    "sustain=0",
+    "release=0",
+    "wave=1.0",
+    "vibrato=0.5",
+    "wobble=0.5"
+  ],
+  "quality": "draft-2x",
+  "start_s": 0.0,
+  "seconds": 42.0,
+  "mix_peak_fs": 1.7816604673862457,
+  "wall_s": 417.4139232998714,
+  "lines": [
+    {
+      "hand": "Right ch0",
+      "notes": 1,
+      "lead_s": 0.5,
+      "stretches": 1,
+      "rendered_s": 2.50996374999999,
+      "wall_s": 6.774342800490558
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 33,
+      "lead_s": 0.87,
+      "stretches": 3,
+      "rendered_s": 39.69097239583333,
+      "wall_s": 56.334898700006306
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 52,
+      "lead_s": 1.24,
+      "stretches": 1,
+      "rendered_s": 42.0,
+      "wall_s": 49.15211199969053
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 35,
+      "lead_s": 1.6099999999999999,
+      "stretches": 2,
+      "rendered_s": 36.223959,
+      "wall_s": 43.23296980001032
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 7,
+      "lead_s": 1.98,
+      "stretches": 3,
+      "rendered_s": 20.732203291666664,
+      "wall_s": 33.450041299685836
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 13,
+      "lead_s": 2.35,
+      "stretches": 5,
+      "rendered_s": 23.396247645833327,
+      "wall_s": 52.545746200717986
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 24,
+      "lead_s": 2.7199999999999998,
+      "stretches": 5,
+      "rendered_s": 34.57289604166666,
+      "wall_s": 55.10433730017394
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 23,
+      "lead_s": 3.09,
+      "stretches": 4,
+      "rendered_s": 33.39711504166666,
+      "wall_s": 53.441385299898684
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 26,
+      "lead_s": 3.46,
+      "stretches": 5,
+      "rendered_s": 37.74086479166666,
+      "wall_s": 66.78553549945354
+    }
+  ]
+}

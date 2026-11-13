@@ -1,0 +1,44 @@
+{
+  "midi": "midi\\classical\\pr2\\prp2_6.mid",
+  "device": "tube_synth",
+  "set": [
+    "resonance=0.4",
+    "attack=0.07",
+    "sustain=0",
+    "release=0",
+    "wave=1.0",
+    "vibrato=0.5",
+    "wobble=0.5"
+  ],
+  "quality": "draft-2x",
+  "start_s": 0.0,
+  "seconds": 32.0,
+  "mix_peak_fs": 1.145132666041718,
+  "wall_s": 185.23626270052046,
+  "lines": [
+    {
+      "hand": "Right ch0",
+      "notes": 84,
+      "lead_s": 0.5,
+      "wall_s": 99.175009499304
+    },
+    {
+      "hand": "Right ch0",
+      "notes": 102,
+      "lead_s": 0.87,
+      "wall_s": 101.88564390037209
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 57,
+      "lead_s": 1.24,
+      "wall_s": 84.01407600007951
+    },
+    {
+      "hand": "Left ch1",
+      "notes": 58,
+      "lead_s": 1.6099999999999999,
+      "wall_s": 83.09817679971457
+    }
+  ]
+}
