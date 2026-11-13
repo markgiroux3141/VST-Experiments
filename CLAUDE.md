@@ -201,6 +201,18 @@ the mix as a performance, solo a part, interactions between mechanisms), each wi
 steps, tests, done-when and cost; its "Order and dependencies" and "Open decisions" say where to
 start and what is the user's.
 
+Instrument realism ([docs/INSTRUMENT_REALISM_FABLE.md](docs/INSTRUMENT_REALISM_FABLE.md), 2026-11-13, a
+read-only review by Claude Fable 5 at the user's request of `tube_synth` and `rhodes_suitcase`,
+written as work packages a later session can build from the doc alone; nothing run, nothing built):
+where each falls short of how a real instrument reacts to being played. The Suitcase, SC1-SC9 (the
+speakers heard live: today the app plays their terminal voltage; per-key unit draws for the harp on
+the Clavinet's wear pattern; the release as a felt contact; attack and sustain forensics on
+jRhodes3d; the rail; bass tines past their clearances; the second polarization; the noise floor;
+the cabinet, now that `box_m3` exists). The synth, TS1-TS4 (the reactor's magnetics, JA against
+Preisach as pitch; mismatch, since every part is nominal; temperature beyond the cathodes; the
+keyboard as a circuit). Both, PL1 (key to ear). Most packages measure first and end in options:
+its "Order and dependencies" and "Open decisions" say where to start and what is the user's.
+
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
 devices that never existed from parts we model, ten instruments (the Nickel Organ, a
