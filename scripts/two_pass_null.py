@@ -192,6 +192,7 @@ def main() -> int:
                 flush=True,
             )
 
+    nan = float("nan")
     summary: dict = {"seconds": a.seconds, "fs": fs, "devices": {}}
     prior = out / "summary.json"
     if prior.exists() and (a.only or a.analyse_only):
@@ -233,7 +234,8 @@ def main() -> int:
             print(
                 f"{dev} {clip}: "
                 + ", ".join(
-                    f"{p.split()[0]} gain {c[p]['gain']:.1f} / dewarped {c[p].get('dewarped', float('nan')):.1f}"
+                    f"{p.split()[0]} gain {c[p]['gain']:.1f} / audio {c[p].get('audio', nan):.1f}"
+                    f" / dewarped {c[p].get('dewarped', nan):.1f}"
                     for p in PAIRS
                     if p in c and not c[p].get("identical")
                 )
