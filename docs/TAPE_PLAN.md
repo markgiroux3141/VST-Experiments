@@ -1413,3 +1413,126 @@ move the oscillator ~1 kHz to reach one. Options (the user's): leave 0.25 um (ch
 clean at the aligned bias); 0.125 um at 15 ips (clean at 90 / 93 / 102 kHz, measured; the
 kernel's cells 2x again, 95 s vs 53 s per probe on the GPU); a guard in the alignment report
 listing |n f_b - j v / ds| < 20 kHz for n <= 40 at the measured oscillator (cheap, not built).
+
+*Step 2, the exact record gap (built opt-in; not adopted):* Westmijze's field of the same head
+(TAPE_HEAD_RESEARCH.md 1.3: the Schwarz-Christoffel map of a gap g between semi-infinite
+poles, z(w) = g/2 + (g/pi)[s(w) - arccos(1/w)], s = sqrt(w - 1) sqrt(w + 1), Hx - i Hy = i Hg /
+s(w)) in place of Karlqvist's gap term only; the finite pole edges and the head's relaxation
+stay as they are. `varimu/tape_variants.py` section 6 the reference (w by Newton from z,
+tolerance 1e-14 of g + |z|; `exact_gap_head()` patches `tape.head_field`), circuitsim's
+`tape.rs` the port (`Head::exact_gap`, false everywhere it was built before: the old kernel bit
+for bit; the field tables warm-start Newton from the previous point; the GPU path takes it
+through its tables and refuses it without them); Rust against Python within 1e-10, the GPU
+within 2e-5 of the f64 tables (`tests/test_tape_variants.py`). Measured by
+`scripts/tape_overbias_study.py` (variants `exact*`, results in
+`reports/tape/overbias_study.json`) on the base tape (SCOTCH111@3: it has no head-shaped
+fit, so a head-only variant keeps it). No. 21 (Ampex 300, 51 um gap; data: the rise at 3 mA
+-11.0 dB, the falls at 8 mA -3.3 / -7.1 dB at 1 / 15 kHz, 15 kHz re 1 kHz at 8 mA -10.4 dB):
+
+| | rms 1k / 15k | rise 3 mA | falls 8 mA 1k / 15k | 15k re 1k, 8 mA | peaks (dB of bias) 1k / 15k |
+|---|---|---|---|---|---|
+| base (Karlqvist) | 2.25 / 1.74 | -5.5 | -3.2 / -5.1 | -6.6 | -1.3 / -0.8 |
+| exact gap | **1.49 / 1.37** | -7.2 | -1.6 / -2.9 | -11.4 | -0.3 / +0.2 |
+
+- The rise widens by 1.7 dB toward the data (the research's estimate, +1.3 to +4.2 dB of
+  geometric sweep, tempered by the medium's own rise as it said), and both peaks land within
+  0.3 dB of bias: the best No. 21 of any single change so far, with no free parameter.
+- The research's second verdict ("not the head: the over-bias loss") doesn't hold: the exact
+  head moves the 8 mA spread from -6.6 to -11.4 dB (the data's -10.4), but by lifting the 1 kHz
+  curve past its peak (its fall -3.2 -> -1.6, the data -3.3), not by a stronger 15 kHz loss.
+- The knee (3% over 1% THD at 400 Hz, `level` / `level51`): +3.42 / +3.92 dB on the 12.7 / 51
+  um gaps (base +3.33 / +4.00; #111's ~4.1-4.5 on Sound Talk No. 1, the 351's +4.8 at 51 um).
+- Bulletin 14 (7 kHz overload, 3M's +4 dB): -1.81 / -0.91 dB at the -40 / -30 dB criteria (base
+  -1.8 / -1.0): unchanged.
+- Cost: the Rust kernel is the same, 2.11 s on a No. 21 probe both ways; the study's 9.0 s vs
+  3.1 s is the Python reference's zone search around it (`cost`, and timing the kernel apart).
+  In a circuitsim stream the field is tabulated once per head: ~1x.
+
+*Step 3, the astroid re-derived with the exact gap in:* TM2's projection-rule choices redone
+under the astroid (`tape_variants.astroid_drive`, now also on 3D axes: cos psi = |h_par| / |H|),
+each variant's ensemble refitted to Bulletin 20 and Hc (No. 21 held out of every fit; Bulletin
+20's residual the held-out discriminator):
+
+| variant (exact gap +) | B20 rms | Ms (kA/m) | S_r | No. 21 rms 1k / 15k | rise | falls 1k / 15k | 15k re 1k |
+|---|---|---|---|---|---|---|---|
+| astroid, in-plane kappa 0.5 | 0.71 | 84.9 | 0.74 | 1.13 / 1.62 | -7.9 | -1.4 / -7.2 | -13.2 |
+| kappa 1 | 0.72 | 76.7 | 0.82 | 1.18 / 2.15 | -7.7 | -1.3 / -8.2 | -15.4 |
+| kappa 1.5 (TM2's) | 0.73 | 71.8 | 0.87 | 1.20 / 2.63 | -7.6 | -1.1 / -8.9 | -17.2 |
+| kappa 3 | 0.71 | 66.3 | 0.95 | 1.23 / 3.56 | -7.4 | -0.9 / -10.0 | -20.2 |
+| kappa 5 | 0.68 | 64.7 | 0.97 | 1.30 / 4.09 | -7.2 | -0.8 / -10.3 | -21.8 |
+| 3D, kappa 3, lam 3 | 0.67 | 77.2 | 0.81 | 1.28 / 3.02 | -7.1 | -1.0 / -8.7 | -17.5 |
+| 3D, kappa 1.5, lam 3 | 0.66 | 87.9 | 0.71 | 1.29 / 2.62 | -7.0 | -1.2 / -8.3 | -16.0 |
+| 3D, kappa 1.5, lam 0 | 0.66 | 99.3 | 0.63 | 1.38 / 1.93 | -6.8 | -1.4 / -7.4 | -12.9 |
+| 3D, kappa 0.75, lam 0 | 0.65 | 111.1 | 0.57 | 1.40 / 1.67 | -6.8 | -1.5 / -7.0 | -11.8 |
+| **3D isotropic** | **0.64** | **125.5** | **0.50** | **1.46 / 1.44** | -6.6 | -1.4 / -6.7 | **-10.7** |
+| kappa 1.5, no head image | 0.73 | 71.8 | 0.87 | 2.67 / 4.53 | -4.0 | -2.4 / -10.9 | -17.4 |
+| (astroid kappa 1.5, Karlqvist) | 0.73 | 71.8 | 0.87 | 1.87 / 1.94 | -8.0 | -1.9 / -8.6 | -15.6 |
+| (exact gap alone, base tape) | 0.57 | 72.0 | - | 1.49 / 1.37 | -7.2 | -1.6 / -2.9 | -11.4 |
+
+- Bulletin 20 doesn't discriminate: every astroid variant fits it within 0.64-0.73 dB (the
+  projection rule's TM2 fit 0.57). The orientation is pinned only by what it predicts.
+- The 15 kHz over-bias overshoot is the orientation: the more in-plane and aligned the axes,
+  the stronger the astroid's 15 kHz loss (kappa 0.5 -> 5: -13.2 -> -21.8). The unoriented
+  ensemble, the one the squareness prior expects (TAPE_PARTICLE_RESEARCH.md 1.1: p S =
+  0.18-0.20, S = 0.5 for random 3D axes at p ~0.35), lands on the data's -10.7 / -10.4 with
+  No. 21 held out, and its fitted Ms (125.5 kA/m over Ms_p 360-389: p = 0.32-0.35) and S_r (0.50)
+  are that prior's numbers, not tuned to it.
+- The head's image stays needed (without it No. 21 is worse than the base).
+- What the astroid + exact + isotropic still misses on No. 21: the 1 kHz fall past the peak
+  (-1.4 against -3.3: the exact gap's lift, which the astroid doesn't undo) and the rise (-6.6
+  against -11.0; the projection rule's -5.5).
+- The knees (3% over 1% THD at 400 Hz, dB):
+
+  | | 12.7 um gap | 51 um gap (the 351's) |
+  |---|---|---|
+  | base | +3.33 | +4.00 |
+  | exact gap | +3.42 | +3.92 |
+  | astroid kappa 1.5, Karlqvist | +3.94 | - |
+  | exact + astroid kappa 1.5 | +3.96 | +5.76 |
+  | exact + astroid isotropic | +3.30 | no operating level |
+
+  The in-plane astroid's 51 um knee overshoots #111's ~4.1-4.8. The isotropic tape doesn't
+  align on the 51 um gap at all: its 500 Hz output peaks at 0.72 Hc of bias, where its 400 Hz
+  THD is already 1.8% at 0.05 Hc (all third harmonic), so the manual's 1% THD level isn't
+  bracketed (`align()`'s bias sweep widened to 0.3 Hc in a scratch copy changed nothing; the
+  base's knee with it +3.995). Against the bias, THD at 0.05 Hc: 1.8 / 1.6 / 1.1 / 0.2% at 0.74
+  / 1.0 / 1.5 / 2.5 Hc (the last ~14 dB of over-bias); the kappa 1.5 astroid 0.63 / 0.29 / 0.19
+  / 0.06%. No. 21 is on a 51 um gap too and fits, so the miss is the low-level linearity, which
+  No. 21 doesn't measure: the isotropic ensemble's sensitivity peak and its linear bias are
+  ~10 dB apart under the long gap (the manual's alignment, between the 500 Hz curve's 1/2 dB
+  points, assumes a tape is usable near its peak; the base, the exact gap and the kappa 1.5
+  astroid are). Not traced; a guess to test first: the
+  perpendicular axes switched by the exact head's corner field with nothing (no
+  perpendicular demagnetization beyond the image) holding their remanence.
+- Bulletin 14 (+4 dB in 3M's data): base -1.8 / -1.0, astroid kappa 1.5 +1.96 / +0.30 (Karlqvist)
+  and +1.45 / +0.19 (exact), isotropic +0.22 / -1.10 at -40 / -30 dB. The in-plane astroid
+  moves it most; none reaches +4.
+- Cost: the astroid ~1x (round one), the exact gap ~1x in a stream; 3D axes the same kernel.
+
+**Options (the user's; nothing adopted).** Each one is a flag carried into the medium (the
+exact gap a head value on the tape part, both builders; the astroid and 3D axes on a new tape
+version, SCOTCH111@4, its ensemble refitted), a re-alignment of the 351 at both speeds and of
+the deck (~30 min + ~2 h; the alignment re-runs whenever the key moves), the two reductions
+regenerated (~3 h each: their tables come from the full medium's kernel, so a changed head or
+tape is refused), the profiles re-run, and the song's reprint where wanted.
+1. **The exact gap alone** on SCOTCH111@3: the best No. 21 (1.49 / 1.37) and peaks, the knee and
+   Bulletin 14 unchanged, no new parameter, ~1x. The smallest step; it worsens only the 1 kHz
+   fall past the peak. (It needs no refit; the head flag goes on the tape part, both builders.)
+2. **The exact gap + the astroid on unoriented 3D axes** (refitted, Ms 125.5 kA/m, S_r 0.50):
+   No. 21 1.46 / 1.44 with it held out, the 15 kHz over-bias loss and the 8 mA spread right,
+   Bulletin 14 2 dB closer, the 12.7 um knee unchanged. The physically better-founded one
+   (the particles' switching, the squareness prior), but **not adoptable as it stands**: on
+   the 351's own 51 um gap it distorts 1.8% at a twentieth of Hc at the bias the alignment
+   picks, and the machine has no operating level. It also moves Ms by 75% and orientation
+   from kappa 1.5 to none (the noise fit and print-through estimates would be re-checked).
+3. Leave the model as it is (the misses are a few dB at over-bias and in the 7 kHz overload).
+My recommendation: option 1 if a change is wanted now (it improves No. 21 and touches
+nothing else measured), A/B'd against the current print before any reprint; option 2 only
+after its low-level distortion on the long gap is understood (the perpendicular
+demagnetization first). The in-plane astroid (kappa 0.5-5) isn't worth adopting on these
+numbers: its 15 kHz over-bias loss and its 51 um knee overshoot.
+
+Not done: the perpendicular demagnetization beyond the head's image (the particle bench
+flags it unconverged; TAPE_PARTICLES.md); calibrated angle-resolved remanence data to pin the
+orientation directly (Levine & Daniel 1959 is the period source to ask for); No. 21 at other
+gaps; the over-bias study's variants other than these with the exact gap.

@@ -182,6 +182,25 @@ with its readout in one solve 1.62x -> 1.08x, no gain at the amps' ~60 states. `
 measures a partition's error and load (`--against` a saved run); `load_profile.rs` streams Live's
 probes only and takes `--solver`.
 
+The tape emulation reviewed ([docs/TAPE_FABLE_REVIEW.md](docs/TAPE_FABLE_REVIEW.md), 2026-11-12, a
+read-only review by Claude Fable 5 at the user's request; nothing run, nothing built): physics not
+yet tried (the coating's reversible magnetization, the noise of a biased tape, azimuth and skew;
+print-through still unbuilt), speed around the GPU kernel (the demag transforms, per-pass buffers,
+Newton on the fixed point; per-channel record islands for the deck), each tagged as already in the
+plans, connected, new or an estimate, and a suggested order. Every item is a hypothesis until
+measured.
+
+Analog magic ([docs/ANALOG_MAGIC_FABLE.md](docs/ANALOG_MAGIC_FABLE.md), 2026-11-12, a brainstorm by
+Claude Fable 5 at the user's request, written as work packages a later session can build from the
+doc alone; nothing run, nothing built): where a 1960s record's sound comes from if not from single
+devices (accumulation, noise that follows the signal, nothing repeating, two-way coupling). AM0 a
+shared toolkit `varimu/magic/`, then AM1-AM14 (record forensics, the two-pass null, distance to an
+era, tape generations, dispersion before saturation, noise-forced gain staging, noise that fuses, a
+room that doesn't hold still, instruments that listen, the floor, the device playing the player,
+the mix as a performance, solo a part, interactions between mechanisms), each with what exists,
+steps, tests, done-when and cost; its "Order and dependencies" and "Open decisions" say where to
+start and what is the user's.
+
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
 devices that never existed from parts we model, ten instruments (the Nickel Organ, a
@@ -1061,9 +1080,15 @@ The same night's cheap variants of the Preisach medium (TAPE_PLAN.md's last sect
 options"; `varimu/tape_variants.py` the references, opt-in in circuitsim's `tape.rs`, off = the
 old kernel bit for bit; `scripts/tape_overbias_study.py`, `tests/test_tape_variants.py`): a
 moving mean field, astroid switching, the head's current law, 3D axes; none adopted (the
-astroid moves No. 21 the right way but overshoots 15 kHz). The head's exact gap field
-(docs/TAPE_HEAD_RESEARCH.md: Karlqvist is worst at No. 21's 51 um gap over a 12.7 um coating;
-the exact field widens the bias sweep by about the missing ~2.3 dB) is the untested lead.
+astroid moves No. 21 the right way but overshoots 15 kHz). **Second round (2026-11-12,
+TAPE_PLAN.md's last status block; nothing adopted, the user's call):** the exact record gap
+(Westmijze's head, docs/TAPE_HEAD_RESEARCH.md 1.3) opt-in: `tape_variants.exact_gap_head`,
+circuitsim `Head::exact_gap` (false = the old kernel bit for bit; GPU through its tables); the
+best No. 21 so far (rms 1.49 / 1.37 dB, was 2.25 / 1.74), knee and Bulletin 14 unchanged, ~1x
+in a stream. With the astroid (now also on 3D axes) the orientation re-derived, No. 21 held
+out: Bulletin 20 can't tell them apart; unoriented 3D axes fix the 15 kHz overshoot (the
+squareness prior's S 0.5) but distort 1.8% at 0.05 Hc on the 351's 51 um gap (no operating
+level); the in-plane astroid's 51 um knee +5.76 dB. Options: the exact gap alone, or wait.
 
 **Tape** ([docs/TAPE_PLAN.md](docs/TAPE_PLAN.md), started 2026-10-31 ahead of the queue, the
 user's call; milestones TM1-TM7): an **Ampex 351** (tubes; the Sun slapback family) with
