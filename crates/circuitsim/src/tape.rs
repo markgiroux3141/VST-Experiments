@@ -12,7 +12,8 @@
 //! cell, two table lookups per record.
 //!
 //! **Recording** ([`record`]): each cell at tape position s and layer height y sees the
-//! record head's field (Karlqvist with finite poles, both components: [`head_field`])
+//! record head's field (Karlqvist with finite poles, both components: [`head_field`];
+//! an opt-in variant has the gap's term exact, Westmijze's head: [`Head::exact_gap`])
 //! at the bias's sample times while it is within the zone, then a steady field (zero, or
 //! its demagnetization) as it leaves. Each easy-axis direction of the particles is an
 //! ensemble driven by the field along it (the vector Preisach model). Cells run in
@@ -24,6 +25,8 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+
+use rustfft::num_complex::Complex64;
 
 /// The particles' tables.
 #[derive(Debug, Clone)]
@@ -489,6 +492,104 @@ pub struct Head {
     pub gap: f64,
     pub pole: f64,
     pub relax: f64,
+    /// The gap's term exact (Westmijze's head: [`exact_gap_w`]) instead of Karlqvist's
+    /// linear ramp across the mouth; an opt-in variant (docs/TAPE_HEAD_RESEARCH.md 1.6,
+    /// `varimu.tape_variants.exact_head_field` the reference). false: the base model.
+    pub exact_gap: bool,
+}
+
+/// [`exact_gap_w`]'s tolerance on |z(w) - z| / (g + |z|) and its iteration limit (the
+/// reference's).
+const EXACT_GAP_TOL: f64 = 1e-14;
+const EXACT_GAP_ITER: usize = 100;
+
+#[inline]
+fn sc_s(w: Complex64) -> Complex64 {
+    (w - 1.0).sqrt() * (w + 1.0).sqrt()
+}
+
+/// The map z(w) = g/2 + (g / pi) [s(w) - arccos(1 / w)], principal branches.
+#[inline]
+fn sc_z(w: Complex64, g: f64) -> Complex64 {
+    let i = Complex64::new(0.0, 1.0);
+    let u = w.inv();
+    let acos = -i * (u + i * (1.0 - u * u).sqrt()).ln();
+    (sc_s(w) - acos) * (g / std::f64::consts::PI) + g / 2.0
+}
+
+/// Westmijze's deep-gap head (infinitely permeable poles, square corners) by its
+/// Schwarz-Christoffel map from the upper w half-plane (`varimu.tape_variants.exact_gap_w`):
+/// the preimage w of z = x + iy, y > 0, by Newton (halving until in the half-plane and the
+/// residual falls), from `start` (a neighbour's w) or the far field's pi z / g. The gap's
+/// field there is Hx - i Hy = i Hg / s(w).
+pub fn exact_gap_w(g: f64, x: f64, y: f64, start: Option<Complex64>) -> Complex64 {
+    let z = Complex64::new(x, y);
+    let mut w = start.unwrap_or(z * (std::f64::consts::PI / g));
+    if w.im < 1e-3 {
+        w.im = 1e-3;
+    }
+    for _ in 0..EXACT_GAP_ITER {
+        let f = sc_z(w, g) - z;
+        let fa = f.norm();
+        if fa <= EXACT_GAP_TOL * (g + z.norm()) {
+            return w;
+        }
+        let step = f / (sc_s(w) / w * (g / std::f64::consts::PI));
+        let mut lam = 1.0;
+        let mut wn = w - step;
+        for _ in 0..60 {
+            if wn.im > 0.0 && (sc_z(wn, g) - z).norm() < fa {
+                break;
+            }
+            lam *= 0.5;
+            wn = w - step * lam;
+        }
+        w = wn;
+    }
+    panic!("tape: the exact gap's map didn't converge at ({x}, {y})");
+}
+
+/// The gap's term of [`head_field`] with [`Head::exact_gap`], from its preimage w.
+#[inline]
+fn exact_gap_field(w: Complex64) -> (f64, f64) {
+    let h = Complex64::new(0.0, 1.0) / sc_s(w);
+    (h.re, -h.im)
+}
+
+/// [`head_field`]'s pole-edge terms alone (its sum less the gap's).
+fn edge_field(head: &Head, x: f64, y: f64) -> (f64, f64) {
+    let g = head.gap;
+    let e = g / 2.0 + head.pole;
+    let (mut re, mut im) = (0.0, 0.0);
+    if head.relax <= 0.0 {
+        for xe in [-e, e] {
+            let (dx, r2) = (x - xe, (x - xe) * (x - xe) + y * y);
+            re += (g / 2.0) * dx / r2;
+            im += -(g / 2.0) * y / r2;
+        }
+    } else {
+        let c = g / 2.0 / head.relax;
+        for (a, b) in [(-e - head.relax, -e), (e, e + head.relax)] {
+            let (r, i) = log_ratio(x, y, a, b);
+            re += c * r;
+            im += c * i;
+        }
+    }
+    let pi = std::f64::consts::PI;
+    (im / pi, re / pi)
+}
+
+/// [`head_field`] with the exact gap, the gap's preimage from `start`; returns it too.
+fn exact_head_field(
+    head: &Head,
+    x: f64,
+    y: f64,
+    start: Option<Complex64>,
+) -> (f64, f64, Complex64) {
+    let w = exact_gap_w(head.gap, x, y, start);
+    let (gx, gy) = exact_gap_field(w);
+    let (ex, ey) = edge_field(head, x, y);
+    (gx + ex, gy + ey, w)
 }
 
 /// ln(z - a) - ln(z - b) for z = x + iy, y > 0: (real, imaginary).
@@ -503,6 +604,10 @@ fn log_ratio(x: f64, y: f64, a: f64, b: f64) -> (f64, f64) {
 /// (Hx, Hy) / Hg at (x, y), y > 0 (`varimu.devices.tape.head_field`): Hx - i Hy =
 /// -(i / pi) times the sum of the surface potential's derivative's terms.
 pub fn head_field(head: &Head, x: f64, y: f64) -> (f64, f64) {
+    if head.exact_gap {
+        let (hx, hy, _) = exact_head_field(head, x, y, None);
+        return (hx, hy);
+    }
     let g = head.gap;
     let e = g / 2.0 + head.pole;
     let (mut re, mut im) = log_ratio(x, y, -g / 2.0, g / 2.0);
@@ -576,8 +681,17 @@ impl FieldTable {
         let n = (2.0 * half_width / dx).ceil() as usize + 5;
         let x0 = -half_width - 2.0 * dx;
         let (mut fx, mut fy) = (Vec::with_capacity(n), Vec::with_capacity(n));
+        let mut w = None;
         for i in 0..n {
-            let (a, b) = head_field(head, x0 + i as f64 * dx, y);
+            let x = x0 + i as f64 * dx;
+            let (a, b) = if head.exact_gap {
+                // The map's Newton from the previous point's preimage.
+                let (a, b, wi) = exact_head_field(head, x, y, w);
+                w = Some(wi);
+                (a, b)
+            } else {
+                head_field(head, x, y)
+            };
             fx.push(a);
             fy.push(b);
         }
@@ -649,10 +763,21 @@ pub fn record_mean_field(
 /// field and the axis, relative to the field along it (Stoner & Wohlfarth 1948): a hysteron
 /// of the axis switches where its own astroid says, the projection's switching made
 /// rotational. Along the axis it is the projection; at 45 degrees twice it. The reference is
-/// `varimu.tape_variants.astroid_drive`.
+/// `varimu.tape_variants.astroid_drive`. A 3D axis ((c, s) its in-plane part, shorter than
+/// 1): psi is the angle between the in-plane field and the whole axis, cos psi = |h_par| / |H|.
 #[inline]
 pub fn astroid_drive(c: f64, s: f64, hx: f64, hy: f64) -> f64 {
     let par = c * hx + s * hy;
+    if (c * c + s * s - 1.0).abs() > 1e-12 {
+        let mag = hx.hypot(hy);
+        if mag == 0.0 || par == 0.0 {
+            return 0.0;
+        }
+        let cp = (par.abs() / mag).min(1.0);
+        let sp = (1.0 - cp * cp).sqrt();
+        let k = cp.cbrt().powi(2) + sp.cbrt().powi(2);
+        return par.signum() * mag * k * k.sqrt();
+    }
     let perp = -s * hx + c * hy;
     let mag = (par * par + perp * perp).sqrt();
     if mag == 0.0 || par == 0.0 {
@@ -703,6 +828,9 @@ fn record_gpu(_: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
 
 #[cfg(feature = "gpu")]
 fn record_gpu(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
+    if r.head.exact_gap && r.table_step <= 0.0 {
+        return Err("tape: the exact gap runs on the GPU only through its tables".into());
+    }
     let (layers, cells) = (r.heights.len(), r.s_cells.len());
     let tables = field_tables(r);
     let ft: Vec<tapegpu::FieldTable> = tables
@@ -973,6 +1101,7 @@ mod tests {
             gap: 6.35e-6,
             pole: 2e-3,
             relax: 0.5e-3,
+            exact_gap: false,
         };
         let (hx, hy) = head_field(&head, 0.0, 1e-6);
         let want = 2.0 / std::f64::consts::PI * (3.175f64).atan();
@@ -982,5 +1111,31 @@ mod tests {
         let (_, a) = head_field(&head, 10e-6, 1e-6);
         let (_, b) = head_field(&head, -10e-6, 1e-6);
         assert!(a * b < 0.0);
+    }
+
+    /// docs/TAPE_HEAD_RESEARCH.md 1.3's exact field of a 51 um gap: at the mouth's centre
+    /// 0.834 Hg, max |H| 2.17 Hg at 0.5 um over the face (Karlqvist 1.57), and far away
+    /// Karlqvist's.
+    #[test]
+    fn the_exact_gap_is_westmijzes() {
+        let g = 51e-6;
+        let w = exact_gap_w(g, 0.0, 1e-12 * g, None);
+        let (hx, _) = exact_gap_field(w);
+        assert!((hx - 0.8336).abs() < 1e-3, "{hx}");
+        let mut top: f64 = 0.0;
+        let mut wi = None;
+        for i in 0..=6000 {
+            let x = -1.5 * g + 3.0 * g * i as f64 / 6000.0;
+            let wn = exact_gap_w(g, x, 0.5e-6, wi);
+            wi = Some(wn);
+            let (a, b) = exact_gap_field(wn);
+            top = top.max(a.hypot(b));
+        }
+        assert!((top - 2.169).abs() < 2e-3, "{top}");
+        let (x, y) = (3.0 * g, 4.0 * g);
+        let (a, b) = exact_gap_field(exact_gap_w(g, x, y, None));
+        let kx = ((x + g / 2.0).atan2(y) - (x - g / 2.0).atan2(y)) / std::f64::consts::PI;
+        assert!((a - kx).abs() < 1e-3 * kx, "{a} vs {kx}");
+        assert!(b < 0.0);
     }
 }

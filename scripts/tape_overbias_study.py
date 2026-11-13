@@ -34,6 +34,17 @@ D:/Claude Code Projects/VST-chirp/docs/TAPE_PARTICLE_RESEARCH.md sections 2 and 
    docs/TAPE_PARTICLES.md on the `tape-particles` branch: the over-bias fall is switching
    in the head's rotating field), refitted to Bulletin 20 with the astroid in the loops;
    kappa 1.5 (the base's) and 3.
+6. `exact*` (2026-11-12, second round): the record head's gap exact (Westmijze's head by
+   its Schwarz-Christoffel map, `tape_variants.exact_head_field`; docs/TAPE_HEAD_RESEARCH.md
+   1.3-1.6), in place of Karlqvist's linear ramp across the mouth: no free parameter, no
+   refit (the head doesn't enter the static loops). `exact` on the base tape,
+   `exact_astroid_k15` with the astroid's tape (its Bulletin 20 fit).
+7. Step 3 of the second round: what TM2 tuned under the projection rule, re-derived with the
+   astroid and the exact gap both in, No. 21 held out of every fit: the in-plane orientation
+   (`exact_astroid_k*`, each refitted to Bulletin 20: its residual is the held-out
+   discriminator), an out-of-plane share (`exact_astroid_o3d_*`: the Bingham axes of 4., the
+   astroid on 3D axes, `tape_variants.astroid_drive`), and the head's image
+   (`exact_astroid_k15_noimage`).
 4. `o3d_*`: the easy axes in 3D (a Bingham density exp(kappa u_x^2 - lam u_y^2): lam > 0
    keeps them in the tape's plane, the coating's flow), refitted to Bulletin 20 and Hc. The
    base model spreads them in the head's x-y plane (kappa 1.5, fitted to No. 21 in TM2).
@@ -105,6 +116,18 @@ def variants() -> dict:
     # The astroid without the head's image (the image carried the over-bias fall under the
     # projection rule: TM2 step 7): the pair the astroid upsets.
     v["astroid_k15_noimage"] = {"astroid": 1.5, "noimage": True}
+    # The exact record gap (second round), alone and with the astroid.
+    v["exact"] = {"exact_gap": True}
+    v["exact_astroid_k15"] = {"astroid": 1.5, "exact_gap": True}
+    # Step 3: TM2's choices re-derived with both in.
+    for k in (0.5, 1.0, 2.0, 3.0, 5.0):
+        v[f"exact_astroid_k{k:g}".replace(".", "")] = {"astroid": k, "exact_gap": True}
+    # (0, 0) and (0.75, 0): the squareness #111's packing implies (S 0.53-0.57, nearly
+    # unoriented: docs/TAPE_PARTICLE_RESEARCH.md 1.1), a prior No. 21 doesn't enter.
+    for k, lam in ((0.0, 0.0), (0.75, 0.0), (1.5, 0.0), (1.5, 3.0), (3.0, 0.0), (3.0, 3.0)):
+        name = f"exact_astroid_o3d_k{k:g}_l{lam:g}".replace(".", "")
+        v[name] = {"astroid": k, "lam": lam, "exact_gap": True}
+    v["exact_astroid_k15_noimage"] = {"astroid": 1.5, "exact_gap": True, "noimage": True}
     return v
 
 
@@ -159,6 +182,8 @@ def orientation_of(base, spec):
     if "o3d" in spec:
         k, lam = spec["o3d"]
         return tv.Orientation3D(k, lam)
+    if "astroid" in spec and "lam" in spec:
+        return tv.Orientation3D(spec["astroid"], spec["lam"])
     if "astroid" in spec:
         return Orientation(spec["astroid"], base.orientation.n)
     return base.orientation
@@ -182,6 +207,7 @@ def options(spec: dict, tape, f_bias_hz: float, threads: int):
                 threads=threads,
                 head_law=head_law(spec, f_bias_hz),
                 astroid="astroid" in spec,
+                exact_gap=spec.get("exact_gap", False),
             )
         )
         if "static" in spec:
@@ -504,7 +530,14 @@ def main() -> int:
         spec = vs[name]
         row = res.setdefault(name, {})
         row["spec"] = spec
-        tape = base if name == "base" or "head" in spec else refit(base, spec, row)
+        # The head's variants keep the base's tape; the astroid's fit is the head's too.
+        head_only = not (set(spec) - {"head", "exact_gap"})
+        if "astroid" in spec and "fit" not in row:
+            tape_keys = {k: x for k, x in spec.items() if k not in ("exact_gap", "noimage")}
+            same = next((n for n, x in vs.items() if x == tape_keys and n != name), None)
+            if same and "fit" in res.get(same, {}):
+                row["fit"] = res[same]["fit"]
+        tape = base if name == "base" or head_only else refit(base, spec, row)
         save()
         parts = ("cost", "anh", "no21", "level", "level_lite", "level51", "level_lite51", "b14")
         for part in parts:

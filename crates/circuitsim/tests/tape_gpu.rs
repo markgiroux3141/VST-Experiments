@@ -76,6 +76,7 @@ fn the_gpu_kernel_is_the_cpu_kernel_within_f32() {
         record(&Recording {
             preisach: &p,
             head: Head {
+                exact_gap: false,
                 gap: 51e-6,
                 pole: 1.5e-3,
                 relax: 5.5e-3,

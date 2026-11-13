@@ -206,3 +206,114 @@ def test_the_rust_astroid_recording_agrees(ensemble):
     np.testing.assert_allclose(my.ravel(), ry, atol=1e-10)
     a = record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust")
     assert np.abs(mx - a[0]).max() > 1e-3
+
+
+def test_the_exact_gap_is_westmijzes():
+    """docs/TAPE_HEAD_RESEARCH.md 1.3's exact field of a 51 um gap: the mouth (0.834 Hg at
+    its centre, 1.98 at 0.49 g), max |H| / max |Hx| at 0.5 and 13.2 um, Karlqvist's far
+    away; and the whole head (finite poles) the base model's away from the gap."""
+    g = 51e-6
+    hx, _ = tv.exact_gap_field(g, np.array([0.0, 0.25 * g, 0.49 * g]), np.full(3, 1e-12 * g))
+    np.testing.assert_allclose(hx, [0.834, 0.886, 1.98], atol=2e-3)
+    x = np.linspace(-1.5 * g, 1.5 * g, 6001)
+    for y, mag, par in ((0.5e-6, 2.17, 1.46), (13.2e-6, 0.65, 0.64)):
+        a, b = tv.exact_gap_field(g, x, np.full_like(x, y))
+        assert np.hypot(a, b).max() == pytest.approx(mag, abs=6e-3)
+        assert np.abs(a).max() == pytest.approx(par, abs=6e-3)
+    head = HeadGeometry(g, 1.5e-3, 5.5e-3)
+    from varimu.devices.tape import head_field
+
+    xs, ys = np.array([0.6e-3, 1.4e-3, -3e-3]), np.array([4e-6, 8e-6, 2e-6])
+    for got, want in zip(tv.exact_head_field(head, xs, ys), head_field(head, xs, ys), strict=True):
+        np.testing.assert_allclose(got, want, atol=2e-3 * np.abs(want).max())
+
+
+@pytest.mark.parametrize("astroid", [False, True])
+def test_the_rust_exact_gap_recording_agrees(ensemble, astroid):
+    """circuitsim's recording with the exact gap (alone and with the astroid) against the
+    reference, cell for cell; tabulated within the tables' error; the variant moves the
+    recording; outside the block the head is the base model's again."""
+    circuitsim = _rust_or_skip()
+    v, slab = 0.381, Slab(12.7e-6, 2, 0.5e-6, 0.5e-6)
+    head = HeadGeometry(51e-6, 1.5e-3, 5.5e-3)
+    s = 300e-6 + np.arange(40) * 1.3e-6
+    rng = np.random.default_rng(10)
+    hs = rng.normal(0.0, 5 * OE, (slab.layers, len(s)))
+    he = rng.normal(0.0, 5 * OE, (slab.layers, len(s)))
+    tv.CAPTURE.clear()
+    with tv.variant_kernel(threads=2, astroid=astroid, exact_gap=True, capture=True):
+        mx, my = record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust")
+        tab = record(
+            *_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust", table_step=0.025
+        )
+        if astroid:
+            rx, ry = tv.record_astroid_reference(tv.CAPTURE[0])
+        else:
+            rx, ry = (
+                a.ravel()
+                for a in record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="python")
+            )
+    np.testing.assert_allclose(mx.ravel(), rx, atol=1e-10)
+    np.testing.assert_allclose(my.ravel(), ry, atol=1e-10)
+    np.testing.assert_allclose(tab[0], mx, atol=1e-5)
+    with tv.variant_kernel(threads=2, astroid=astroid):
+        base = record(*_args(ensemble, head, slab, v, s), **_kw(hs, he), engine="rust")
+    assert np.abs(mx - base[0]).max() > 1e-3
+    assert circuitsim is not None
+
+
+def test_the_astroid_on_3d_axes(ensemble):
+    """On a 3D axis the astroid's angle is between the field and the whole axis: an axis
+    out of the head's plane needs a larger field than its in-plane projection says; unit
+    axes keep the in-plane formula; circuitsim's recording on 3D axes agrees with the
+    reference."""
+    _rust_or_skip()
+    c, s = 0.6, 0.0  # 53 degrees out of the plane, along x in it
+    # Field along x: psi is the axis's own angle to x, h_sw(53 deg) < 1, so the drive
+    # exceeds |H| though the in-plane formula would see the field along the axis.
+    d = float(tv.astroid_drive(c, s, 1.0, 0.0))
+    ct = 0.6
+    st = math.sqrt(1 - ct * ct)
+    assert d == pytest.approx((np.cbrt(ct) ** 2 + np.cbrt(st) ** 2) ** 1.5)
+    v, slab = 0.381, Slab(12.7e-6, 2, 0.5e-6, 0.5e-6)
+    head = HeadGeometry(25e-6, 2e-3, 3e-3)
+    s_c = 300e-6 + np.arange(30) * 1.3e-6
+    rng = np.random.default_rng(11)
+    hs = rng.normal(0.0, 5 * OE, (slab.layers, len(s_c)))
+    he = rng.normal(0.0, 5 * OE, (slab.layers, len(s_c)))
+    kw = _kw(hs, he) | {"orientation": tv.Orientation3D(1.5, 3.0, n_t=3, n_p=4)}
+    tv.CAPTURE.clear()
+    with tv.variant_kernel(threads=2, astroid=True, capture=True):
+        mx, my = record(*_args(ensemble, head, slab, v, s_c), **kw, engine="rust")
+    rx, ry = tv.record_astroid_reference(tv.CAPTURE[0])
+    np.testing.assert_allclose(mx.ravel(), rx, atol=1e-10)
+    np.testing.assert_allclose(my.ravel(), ry, atol=1e-10)
+
+
+def test_the_exact_gap_on_the_gpu(ensemble):
+    """The GPU kernel takes the exact gap through its field tables (f32, within its rounding
+    of the f64 tables); without tables it refuses rather than use Karlqvist's field."""
+    circuitsim = _rust_or_skip()
+    if not hasattr(circuitsim, "tape_gpu") or circuitsim.tape_gpu()[0] is None:
+        pytest.skip("no GPU")
+    v, slab = 0.381, Slab(12.7e-6, 2, 0.5e-6, 0.5e-6)
+    head = HeadGeometry(51e-6, 1.5e-3, 5.5e-3)
+    s = 300e-6 + np.arange(40) * 1.3e-6
+    tv.CAPTURE.clear()
+    with tv.variant_kernel(threads=2, exact_gap=True, capture=True):
+        record(*_args(ensemble, head, slab, v, s), orientation=Orientation(1.5, 4), engine="rust")
+    k = tv.CAPTURE[0]
+    kw = {n: k[n] for n in ("preisach", "head", "heights", "zones", "s_rec", "hg", "s_cells")}
+    axes = np.ascontiguousarray(np.asarray(k["axes"], float).ravel())
+
+    def run(gpu, step):
+        return circuitsim.tape_record(
+            *kw.values(), axes, None, None, None, None, step, gpu, 2, 0.0, 0.0, False, True
+        )
+
+    cpu = run(False, 0.025)
+    gpu = run(True, 0.025)
+    for a, b in zip(gpu, cpu, strict=True):
+        np.testing.assert_allclose(np.asarray(a), np.asarray(b), atol=2e-5)
+    with pytest.raises(Exception, match="tables"):
+        run(True, 0.0)

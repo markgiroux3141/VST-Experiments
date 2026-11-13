@@ -383,13 +383,24 @@ def astroid_drive(c, s, hx, hy):
     fall comes from switching in the head's rotating field, which projections lack) as a
     vector Preisach rule: each hysteron of the axis switches at its own astroid. Along the
     axis it is the projection; at 45 degrees twice it. circuitsim's `tape::astroid_drive`
-    is the port. Arrays broadcast."""
+    is the port. Arrays broadcast.
+
+    A 3D axis (`Orientation3D`: (c, s) its in-plane part, shorter than 1): the field has no
+    z component, so psi is the angle between the field and the whole axis, cos psi =
+    |h_par| / |H| (the in-plane formula's perpendicular part would be the axis's in-plane
+    length times too short)."""
     hx, hy = np.asarray(hx, float), np.asarray(hy, float)
     par = c * hx + s * hy
-    perp = -s * hx + c * hy
-    mag = np.sqrt(par * par + perp * perp)
-    safe = np.where(mag == 0.0, 1.0, mag)
-    cp, sp = np.abs(par) / safe, np.abs(perp) / safe
+    if abs(c * c + s * s - 1.0) > 1e-12:
+        mag = np.hypot(hx, hy)
+        safe = np.where(mag == 0.0, 1.0, mag)
+        cp = np.minimum(np.abs(par) / safe, 1.0)
+        sp = np.sqrt(1.0 - cp * cp)
+    else:
+        perp = -s * hx + c * hy
+        mag = np.sqrt(par * par + perp * perp)
+        safe = np.where(mag == 0.0, 1.0, mag)
+        cp, sp = np.abs(par) / safe, np.abs(perp) / safe
     k = np.cbrt(cp) ** 2 + np.cbrt(sp) ** 2
     return np.where((mag == 0.0) | (par == 0.0), 0.0, np.sign(par) * mag * k * np.sqrt(k))
 
@@ -588,6 +599,106 @@ def inplane_ratios(kappa: float) -> dict:
     }
 
 
+# --- 6. The exact record gap (Westmijze's head) -----------------------------------------
+#
+# docs/TAPE_HEAD_RESEARCH.md 1.3 and 1.6: the base model's head is Karlqvist's, a potential
+# falling linearly across the gap's mouth. The exact field of the same head (infinitely
+# permeable poles, square corners, the gap running deep: Westmijze, Philips Res. Rep. 8,
+# 1953) maps from the upper w half-plane by Schwarz-Christoffel,
+#     z(w) = g/2 + (g / pi) [s(w) - arccos(1 / w)],   s(w) = sqrt(w - 1) sqrt(w + 1),
+#     Hx - i Hy = i Hg / s(w),
+# w = +-1 the corners, w -> 0 the gap's depth (Hx -> Hg). It replaces only the gap's term:
+# the pole faces' finite length and their relaxation (the contour) stay the base model's
+# (`tape.head_field`), whose gap term is that ramp's field. No free parameter. Each point is
+# found by Newton on z(w) = x + iy (circuitsim's `tape::exact_gap_w` the port, warm-started
+# along its tables).
+
+#: Newton's tolerance on |z(w) - z| / (g + |z|) and its iteration limit (as circuitsim's).
+EXACT_GAP_TOL = 1e-14
+EXACT_GAP_ITER = 100
+
+
+def _sc_s(w):
+    return np.sqrt(w - 1.0) * np.sqrt(w + 1.0)
+
+
+def _sc_z(w, g: float):
+    u = 1.0 / w
+    acos = -1j * np.log(u + 1j * np.sqrt(1.0 - u * u))  # arccos(1 / w), principal branches
+    return g / 2.0 + (g / math.pi) * (_sc_s(w) - acos)
+
+
+def exact_gap_w(g: float, x, y) -> np.ndarray:
+    """The map's preimage w of z = x + iy (y > 0), for the gap g."""
+    z = np.asarray(x, float) + 1j * np.asarray(y, float)
+    w = np.pi * z / g
+    w = np.where(w.imag < 1e-3, w.real + 1e-3j, w)
+    for _ in range(EXACT_GAP_ITER):
+        f = _sc_z(w, g) - z
+        todo = np.abs(f) > EXACT_GAP_TOL * (g + np.abs(z))
+        if not todo.any():
+            return w
+        step = f / ((g / math.pi) * _sc_s(w) / w)
+        lam = np.ones(w.shape)
+        wn = w - step
+        for _ in range(60):  # halve until in the upper half plane and |f| falls
+            bad = todo & ((wn.imag <= 0.0) | (np.abs(_sc_z(wn, g) - z) >= np.abs(f)))
+            if not bad.any():
+                break
+            lam = np.where(bad, 0.5 * lam, lam)
+            wn = np.where(bad, w - lam * step, wn)
+        w = np.where(todo, wn, w)
+    raise ValueError("exact_gap_w: Newton didn't converge")
+
+
+def exact_gap_field(g: float, x, y) -> tuple[np.ndarray, np.ndarray]:
+    """(Hx, Hy) / Hg of the gap's term alone (semi-infinite poles), y > 0; Hy positive away
+    from the head, as `tape.head_field`'s."""
+    h = 1j / _sc_s(exact_gap_w(g, x, y))
+    return h.real, -h.imag
+
+
+def _edges(head, x, y):
+    """`tape.head_field`'s pole-edge terms (its sum less the gap's), as Hx - i Hy."""
+    z = x + 1j * y
+    g, p, r = head.gap_m, head.pole_m, head.relax_m
+    e = g / 2.0 + p
+    if r <= 0.0:
+        acc = (g / 2.0) / (z + e) + (g / 2.0) / (z - e)
+    else:
+        c = g / 2.0 / r
+        acc = c * (np.log(z + e + r) - np.log(z + e)) + c * (np.log(z - e) - np.log(z - e - r))
+    return -(1j / math.pi) * acc
+
+
+def exact_head_field(head, x, y) -> tuple[np.ndarray, np.ndarray]:
+    """`tape.head_field` with the gap's term exact (Westmijze's head with the base model's
+    finite poles)."""
+    x, y = np.broadcast_arrays(np.asarray(x, float), np.asarray(y, float))
+    gx, gy = exact_gap_field(head.gap_m, x, y)
+    w = _edges(head, x, y)
+    return gx + w.real, gy - w.imag
+
+
+def exact_head_hx(head, x, y) -> np.ndarray:
+    return exact_head_field(head, x, y)[0]
+
+
+@contextlib.contextmanager
+def exact_gap_head():
+    """Inside the block, varimu.devices.tape's record head (its recordings' field and
+    zones, the Python reference's and the zones handed to the kernel) is Westmijze's
+    exact gap; `variant_kernel(exact_gap=True)` tells circuitsim's kernel the same."""
+    saved = tape_mod.head_field, tape_mod.head_hx
+    tape_mod._ZONE_TABLES.clear()
+    tape_mod.head_field, tape_mod.head_hx = exact_head_field, exact_head_hx
+    try:
+        yield
+    finally:
+        tape_mod.head_field, tape_mod.head_hx = saved
+        tape_mod._ZONE_TABLES.clear()
+
+
 # --- The kernel with the options --------------------------------------------------------
 
 #: What the last kernel calls were given (tests: `record_reference` reruns them).
@@ -602,11 +713,13 @@ def variant_kernel(
     head_law: HeadLaw | None = None,
     capture: bool = False,
     astroid: bool = False,
+    exact_gap: bool = False,
 ):
     """Inside the block, varimu.devices.tape's Rust kernel call (`_record_rust`) runs with
     the moving model's mean field (alpha, with the tape's Ms), at most `threads` threads
-    (0: every core), the head's field mapped by `head_law`, and with `astroid` each axis
-    driven by `astroid_drive`. capture: keep each call's inputs in CAPTURE."""
+    (0: every core), the head's field mapped by `head_law`, with `astroid` each axis
+    driven by `astroid_drive`, and with `exact_gap` the record head's gap exact
+    (`exact_gap_head`, the zones too). capture: keep each call's inputs in CAPTURE."""
     if mean_field != 0.0 and not ms_a_m:
         raise ValueError("the mean field needs the tape's Ms")
     import circuitsim
@@ -654,6 +767,7 @@ def variant_kernel(
                     "h_static": (hx, hy),
                     "h_end": (ex, ey),
                     "table_step": table_step,
+                    "exact_gap": exact_gap,
                 }
             )
         mx, my = circuitsim.tape_record(
@@ -668,6 +782,7 @@ def variant_kernel(
             mean_field,
             ms_a_m or 0.0,
             astroid,
+            exact_gap,
         )
         shape = (slab.layers, len(s_cells))
         mx, my = np.asarray(mx).reshape(shape), np.asarray(my).reshape(shape)
@@ -675,7 +790,8 @@ def variant_kernel(
 
     tape_mod._record_rust = patched
     try:
-        yield
+        with exact_gap_head() if exact_gap else contextlib.nullcontext():
+            yield
     finally:
         tape_mod._record_rust = original
 

@@ -1743,6 +1743,7 @@ impl TapeStream {
             gap: p.rec_gap_m,
             pole: p.pole_m,
             relax: p.relax_m,
+            exact_gap: false,
         };
         let rep_head = Head {
             gap: p.rep_gap_m,
