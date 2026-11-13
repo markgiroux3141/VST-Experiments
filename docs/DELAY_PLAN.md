@@ -457,7 +457,8 @@ pot's wiper. Measured at 1 kHz: 0 dB at 0.44 (the default: the echo as it was), 
   so the 15 ips alignment's carries over; so do the levels.
 - **In `ampex_351.yaml`:** `speed` (the transport's switch: the capstan motor's other winding;
   each speed its own tape part in a switch, TP / TP_LO, the medium's cells per bias wavelength:
-  0.25 um at 7-1/2) and `equalization` (4S2a as contacts always in the circuit, so a flip is a
+  0.25 um at 7-1/2 then; since 2026-11-12 the parts' `cell_m`, 0.25 um at 15 ips and 0.125 at
+  7-1/2, TAPE_PLAN.md "Gaps" 8) and `equalization` (4S2a as contacts always in the circuit, so a flip is a
   value change; set with the speed, or against it). The 351's default IR moves only by the two
   contacts.
 - **Aligned** (`varimu.measure.tape_align.record_eq_lo`, step 3b; `scripts/align_351.py --low`

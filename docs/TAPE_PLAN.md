@@ -1536,3 +1536,29 @@ Not done: the perpendicular demagnetization beyond the head's image (the particl
 flags it unconverged; TAPE_PARTICLES.md); calibrated angle-resolved remanence data to pin the
 orientation directly (Levine & Daniel 1959 is the period source to ask for); No. 21 at other
 gaps; the over-bias study's variants other than these with the exact gap.
+
+**Still to do after the second round (2026-11-13), in one place:**
+- *The user's decisions:*
+  - adopt the exact gap alone (option 1 above), or wait;
+  - the Ampex 300-4's chirp fix (esdirk4 without tables or 40 substeps in its record island;
+    PERIOD_GEAR_BACKLOG.md PG1), then the deck's re-alignment and trims and the song's reprint
+    (~3 h);
+  - 0.125 um cells at 15 ips for margin against the cell alias's higher orders (step 1b; the
+    tape kernel 2x);
+  - regenerating the 351's two reductions on the 0.25 um medium (~3 h each; they load as they
+    are, -25 to -35 dB from the full stream either way);
+  - print-through as a condition dial (the over-bias study's item 6).
+- *Not built, cheap:* a guard in the alignment report listing |n f_b - j v / ds| < 20 kHz for
+  n <= 40 at the measured oscillator (step 1b).
+- *Open questions:*
+  - why the unoriented astroid tape distorts 1.8% at 0.05 Hc on the 51 um gap (test the
+    perpendicular demagnetization beyond the head's image first; the particle bench found it
+    unconverged);
+  - the 21.2 kHz line at the 351's `out`, the same on 0.5 and 0.25 um cells (out of band, not
+    traced);
+  - No. 21's rise, still short in every variant (-7.2 at best against -11.0 at 3 mA), and
+    Bulletin 14 (+0.2 to +1.5 dB at best against 3M's +4).
+- *Data to ask the user for:* Levine & Daniel 1959 (angle-resolved remanence: it would pin the
+  orientation that Bulletin 20 can't).
+- *Not run:* the head's corner-radius and spacing sensitivities (TAPE_HEAD_RESEARCH.md 5); No. 21
+  at other gaps; the round-one variants (moving / static mean field, head law) with the exact gap.

@@ -384,6 +384,16 @@ sensitivities. If the exact head and the astroid together reach the 9.4 dB rise 
 remaining width is the medium's (the switching-field distribution under rotating fields), and
 Levine & Daniel 1959 is the calibrated measurement to ask the user for.
 
+**Tested 2026-11-12** (TAPE_PLAN.md's "second round" status block; opt-in, not adopted): the
+exact mouth on the base medium gives the best No. 21 so far (rms 1.49 / 1.37 dB, was 2.25 /
+1.74), the rise -5.5 -> -7.2 dB of -11.0 (short of the 9.4 dB width), both peaks within 0.3 dB.
+The second verdict above didn't hold: the exact head moves the 8 mA spread too (-6.6 -> -11.4,
+the data -10.4), by lifting the 1 kHz curve past its peak. With the astroid on top, Bulletin 20
+can't pin the orientation; unoriented 3D axes remove the 15 kHz overshoot but distort at low
+level on the 51 um gap. The rise still falls short in every variant, so the remaining width is
+the medium's, and Levine & Daniel 1959 is still the measurement to ask for. The corner radius
+and spacing sensitivities weren't run.
+
 ---
 
 ## Sources (opened this session)

@@ -582,3 +582,7 @@ HLF-3C wait.
     reprint (~3 h), and the 351 family (its beat at ~18 kHz, -68 dB re a hot tone: near the top of
     the band; a BIAS ADJUST that moves its oscillator toward 96 kHz brings it down into the band):
     the same `cell_m` there moves every 351 print and needs its re-alignment (~1 h).
+    **Done 2026-11-12 for the 351 family** (TAPE_PLAN.md's "second round" status block): 0.25 um
+    at 15 ips, 0.125 at 7-1/2, re-aligned and re-profiled (`ampex351_cells025`, every spec as
+    before); the deck file is unchanged (it keeps its own value). The deck's chirp fix, its
+    re-alignment and trims, and the song's reprint stay open (the user's).

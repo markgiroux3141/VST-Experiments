@@ -455,6 +455,10 @@ each orientation's hysterons switching at the astroid's field for the angle betw
 field and their axis (h_sw(psi) = (cos^{2/3} + sin^{2/3})^{-3/2}), which the medium's
 kernel can tabulate per (orientation, field angle) at no cost per sample. The bench gives
 its target curves (`bench_curves.json`), the static fit its switching distribution.
+(Tested since, opt-in: TAPE_PLAN.md's "Over-bias options" and its "second round" status
+block, 2026-11-12. The astroid moves No. 21 the right way; its 15 kHz overshoot goes with the
+orientation, gone for unoriented 3D axes, which then distort at low level on the 51 um gap.
+Not adopted.)
 
 **What would make it trustworthy:** (a) the coating's field converged with particles: an
 implicit (per-step self-consistent) solve of the whole layered field, not only the cell's
