@@ -1,0 +1,478 @@
+{
+ "telefunken_v76": {
+  "noise_a_rms": 8.822378780167517e-07,
+  "rows": [
+   {
+    "level_db": -40.0,
+    "signal_a": 0.02821748198161578,
+    "character_a": 6.826385095171314e-06,
+    "character": 0.0001618822202203702
+   },
+   {
+    "level_db": -37.0,
+    "signal_a": 0.03985715366042355,
+    "character_a": 1.1057363461334642e-05,
+    "character": 0.00023050455397708822
+   },
+   {
+    "level_db": -34.0,
+    "signal_a": 0.05629727241428492,
+    "character_a": 1.910541821417092e-05,
+    "character": 0.00033146495733186435
+   },
+   {
+    "level_db": -31.0,
+    "signal_a": 0.07951634886492887,
+    "character_a": 3.513954129073389e-05,
+    "character": 0.0004807605681693257
+   },
+   {
+    "level_db": -28.0,
+    "signal_a": 0.11230619331677977,
+    "character_a": 6.821911575612207e-05,
+    "character": 0.0006995019432805702
+   },
+   {
+    "level_db": -25.0,
+    "signal_a": 0.15860179617532924,
+    "character_a": 0.00013953506378518553,
+    "character": 0.0010245058794835751
+   },
+   {
+    "level_db": -22.0,
+    "signal_a": 0.22391530904094487,
+    "character_a": 0.0006308252018499826,
+    "character": 0.001779670748623484
+   },
+   {
+    "level_db": -19.0,
+    "signal_a": 0.314067847280353,
+    "character_a": 0.0075961747058870535,
+    "character": 0.008052764837913992
+   },
+   {
+    "level_db": -16.0,
+    "signal_a": 0.41396315843655984,
+    "character_a": 0.05150927295876974,
+    "character": 0.052029186996452856
+   },
+   {
+    "level_db": -13.0,
+    "signal_a": 0.48766561956413984,
+    "character_a": 0.0999493260565865,
+    "character": 0.09886421938722922
+   },
+   {
+    "level_db": -10.0,
+    "signal_a": 0.5583550156721153,
+    "character_a": 0.14446552675978708,
+    "character": 0.14700770556302797
+   },
+   {
+    "level_db": -7.0,
+    "signal_a": 0.613069421998812,
+    "character_a": 0.19604369137960218,
+    "character": 0.2049210001890162
+   },
+   {
+    "level_db": -4.0,
+    "signal_a": 0.6532025140457008,
+    "character_a": 0.24766443776700642,
+    "character": 0.2630893702999794
+   },
+   {
+    "level_db": -1.0,
+    "signal_a": 0.6873864065557029,
+    "character_a": 0.2955810847692371,
+    "character": 0.31684823424158726
+   },
+   {
+    "level_db": 2.0,
+    "signal_a": 0.7130227980183906,
+    "character_a": 0.3332724475146945,
+    "character": 0.35833604652351053
+   },
+   {
+    "level_db": 5.0,
+    "signal_a": 0.7335713676627107,
+    "character_a": 0.36088730550676806,
+    "character": 0.3885581812475091
+   }
+  ],
+  "character_floor_db_re_signal": -72.3265494403123,
+  "L_star": -40.0,
+  "L_star_noise_half": -40.0,
+  "L_star_noise_double": -40.0,
+  "L_star_at_edge": "below the grid",
+  "impairment_min_db": -72.2546091538884,
+  "at_L_star": {
+   "noise_db_re_signal": -90.09865113093291,
+   "character_db_re_signal": -72.3265494403123,
+   "character_over_floor_db_re_signal": null,
+   "distortion_percent": 0.024192042010051897
+  },
+  "operating_dbfs_rms": -18.0,
+  "at_operating": {
+   "noise_db_re_signal": -111.02875555788076,
+   "character_db_re_signal": -32.328570662826664,
+   "character_over_floor_db_re_signal": -32.32900518121426
+  }
+ },
+ "fairchild_670": {
+  "noise_a_rms": 8.499757362763767e-08,
+  "rows": [
+   {
+    "level_db": -40.0,
+    "signal_a": 0.004456607344319016,
+    "character_a": 1.864606648258048e-07,
+    "character": 4.9096466633611045e-06
+   },
+   {
+    "level_db": -37.0,
+    "signal_a": 0.0062949849933493516,
+    "character_a": 2.971393968509118e-07,
+    "character": 6.936007533586037e-06
+   },
+   {
+    "level_db": -34.0,
+    "signal_a": 0.00889151098808613,
+    "character_a": 5.702990955271446e-07,
+    "character": 9.792794739928483e-06
+   },
+   {
+    "level_db": -31.0,
+    "signal_a": 0.012558498987043861,
+    "character_a": 1.347162302536305e-06,
+    "character": 1.3835277498499257e-05
+   },
+   {
+    "level_db": -28.0,
+    "signal_a": 0.017716317677381417,
+    "character_a": 3.6214359564556246e-05,
+    "character": 4.834514674276656e-05
+   },
+   {
+    "level_db": -25.0,
+    "signal_a": 0.02407866318258829,
+    "character_a": 0.0008109210863478722,
+    "character": 0.0009735408766564482
+   },
+   {
+    "level_db": -22.0,
+    "signal_a": 0.030117707619135424,
+    "character_a": 0.0018720897127749694,
+    "character": 0.0022211911471710197
+   },
+   {
+    "level_db": -19.0,
+    "signal_a": 0.036834607191284965,
+    "character_a": 0.0032271203177423953,
+    "character": 0.0038056408893358943
+   },
+   {
+    "level_db": -16.0,
+    "signal_a": 0.0434533614630736,
+    "character_a": 0.005021591813900683,
+    "character": 0.0058879787731981725
+   },
+   {
+    "level_db": -13.0,
+    "signal_a": 0.04955267612014084,
+    "character_a": 0.007301619645128067,
+    "character": 0.008547871613458196
+   },
+   {
+    "level_db": -10.0,
+    "signal_a": 0.054595425651050154,
+    "character_a": 0.009669221515976986,
+    "character": 0.011325846083261829
+   },
+   {
+    "level_db": -7.0,
+    "signal_a": 0.05897284689846894,
+    "character_a": 0.012324512505809024,
+    "character": 0.014425506774006133
+   },
+   {
+    "level_db": -4.0,
+    "signal_a": 0.06270780241248387,
+    "character_a": 0.015072456272265762,
+    "character": 0.017635106321581173
+   },
+   {
+    "level_db": -1.0,
+    "signal_a": 0.0658185970193513,
+    "character_a": 0.017906628140814743,
+    "character": 0.021000829756495178
+   },
+   {
+    "level_db": 2.0,
+    "signal_a": 0.0684117018686941,
+    "character_a": 0.020807508019339758,
+    "character": 0.02444555027126678
+   },
+   {
+    "level_db": 5.0,
+    "signal_a": 0.07143164221006516,
+    "character_a": 0.023991310318041113,
+    "character": 0.028149293422985066
+   }
+  ],
+  "character_floor_db_re_signal": -87.56834286556182,
+  "L_star": -40.0,
+  "L_star_noise_half": -40.0,
+  "L_star_noise_double": -40.0,
+  "L_star_at_edge": "below the grid",
+  "impairment_min_db": -86.74840455847766,
+  "at_L_star": {
+   "noise_db_re_signal": -94.39195686567979,
+   "character_db_re_signal": -87.56834286556182,
+   "character_over_floor_db_re_signal": null,
+   "distortion_percent": 0.004183915037152474
+  },
+  "operating_dbfs_rms": -18.0,
+  "at_operating": {
+   "noise_db_re_signal": -112.7369902897448,
+   "character_db_re_signal": -21.148817704060214,
+   "character_over_floor_db_re_signal": -21.148818694508588
+  }
+ },
+ "pultec_eqp1a": {
+  "noise_a_rms": 1.2699509062655263e-06,
+  "rows": [
+   {
+    "level_db": -40.0,
+    "signal_a": 0.004848717678590083,
+    "character_a": 2.2835902697371872e-07,
+    "character": 3.250521885953018e-06
+   },
+   {
+    "level_db": -37.0,
+    "signal_a": 0.006848988902825019,
+    "character_a": 3.2333113307244514e-07,
+    "character": 4.528693410659734e-06
+   },
+   {
+    "level_db": -34.0,
+    "signal_a": 0.009674438833792794,
+    "character_a": 4.59177897791596e-07,
+    "character": 6.3018139660837745e-06
+   },
+   {
+    "level_db": -31.0,
+    "signal_a": 0.01366547370676718,
+    "character_a": 6.559333192704191e-07,
+    "character": 8.787115463922892e-06
+   },
+   {
+    "level_db": -28.0,
+    "signal_a": 0.019302914230463215,
+    "character_a": 9.476093991809479e-07,
+    "character": 1.2322986867120532e-05
+   },
+   {
+    "level_db": -25.0,
+    "signal_a": 0.027265896915600298,
+    "character_a": 1.3980861778830667e-06,
+    "character": 1.740386407620295e-05
+   },
+   {
+    "level_db": -22.0,
+    "signal_a": 0.03851362029335739,
+    "character_a": 2.139779613088422e-06,
+    "character": 2.4709239076519842e-05
+   },
+   {
+    "level_db": -19.0,
+    "signal_a": 0.05440070001168085,
+    "character_a": 3.4699737288756714e-06,
+    "character": 3.516829740503286e-05
+   },
+   {
+    "level_db": -16.0,
+    "signal_a": 0.07683979405757149,
+    "character_a": 6.096344414891987e-06,
+    "character": 5.009468072123391e-05
+   },
+   {
+    "level_db": -13.0,
+    "signal_a": 0.10853041781329538,
+    "character_a": 1.1805776250806641e-05,
+    "character": 7.148628144274147e-05
+   },
+   {
+    "level_db": -10.0,
+    "signal_a": 0.1532795772802197,
+    "character_a": 2.5387313720097426e-05,
+    "character": 0.00010297993663107651
+   },
+   {
+    "level_db": -7.0,
+    "signal_a": 0.21644712695229607,
+    "character_a": 6.038371294618961e-05,
+    "character": 0.00015396229355386075
+   },
+   {
+    "level_db": -4.0,
+    "signal_a": 0.3055516731433783,
+    "character_a": 0.00015679846143772604,
+    "character": 0.000258755359324236
+   },
+   {
+    "level_db": -1.0,
+    "signal_a": 0.4310485526198589,
+    "character_a": 0.00044101523670087695,
+    "character": 0.0005530979755391573
+   },
+   {
+    "level_db": 2.0,
+    "signal_a": 0.605394160652894,
+    "character_a": 0.01037518838650694,
+    "character": 0.010569339366669034
+   },
+   {
+    "level_db": 5.0,
+    "signal_a": 0.6995443080878062,
+    "character_a": 0.16917699046679874,
+    "character": 0.19341637112539017
+   }
+  ],
+  "character_floor_db_re_signal": -86.54017427583484,
+  "L_star": -21.767335083699972,
+  "L_star_noise_half": -23.129556726392494,
+  "L_star_noise_double": -20.2880809967578,
+  "L_star_at_edge": null,
+  "impairment_min_db": -83.79437574477319,
+  "at_L_star": {
+   "noise_db_re_signal": -89.63654824072384,
+   "character_db_re_signal": -85.104905978813,
+   "character_over_floor_db_re_signal": -90.61130646887494,
+   "distortion_percent": 0.0055559035914820995
+  },
+  "operating_dbfs_rms": -18.0,
+  "at_operating": {
+   "noise_db_re_signal": -92.636351115395,
+   "character_db_re_signal": -83.90556602675875,
+   "character_over_floor_db_re_signal": -87.3271616154783
+  }
+ },
+ "ampex_351": {
+  "noise_a_rms": 8.455251512987918e-05,
+  "rows": [
+   {
+    "level_db": -40.0,
+    "signal_a": 0.00874339389099982,
+    "character_a": 0.00039618031731394627,
+    "character": 0.00043434597288354926
+   },
+   {
+    "level_db": -37.0,
+    "signal_a": 0.012378927263372776,
+    "character_a": 0.0005619306283149991,
+    "character": 0.0006161285346570287
+   },
+   {
+    "level_db": -34.0,
+    "signal_a": 0.017533748311464557,
+    "character_a": 0.0007968627468179218,
+    "character": 0.0008731118985722061
+   },
+   {
+    "level_db": -31.0,
+    "signal_a": 0.024836781651012482,
+    "character_a": 0.0011300207258614825,
+    "character": 0.0012373893561904718
+   },
+   {
+    "level_db": -28.0,
+    "signal_a": 0.0351519863443913,
+    "character_a": 0.0016035269283993273,
+    "character": 0.0017534099944252145
+   },
+   {
+    "level_db": -25.0,
+    "signal_a": 0.049597039948982354,
+    "character_a": 0.0022863276742734915,
+    "character": 0.0024906139496026956
+   },
+   {
+    "level_db": -22.0,
+    "signal_a": 0.06941899240734557,
+    "character_a": 0.003376043415725228,
+    "character": 0.003635367409740738
+   },
+   {
+    "level_db": -19.0,
+    "signal_a": 0.09555150301807278,
+    "character_a": 0.00562025632557911,
+    "character": 0.005894466151439745
+   },
+   {
+    "level_db": -16.0,
+    "signal_a": 0.12793433501808935,
+    "character_a": 0.010594305249928394,
+    "character": 0.010805168429275612
+   },
+   {
+    "level_db": -13.0,
+    "signal_a": 0.16464670869945347,
+    "character_a": 0.01992505832287473,
+    "character": 0.020111917684242683
+   },
+   {
+    "level_db": -10.0,
+    "signal_a": 0.20153492620153562,
+    "character_a": 0.03443725281999868,
+    "character": 0.03490545604333222
+   },
+   {
+    "level_db": -7.0,
+    "signal_a": 0.2338732775166968,
+    "character_a": 0.053505547155813085,
+    "character": 0.054810285964849464
+   },
+   {
+    "level_db": -4.0,
+    "signal_a": 0.2595020035416432,
+    "character_a": 0.0747470340989616,
+    "character": 0.0775733672212033
+   },
+   {
+    "level_db": -1.0,
+    "signal_a": 0.2795316865856102,
+    "character_a": 0.09562317474319244,
+    "character": 0.1005044537755534
+   },
+   {
+    "level_db": 2.0,
+    "signal_a": 0.29500502877987805,
+    "character_a": 0.11370160852863753,
+    "character": 0.1206778909465914
+   },
+   {
+    "level_db": 5.0,
+    "signal_a": 0.30651071003260205,
+    "character_a": 0.12787173769860558,
+    "character": 0.13640406423663742
+   }
+  ],
+  "character_floor_db_re_signal": -26.875742967055388,
+  "L_star": -30.771533446487727,
+  "L_star_noise_half": -32.0486601555808,
+  "L_star_noise_double": -29.418322864311893,
+  "L_star_at_edge": null,
+  "impairment_min_db": -26.815931560383888,
+  "at_L_star": {
+   "noise_db_re_signal": -49.359375769688114,
+   "character_db_re_signal": -26.840178205645174,
+   "character_over_floor_db_re_signal": -47.72559256888397,
+   "distortion_percent": 4.549787253999621
+  },
+  "operating_dbfs_rms": -18.0,
+  "at_operating": {
+   "noise_db_re_signal": -61.062219841144945,
+   "character_db_re_signal": -24.60962799557368,
+   "character_over_floor_db_re_signal": -28.518552112864874
+  }
+ }
+}

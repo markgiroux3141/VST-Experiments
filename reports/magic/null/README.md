@@ -94,6 +94,36 @@ Readings:
 - T1: the grain alone nulls at -33 dB, consistent with AM7's -37 dB re signal (the residual of
   two independent realizations is +3 dB over one).
 
+## The Ampex 351 (the literal machine, aligned)
+
+`two_pass_null.py --only ampex_351` (14 renders, 89 min). The same pairs on the whole machine
+(tubes, the literal bias, the tape's grain and transport). A run's origin (P1) moves every
+deterministic process that runs from the start: the mains sines, and also the transport's
+flutter and the grain's position along the tape. So on the 351, P1 is not only "the mains'
+phase".
+
+| Pair (guitar / drums) | audio | dewarped | delay track rms |
+|---|---|---|---|
+| floor (noise alone, audio band) | -53 / -50 | | |
+| P0 noise off twice | **identical** | | |
+| P1 origin 0 vs 7.3 s | -15 / -7 | **-45 / -37** | 141 / 140 us |
+| P2 noise seeds | -20 / -9 | -33 / -31 | 96 / 163 us |
+| P2 if additive | -50 / -47 | | |
+| P3 another moment | -16 / -6 | -33 / -31 | 151 / 215 us |
+
+- **The time base is almost all of it.** Every pair's plain residual is -6 to -20 dB, as the
+  idealized machine's T2 was, and dewarping takes 13-30 dB off it. The relative displacement
+  is 100-200 us rms, more than the idealized machine's 76 us. The literal machine's transport
+  also hunts with its motor.
+- **After dewarping, P2 and P3 still sit ~16 dB over additive** (-33 / -31 against -50 / -47).
+  That is what AM6 found too (`reports/magic/levels/`: a -27 dB floor that scales with the
+  signal). Flutter faster than the tracker follows (~25 Hz) and the grain's modulation noise
+  both scale with the signal, and this measurement can't split them. P1 dewarps deeper (-45 /
+  -37). There the grain is the same realization, only shifted, so what's left of P1 is
+  mostly fast flutter.
+- **P0 is bit-identical** with the noise off, like every other device: the literal 351 is
+  deterministic at a fixed origin and seed.
+
 ## More deterministic than hardware (pairs below -120 dB)
 
 | Pair | What a real unit would vary that the model holds fixed |

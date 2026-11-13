@@ -23,7 +23,7 @@ import numpy as np
 from varimu.config import REPO_ROOT
 from varimu.listen import difference
 from varimu.magic import levels as lvmod
-from varimu.magic import render
+from varimu.magic import null, render
 from varimu.sim.io import load_audio
 
 OUT = REPO_ROOT / "reports" / "magic" / "levels"
@@ -81,6 +81,12 @@ def main() -> int:
         for L in LEVELS_DB:
             u = x * 10 ** (L / 20)
             y = ys[(st, float(L))][: len(u)]
+            if st == "ampex_351":
+                # The transport's wow and flutter is a time base no fixed filter explains: it
+                # would count as "character" at every level (-6.5 dB re signal before this).
+                # Removed first, as AM2's dewarped stage does.
+                tt, dl = null.delay_track(u, y, fs)
+                y = null.dewarp(y, fs, tt, dl)
             d = difference.decompose(u, y)
             # The character part, referred to the output (decompose maps the output onto the
             # input: scale back by the output / input gain).
@@ -97,15 +103,25 @@ def main() -> int:
         sig = np.array([r["signal_a"] for r in rows])
         ch = np.array([r["character_a"] for r in rows])
         res = {"noise_a_rms": n_a, "rows": rows}
+        # A part of the character that scales with the signal (the 351's residual flutter and
+        # modulation noise; decompose's own floor elsewhere) is the same ratio at every level:
+        # it can't move the optimum, only bury it in wobble. L* is found on the rest, the
+        # character's power over that floor (the least ratio on the grid).
+        floor = float(np.min(ch / sig))
+        excess = np.maximum(ch**2 - (floor * sig) ** 2, 0.0)
+        res["character_floor_db_re_signal"] = float(20 * np.log10(floor))
         for tag, k in (("L_star", 1.0), ("L_star_noise_half", 0.5), ("L_star_noise_double", 2.0)):
-            imp = (k * n_a**2 + ch**2) / sig**2
+            imp = (k * n_a**2 + excess) / sig**2
             res[tag] = lvmod.optimum(LEVELS_DB, imp)
+        edge = {float(LEVELS_DB[0]): "below the grid", float(LEVELS_DB[-1]): "above the grid"}
+        res["L_star_at_edge"] = edge.get(res["L_star"])
         imp = (n_a**2 + ch**2) / sig**2
-        i = int(np.argmin(imp))
+        i = int(np.argmin((n_a**2 + excess) / sig**2))
         res["impairment_min_db"] = float(10 * np.log10(imp[i]))
         res["at_L_star"] = {
             "noise_db_re_signal": float(20 * np.log10(n_a / sig[i])),
             "character_db_re_signal": float(20 * np.log10(ch[i] / sig[i])),
+            "character_over_floor_db_re_signal": over_db(excess[i], sig[i]),
             "distortion_percent": float(100 * ch[i] / sig[i]),
         }
         res["operating_dbfs_rms"] = OPERATING_DBFS_RMS
@@ -113,17 +129,28 @@ def main() -> int:
         res["at_operating"] = {
             "noise_db_re_signal": float(20 * np.log10(n_a / sig[j])),
             "character_db_re_signal": float(20 * np.log10(ch[j] / sig[j])),
+            "character_over_floor_db_re_signal": over_db(excess[j], sig[j]),
         }
         summ[st] = res
+        at = res["at_L_star"]
+        ov = at["character_over_floor_db_re_signal"]
         print(
-            f"{st}: L* {res['L_star']:+.1f} dBFS rms (noise x0.5 {res['L_star_noise_half']:+.1f}, "
-            f"x2 {res['L_star_noise_double']:+.1f}); at L*: noise {res['at_L_star']['noise_db_re_signal']:.1f}, "
-            f"character {res['at_L_star']['character_db_re_signal']:.1f} dB re signal",
+            f"{st}: L* {res['L_star']:+.1f} dBFS rms (noise x0.5 "
+            f"{res['L_star_noise_half']:+.1f}, x2 {res['L_star_noise_double']:+.1f}"
+            f"{'; ' + res['L_star_at_edge'] if res['L_star_at_edge'] else ''}); at L*: noise "
+            f"{at['noise_db_re_signal']:.1f}, character {at['character_db_re_signal']:.1f}"
+            f" (over its floor {'none' if ov is None else f'{ov:.1f}'}) dB re signal;"
+            f" floor {res['character_floor_db_re_signal']:.1f}",
             flush=True,
         )
     summ_path.write_text(json.dumps(summ, indent=1, default=float))
     plot(summ)
     return 0
+
+
+def over_db(excess: float, sig: float) -> float | None:
+    """The character over its floor in dB re the signal; None where it is all floor."""
+    return float(10 * np.log10(excess / sig**2)) if excess > 0 else None
 
 
 def plot(summ: dict) -> None:
@@ -140,6 +167,9 @@ def plot(summ: dict) -> None:
         ch = np.array([q["character_a"] for q in r["rows"]])
         ax.plot(L, 20 * np.log10(r["noise_a_rms"] / sig), label="noise re signal (A)")
         ax.plot(L, 20 * np.log10(ch / sig), label="character re signal (A)")
+        fl = 10 ** (r["character_floor_db_re_signal"] / 20)
+        ex = np.maximum(ch**2 - (fl * sig) ** 2, 1e-30)
+        ax.plot(L, 10 * np.log10(ex / sig**2), ls="--", label="character over its floor")
         ax.plot(L, 10 * np.log10((r["noise_a_rms"] ** 2 + ch**2) / sig**2), "k", label="impairment")
         ax.axvline(r["L_star"], color="k", ls=":", label=f"L* {r['L_star']:+.1f}")
         ax.axvline(r["operating_dbfs_rms"], color="r", ls="--", label="0 VU")
