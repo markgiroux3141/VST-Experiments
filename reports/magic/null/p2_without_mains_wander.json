@@ -1,0 +1,14 @@
+{
+ "telefunken_v76 drums": {
+  "P2_gain": -86.41972923963678,
+  "P2_audio": -87.65014062213831,
+  "floor_audio": -107.44728009590202,
+  "additive_expectation_audio": -104.4369801392622
+ },
+ "fender_5e3 guitar": {
+  "P2_gain": -77.87116099814216,
+  "P2_audio": -78.80580937452234,
+  "floor_audio": -74.53118321423652,
+  "additive_expectation_audio": -71.52088325759671
+ }
+}

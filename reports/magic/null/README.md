@@ -45,7 +45,17 @@ Readings:
   **mains wander** (0.5 % rms, a 1/f process below 2 Hz, provisional): two seeds give two
   different slow supply offsets over a render, and supplies set the gain reduction (670, SSL),
   the sag (5E3) and the clip point (the V76 is overdriven by these drums: its output peaks at
-  2.4x full scale). Attribution run: `p2_without_mains_wander.json` (below).
+  2.4x full scale). **Confirmed** (`p2_without_mains_wander.json`, `scripts/p2_without_mains_wander.py`:
+  the wander's rms set to 0 in that process only, uncached):
+
+  | | P2 with the wander | without | additive expectation |
+  |---|---|---|---|
+  | V76, drums | -30.4 | **-87.7** | -104.4 |
+  | 5E3, guitar | -41.0 | **-78.8** | -71.5 |
+
+  The wander is 58 and 38 dB of it. What the V76 keeps (17 dB over additive) is its noise
+  meeting the clipping. The 5E3 lands *under* additive: a cranked amp compresses its own noise,
+  as the triode stage does under a big swing (tests/test_magic_null.py).
 - **The EQP-1A, the 1176 and the 6G15 are near additive**: their noise doesn't reach the gain.
   The 1176 and the SSL have ideal rails (P1 identical), so the wander has nothing to act on in
   either. **The SSL's P2 is still 33 dB above additive, so the wander isn't the whole story:**
