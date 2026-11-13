@@ -32,6 +32,7 @@ from varimu.sim.io import TransientSettings
 VERSION = 1  # bump when what a cached file holds changes
 CACHE = REPO_ROOT / "cache" / "magic" / "renders"
 _lock = threading.Lock()
+_build_lock = threading.Lock()
 _settings_cache: dict[str, TransientSettings] = {}
 
 
@@ -126,14 +127,17 @@ def through(
     def make() -> dict[str, np.ndarray]:
         c = spec.load_circuit(path)
         v_in, v_out = full_scale(st, c)
-        built = builder.build(
-            c,
-            ov,
-            triode_formulation=st.triode_formulation,
-            cores=cores if cores is not None else st.cores,
-            noise=noise,
-            heaters=heaters,
-        )
+        # One build at a time: varimu.devices.table.cached_table's file replace races
+        # between threads building the same tube tables (WinError 32).
+        with _build_lock:
+            built = builder.build(
+                c,
+                ov,
+                triode_formulation=st.triode_formulation,
+                cores=cores if cores is not None else st.cores,
+                noise=noise,
+                heaters=heaters,
+            )
         r = fast.run_transient(
             built.ir,
             x * v_in,

@@ -32,12 +32,13 @@ import soundfile as sf
 
 from varimu.config import REPO_ROOT
 from varimu.magic import fingerprints as fp
+from varimu.magic import main_root
 
 OUT = REPO_ROOT / "reports" / "magic" / "forensics"
 REF = REPO_ROOT / "cache" / "magic" / "reference"
 COVER = REPO_ROOT / "cache" / "magic" / "forensics" / "cover"
 LANES = REPO_ROOT / "cache" / "lightfoot_mix" / "dry"
-MIXES = REPO_ROOT / "reports" / "lightfoot_mix"
+MIXES = main_root() / "reports" / "lightfoot_mix"
 AUDIO_EXT = (".wav", ".flac", ".mp3", ".ogg", ".opus", ".aiff", ".aif")
 
 
