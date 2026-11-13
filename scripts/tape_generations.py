@@ -102,7 +102,8 @@ def measure_tones(y, marks, fs):
     out["response_db"] = {k: 20 * np.log10(v / ref) for k, v in resp.items()}
     vu = float(np.sqrt(np.mean(seg("thd1k") ** 2)))
     sil = seg("silence", skip=0.5, tail=0.5)
-    out["snr_db"] = 20 * np.log10(vu / fp.band_rms(sil, fs, 50.0, 15000.0))
+    n = fp.band_rms(sil, fs, 50.0, 15000.0)
+    out["snr_db"] = 20 * np.log10(vu / n) if n > 0 else None  # G0: digital silence
     out["flutter"] = fp.flutter(seg("flutter", 0.0, 0.0), fs, (2000.0, 4500.0))
     return out
 
@@ -192,7 +193,7 @@ def main() -> int:
         t = r["tones"]
         print(
             f"  G{k}: THD 400 {t['thd400_pct']:.2f}% 1k {t['thd1k_pct']:.2f}%, "
-            f"S/N {t['snr_db']:.1f} dB, "
+            f"S/N {t['snr_db'] if t['snr_db'] is None else round(t['snr_db'], 1)} dB, "
             f"wow {100 * t['flutter']['wow']:.3f}% flutter {100 * t['flutter']['flutter']:.3f}%, "
             f"resp 50 {t['response_db']['50']:+.2f} 15k {t['response_db']['15000']:+.2f}",
             flush=True,
@@ -227,16 +228,10 @@ def plot(summ):
     g = summ["generations"]
     ks = sorted(int(k) for k in g)
     fig, ax = plt.subplots(1, 3, figsize=(15, 4))
-    ax[0].plot(ks, [g[k]["tones"]["snr_db"] for k in ks], "o-", label="S/N")
-    ax[0].plot(
-        ks,
-        [
-            g[ks[0]]["tones"]["snr_db"] - 10 * np.log10(max(k, 1)) if k else g[0]["tones"]["snr_db"]
-            for k in ks
-        ],
-        "k:",
-        label="G1 - 10 log10 N",
-    )
+    kt = [k for k in ks if k > 0]  # G0 is the digital source: no floor
+    ax[0].plot(kt, [g[k]["tones"]["snr_db"] for k in kt], "o-", label="S/N")
+    s1 = g[1]["tones"]["snr_db"]
+    ax[0].plot(kt, [s1 - 10 * np.log10(k) for k in kt], "k:", label="G1 - 10 log10 N")
     ax[0].set(xlabel="generation", ylabel="dB", title="S/N")
     for key in ("thd400_pct", "thd1k_pct"):
         ax[1].plot(ks, [g[k]["tones"][key] for k in ks], "o-", label=key)

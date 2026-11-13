@@ -40,7 +40,9 @@ Distance to the corpus (diagonal; the floor is ~37, held-out tracks ~87):
 - **The 4-track moves it slightly *away*** (+8, the interval just clear of 0). Which features do
   it isn't decomposed yet (the per-feature contributions to the mean term are the way in).
   With AM1's reading (the 1960s tracks have a steady hiss and a 12.7 kHz top), one pass of
-  clean 15 ips tape isn't the missing piece. AM4's generations are the next thing to score here.
+  clean 15 ips tape isn't the missing piece. AM4's generations, scored here on the plain cover
+  (`reports/magic/generations/README.md`), move it *toward* the era: -17 / -27 / -37 at G1 / G2 / G4,
+  a third of what the mix does.
 
 ## With stereo features (`--stereo`, `summary_stereo.json`)
 
