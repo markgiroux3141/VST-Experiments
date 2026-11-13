@@ -112,23 +112,30 @@ def align(a, b, fs, max_lag_s=0.05) -> tuple[np.ndarray, np.ndarray, float]:
     return a[lo:hi], bb[lo:hi], d
 
 
-def delay_track(a, b, fs, window_s=0.02, hop_s=0.005, max_lag_s=0.002):
-    """(times, delay of b against a in seconds) from windowed cross-correlations, each peak
-    refined by a parabola; windows whose correlation peak is under 0.5 are NaN."""
+def delay_track(a, b, fs, window_s=0.02, hop_s=0.005, max_lag_s=0.002, gate_db=-40.0):
+    """(times, delay of b against a in seconds) from windowed cross-correlations: both
+    signals cut at the same place with the same Hann window (generalized cross-correlation;
+    windowing only a is no correlation, and its peak wandered by up to 2 ms on drums), each
+    peak refined by a parabola. NaN where the correlation peak is under 0.5 or the window's
+    energy is more than `gate_db` under the median window's."""
     a, b = np.asarray(a, float), np.asarray(b, float)
     n = min(len(a), len(b))
     w, hop, ml = int(window_s * fs), int(hop_s * fs), int(max_lag_s * fs)
     win = hann(w)
+    starts = np.arange(0, n - w, hop)
+    energy = np.array([np.dot(a[s : s + w] ** 2, win) for s in starts])
+    floor = np.median(energy) * 10 ** (gate_db / 10)
+    lags = np.arange(-ml, ml + 1)
     times, delays = [], []
-    for s in range(ml, n - w - ml, hop):
-        aw = a[s : s + w] * win
-        bw = b[s - ml : s + w + ml]
-        c = correlate(bw, aw, mode="valid", method="fft")  # lag -ml..ml
-        e_b = np.convolve(bw * bw, np.ones(w), mode="valid")  # Cauchy-Schwarz: peak <= 1
-        norm = np.sqrt(np.dot(aw, aw) * np.maximum(e_b, 1e-300))
-        lags = np.arange(-ml, ml + 1)
-        lag, peak = _peak_lag(c / norm, lags)
+    for s, e in zip(starts, energy, strict=True):
         times.append((s + w / 2) / fs)
+        if e <= floor:
+            delays.append(np.nan)
+            continue
+        aw, bw = a[s : s + w] * win, b[s : s + w] * win
+        c = correlate(bw, aw, mode="full", method="fft")[w - 1 - ml : w + ml]
+        norm = np.sqrt(np.dot(aw, aw) * np.dot(bw, bw))
+        lag, peak = _peak_lag(c / max(norm, 1e-300), lags)
         delays.append(lag / fs if peak >= 0.5 else np.nan)
     return np.asarray(times), np.asarray(delays)
 
@@ -184,12 +191,28 @@ def _edge(n: int) -> int:
     return max(1, min(taps // 2, n // 4))
 
 
+AUDIO_BAND_HZ = (20.0, 20000.0)
+
+
+def audio_band(x, fs):
+    """x band-passed to AUDIO_BAND_HZ (4th-order Butterworth each side, zero phase): levels
+    without the sub-audio drift a noise build can carry (AM2: the 6G15's floor, -24 dBFS rms,
+    was almost all below 5 Hz)."""
+    from scipy.signal import butter, sosfiltfilt
+
+    lo, hi = AUDIO_BAND_HZ
+    sos = butter(4, [lo, min(hi, 0.45 * fs)], "bandpass", fs=fs, output="sos")
+    return sosfiltfilt(sos, np.asarray(x, float))
+
+
 def null_report(a, b, fs, *, max_lag_s=0.05, dewarp_stage=True) -> dict:
     """How deep two passes null, in stages. All levels in dB re a's rms.
     raw: a - b after `align`. gain: a - g b. filter: the character part of
     difference.decompose(a, b) (one fixed filter removed). dewarped: the character part
     after `dewarp` (the time base removed). bands: the gain residual per third octave re a's
-    level in that band. over_time: (t, gain residual per 100 ms block, dB re a's rms)."""
+    level in that band. over_time: (t, gain residual per 100 ms block, dB re a's rms).
+    audio: the gain residual of both band-passed to AUDIO_BAND_HZ (`audio_band`), re a's
+    band-passed rms."""
     a, b = np.asarray(a, float), np.asarray(b, float)
     if len(a) == len(b) and np.array_equal(a, b):
         return {
@@ -198,6 +221,7 @@ def null_report(a, b, fs, *, max_lag_s=0.05, dewarp_stage=True) -> dict:
             "gain": float("-inf"),
             "filter": float("-inf"),
             "dewarped": float("-inf"),
+            "audio": float("-inf"),
             "delay_samples": 0.0,
             "bands": {},
             "over_time": [[], []],
@@ -209,6 +233,10 @@ def null_report(a, b, fs, *, max_lag_s=0.05, dewarp_stage=True) -> dict:
     rg = aa - g * bb
     out["gain_factor"] = g
     out["gain"] = rms_db(rg, aa)
+    ab = audio_band(aa, fs)
+    out["audio"] = rms_db(
+        ab - difference.align_gain(ab, audio_band(bb, fs)) * audio_band(bb, fs), ab
+    )
     # The fixed filter and the time base see b moved by whole samples only (decompose
     # fits any delay itself; a fractional delay's droop near Nyquist would read as character).
     k = int(round(d))

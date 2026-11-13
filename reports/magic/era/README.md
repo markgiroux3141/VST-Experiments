@@ -41,3 +41,42 @@ Distance to the corpus (diagonal; the floor is ~37, held-out tracks ~87):
   it isn't decomposed yet (the per-feature contributions to the mean term are the way in).
   With AM1's reading (the 1960s tracks have a steady hiss and a 12.7 kHz top), one pass of
   clean 15 ips tape isn't the missing piece. AM4's generations are the next thing to score here.
+
+## With stereo features (`--stereo`, `summary_stereo.json`)
+
+Each window gains 18 columns: per octave band (63 Hz-16 kHz) the L/R coherence and the side /
+mid ratio (dB). 356 dimensions, the same z-scoring, the diagonal distance.
+
+| Check | mono | **with stereo** | stereo columns alone |
+|---|---|---|---|
+| floor (odd vs even) | 36.7 | 144.4 | |
+| held-out 1960s (median) | 87.0 | **125.6** | **10.6** |
+| 1970s | 85.2 | **164.3** | 54.4 |
+| later | 126.4 | 233.5 | 95.4 |
+
+- **With stereo the features tell the 1960s from the 1970s** (126 vs 164; the stereo columns
+  alone 11 vs 54 vs 95). AM1's strongest marker carries the era. One 1960s track is an outlier
+  in stereo (track 4, 194 on the stereo columns: perhaps a mono or a narrow master), which is
+  also why the floor (three tracks against three) sits above the held-out median.
+- The floor rose from 37 to 144: the side / mid dB isn't bounded (a near-mono passage gives
+  -40 to -100 dB). The fold-to-mono check moves the distance by +7198, the right sign but the
+  wrong scale. Clip the ratio (at -40 dB, say) before using the stereo distance as an
+  objective. Not done tonight: the features would need recomputing for all tracks.
+
+The cover (deltas vs the plain four lanes, each through the codec):
+
+| Version | with stereo | stereo columns alone |
+|---|---|---|
+| plain | D 265.3 | D 50.4 |
+| 1968-style mix, no tape | -55.1 [-68.9, -41.5] | **+50.1** [+46.6, +53.6] |
+| through the 4-track | -41.4 [-58.3, -32.1] | +55.8 [+50.0, +56.4] |
+| known: low-pass 10 kHz | -0.4 | |
+| known: +6 dB below 150 Hz | +26.5 | |
+
+- **The 1968-style mix moves the cover away from the era in stereo** (+50 on the stereo
+  columns): it is narrower than the plain lanes (AM1: L/R correlation 0.93 against the 1960s
+  tracks' 0.55, bass coherence 0.89 against 0.16). The texture features still pull it closer
+  overall. **The way to sound more like these records is a wider, decorrelated stereo picture,
+  bass included: a mix and miking decision**, not a device. HEADLESS_MIX_PLAN's pans and the
+  Room view's separate mics are where that lives.
+- The 4-track again sits a little further away than no tape (+14 here, +8 mono).

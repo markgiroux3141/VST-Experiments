@@ -31,7 +31,7 @@ from varimu.sim.io import TransientSettings
 
 VERSION = 1  # bump when what a cached file holds changes
 CACHE = REPO_ROOT / "cache" / "magic" / "renders"
-_lock = threading.Lock()
+_lock = threading.RLock()  # re-entered: ampex_351_setup -> sample_rate -> settings
 _build_lock = threading.Lock()
 _settings_cache: dict[str, TransientSettings] = {}
 

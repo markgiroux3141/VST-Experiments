@@ -17,7 +17,10 @@ The tape machine alone (varimu.devices.tape_machine.print_audio), grain and tran
 -> reports/magic/null/ (summary.json, null.png, residual WAVs, README.md written by hand).
 
   uv run --extra fast --extra listen python scripts/two_pass_null.py [--only DEVICE ...]
-      [--clips guitar drums] [--seconds 10] [--jobs N]
+      [--clips guitar drums] [--seconds 10] [--jobs N] [--analyse-only]
+
+--analyse-only recomputes the reports from the render cache (P0's uncached second pass is not
+rerun: P0 keeps the previous summary's result).
 """
 
 from __future__ import annotations
@@ -138,6 +141,7 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--jobs", type=int, default=None)
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--analyse-only", action="store_true")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -149,6 +153,8 @@ def main() -> int:
     for dev in devs:
         for clip, x in progs.items():
             for tag, job in jobs_for(dev, clip, x).items():
+                if a.analyse_only and tag == "base_again":
+                    job = {**job, "cache": True}
                 work.append((dev, clip, tag, job))
     work.sort(key=lambda w: -cost_weight(w[0]))
     print(
@@ -188,7 +194,7 @@ def main() -> int:
 
     summary: dict = {"seconds": a.seconds, "fs": fs, "devices": {}}
     prior = out / "summary.json"
-    if prior.exists() and a.only:
+    if prior.exists() and (a.only or a.analyse_only):
         summary = json.loads(prior.read_text())
     for dev in devs:
         d = summary["devices"].setdefault(dev, {})
@@ -199,14 +205,23 @@ def main() -> int:
             if base is not None and floor is not None:
                 c["noise_floor_db"] = null.rms_db(floor, base)
                 c["output_rms_dbfs"] = null.rms_db(base, 1.0)
+                c["floor_bands"] = null.band_levels(floor, base, fs)
+                c["noise_floor_audio_db"] = null.rms_db(
+                    null.audio_band(floor, fs), null.audio_band(base, fs)
+                )
             for pname, (ta, tb) in PAIRS.items():
                 ya, yb = results.get((dev, clip, ta)), results.get((dev, clip, tb))
                 if ya is None or yb is None:
+                    continue
+                if a.analyse_only and pname.startswith("P0") and pname in c:
                     continue
                 r = null.null_report(ya, yb, fs)
                 if pname.startswith("P2") and "noise_floor_db" in c:
                     # Independent additive noise alone would give the floor + 3.01 dB.
                     c["P2 additive expectation"] = c["noise_floor_db"] + 10 * math.log10(2)
+                    c["P2 additive expectation audio"] = c[
+                        "noise_floor_audio_db"
+                    ] + 10 * math.log10(2)
                 c[pname] = r
                 if not r.get("identical"):
                     ra, rb, _ = null.align(ya, yb, fs)
