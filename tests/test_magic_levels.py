@@ -18,7 +18,6 @@ def test_a_weighting_reads_iec_values():
 
 
 def test_optimum_of_tanh_plus_noise():
-    rng = np.random.default_rng(1)
     t = np.arange(2 * FS) / FS
     x = np.sin(2 * np.pi * 440 * t) * (0.6 + 0.4 * np.sin(2 * np.pi * 1.1 * t))
     x /= np.std(x)

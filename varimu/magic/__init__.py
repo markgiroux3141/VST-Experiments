@@ -12,8 +12,13 @@ def main_root():
     from varimu.config import REPO_ROOT
 
     try:
-        common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=REPO_ROOT,
-                                capture_output=True, text=True, check=True).stdout.strip()
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
         p = Path(common)
         p = p if p.is_absolute() else (REPO_ROOT / p)
         return p.resolve().parent

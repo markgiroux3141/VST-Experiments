@@ -81,7 +81,9 @@ def floor_accel_per_force(f, fl, r):
     kr = k * r
     spread = np.abs(special.hankel2(0, kr) - 2j / np.pi * special.k0(kr))
     y0 = 1.0 / (8 * np.sqrt(D * m))
-    return w * y0 * spread  # |H0(0) - (2i/pi)K0(0)| -> 1 (finite part), so spread re the drive point
+    return (
+        w * y0 * spread
+    )  # |H0(0) - (2i/pi)K0(0)| -> 1 (finite part), so spread re the drive point
 
 
 def band_levels(x, fs):
@@ -101,10 +103,15 @@ def main() -> int:
     p_ac = hit.pressure_pa * r_mic / R_STAND_M  # the kick's sound at the stand's mic
     P_ac = band_levels(p_ac, FS)
     F = band_levels(hit.force_n, FS)
-    summ = {"kick": {"peak_force_n": float(np.abs(hit.force_n).max()),
-                     "peak_pressure_pa_at_mic": float(np.abs(p_ac).max()),
-                     "peak_spl_db_at_mic": float(20 * np.log10(np.abs(p_ac).max() / 2e-5))},
-            "bands_hz": THIRDS, "cases": {}}
+    summ = {
+        "kick": {
+            "peak_force_n": float(np.abs(hit.force_n).max()),
+            "peak_pressure_pa_at_mic": float(np.abs(p_ac).max()),
+            "peak_spl_db_at_mic": float(20 * np.log10(np.abs(p_ac).max() / 2e-5)),
+        },
+        "bands_hz": THIRDS,
+        "cases": {},
+    }
     for fname, fl in FLOORS.items():
         for share in FLOOR_SHARE:
             g = np.array([floor_accel_per_force(fc, fl, R_STAND_M) for fc in THIRDS])
@@ -123,17 +130,24 @@ def main() -> int:
                 diff_p = 10 * np.log10(P_eq / P_ac)
                 diff = 10 * np.log10(P_eq / (P_ac * grad))
                 key = f"{fname} share {share:g} | {mic}"
-                summ["cases"][key] = {"sigma_kg_m2": sigma,
-                                      "pressure_reference_max_db": float(diff_p.max()),
-                                      "d_eff_m": d_eff, "mount": mount,
-                                      "vibration_re_acoustic_db": [round(float(v), 1) for v in diff],
-                                      "max_db": float(diff.max()),
-                                      "at_hz": THIRDS[int(np.argmax(diff))],
-                                      "accel_rms_m_s2": float(np.sqrt(A.sum())),
-                                      "passes_gate": bool(diff.max() > -40.0)}
-                print(f"{key}: worst band {diff.max():+.1f} dB at {THIRDS[int(np.argmax(diff))]:.0f} Hz "
-                      f"(floor accel {np.sqrt(A.sum()):.3g} m/s^2 rms) -> "
-                      f"{'PASSES' if diff.max() > -40 else 'closed'}", flush=True)
+                summ["cases"][key] = {
+                    "sigma_kg_m2": sigma,
+                    "pressure_reference_max_db": float(diff_p.max()),
+                    "d_eff_m": d_eff,
+                    "mount": mount,
+                    "vibration_re_acoustic_db": [round(float(v), 1) for v in diff],
+                    "max_db": float(diff.max()),
+                    "at_hz": THIRDS[int(np.argmax(diff))],
+                    "accel_rms_m_s2": float(np.sqrt(A.sum())),
+                    "passes_gate": bool(diff.max() > -40.0),
+                }
+                print(
+                    f"{key}: worst band {diff.max():+.1f} dB at "
+                    f"{THIRDS[int(np.argmax(diff))]:.0f} Hz "
+                    f"(floor accel {np.sqrt(A.sum()):.3g} m/s^2 rms) -> "
+                    f"{'PASSES' if diff.max() > -40 else 'closed'}",
+                    flush=True,
+                )
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "summary.json").write_text(json.dumps(summ, indent=1))
     return 0

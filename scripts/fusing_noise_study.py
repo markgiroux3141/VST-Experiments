@@ -49,7 +49,7 @@ def main() -> int:
     fs = render.sample_rate()
     xs = {k: excerpt(p, fs) for k, p in CARRIERS.items() if p.exists()}
     jobs = []
-    for k, x in xs.items():
+    for x in xs.values():
         jobs.append({"fn": render.tape_print, "x": x, "noise_seed": None, "flutter": False})
         jobs.append({"fn": render.tape_print, "x": x, "noise_seed": 1, "flutter": False})
     outs = render.through_many(jobs, workers=6)

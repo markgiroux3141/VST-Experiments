@@ -42,6 +42,21 @@ def test_delta_sign_follows_the_change():
     sos = signal.butter(6, 3000, fs=FS, output="sos")
     corpus = era.Corpus([era.features(signal.sosfilt(sos, _music(s)), FS) for s in (2, 3)])
     base = _music(4)
-    r = era.era_delta(era.features(signal.sosfilt(sos, base), FS), era.features(base, FS),
-                      corpus, n_boot=20)
+    r = era.era_delta(
+        era.features(signal.sosfilt(sos, base), FS), era.features(base, FS), corpus, n_boot=20
+    )
     assert r["delta"] < 0 and r["ci95"][1] < 0
+
+
+def test_stereo_columns_read_width():
+    from varimu.magic import era
+
+    fs = 48000
+    rng = np.random.default_rng([3, 0x57E])
+    n = 8 * fs
+    a, b = rng.standard_normal(n), rng.standard_normal(n)
+    k = era.N_STEREO // 2
+    mono = era.features(np.stack([a, a], axis=1), fs, stereo=True)[:, -era.N_STEREO :]
+    wide = era.features(np.stack([a, b], axis=1), fs, stereo=True)[:, -era.N_STEREO :]
+    assert mono[:, :k].min() > 0.99 and mono[:, k:].max() < -100
+    assert wide[:, :k].max() < 0.1 and np.abs(wide[:, k:]).max() < 1.0

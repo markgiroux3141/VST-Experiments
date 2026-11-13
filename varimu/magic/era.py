@@ -33,9 +33,36 @@ OFFSETS = (2, 4, 8)
 SHRINK = 0.1
 
 
-def features(x: np.ndarray, fs: int) -> np.ndarray:
-    """(windows, d) texture statistics of a mono signal."""
+STEREO_BANDS_HZ = (63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0)
+N_STEREO = 2 * len(STEREO_BANDS_HZ)
+
+
+def _stereo_row(seg: np.ndarray, fs: int) -> np.ndarray:
+    """Per octave band: the L/R magnitude-squared coherence (Welch, 4096-point segments at
+    48 kHz scaled to fs) and the side power re the mid power in dB."""
+    left, r = seg[:, 0], seg[:, 1]
+    n = int(2 ** round(np.log2(4096 * fs / 48000)))
+    f, sll = signal.welch(left, fs, nperseg=n)
+    _, srr = signal.welch(r, fs, nperseg=n)
+    _, slr = signal.csd(left, r, fs, nperseg=n)
+    _, smm = signal.welch((left + r) / 2, fs, nperseg=n)
+    _, sss = signal.welch((left - r) / 2, fs, nperseg=n)
+    coh, sm = [], []
+    for c in STEREO_BANDS_HZ:
+        b = (f >= c / np.sqrt(2)) & (f < c * np.sqrt(2))
+        coh.append(np.abs(slr[b].sum()) ** 2 / (sll[b].sum() * srr[b].sum() + 1e-30))
+        sm.append(10 * np.log10((sss[b].sum() + 1e-20) / (smm[b].sum() + 1e-20)))
+    return np.concatenate([coh, sm])
+
+
+def features(x: np.ndarray, fs: int, *, stereo: bool = False) -> np.ndarray:
+    """(windows, d) texture statistics of a mono signal (a stereo one is summed to mono).
+    `stereo=True` with a (n, 2) signal appends N_STEREO columns per window: each octave
+    band's L/R coherence and side / mid ratio (`_stereo_row`), on the same windows."""
     x = np.asarray(x, float)
+    x2 = x if (stereo and x.ndim == 2 and x.shape[1] == 2) else None
+    if stereo and x2 is None:
+        raise ValueError("stereo features need an (n, 2) signal")
     if x.ndim == 2:
         x = x.mean(axis=1)
     e = grouping.envelopes(x, fs).env  # (32, n) at 1 kHz
@@ -65,7 +92,12 @@ def features(x: np.ndarray, fs: int) -> np.ndarray:
         for o in OFFSETS:
             corr.append(np.sum(zc[:-o] * zc[o:], axis=1))
         f_mod = [np.mean(m[:, s : s + w] ** 2, axis=1) / mean**2 for m in mods]
-        rows.append(np.concatenate([f_mean, f_cv, f_skew, *corr, *(10 * np.log10(np.array(f_mod) + 1e-12))]))
+        row = [f_mean, f_cv, f_skew, *corr, *(10 * np.log10(np.array(f_mod) + 1e-12))]
+        if x2 is not None:
+            # The envelope's sample s (after the edge cut) is at EDGE_S + s / fe in the audio.
+            a0 = int(round((grouping.EDGE_S + s / fe) * fs))
+            row.append(_stereo_row(x2[a0 : a0 + int(WINDOW_S * fs)], fs))
+        rows.append(np.concatenate(row))
     return np.array(rows)
 
 
@@ -102,8 +134,15 @@ class Corpus:
         return frechet(self.z(f), self.z(self.f), diagonal=diagonal)
 
 
-def era_delta(f_variant: np.ndarray, f_baseline: np.ndarray, corpus: Corpus, *,
-              diagonal: bool = True, n_boot: int = 200, seed: int = 0) -> dict:
+def era_delta(
+    f_variant: np.ndarray,
+    f_baseline: np.ndarray,
+    corpus: Corpus,
+    *,
+    diagonal: bool = True,
+    n_boot: int = 200,
+    seed: int = 0,
+) -> dict:
     """D(variant) - D(baseline) against the corpus, with a bootstrap interval over the two
     versions' windows (paired: the same window indices resampled in both)."""
     d = corpus.distance(f_variant, diagonal) - corpus.distance(f_baseline, diagonal)
@@ -113,7 +152,9 @@ def era_delta(f_variant: np.ndarray, f_baseline: np.ndarray, corpus: Corpus, *,
     boots = []
     for _ in range(n_boot):
         i = rng.integers(0, n, n)
-        boots.append(frechet(corpus.z(f_variant[i]), zc, diagonal=diagonal)
-                     - frechet(corpus.z(f_baseline[i]), zc, diagonal=diagonal))
+        boots.append(
+            frechet(corpus.z(f_variant[i]), zc, diagonal=diagonal)
+            - frechet(corpus.z(f_baseline[i]), zc, diagonal=diagonal)
+        )
     lo, hi = np.percentile(boots, [2.5, 97.5])
     return {"delta": float(d), "ci95": [float(lo), float(hi)]}

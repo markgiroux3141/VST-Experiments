@@ -17,10 +17,38 @@ def round_trip(x: np.ndarray, fs: int, codec: str = "opus160") -> np.ndarray:
     with tempfile.TemporaryDirectory() as d:
         src, enc, dec = Path(d) / "x.wav", Path(d) / "x.opus", Path(d) / "y.wav"
         sf.write(src, np.asarray(x, np.float32), fs, subtype="FLOAT")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-c:a", "libopus",
-                        "-b:a", f"{kbps}k", str(enc)], check=True)
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(enc), "-ar", str(fs),
-                        "-c:a", "pcm_f32le", str(dec)], check=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(src),
+                "-c:a",
+                "libopus",
+                "-b:a",
+                f"{kbps}k",
+                str(enc),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(enc),
+                "-ar",
+                str(fs),
+                "-c:a",
+                "pcm_f32le",
+                str(dec),
+            ],
+            check=True,
+        )
         y, _ = sf.read(dec, dtype="float64", always_2d=x.ndim == 2)
     # Opus adds a pre-skip delay: line the output up with the input (whole samples).
     from varimu.magic.null import lag_of

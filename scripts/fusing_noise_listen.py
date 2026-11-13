@@ -51,7 +51,7 @@ def main() -> int:
         for k in rng.permutation(a.kinds):
             n = ns[k]
 
-            def trial(level_db, odd, n=n):
+            def trial(level_db, odd, n=n, gain=gain, y0=y0):
                 g = 10 ** (level_db / 20)
                 return [gain * (y0 + (g * n if i == odd else 0.0)) for i in range(3)]
 

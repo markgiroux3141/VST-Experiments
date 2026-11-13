@@ -30,7 +30,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-import soundfile as sf
 
 from varimu.config import REPO_ROOT
 from varimu.listen import difference
@@ -57,11 +56,13 @@ def tone(f, seconds, amp, fs):
 def test_signal(fs):
     """(signal, {name: (start, end) in samples})."""
     parts, marks, pos = [], {}, 0
+
     def add(name, x):
         nonlocal pos
         parts.append(x)
         marks[name] = (pos, pos + len(x))
         pos += len(x)
+
     add("thd400", tone(400.0, 4.0, VU0, fs))
     add("thd1k", tone(1000.0, 4.0, VU0, fs))
     for f in RESP_HZ:
@@ -87,8 +88,11 @@ def measure_tones(y, marks, fs):
     def seg(name, skip=0.5, tail=0.25):
         a, b = marks[name]
         return y[a + int(skip * fs) : b - int(tail * fs)]
-    out = {"thd400_pct": 100 * thd(seg("thd400"), fs, 400.0)[0],
-           "thd1k_pct": 100 * thd(seg("thd1k"), fs, 1000.0)[0]}
+
+    out = {
+        "thd400_pct": 100 * thd(seg("thd400"), fs, 400.0)[0],
+        "thd1k_pct": 100 * thd(seg("thd1k"), fs, 1000.0)[0],
+    }
     ref = None
     resp = {}
     for f in RESP_HZ:
@@ -132,8 +136,11 @@ def main() -> int:
     yu = render.ampex_351(u, noise=False, tail_s=0.0)["out"]
     m = slice(int(1.0 * fs), int(2.5 * fs))
     gain = float(np.sqrt(np.mean(u[m] ** 2)) / np.sqrt(np.mean(yu[m] ** 2)))
-    print(f"unity: the 351 gives {-20 * np.log10(gain):+.2f} dB at 0 VU 400 Hz; "
-          f"applying {20 * np.log10(gain):+.2f} dB between generations", flush=True)
+    print(
+        f"unity: the 351 gives {-20 * np.log10(gain):+.2f} dB at 0 VU 400 Hz; "
+        f"applying {20 * np.log10(gain):+.2f} dB between generations",
+        flush=True,
+    )
 
     x = load_audio(COVER, fs)[int(a.start * fs) : int((a.start + a.seconds) * fs)]
     x = x * 10 ** (-18 / 20) / np.std(x)  # the program at 0 VU rms
@@ -144,14 +151,21 @@ def main() -> int:
     bounce = {}
     with ThreadPoolExecutor(4) as ex:
         # The bounce's first prints run beside generation 1.
-        lanes = [load_audio(LANES / f"src_{k}.wav", fs)[int(a.start * fs) : int((a.start + a.seconds) * fs)]
-                 for k in (1, 2)]
+        lanes = [
+            load_audio(LANES / f"src_{k}.wav", fs)[
+                int(a.start * fs) : int((a.start + a.seconds) * fs)
+            ]
+            for k in (1, 2)
+        ]
         tot = lanes[0] + lanes[1]
         sc = 10 ** (-18 / 20) / np.std(tot)
         lanes = [v * sc for v in lanes]
         tot = tot * sc
-        fb = [ex.submit(print_gen, lanes[0], 101, gain), ex.submit(print_gen, lanes[1], 102, gain),
-              ex.submit(print_gen, tot, 103, gain)]
+        fb = [
+            ex.submit(print_gen, lanes[0], 101, gain),
+            ex.submit(print_gen, lanes[1], 102, gain),
+            ex.submit(print_gen, tot, 103, gain),
+        ]
         for k in range(1, a.generations + 1):
             tk = time.time()
             fp_ = ex.submit(print_gen, gens["program"][-1], k, gain)
@@ -159,8 +173,11 @@ def main() -> int:
             gens["program"].append(fp_.result())
             gens["test"].append(ft.result())
             el = time.time() - tk
-            print(f"  generation {k}: {el / 60:.1f} min (ETA {(a.generations - k) * el / 60:.0f} min)",
-                  flush=True)
+            print(
+                f"  generation {k}: {el / 60:.1f} min "
+                f"(ETA {(a.generations - k) * el / 60:.0f} min)",
+                flush=True,
+            )
         p1, p2, once = (f.result() for f in fb)
         twice = print_gen(p1 + p2, 104, gain)
         bounce = {"each_then_again": twice, "summed_once": once}
@@ -173,10 +190,18 @@ def main() -> int:
             r["program"] = measure_program(gens["program"][0], gens["program"][k], fs)
         summ["generations"][k] = r
         t = r["tones"]
-        print(f"  G{k}: THD 400 {t['thd400_pct']:.2f}% 1k {t['thd1k_pct']:.2f}%, S/N {t['snr_db']:.1f} dB, "
-              f"wow {100 * t['flutter']['wow']:.3f}% flutter {100 * t['flutter']['flutter']:.3f}%, "
-              f"resp 50 {t['response_db']['50']:+.2f} 15k {t['response_db']['15000']:+.2f}", flush=True)
-    summ["bounce"] = {"each_then_again_vs_once": difference.levels(bounce["summed_once"], bounce["each_then_again"])}
+        print(
+            f"  G{k}: THD 400 {t['thd400_pct']:.2f}% 1k {t['thd1k_pct']:.2f}%, "
+            f"S/N {t['snr_db']:.1f} dB, "
+            f"wow {100 * t['flutter']['wow']:.3f}% flutter {100 * t['flutter']['flutter']:.3f}%, "
+            f"resp 50 {t['response_db']['50']:+.2f} 15k {t['response_db']['15000']:+.2f}",
+            flush=True,
+        )
+    summ["bounce"] = {
+        "each_then_again_vs_once": difference.levels(
+            bounce["summed_once"], bounce["each_then_again"]
+        )
+    }
     (OUT / "summary.json").write_text(json.dumps(summ, indent=1, default=float))
 
     from varimu.listen.matching import match_loudness
@@ -203,8 +228,15 @@ def plot(summ):
     ks = sorted(int(k) for k in g)
     fig, ax = plt.subplots(1, 3, figsize=(15, 4))
     ax[0].plot(ks, [g[k]["tones"]["snr_db"] for k in ks], "o-", label="S/N")
-    ax[0].plot(ks, [g[ks[0]]["tones"]["snr_db"] - 10 * np.log10(max(k, 1)) if k else g[0]["tones"]["snr_db"] for k in ks],
-               "k:", label="G1 - 10 log10 N")
+    ax[0].plot(
+        ks,
+        [
+            g[ks[0]]["tones"]["snr_db"] - 10 * np.log10(max(k, 1)) if k else g[0]["tones"]["snr_db"]
+            for k in ks
+        ],
+        "k:",
+        label="G1 - 10 log10 N",
+    )
     ax[0].set(xlabel="generation", ylabel="dB", title="S/N")
     for key in ("thd400_pct", "thd1k_pct"):
         ax[1].plot(ks, [g[k]["tones"][key] for k in ks], "o-", label=key)
