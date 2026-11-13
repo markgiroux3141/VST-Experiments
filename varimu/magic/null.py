@@ -192,9 +192,16 @@ def null_report(a, b, fs, *, max_lag_s=0.05, dewarp_stage=True) -> dict:
     level in that band. over_time: (t, gain residual per 100 ms block, dB re a's rms)."""
     a, b = np.asarray(a, float), np.asarray(b, float)
     if len(a) == len(b) and np.array_equal(a, b):
-        return {"identical": True, "raw": float("-inf"), "gain": float("-inf"),
-                "filter": float("-inf"), "dewarped": float("-inf"), "delay_samples": 0.0,
-                "bands": {}, "over_time": [[], []]}
+        return {
+            "identical": True,
+            "raw": float("-inf"),
+            "gain": float("-inf"),
+            "filter": float("-inf"),
+            "dewarped": float("-inf"),
+            "delay_samples": 0.0,
+            "bands": {},
+            "over_time": [[], []],
+        }
     aa, bb, d = align(a, b, fs, max_lag_s)
     out: dict = {"identical": False, "delay_samples": d}
     out["raw"] = rms_db(aa - bb, aa)
@@ -217,9 +224,7 @@ def null_report(a, b, fs, *, max_lag_s=0.05, dewarp_stage=True) -> dict:
         m = int(0.01 * fs)
         a2, b2 = ai[m:-m], bw[m:-m]
         e2 = _edge(len(a2))
-        out["dewarped"] = rms_db(
-            difference.decompose(a2, b2).character[e2:-e2], a2[e2:-e2]
-        )
+        out["dewarped"] = rms_db(difference.decompose(a2, b2).character[e2:-e2], a2[e2:-e2])
         good = np.isfinite(dl)
         out["delay_track_rms_us"] = (
             float(np.std(dl[good]) * 1e6) if good.sum() > 2 else float("nan")

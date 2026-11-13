@@ -51,8 +51,9 @@ def test_dewarp_removes_a_wobbling_delay():
     # A 4 kHz-centred program: noise band-passed, so the time base matters.
     from scipy.signal import butter, sosfilt
 
-    a = sosfilt(butter(4, [2000, 6000], "bandpass", fs=FS, output="sos"),
-                rng.standard_normal(len(t)))
+    a = sosfilt(
+        butter(4, [2000, 6000], "bandpass", fs=FS, output="sos"), rng.standard_normal(len(t))
+    )
     a /= np.std(a)
     d = 30e-6 * np.sin(2 * np.pi * 5 * t)  # 30 us peak, 5 Hz
     up = 8

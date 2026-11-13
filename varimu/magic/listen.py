@@ -80,7 +80,9 @@ def staircase(
         play(seq)
         t0 = time.time()
         while True:
-            ans = _ask(f"  trial {len(trials) + 1}: which is odd? [1/2/3 r q] ", ("1", "2", "3", "r", "q"))
+            ans = _ask(
+                f"  trial {len(trials) + 1}: which is odd? [1/2/3 r q] ", ("1", "2", "3", "r", "q")
+            )
             if ans == "r":
                 play(seq)
                 continue
@@ -88,8 +90,15 @@ def staircase(
         if ans == "q":
             return {"condition": name, "stopped": True, "trials": trials, "reversals": reversals}
         correct = int(ans) - 1 == odd
-        trials.append({"level_db": level, "odd": odd + 1, "answer": int(ans),
-                       "correct": correct, "rt_s": round(time.time() - t0, 2)})
+        trials.append(
+            {
+                "level_db": level,
+                "odd": odd + 1,
+                "answer": int(ans),
+                "correct": correct,
+                "rt_s": round(time.time() - t0, 2),
+            }
+        )
         if correct:
             run += 1
             move = -1 if run == 2 else 0
@@ -115,8 +124,15 @@ def binomial_p(correct: int, trials: int) -> float:
     return float(sum(comb(trials, k) for k in range(correct, trials + 1)) / 2**trials)
 
 
-def abx(a: np.ndarray, b: np.ndarray, trials: int, rng: np.random.Generator, play,
-        fs: int, name: str = "") -> dict:
+def abx(
+    a: np.ndarray,
+    b: np.ndarray,
+    trials: int,
+    rng: np.random.Generator,
+    play,
+    fs: int,
+    name: str = "",
+) -> dict:
     """Each trial plays A, B, then X (A or B at random); the answer is a / b (r replays,
     q stops). Returns the count correct and the one-sided binomial p-value."""
     gap = np.zeros(int(GAP_S * fs))
