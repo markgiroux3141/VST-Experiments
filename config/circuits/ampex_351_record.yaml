@@ -44,7 +44,7 @@ full_scale:
       over +8 dBm, man p 11, is +22 dBm)'
 controls:
   record_level:
-    value: 0.9447651829377177
+    value: 0.9498869512281529
     min: 0.0
     max: 1.0
     unit: rotation

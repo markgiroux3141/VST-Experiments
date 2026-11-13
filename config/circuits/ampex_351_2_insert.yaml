@@ -58,20 +58,20 @@ full_scale:
     source: 'derived: +8 dBm into 600 ohm (1.949 V rms, man p11 / p79: 0 VU = +8 dBm) at -18 dBFS rms'
 controls:
   record_level:
-    value: 0.9447651829377177
+    value: 0.9498869512281529
     min: 0.0
     max: 1.0
     unit: rotation
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: the alignment sets it for 0 VU in at the operating level (1% THD at 400 Hz)
   playback_level:
-    value: 0.3907155917744636
+    value: 0.3976207704750129
     min: 0.0
     max: 1.0
     unit: rotation
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: the alignment sets it for 0 VU (+8 dBm) out at the operating level
   rec_eq_hi_f:
     value: 4.3703703703703705e-10
@@ -79,7 +79,7 @@ controls:
     max: 5.5e-10
     unit: F
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: 'across 1R17 (via 4S2a HI): less cathode feedback above ~1 / (2 pi 47K C); the alignment sets
       it'
   rec_eq_lo_f:
@@ -88,7 +88,7 @@ controls:
     max: 1.6e-09
     unit: F
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: across 1R17 (via 4S2a LOW); the alignment sets it for the flattest response at 7-1/2 ips, 20
       dB under operating level (man p83-84)
   speed:
@@ -114,7 +114,7 @@ controls:
     max: 1.0
     unit: rotation
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: '0.67 is 50 us with 2C15 (derived: 50 us / 750 pF = 66.7K); the alignment sets it from a test
       tape (man p80)'
   oscillator:
@@ -127,12 +127,12 @@ controls:
     notes: '0 removed (the drawing''s measuring condition: no bias, no erase), 1 in its socket'
     events: 0
   bias_adjust_f:
-    value: 3.107278776973839e-11
+    value: 3.107922720741824e-11
     min: 1.5e-11
     max: 1.3e-10
     unit: F
     source: 'derived: the machine''s alignment (reports/tape/ampex_351_alignment.json, varimu.measure.tape_align,
-      key 3d19e2a715b4de7b)'
+      key 9595615ed89d69f6)'
     notes: 24 pF gives 2.86 mA peak in the provisional head, about what the tape's alignment needs (scripts/tape_bias_study.py);
       the alignment sets it
   erase_adjust_f:
@@ -283,6 +283,18 @@ values:
   spacing_m:
     value: 5.0e-07
     source: 'provisional: model knowledge (contact recording, 0.1-1 um)'
+  tape_cell_m:
+    value: 2.5e-07
+    source: 'numerical: the tape''s cells at 15 ips, 0.25 um (15.24 per nominal bias wavelength), not
+      7.62 (0.5 um): with the literal bias the cells point-sample the pattern of the field''s peaks (two
+      per bias cycle, ~2 um apart on tape) and alias it to |8 f_b - v / ds|; the oscillator runs at ~93
+      kHz, which put that at ~18 kHz, -68 dB re a hot tone, on 0.5 um cells (docs/TAPE_PLAN.md Gaps 8;
+      scripts/chirp_alias_map.py, chirp_medium.py); 0.25 um was within 0.3 dB of 0.5 um on No. 21 (docs/TAPE_PLAN.md
+      TM2 step 7); the deck''s value (scripts/make_ampex_300_4.py)'
+  tape_cell_lo_m:
+    value: 1.25e-07
+    source: 'numerical: tape_cell_m''s cells per bias wavelength at 7-1/2 ips (the alias depends on v
+      / ds: 0.25 um there aliased as 0.5 um does at 15 ips; scripts/chirp_medium.py --machines 351lo)'
   track_m:
     value: 0.001905
     source: 'provisional: model knowledge (NAB two-track 1/4 in: 0.075 in tracks, the 351-2''s head stack
@@ -1343,6 +1355,7 @@ sections:
           scrape_c_m_s: scrape_c_m_s
           scrape_q: scrape_q
           scrape_rms: scrape_rms
+          cell_m: tape_cell_m
           in:
           - 1
           reduction: ampex_351
@@ -1381,6 +1394,7 @@ sections:
           scrape_c_m_s: scrape_c_m_s
           scrape_q: scrape_q
           scrape_rms: scrape_rms
+          cell_m: tape_cell_lo_m
           in:
           - 0
           reduction: ampex_351_lo

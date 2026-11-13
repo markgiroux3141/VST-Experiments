@@ -62,9 +62,7 @@ def test_two_track_insert_is_the_insert_on_two_track_heads():
     assert {k for k in one if one[k] != two[k]} == {"track_m", "rep_h_per_a"}
     assert two["track_m"] == pytest.approx(1.905e-3)
     # The repro head wound for the full-track head's output: the alignment carries over.
-    assert two["rep_h_per_a"] * two["track_m"] == pytest.approx(
-        one["rep_h_per_a"] * one["track_m"]
-    )
+    assert two["rep_h_per_a"] * two["track_m"] == pytest.approx(one["rep_h_per_a"] * one["track_m"])
 
 
 def test_echo_is_the_aligned_351_with_a_console():
@@ -143,10 +141,13 @@ def test_speed_switch():
             assert (tape.medium.reduced is not None) == events
             closed, open_ = ("RSEQ_HI", "RSEQ_LO") if speed else ("RSEQ_LO", "RSEQ_HI")
             assert els[closed].r_ohm < 1.0 and els[open_].r_ohm > 1e9
-    # The full medium's cells follow the bias wavelength, the reduction's are its own.
-    lo = builder.build(c, {"speed": 0}, cores="linear", noise=False).ir
-    (t,) = [e for s in lo.sections for e in s.elements if isinstance(e, irm.Tape)]
-    assert abs(t.medium.ds_m - 0.25e-6) < 1e-12
+    # The full medium's cells: the tape part's cell_m, the same per bias wavelength at both
+    # speeds (0.25 / 0.125 um: the literal bias's cell alias, docs/TAPE_PLAN.md "Gaps" 8);
+    # the reduction's are its own.
+    for speed, ds in ((1, 0.25e-6), (0, 0.125e-6)):
+        ir = builder.build(c, {"speed": speed}, cores="linear", noise=False).ir
+        (t,) = [e for s in ir.sections for e in s.elements if isinstance(e, irm.Tape)]
+        assert abs(t.medium.ds_m - ds) < 1e-12
 
 
 def test_live_slap_lands_a_head_distance_later():

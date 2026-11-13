@@ -1189,7 +1189,10 @@ def _tape_reduction(
     full = next(e for e in els if isinstance(e, Tape)).medium
     if d["tape"] != str(component):
         raise ctx.fail(where, f"{path.name} is for {d['tape']}, not {component}")
-    stale = [k for k, v in d["medium"].items() if getattr(full, k) != v]
+    # Not the cells' length: the reduced tape plays on its own (ds_m below), and the literal
+    # medium's (a tape part's cell_m: numerics against the literal bias's alias) refines the
+    # reference the tables were taken from, not the tape (docs/TAPE_PLAN.md "Gaps" 8).
+    stale = [k for k, v in d["medium"].items() if k != "ds_m" and getattr(full, k) != v]
     if stale:
         raise ctx.fail(
             where, f"{path.name} was made for another medium ({stale[0]}): rerun its script"

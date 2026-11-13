@@ -4,7 +4,8 @@ decimation) on the same bass excerpt, their probes kept, so what lies above the 
 (the bias's residue, the oscillator) can be seen before the decimation folds it.
 
     uv run --extra fast python scripts/chirp_ultrasonic.py BASS.wav OUTDIR [--seconds 1.2]
-        [--only deck|351] [--deck-trim-db 11.6] [--a351-trim-db 11.1]
+        [--only deck|351] [--deck-trim-db 11.6] [--a351-trim-db 11.1] [--gpu]
+        [--cell-um 0.5]
 
 Writes OUTDIR/<machine>.npz (every probe at 192 kHz, the input) and prints each machine's
 oscillator frequency (the erase head's node `ers`) and the strongest lines 20-96 kHz in
@@ -53,11 +54,13 @@ def main() -> int:
     ap.add_argument("--only", choices=["deck", "351"])
     ap.add_argument("--deck-trim-db", type=float, default=11.6)
     ap.add_argument("--a351-trim-db", type=float, default=11.1)
+    ap.add_argument("--gpu", action="store_true", help="the tape kernel on the GPU (f32)")
+    ap.add_argument("--cell-um", type=float, help="the 351's tape cells (its tape_cell_m)")
     a = ap.parse_args()
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
     st = TransientSettings.from_sim_settings(engine="circuitsim")
-    st = dataclasses.replace(st, sample_rate=FS, oversample=1)
+    st = dataclasses.replace(st, sample_rate=FS, oversample=1, tape_gpu=a.gpu)
     x = load_audio(Path(a.bass), FS)[: int(a.seconds * FS)]
 
     jobs = []
@@ -70,7 +73,10 @@ def main() -> int:
     if a.only in (None, "351"):
         al = ta.aligned()
         c = spec.load_circuit(spec.circuit_path(ta.CIRCUIT))
-        ir = builder.build(c, al.overrides, cores="ja").ir
+        over = dict(al.overrides)
+        if a.cell_um:
+            over["tape_cell_m"] = a.cell_um * 1e-6
+        ir = builder.build(c, over, cores="ja").ir
         jobs.append(("351", ir, c.full_scale, a.a351_trim_db, None))
 
     res = {}

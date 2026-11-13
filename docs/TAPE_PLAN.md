@@ -1033,6 +1033,8 @@ out of sample.
    lines at |fs/2 - f_b|-type frequencies (6.0 kHz at 90 and 102 kHz), -67 to -75 dB re a tone 4
    dB over operating level; not traced. Open (the user's): `cell_m` on the 351 family too (its
    prints and alignment move; 2x the recording kernel's cells).
+   **Applied to the 351 family and the second family traced (2026-11-12, second round): the
+   status block "second round" at the end.**
 
 **Speed: the GPU (the user's suggestion, 2026-11-01).** The dev machine has an RTX 3080.
 - **The candidate is the recording kernel** (`tape.rs`): every cell times 8 orientations
@@ -1356,3 +1358,58 @@ other orientations or an out-of-plane share; No. 21 for alpha
 +0.03 / +0.09 (only their knees: +3.03 lite at +0.09); Bulletin 14 and the 51 um knee for
 the variants other than those named above; the moving model's zone floor (120 Oe, the
 base's) not re-checked lower.
+
+**Status (2026-11-12, second round: the 351 family's numerics, the exact record gap, the
+astroid re-derived).** The user's brief: clear the numerical artifacts of the 351 family
+(both machines), then the exact record-head gap field and the astroid on top of it as
+studies; adoption of any model change is the user's call. The deck's chirp fix (esdirk4 or
+40 substeps in its record island) stays the user's call and wasn't touched.
+
+*Step 1a, the cell alias (applied, the numerical fix the brief allowed):*
+- `config/circuits/ampex_351.yaml`: the tape parts' `cell_m`, `tape_cell_m` 0.25 um at 15 ips
+  and `tape_cell_lo_m` 0.125 um at 7-1/2 ips ("numerical:" sources: the alias goes with v /
+  ds, so the same cells per bias wavelength at both speeds); the generated 351 circuits
+  regenerated (`make_351_echo.py`: echo, 351-2 echo, insert, 351-2 insert; `make_351_record.py`
+  has no tape). `make_ampex_300_4.py` drops the 351's two values for its own, so the deck file
+  is byte for byte as before; its channel file (`ampex_300_4_channel.yaml`, the 351 aligned:
+  `align_300_4.py`'s starting point) carries the new 351 alignment.
+- The reductions load unchanged: both builders' staleness check skips `ds_m` (the reduced tape
+  plays on its own cells, `ds_m` 2 um; the literal medium's cell length refines the reference
+  the tables came from). Regenerating them (~3 h per machine) is the user's option, not done:
+  0.25 um was within 0.3 dB of 0.5 um on No. 21 (TM2 step 7), the reduced tier is -25 to -35
+  dB from the full stream.
+- Measured on the medium alone (`scripts/chirp_family2.py`, the transport off; the aligned
+  f_b 92.994 kHz): 0.5 um a line at 17.99 kHz, -55.0 dB re the tone; 0.25 um none above
+  -81 dB (the floor). At 7-1/2 ips (the medium's `lam_min` scaled as `parts.tape` does) 0.25 um
+  18.10 kHz at -82.6 dB, 0.125 um nothing above -100 dB. On the whole machine at the
+  production rate (`chirp_ultrasonic.py --gpu [--cell-um 0.5]`, the song's bass at 25 s, 3 s)
+  the bands 13-21 kHz are within 0.2 dB between 0.5 and 0.25 um: there the transport smears the
+  alias under the machine's hiss. A steady 21.2 kHz line (-67 dB re the total at `out`, the
+  same on both cells, as in PG1's run) isn't the cells: not traced, out of band.
+- Re-aligned (`align_351.py`, `--low`): RECORD LEVEL 0.9448 -> 0.9499, PLAYBACK LEVEL 0.3907
+  -> 0.3976, BIAS ADJUST 31.07 -> 31.08 pF, 1C7 437 pF and 1C46 at its 1600 pF end as before
+  (7-1/2 ips rms 1.33 dB 1-10 kHz). Profile `ampex351_cells025` (the old `ampex351_p4` kept):
+  every spec passes; response re 1 kHz 30 Hz -1.71 (was -1.84), elsewhere within 0.14 dB; S/N
+  60.8 dB (61.1); THD at -10 / 0 / +3 / +6 dB 0.36 / 1.01 / 1.97 / 4.04% (0.37 / 1.00 / 1.94 /
+  3.99); the 3% level +4.76 dB over 0 VU (+4.81). The recording kernel's cells double (prints
+  ~2x on the tape kernel; the GPU path takes the same cells). App fixtures refreshed; both
+  builders bit for bit (`tests/agreement.rs`).
+
+*Step 1b, the second family (traced: the first family's higher orders; no fix applied):* the
+lines near |fs/2 - f_b| (6.0 kHz at f_b 90 and 102 kHz) are the cells aliasing high
+harmonics n f_b of the recorded field-peak pattern to |n f_b - j v / ds|, odd n included
+(the tone makes the positive and negative peaks unequal, so the pattern's period is 1 / f_b,
+and the alias carries the signal: with a 1 kHz tone the lines sit at 6 kHz +- 1 kHz). Every
+line fits: 0.5 um, 90 kHz: 17 x 90 - 2 x 762 = 6 kHz; 0.25 um: 17 x 90 - 1524 = 6 (the same
+fold, hence identical levels at 0.5 and 0.25 um); 102 kHz: 15 x 102 - 1524 = 6; 0.4 um, 90 kHz:
+2 x 952.5 - 21 x 90 = 15.0 kHz (measured 15.00, -68.8 dB); 94 kHz: 2 x 762 - 16 x 94 = 20 kHz;
+the 351's 92.99 kHz on 0.25 um: 3 x 1524 - 49 x 92.99 = 15.3 kHz at -81.2 dB (measured 15.29).
+Unchanged by the host rate (96 / 192 / 384 kHz: the |fs/2 - f_b| match is a coincidence), the
+substeps (10 / 20 / 40), local zones, the zone floor, the demag iteration; only ds and f_b
+move them (`reports/tape/chirp/family2.json`). At 0.25 um the in-band windows are f_b
+88.5-90.8 (n 17), 94.0-96.5 (n 16) and 100.3-102.9 kHz (n 15), up to -67 dB re a tone 4 dB over
+operating level; the 351's aligned 92.99 kHz is between them, and BIAS ADJUST would have to
+move the oscillator ~1 kHz to reach one. Options (the user's): leave 0.25 um (chosen here:
+clean at the aligned bias); 0.125 um at 15 ips (clean at 90 / 93 / 102 kHz, measured; the
+kernel's cells 2x again, 95 s vs 53 s per probe on the GPU); a guard in the alignment report
+listing |n f_b - j v / ds| < 20 kHz for n <= 40 at the measured oscillator (cheap, not built).

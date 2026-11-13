@@ -172,6 +172,9 @@ def one_channel(base: dict, alignment: dict, fit: dict, trims: dict) -> dict:
     del c["controls"]["speed"]
     for k, v in deck_values(fit, trims).items():
         c["values"][k] = v
+    # The 351's own cells (both speeds) give way to the deck's (15 ips only), placed as before.
+    c["values"].pop("tape_cell_m", None)
+    c["values"].pop("tape_cell_lo_m", None)
     c["values"]["tape_cell_m"] = {
         "value": TAPE_CELL_M,
         "source": (

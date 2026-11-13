@@ -35,9 +35,12 @@ def medium(name: str):
     if name == "deck":
         c = spec.load_circuit(spec.circuit_path("ampex_300_4"))
         ir = builder.build(c, cores="ja").ir
-    else:
+    else:  # "351", or "351lo": its 7-1/2 ips tape part
         c = spec.load_circuit(spec.circuit_path(ta.CIRCUIT))
-        ir = builder.build(c, ta.aligned().overrides, cores="ja").ir
+        over = dict(ta.aligned().overrides)
+        if name == "351lo":
+            over["speed"] = 0
+        ir = builder.build(c, over, cores="ja").ir
     tapes = [e for e in ir.elements() if isinstance(e, Tape)]
     t = tapes[0]
     return t.medium
@@ -65,6 +68,8 @@ def main() -> int:
         help="override the literal bias's substeps (default: the circuit's)",
     )
     ap.add_argument("--out", default="medium.json")
+    ap.add_argument("--gpu", action="store_true", help="the f32 GPU kernel (a diagnosis)")
+    ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--tone-hz", type=float, default=60.0)
     ap.add_argument(
         "--ds-um",
@@ -101,7 +106,7 @@ def main() -> int:
         h = env * (
             ha * np.sin(2 * math.pi * a.tone_hz * t) + hb * np.sin(2 * math.pi * fb * t + 0.3)
         )
-        y = np.asarray(circuitsim.tape_stream_run(params, FS, h, chunk=20 * m * 48))
+        y = np.asarray(circuitsim.tape_stream_run(params, FS, h, chunk=20 * m * 48, gpu=a.gpu))
         d = int(med.head_distance_m / med.speed_m_s * FS) + int(0.05 * FS)
         y = y[d:]
         np.save(
@@ -138,7 +143,7 @@ def main() -> int:
             "strongest_lines_1k_90k": lines,
         }
 
-    with ThreadPoolExecutor(min(4, len(jobs))) as ex:
+    with ThreadPoolExecutor(min(a.jobs, len(jobs))) as ex:
         rows = list(ex.map(run, jobs))
     for r in rows:
         print(json.dumps(r))

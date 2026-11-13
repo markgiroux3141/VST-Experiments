@@ -1635,6 +1635,11 @@ fn tape_reduction(
     let full = serde_json::to_value(&*medium).map_err(|e| bad(e.to_string()))?;
     let made: serde_json::Map<String, serde_json::Value> = field(&d, "medium").map_err(bad)?;
     for (k, v) in &made {
+        // Not the cells' length (builder.py's): the reduced tape plays on its own ds_m, and
+        // the literal medium's (a tape part's cell_m) refines the reference, not the tape.
+        if k == "ds_m" {
+            continue;
+        }
         let same = match (full.get(k), v) {
             (Some(serde_json::Value::Bool(a)), serde_json::Value::Bool(b)) => a == b,
             (Some(a), b) => a.as_f64().is_some() && a.as_f64() == b.as_f64(),

@@ -1,0 +1,57 @@
+{
+ "args": {
+  "seconds": 0.5,
+  "bias_ma": 2.94,
+  "audio_ma": 0.6,
+  "head_a_m_per_a": 8000000.0,
+  "fb": [
+   92994.0
+  ],
+  "machines": [
+   "351lo"
+  ],
+  "substeps": [
+   20
+  ],
+  "out": "cells_351lo_probe.json",
+  "gpu": true,
+  "jobs": 1,
+  "tone_hz": 55.3,
+  "ds_um": [
+   0.25
+  ]
+ },
+ "rows": [
+  {
+   "machine": "351lo",
+   "substeps": 20,
+   "ds_um": 0.25,
+   "f_bias_hz": 92994.0,
+   "beat_hz": 65748,
+   "band_5k2_5k8_db_re_60hz": -83.4,
+   "at_beat_db_re_60hz": -128.3,
+   "strongest_lines_1k_90k": [
+    [
+     1052,
+     -66.3
+    ],
+    [
+     1494,
+     -73.9
+    ],
+    [
+     1936,
+     -80.7
+    ],
+    [
+     33332,
+     -83.1
+    ],
+    [
+     2380,
+     -87.5
+    ]
+   ]
+  }
+ ]
+}

@@ -990,7 +990,7 @@ now writes a stereo last insert as two channels; faders by loudness, rides, the 
 5.4 kHz (the 351's beat 65.7 kHz); clean at 40 substeps or on esdirk4 without tables (each ~2x the island): the choice
 and the song's reprint are the user's. Also found: the tape's cells alias the literal bias's peak pattern at
 |8 f_b - v / ds| (0.5 um cells sized for the nominal 100 kHz; TAPE_PLAN.md Gaps 8): the tape part's optional `cell_m`
-(both builders; absent, IRs unchanged), the deck at 0.25 um (re-aligned: PLAYBACK LEVEL 0.432 -> 0.442).
+(both builders; absent, IRs unchanged), the deck at 0.25 um (re-aligned: PLAYBACK LEVEL 0.432 -> 0.442); since 2026-11-12 the 351 family too (`tape_cell_m` 0.25 um at 15 ips, `tape_cell_lo_m` 0.125 um at 7-1/2, re-aligned, profile `ampex351_cells025`: every spec as before; a reduction's staleness check skips `ds_m`, both builders). The "second family" of lines is the same alias at higher orders |n f_b - j v / ds| (odd n: the tone's asymmetry), clean at the 351's aligned 92.99 kHz (TAPE_PLAN.md, "second round").
 PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
 the Langevin EQ-251A. A mix from scratch starts from `stems/Did she mention my name/full/` (the user's call).
 

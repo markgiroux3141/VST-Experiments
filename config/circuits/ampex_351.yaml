@@ -111,6 +111,8 @@ values:
   pole_m: {value: 1.5e-3, source: "calibrated: the repro contour (with relax_m) that puts the aligned machine within +-1.5 dB 30 Hz-1 kHz with its electronics, the 351's +-2 dB at 15 ips (man p10; scripts/tape_heads_study.py, TAPE_PLAN.md Gaps 4); near a measured long-pole head, web: https://www.discolathe.com/.pdfs/Nortronics_Silvr_pp1-9.pdf (Nortronics WP series, Fig. 3: 1.25 mm / 4.0 mm fitted). Both heads' (the record head's contour is far below the zone's floor)"}
   relax_m: {value: 5.5e-3, source: "calibrated: with pole_m (see there); 3 mm / 3 mm dipped -4.3 dB at 70 Hz"}
   spacing_m: {value: 0.5e-6, source: "provisional: model knowledge (contact recording, 0.1-1 um)"}
+  tape_cell_m: {value: 0.25e-6, source: "numerical: the tape's cells at 15 ips, 0.25 um (15.24 per nominal bias wavelength), not 7.62 (0.5 um): with the literal bias the cells point-sample the pattern of the field's peaks (two per bias cycle, ~2 um apart on tape) and alias it to |8 f_b - v / ds|; the oscillator runs at ~93 kHz, which put that at ~18 kHz, -68 dB re a hot tone, on 0.5 um cells (docs/TAPE_PLAN.md Gaps 8; scripts/chirp_alias_map.py, chirp_medium.py); 0.25 um was within 0.3 dB of 0.5 um on No. 21 (docs/TAPE_PLAN.md TM2 step 7); the deck's value (scripts/make_ampex_300_4.py)"}
+  tape_cell_lo_m: {value: 0.125e-6, source: "numerical: tape_cell_m's cells per bias wavelength at 7-1/2 ips (the alias depends on v / ds: 0.25 um there aliased as 0.5 um does at 15 ips; scripts/chirp_medium.py --machines 351lo)"}
   track_m: {value: 5.94e-3, source: "man p41: full track 234 mils"}
   head_distance_m: {value: 50.8e-3, source: "provisional: secondary sources (the 350 / 351 headblock's record-to-repro gap spacing ~2 in; data/schematics/ampex_351/README.md)"}
   rec_l_h: {value: 3.0e-3, source: "provisional: model knowledge (~480 turns, as rec_h_per_a implies at 85% over the 51 um gap, on a ring head of A_L ~ 12.5 nH (50 nH at 12.7 um: L ~ N^2 / g); not printed; web: Nortronics' notes give record heads 2-50 mH, see pole_m)"}
@@ -487,6 +489,7 @@ sections:
             scrape_c_m_s: scrape_c_m_s
             scrape_q: scrape_q
             scrape_rms: scrape_rms
+            cell_m: tape_cell_m
             in: [1]
           TP_LO:
             tape: [hra, rbc, rh]
@@ -519,6 +522,7 @@ sections:
             scrape_c_m_s: scrape_c_m_s
             scrape_q: scrape_q
             scrape_rms: scrape_rms
+            cell_m: tape_cell_lo_m
             in: [0]
 
   - title: reproduce amplifier
