@@ -1,0 +1,102 @@
+{
+ "circuit": "triode_stage",
+ "overrides": {},
+ "clip": "Dry Guitar.wav",
+ "seconds": 2.0,
+ "probe": "o",
+ "deltas": [
+  0.005,
+  0.02
+ ],
+ "flag_db": -30.0,
+ "parts": [
+  {
+   "level_db": -11.859217128769114,
+   "check_db": -73.22001881184843,
+   "flag": false,
+   "name": "RP",
+   "kind": "Resistor",
+   "value": 100000.0,
+   "key": "r_plate_ohm",
+   "source": "provisional: model knowledge (12AX7 plate load, 100k)",
+   "provisional": true
+  },
+  {
+   "level_db": -16.6166593772375,
+   "check_db": -71.36770466623031,
+   "flag": false,
+   "name": "RG",
+   "kind": "Resistor",
+   "value": 1000000.0,
+   "key": "r_grid_ohm",
+   "source": "provisional: model knowledge (12AX7 grid leak, 0.5-1 MOhm)",
+   "provisional": true
+  },
+  {
+   "level_db": -17.299234916073004,
+   "check_db": -72.2691598241636,
+   "flag": false,
+   "name": "RL",
+   "kind": "Resistor",
+   "value": 470000.0,
+   "key": "r_load_ohm",
+   "source": "provisional: model knowledge (the next stage's grid leak)",
+   "provisional": true
+  },
+  {
+   "level_db": -19.599540658321107,
+   "check_db": -78.9422678354847,
+   "flag": false,
+   "name": "RK",
+   "kind": "Resistor",
+   "value": 1500.0,
+   "key": "r_cathode_ohm",
+   "source": "provisional: model knowledge (12AX7 self-bias with a 100k plate load, 1.5k)",
+   "provisional": true
+  },
+  {
+   "level_db": -19.962887613135475,
+   "check_db": -78.81071470806728,
+   "flag": false,
+   "name": "RS",
+   "kind": "Resistor",
+   "value": 10000.0,
+   "key": "r_source_ohm",
+   "source": "provisional: model knowledge (a source impedance that lets the grid-current peaks show)",
+   "provisional": true
+  },
+  {
+   "level_db": -21.279395042766858,
+   "check_db": -68.81657170564745,
+   "flag": false,
+   "name": "CI",
+   "kind": "Capacitor",
+   "value": 1e-07,
+   "key": "c_in_f",
+   "source": "provisional: model knowledge (coupling capacitor: 1.6 Hz with the grid leak)",
+   "provisional": true
+  },
+  {
+   "level_db": -21.772186197127226,
+   "check_db": -75.0997714509551,
+   "flag": false,
+   "name": "CO",
+   "kind": "Capacitor",
+   "value": 1e-07,
+   "key": "c_out_f",
+   "source": "provisional: model knowledge (output coupling capacitor)",
+   "provisional": true
+  },
+  {
+   "level_db": -30.274185883469933,
+   "check_db": -68.89149518032255,
+   "flag": false,
+   "name": "CK",
+   "kind": "Capacitor",
+   "value": 2.2e-05,
+   "key": "c_cathode_f",
+   "source": "provisional: model knowledge (cathode bypass, a few Hz)",
+   "provisional": true
+  }
+ ]
+}
