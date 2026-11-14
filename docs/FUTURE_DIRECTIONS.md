@@ -400,6 +400,16 @@ provisional values with the highest scores first.**
 - Full pass: one render per part (~100-200 for the 670), parallel and cached.
 - Shows in the Editor as a heat overlay on the drawing.
 
+**A first pass exists (2026-11-13, ANALOG_MAGIC_FABLE.md AM13 step 1):** `varimu/magic/solo.py`
+and `scripts/solo_part.py --circuit NAME [--set k=v ...]` take each R, C and L's sensitivity
+d out / d ln(value) by central differences (±0.5 %, checked at ±2 %; noise and heaters off,
+linear cores) on a program excerpt. They rank the parts by level re the output, with each
+part's source, and write the top solos and "+20 %" pairs as audio (`reports/magic/solo/`:
+triode_stage, the EQP-1A flat and boosted). Not yet: a perceptual weighting (it ranks by
+rms), parts inside a switch's `network` and transformer internals (their source isn't
+looked up), the engine's adjoint (AM13 step 2), the Editor's overlay. On the EQP-1A, every
+part that matters is sourced; the triode stage's ranking is its sourcing order.
+
 ### 8.3 Fit a unit to recordings of real hardware (system identification)
 
 The genome is fitted by preference today (Phases 6-8). Fit it instead to input / output

@@ -728,6 +728,14 @@ met).*
   evaluation, no extra device evaluations: that saved little), free for the mains wander;
   all of it ~1.08-1.16x. In the app: ~88% load, worst block 133% (no dropouts in 10 s at
   a 50 ms buffer), against 60% / 91% without, back to back.
+- **The mains wander needs a source before anything leans on it (2026-11-13, ANALOG_MAGIC_FABLE.md
+  AM2; reports/magic/null/README.md).** With noise builds on, the difference between two
+  prints of the same input (different seeds) ran 30-74 dB above the sum of the two prints' own
+  noise on the compressors, the V76 and the 5E3. Nearly all of it is the wander: with it off,
+  the V76's excess went from -30 to -88 dB and the 5E3's from -41 to -79. So the model's
+  print-to-print variation is essentially this one provisional figure (0.5 % rms and its
+  spectrum). Source it (published mains-voltage fluctuation measurements, period and
+  modern) before treating "no two prints alike" as a result.
 
 **B6. Component physics.** The part non-idealities of FUTURE_DIRECTIONS.md
 section 1, each a sourced, bounded parameter of its part class, tested on its

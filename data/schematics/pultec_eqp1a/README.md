@@ -47,3 +47,12 @@ The drawing shows the passive network as a box. Its values come from a redraw:
   disputes the commonly used values (27 / 33 / 47 / 68 / 82 / 150 mH) with its own
   calculation (29.9 / 31.4 / 48.2 / 67.5 / 87.9 / 156 mH). Neither is a measurement
   we can check, so the inductances are bounded genome parameters.
+
+## Open: CLB330's wiring
+
+`c_lb_330n_f` (330 nF, "dwg-interp": the redraw's reading, wired to the low-boost switch's
+common, so in at every position) is the most audible value that came from interpretation. On
+`scripts/solo_part.py --circuit pultec_eqp1a --set lf_boost=0.5 hf_boost=0.5`
+(reports/magic/solo/, 2026-11-13) it sits at -19.4 dB re the output, against -22.9 for CLB60. Every
+higher-ranked part is read straight off the drawing or the manual. If one value deserves
+a second look at an original drawing or a measured unit, it is this one.

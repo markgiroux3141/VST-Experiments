@@ -192,14 +192,17 @@ measured.
 
 Analog magic ([docs/ANALOG_MAGIC_FABLE.md](docs/ANALOG_MAGIC_FABLE.md), 2026-11-12, a brainstorm by
 Claude Fable 5 at the user's request, written as work packages a later session can build from the
-doc alone; nothing run, nothing built): where a 1960s record's sound comes from if not from single
-devices (accumulation, noise that follows the signal, nothing repeating, two-way coupling). AM0 a
-shared toolkit `varimu/magic/`, then AM1-AM14 (record forensics, the two-pass null, distance to an
-era, tape generations, dispersion before saturation, noise-forced gain staging, noise that fuses, a
-room that doesn't hold still, instruments that listen, the floor, the device playing the player,
-the mix as a performance, solo a part, interactions between mechanisms), each with what exists,
-steps, tests, done-when and cost; its "Order and dependencies" and "Open decisions" say where to
-start and what is the user's.
+doc alone): where a 1960s record's sound comes from if not from single devices (accumulation,
+noise that follows the signal, nothing repeating, two-way coupling). AM0 a shared toolkit
+`varimu/magic/`, then AM1-AM14. **Run once (2026-11-12/13: AM0-AM7, AM10 and AM13 step 1, AM14;
+reports in `reports/magic/<name>/README.md`, tests `tests/test_magic_*.py`), then closed by the
+user (2026-11-14):** the audio analysis doesn't carry a strong enough signal to say where the 60s
+sound comes from, and nothing in a device changed. The doc's "Status" says what held (the models
+act like analog; mechanisms add; the mix is the biggest lever), what isn't trusted (AM3's era
+distance can't separate 1960s from 1970s Lightfoot; AM6's level measure has no masking) and what
+was kept: the tools (`solo` / `scripts/solo_part.py`, a first audibility map; the two-pass null;
+`null.dewarp`) and notes in DEVICE_BUILDER_PLAN.md B5 (source the mains wander), TAPE_PLAN.md
+(the heads set the generations' 5 kHz rise), the EQP-1A's sources README (CLB330).
 
 Instrument realism ([docs/INSTRUMENT_REALISM_FABLE.md](docs/INSTRUMENT_REALISM_FABLE.md), 2026-11-13, a
 read-only review by Claude Fable 5 at the user's request of `tube_synth` and `rhodes_suitcase`,

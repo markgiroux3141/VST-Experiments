@@ -1562,3 +1562,14 @@ gaps; the over-bias study's variants other than these with the exact gap.
   orientation that Bulletin 20 can't).
 - *Not run:* the head's corner-radius and spacing sensitivities (TAPE_HEAD_RESEARCH.md 5); No. 21
   at other gaps; the round-one variants (moving / static mean field, head law) with the exact gap.
+- *From the analog-magic run (2026-11-13, ANALOG_MAGIC_FABLE.md AM4;
+  reports/magic/generations/README.md):* four generations on the literal, aligned 351 behave
+  as tape should. THD adds in amplitude (1.31 / 2.58 / 3.81 / 4.93 % at 400 Hz, 0 VU), S/N falls
+  more slowly than 10 log10 N (56.7 -> 52.7 dB), and the response errors compound: per
+  generation -0.4 dB at 50 Hz, +1.0 dB at 5 kHz, -1.3 dB at 15 kHz. The +1 dB at 5 kHz (+4 dB by
+  G4) is the record EQ against the provisional repro heads' contour. **It's a reason to source
+  the heads before relying on multi-generation sound.** Also: the idealized tape is
+  time-invariant to -67 dB at 0 dB drive (a print shifted by 4801 samples, AM5), and the 351's
+  error-minimizing level (A-weighted noise against distortion, no masking) is ~13 dB under
+  its 0 VU (AM6), more likely a limit of that measure than of the alignment. Nothing to change
+  in the model.

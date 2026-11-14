@@ -5,7 +5,65 @@ sound the way they do, written out so that a later session on any model can buil
 without having been in the conversation. Fourteen work packages, AM1-AM14, on a small shared
 toolkit, AM0.
 
-**Nothing here is built and nothing was run.** No model, circuit, engine or app code changed.
+## Status (2026-11-14): run once, then closed by the user
+
+**What ran.** One night (2026-11-12/13) in a worktree, merged into main 2026-11-14 (e11bbf8):
+AM0 (`varimu/magic/`), AM1, AM2, AM3 (with stereo features), AM4, AM5, AM6, AM7 (the
+measurements), AM10 step 1, AM13 step 1, AM14. Not started: AM8, AM9, AM11, AM12, and the
+second steps of AM3, AM10 and AM13. Each package's results are in
+`reports/magic/<name>/README.md`, its tests in `tests/test_magic_*.py`. Its listening files are in
+`reports/magic/*/audio/` and `dispersion/abx/`: git-ignored, on this machine only. Its renders are in
+`cache/magic/renders/`, keyed by `circuitsim.SOURCE_HASH`, so stale after any Rust change.
+The material was the user's own cover of *Did She Mention My Name* (modern clean gear). The
+reference was a Lightfoot compilation (Rhino 2002, a lossy rip;
+`data/reference_records/era_1960s/`).
+
+**Why it stopped (the user's call).** The audio analysis doesn't carry a strong enough
+signal to say where the 1960s sound comes from. AM4's generations are obviously different by
+ear, but mostly because each copy is more distorted, which says nothing about the era. No
+device, circuit, engine or config file changed, and no change is proposed.
+
+**What held:**
+- The models behave like analog gear under every test here.
+  - The idealized tape is time-invariant to -67 dB.
+  - Four generations on the literal 351 add distortion in amplitude (THD 1.3 -> 4.9 %).
+  - Noise rises more slowly than 10 log10 N.
+  - The response errors compound.
+- Mechanisms add (AM14): their interactions are small. That's convenient for modelling, and
+  against the thesis that the magic is in the interactions.
+- At realistic values, the device-level subtleties are small or rest on provisional values.
+  - AM2: the excess difference between two prints is the mains wander, a provisional 0.5 %.
+  - AM5: the tape doesn't commute with the chain's phase rotation (the interaction is as large
+    as the tape's own character); the 670 hardly cares. It hasn't been heard.
+- The mix is the largest lever on AM3's distance: the 1968-style mix -105, tape generations
+  -17 / -27 / -37 at G1 / G2 / G4, one 4-track pass +8 (away).
+
+**What isn't trusted, and why:**
+- **AM3's era distance** can't tell Lightfoot's 1960s tracks from his 1970s ones (held out:
+  87 against 85). A 10 kHz low-pass moved the cover *away* (+0.8), although the corpus rolls off
+  at 12.7 kHz. Its corpus is one artist, one 2002 remaster, a lossy rip. Every "toward the era"
+  number rests on it.
+  - **Before it is used again:** several artists and labels from 1963-69, lossless, mono
+    releases among them, and a 1970s set it must separate.
+- **AM6's best level** weighs A-weighted noise against distortion with no masking. "The 351's
+  optimum is 13 dB under 0 VU" may say more about the measure than about the engineers.
+
+**Kept for later:**
+- The tools:
+  - `solo` (FUTURE_DIRECTIONS.md 8.2's audibility map, first pass);
+  - the two-pass null;
+  - `null.delay_track` / `dewarp` (the time base of a tape or a recording);
+  - `fingerprints`;
+  - `era` (only with a better corpus).
+- Notes moved into the plans:
+  - DEVICE_BUILDER_PLAN.md B5: source the mains wander;
+  - TAPE_PLAN.md's "Still to do": the heads set the generations' 5 kHz rise;
+  - `data/schematics/pultec_eqp1a/README.md`: CLB330, the most audible interpreted value;
+  - FUTURE_DIRECTIONS.md 8.2.
+
+What follows is the brainstorm as written on 2026-11-12, unchanged.
+
+**As written: nothing here is built and nothing was run.** No model, circuit, engine or app code changed.
 What was read for this document: EMERGENCE_RESEARCH.md, SCENE_ANALYSIS.md (sections 2, 3, 5, 6),
 the headings of FUTURE_DIRECTIONS.md, COMPONENT_DEPTH_PLAN.md, METHODOLOGY_REVIEW.md and
 INVENTED_DEVICES.md, circuitsim's `dk.rs` (module docs, `DkSystem`, `DkNewton`) and
