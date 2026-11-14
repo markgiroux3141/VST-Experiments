@@ -1,0 +1,92 @@
+{
+ "synth": {
+  "n_phys": {
+   "coherence_cross": 0.5997736082724474,
+   "coherence_within": 0.6787787863847836,
+   "level_corr": 0.24809477108706204,
+   "level_slope": 0.7738366092256647,
+   "level_db_re_signal": -36.790270793559515
+  },
+  "n_stat": {
+   "coherence_cross": -0.0022066020067713424,
+   "coherence_within": -0.0021159755546229218,
+   "level_corr": -0.34547777522597445,
+   "level_slope": -0.2179196491974645,
+   "level_db_re_signal": -36.790270793559515
+  },
+  "n_env": {
+   "coherence_cross": 0.7383280029264154,
+   "coherence_within": 0.7442859351812459,
+   "level_corr": 0.7763349340002307,
+   "level_slope": 0.882064244388141,
+   "level_db_re_signal": -36.790270793559515
+  },
+  "n_band": {
+   "coherence_cross": 0.6664481890592799,
+   "coherence_within": 0.7555971375444778,
+   "level_corr": 0.3337971956131445,
+   "level_slope": 0.5448471853409064,
+   "level_db_re_signal": -36.790270793559515
+  }
+ },
+ "bass": {
+  "n_phys": {
+   "coherence_cross": 0.4010896319706386,
+   "coherence_within": 0.5444440015229135,
+   "level_corr": 0.5056906776528237,
+   "level_slope": 1.437157078106751,
+   "level_db_re_signal": -36.35358464977292
+  },
+  "n_stat": {
+   "coherence_cross": 0.01477829866069412,
+   "coherence_within": 0.05299261356396591,
+   "level_corr": -0.10507430753385028,
+   "level_slope": -0.05273881744534373,
+   "level_db_re_signal": -36.35358464977291
+  },
+  "n_env": {
+   "coherence_cross": 0.35592122001960963,
+   "coherence_within": 0.4113871183572303,
+   "level_corr": 0.8055658901763493,
+   "level_slope": 0.7009294137472102,
+   "level_db_re_signal": -36.35358464977291
+  },
+  "n_band": {
+   "coherence_cross": 0.391945574708612,
+   "coherence_within": 0.6401274324684435,
+   "level_corr": 0.6886217626741377,
+   "level_slope": 1.0371936145424054,
+   "level_db_re_signal": -36.35358464977292
+  }
+ },
+ "voice": {
+  "n_phys": {
+   "coherence_cross": 0.2572605770190721,
+   "coherence_within": 0.6043452898455144,
+   "level_corr": 0.8094654225552846,
+   "level_slope": 0.8267780510629723,
+   "level_db_re_signal": -37.58395198095008
+  },
+  "n_stat": {
+   "coherence_cross": 0.0023297816060376614,
+   "coherence_within": -0.06819696260882668,
+   "level_corr": 0.04255851931524762,
+   "level_slope": 0.006160538777437076,
+   "level_db_re_signal": -37.58395198095008
+  },
+  "n_env": {
+   "coherence_cross": 0.42316278993099676,
+   "coherence_within": 0.40412166452906895,
+   "level_corr": 0.9886160750104142,
+   "level_slope": 1.0343175994108216,
+   "level_db_re_signal": -37.58395198095008
+  },
+  "n_band": {
+   "coherence_cross": 0.3388455012116061,
+   "coherence_within": 0.6597843830211301,
+   "level_corr": 0.9742702337209916,
+   "level_slope": 0.8486388773822247,
+   "level_db_re_signal": -37.58395198095008
+  }
+ }
+}
