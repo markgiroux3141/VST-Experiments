@@ -486,6 +486,14 @@ impl Device {
     pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
         c.with_live_speaker(self.live_speaker_v)
             .with_apart_from(self.partition.unwrap_or(&[]))
+            .with_speaker_filter(self.offers_speaker_filter() && speakers_heard(self.id))
+    }
+
+    /// Whether it can be heard through its speakers' filter instead of their terminal
+    /// voltage (played without its readouts, a filter measured for its circuit:
+    /// `crate::speaker_filter::DEVICES`).
+    pub fn offers_speaker_filter(&self) -> bool {
+        self.live_speaker_v.is_some() && crate::speaker_filter::circuit_of(self.id).is_some()
     }
 
     /// The settings it plays at: `s` (its quality's) with its cores.
@@ -566,6 +574,31 @@ static PRECISE: std::sync::RwLock<std::collections::BTreeSet<String>> =
 /// Whether device `id` plays with its precise solver ([`LiveNumerics::fast_newton`] not used).
 pub fn precise(id: &str) -> bool {
     PRECISE.read().map(|p| p.contains(id)).unwrap_or(false)
+}
+
+/// The devices the user hears through their speakers' filter (`app.json`'s `speakers_heard`;
+/// the Play view loads and sets them: [`Device::live`] reads them).
+static SPEAKERS_HEARD: std::sync::RwLock<std::collections::BTreeSet<String>> =
+    std::sync::RwLock::new(std::collections::BTreeSet::new());
+
+/// Whether device `id` is heard through its speakers' filter (`crate::speaker_filter`).
+pub fn speakers_heard(id: &str) -> bool {
+    SPEAKERS_HEARD
+        .read()
+        .map(|p| p.contains(id))
+        .unwrap_or(false)
+}
+
+/// Hear device `id` through its speakers' filter, or as their terminal voltage: from the
+/// next stream built.
+pub fn set_speakers_heard(id: &str, on: bool) {
+    if let Ok(mut p) = SPEAKERS_HEARD.write() {
+        if on {
+            p.insert(id.to_string());
+        } else {
+            p.remove(id);
+        }
+    }
 }
 
 /// Play device `id` with its precise solver, or its fast one: from the next stream built.

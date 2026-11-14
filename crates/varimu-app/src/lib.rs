@@ -52,5 +52,6 @@ pub mod room;
 pub mod sampler;
 pub mod session;
 pub mod settings;
+pub mod speaker_filter;
 pub mod take_render;
 pub mod transport;

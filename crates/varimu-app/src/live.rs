@@ -71,6 +71,10 @@ pub struct Circuit {
     mechanics_apart: Vec<String>,
     /// Its tape's track (`with_track`): None the first, Some a further one's name.
     track: Option<String>,
+    /// With `live_speaker_v`, its speakers heard after it as the pressure the file's
+    /// readouts give (`crate::speaker_filter`, `with_speaker_filter`): its output on the
+    /// file's own full scale.
+    speaker_filter: bool,
 }
 
 impl Circuit {
@@ -92,6 +96,7 @@ impl Circuit {
             readouts_apart: Vec::new(),
             mechanics_apart: Vec::new(),
             track: None,
+            speaker_filter: false,
         })
     }
 
@@ -109,6 +114,7 @@ impl Circuit {
             readouts_apart: Vec::new(),
             mechanics_apart: Vec::new(),
             track: None,
+            speaker_filter: false,
         }
     }
 
@@ -124,6 +130,25 @@ impl Circuit {
     pub fn with_live_speaker(mut self, v: Option<f64>) -> Circuit {
         self.live_speaker_v = v;
         self
+    }
+
+    /// Played without its readouts (`with_live_speaker`), its speakers heard after it
+    /// through the filter saved for its file (`crate::speaker_filter`): the stream's output
+    /// on the file's full scale (the pressure, as a render's), Live convolving it.
+    pub fn with_speaker_filter(mut self, on: bool) -> Circuit {
+        self.speaker_filter = on;
+        self
+    }
+
+    /// Whether its speakers are heard through their filter (`with_speaker_filter`, and
+    /// played without their readouts).
+    pub fn speaker_filter(&self) -> bool {
+        self.speaker_filter && self.live_speaker_v.is_some()
+    }
+
+    /// The circuit file it was read from.
+    pub fn path(&self) -> &Path {
+        &self.spec.path
     }
 
     /// Speaker parts `parts` with their readouts in sections of their own, titled
@@ -212,6 +237,8 @@ impl Circuit {
             output_pascals: false,
         });
         match self.live_speaker_v {
+            // Heard through the speakers' filter: the file's own scale, the pressure.
+            Some(_) if self.speaker_filter => fs,
             Some(v) => FullScale {
                 output_v: v,
                 output_pascals: false,
@@ -641,6 +668,8 @@ pub struct Live {
     /// built so, waiting for the next block.
     circuit: Circuit,
     pending: Vec<Ready>,
+    /// The speakers heard after the circuit (`Circuit::with_speaker_filter`).
+    speakers: Option<crate::speaker_filter::Speakers>,
 }
 
 impl Live {
@@ -710,7 +739,14 @@ impl Live {
                 (j, r)
             })
             .collect();
-        let lag = chain_lag(k, (s.input_order.max(1) - 1) / 2 + 1, n0);
+        let mut lag = chain_lag(k, (s.input_order.max(1) - 1) / 2 + 1, n0);
+        let speakers = if circuit.speaker_filter() {
+            let f = crate::speaker_filter::SpeakerFilter::load(circuit.path(), rate)?;
+            lag += f.latency;
+            Some(crate::speaker_filter::Speakers::new(&f))
+        } else {
+            None
+        };
         let shared = Arc::new(Shared {
             wanted: Mutex::new(None),
             circuit: Mutex::new(None),
@@ -753,6 +789,7 @@ impl Live {
             log: None,
             circuit,
             pending: Vec::new(),
+            speakers,
         })
     }
 
@@ -1090,8 +1127,15 @@ impl Live {
                 y
             }
         };
-        let y = pad(y);
-        self.right = yr.map(|r| pad(r).iter().map(|&t| t as f32).collect());
+        let mut y = pad(y);
+        let mut yr = yr.map(pad);
+        if let Some(sp) = &mut self.speakers {
+            sp.process(0, &mut y);
+            if let Some(r) = &mut yr {
+                sp.process(1, r);
+            }
+        }
+        self.right = yr.map(|r| r.iter().map(|&t| t as f32).collect());
         let rms = |a: &[f64]| (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt();
         let (rms_in, rms_out) = (rms(x) + 1e-12, rms(&y) + 1e-12);
         // The circuit's gain, V/V or Pa/V (0 dB more when the scales in and out differ).

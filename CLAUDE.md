@@ -212,6 +212,15 @@ the cabinet, now that `box_m3` exists). The synth, TS1-TS4 (the reactor's magnet
 Preisach as pitch; mismatch, since every part is nominal; temperature beyond the cathodes; the
 keyboard as a circuit). Both, PL1 (key to ear). Most packages measure first and end in options:
 its "Order and dependencies" and "Open decisions" say where to start and what is the user's.
+**SC1-SC6 tried 2026-11-13 on the branch `rhodes-realism` (kept unmerged as the record); the user's
+verdict: not an improvement as played.** Only two things came to main (2026-11-14): SC1, Play's
+"Hear the speakers" for `rhodes_suitcase` (off by default: the circuit's speakers as a fixed
+filter, `config/speaker_filters/rhodes_suitcase_100w.json` by `scripts/suitcase_speaker_filter.py
+[--check]`, stale when the circuit file changes, a harp pin included; `varimu_app::speaker_filter`),
+and `varimu/measure/ac.py` ~190x faster. The instruments stay on `MK1_HARP@2`. What was tried and
+why it was set aside (@3's per-register hammer speed: quieter, the loud bass duller; @4's rigid
+felt: a pitch-stretched release; evening keys by gap: the bass already at the manual's closest) is
+the doc's "What was tried, 2026-11-13": read it before picking any of SC2-SC6 up again.
 
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing

@@ -96,40 +96,54 @@ def _system(ir: CircuitIR):
     return nodes, index, stamps, branches, els
 
 
+def _assemble(n: int, m: int, stamps, branches) -> tuple[np.ndarray, np.ndarray]:
+    """The system matrix as A0 + s A1 (it is affine in s): (A0, A1)."""
+    a0 = np.zeros((n + m, n + m))
+    a1 = np.zeros((n + m, n + m))
+
+    def add(a, i, j, y):
+        if i >= 0 and j >= 0:
+            a[i, j] += y
+
+    for kind, p, q, v in stamps:
+        if kind in ("g", "c"):
+            a = a0 if kind == "g" else a1
+            add(a, p, p, v), add(a, q, q, v), add(a, p, q, -v), add(a, q, p, -v)
+        elif kind == "m":  # branches p and q (indices): - s M i on each other's row
+            a1[n + p, n + q] -= v
+            a1[n + q, n + p] -= v
+        else:  # current gm (V(cp) - V(cn)) from p to q through the source
+            cp, cn, gm = v
+            add(a0, q, cp, -gm), add(a0, q, cn, gm), add(a0, p, cp, gm), add(a0, p, cn, -gm)
+    for k, (kind, p, q, v) in enumerate(branches):
+        r = n + k
+        add(a0, p, r, 1.0), add(a0, q, r, -1.0)  # the branch current leaves p, enters q
+        add(a0, r, p, 1.0), add(a0, r, q, -1.0)
+        if kind == "l":
+            a1[r, r] -= v  # V(p) - V(q) - s L i = 0
+        elif kind == "w":
+            core, k_v, turns = v
+            add(a1, r, core, -k_v)  # V(p) - V(q) - s N A k V(core) = 0
+            add(a0, core, r, -turns)  # N i flows into the core node
+    return a0, a1
+
+
+_BATCH = 256  # frequencies per stacked solve
+
+
 def _solve(ir: CircuitIR, f_hz: Sequence[float], rhs_fn) -> tuple[list[str], np.ndarray]:
     nodes, index, stamps, branches, els = _system(ir)
     n, m = len(nodes), len(branches)
-    out = []
-    for f in np.atleast_1d(np.asarray(f_hz, float)):
+    a0, a1 = _assemble(n, m, stamps, branches)
+    freqs = np.atleast_1d(np.asarray(f_hz, float))
+    out = np.empty((len(freqs), n + m), complex)
+    for i in range(0, len(freqs), _BATCH):
+        f = freqs[i : i + _BATCH]
         s = 2j * np.pi * f
-        a = np.zeros((n + m, n + m), complex)
-
-        def add(i, j, y, a=a):
-            if i >= 0 and j >= 0:
-                a[i, j] += y
-
-        for kind, p, q, v in stamps:
-            if kind in ("g", "c"):
-                y = v if kind == "g" else s * v
-                add(p, p, y), add(q, q, y), add(p, q, -y), add(q, p, -y)
-            elif kind == "m":  # branches p and q (indices): - s M i on each other's row
-                a[n + p, n + q] -= s * v
-                a[n + q, n + p] -= s * v
-            else:  # current gm (V(cp) - V(cn)) from p to q through the source
-                cp, cn, gm = v
-                add(q, cp, -gm), add(q, cn, gm), add(p, cp, gm), add(p, cn, -gm)
-        for k, (kind, p, q, v) in enumerate(branches):
-            r = n + k
-            add(p, r, 1.0), add(q, r, -1.0)  # the branch current leaves p, enters q
-            add(r, p, 1.0), add(r, q, -1.0)
-            if kind == "l":
-                a[r, r] -= s * v  # V(p) - V(q) - s L i = 0
-            elif kind == "w":
-                core, k_v, turns = v
-                add(r, core, -s * k_v)  # V(p) - V(q) - s N A k V(core) = 0
-                add(core, r, -turns)  # N i flows into the core node
-        out.append(np.linalg.solve(a, rhs_fn(n, m, index, els, branches, f)))
-    return nodes, np.array(out)
+        a = a0[None, :, :] + s[:, None, None] * a1[None, :, :]
+        b = np.stack([rhs_fn(n, m, index, els, branches, fk) for fk in f])
+        out[i : i + len(f)] = np.linalg.solve(a, b[:, :, None])[:, :, 0]
+    return nodes, out
 
 
 def transfer(

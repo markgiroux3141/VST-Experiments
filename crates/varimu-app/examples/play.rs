@@ -35,6 +35,8 @@
 //! replayed from the Clavinet's strike table, as in the app: the keys wait until it is
 //! filled (recorded once, then loaded from cache/clavinet/); `--compute-strikes` computes
 //! every strike instead.
+//! `--speakers` hears a device through its speakers' filter (`varimu_app::speaker_filter`,
+//! Play's "Hear the speakers") instead of their terminal voltage.
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
 //! `--end ID` puts a device at the chain's end (`panel::CHAIN_ENDS`: the plate reverb) on
@@ -109,6 +111,7 @@ fn main() -> Result<(), String> {
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
     let mut mute = false;
+    let mut speakers = false;
     let mut compute_strikes = false;
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
@@ -186,6 +189,7 @@ fn main() -> Result<(), String> {
             }
             "--normal-priority" => normal_priority = true,
             "--mute" => mute = true,
+            "--speakers" => speakers = true,
             "--compute-strikes" => compute_strikes = true,
             "--record" => record = Some(args.next().ok_or("--record needs a file")?),
             "--list-inputs" => {
@@ -206,6 +210,7 @@ fn main() -> Result<(), String> {
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
+    varimu_app::panel::set_speakers_heard(dev.id, speakers);
     let circuit = dev
         .live(Circuit::load(config, dev.circuit, s.cores()?)?)
         .with_events(s.events)

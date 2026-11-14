@@ -1507,6 +1507,32 @@ impl PlayView {
         let Some(cores) = self.play_settings().ok().and_then(|s| s.cores().ok()) else {
             return;
         };
+        // Its speakers heard as their pressure or their terminal voltage: a restart.
+        if let Some(d) = DEVICES
+            .get(self.device)
+            .filter(|d| d.offers_speaker_filter())
+        {
+            let mut on = panel::speakers_heard(d.id);
+            let r = ui.checkbox(&mut on, "Hear the speakers").on_hover_text(
+                "The sound pressure 1 m in front of each channel's front speaker, as renders \
+                 and prints have it (the speakers' filter, measured from the circuit file: \
+                 scripts/suitcase_speaker_filter.py), instead of the speakers' terminal \
+                 voltage. The drivers are stand-ins (P12R), so the curve is provisional. \
+                 Takes record what is heard; a change restarts the sound.",
+            );
+            if r.changed() {
+                panel::set_speakers_heard(d.id, on);
+                if on {
+                    self.prefs.speakers_heard.insert(d.id.to_string());
+                } else {
+                    self.prefs.speakers_heard.remove(d.id);
+                }
+                self.save_prefs();
+                if self.player.is_some() {
+                    self.start();
+                }
+            }
+        }
         // Its precise or fast Newton tolerance (panel::LIVE_NUMERICS): a restart.
         if let Some(d) = DEVICES.get(self.device).filter(|d| d.offers_fast_solver()) {
             let mut on = panel::precise(d.id);

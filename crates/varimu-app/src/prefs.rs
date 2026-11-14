@@ -22,6 +22,9 @@ pub struct Prefs {
     /// The devices played with their precise Newton tolerance instead of their fast one
     /// (`panel::LIVE_NUMERICS`, Play's "Precise solver").
     pub precise_solver: BTreeSet<String>,
+    /// The devices heard through their speakers' filter instead of as their speakers'
+    /// terminal voltage (`crate::speaker_filter`, Play's "Hear the speakers").
+    pub speakers_heard: BTreeSet<String>,
 }
 
 /// A keyboard's saved touch (the device's own law is the device's: `midi::Touch::native_db`).
@@ -52,6 +55,7 @@ impl Default for Prefs {
             normalize_dbfs: Some(ALIGNMENT_DBFS),
             touch: BTreeMap::new(),
             precise_solver: BTreeSet::new(),
+            speakers_heard: BTreeSet::new(),
         }
     }
 }
@@ -102,20 +106,25 @@ impl Prefs {
                     .collect()
             })
             .unwrap_or_default();
-        let precise_solver = v["precise_solver"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(Value::as_str)
-                    .map(String::from)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let ids = |key: &str| -> BTreeSet<String> {
+            v[key]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let precise_solver = ids("precise_solver");
+        let speakers_heard = ids("speakers_heard");
         Prefs {
             source_folders,
             normalize_dbfs,
             touch,
             precise_solver,
+            speakers_heard,
         }
     }
 
@@ -124,6 +133,9 @@ impl Prefs {
     pub fn with_solvers_set(self) -> Prefs {
         for id in &self.precise_solver {
             crate::panel::set_precise(id, true);
+        }
+        for id in &self.speakers_heard {
+            crate::panel::set_speakers_heard(id, true);
         }
         self
     }
@@ -156,6 +168,7 @@ impl Prefs {
             "normalize_dbfs": self.normalize_dbfs,
             "touch": touch,
             "precise_solver": self.precise_solver,
+            "speakers_heard": self.speakers_heard,
         })
     }
 }
@@ -176,12 +189,14 @@ mod tests {
         );
         p.touch.insert("Other".into(), KeyTouch::default());
         p.precise_solver.insert("minimoog_voice".into());
+        p.speakers_heard.insert("rhodes_suitcase".into());
         let text = serde_json::to_string(&p.to_json()).unwrap();
         assert_eq!(Prefs::from_json(&serde_json::from_str(&text).unwrap()), p);
         // A settings file from before the touch: none saved, the rest as it was.
         let old = json!({"source_folders": ["D:/music"], "normalize_dbfs": null});
         let back = Prefs::from_json(&old);
         assert!(back.touch.is_empty() && back.precise_solver.is_empty());
+        assert!(back.speakers_heard.is_empty());
         assert_eq!(back.source_folders, vec![PathBuf::from("D:/music")]);
         assert_eq!(back.normalize_dbfs, None);
     }

@@ -212,6 +212,66 @@ These are the project's rules (CLAUDE.md) as they apply here. Follow them withou
 
 # The Rhodes Suitcase
 
+## What was tried, 2026-11-13: read this before picking up SC2-SC6
+
+All of SC1-SC6's first round was built in one day on the branch `rhodes-realism` (worktree
+`vst-rhodes`, commits 9058388..f27c634, kept unmerged as the record; its own copy of this file
+has every status block, its `reports/rhodes/{attack,bass_clearance,release,speed_fit,key_levels}/`
+the tables). **The user's verdict (2026-11-14): not an improvement as played.** The keys needed
+harder hits and the release sounded wrong, so only SC1 and the AC speed-up came to main; the
+instruments stay on `MK1_HARP@2`.
+
+**Kept (in main):**
+- SC1, "Hear the speakers" (its status block below).
+- `varimu/measure/ac.py`: A0 + s A1 assembled once, frequencies solved in stacked batches (~190x
+  faster, the AC-dependent tests pass).
+
+**Tried and set aside (don't redo these as they were):**
+- **MK1_HARP@3, a hammer speed per register (SC6 option a).** The fit: `velocity.ff_speed_by_key`,
+  1.45 m/s at F1 rising to 3.75 at D3 and up (was 5.0 everywhere), fitted to jRhodes3d's harmonic
+  patterns per layer. On paper better (harmonics 1-6 vs jRhodes3d, mean error 8.1 -> 4.3 dB; E1's
+  swing at ff 62 -> 18 mm, Pfeifle ~15). As played worse: 2-4 dB quieter in the middle and 5-8 dB
+  in the bass at the same velocity (the fit pins timbre per layer, not the keyboard's feel), and
+  the loud bass lost its content above 4 kHz, which in @2 came from the tines swinging off the
+  pickup's flux map (a clip, physically wrong, but it was the bark the user liked). Lesson: a fit
+  to a sample set's timbre can make the instrument feel worse; check level per velocity and play
+  it before pinning.
+- **The felt release (SC3, MK1_HARP@4).** The felt as a prescribed, rigid surface 0.05 mm into the
+  tine's rest line, its four values model knowledge with no real release to check against. The
+  user, live: "like a wave sample stretched by the pitch, a really low note has a super long
+  release". Why: a swing of millimetres grazes such a surface once per cycle, so a release lasts
+  a fixed number of cycles (E1 ~25, ~0.6 s), a click train at the note's frequency. Its port
+  agreed with its own reference to -137.7 dB, which proved nothing about reality. If the release
+  is taken up again: the damper as a light mass on a preloaded spring that follows the tine,
+  through a soft, lossy felt, and a real release reference first (the Suitcase recording's chord
+  releases, the user's own recordings). Main's release is still the switch the user disliked
+  before all this: that complaint stands, unsolved.
+- **Even keys by pickup gap (SC2).** Measured on @3: the bass 7-15 dB and the top octave 9-20 dB
+  under the middle, and a sawtooth by hammer-tip zone (up to 14 dB between neighbours at velocity
+  32). The gap moves a key by ~6 dB a mm, the same everywhere, but the bass already sits at the
+  manual's closest gap (1/16 in; 0.020 in only in the middle and upper ranges, ch.4): no voicing
+  within the manual lifts it. jRhodes3d's README is a sourced equal-level reference ("to maintain
+  volume throughout each layer"): E2-A5 already balance within +-2 dB of that piano.
+- **The likely common cause, not pursued:** the hammer's contact lasts 1-1.9 periods of the note
+  at each tip zone's top and 7.4 at E7 (velocity 64), longer when soft. That fits the sawtooth,
+  the weak top octave and the soft notes' missing high band (below). Every value behind it is
+  provisional (the hammer's 10 g, Gent's Shore-to-modulus, the wrapped tips' 40 MPa). A contact
+  fit would be the next thing to try, against jRhodes3d's soft layers above 4 kHz and its
+  equal-level layers, and played before it is pinned.
+
+**Measured, still true of main's @2 (SC4, `rhodes_attack_forensics.py` on the branch):**
+- the real bass has 2-11 dB more thump (sub-f0 energy at the attack) in loud layers;
+- the real attack's 4 kHz+ tick is 5-14 dB stronger from A2 up in loud layers;
+- the real piano's level above 4 kHz hardly changes with velocity, ours falls 50-70 dB from loud
+  to soft: soft notes are nearly pure above 4 kHz;
+- beating is weak in the real piano too (0.01-0.25 dB mostly);
+- the bass tines swing 20-62 mm at ff (SC6; Pfeifle ~15), off the flux map from velocity 64 at E1.
+
+**Found on the way, not changed:** the speaker readout's back-wave delay line
+(`speaker.LADDER_SECTION_S`, a lossless lumped LC line, cutoff 5.1 kHz) rings at its cutoff with
+a Q in the thousands, ~-70 dB re the peak for over a second, in every speaker render (5E3, the
+amps, the Suitcase): numerical, not a cone mode; the user's call.
+
 ## SC1. The speakers heard live
 
 **The gap.** Live, `out` / `out_r` are the speakers' terminal voltages [code: `panel.rs:1201`].
@@ -268,6 +328,35 @@ user has heard DI against SPEAKERS.
 
 **The user's.** Which of the two the device plays by default. Note that `P12R@1` is a stand-in
 for unknown drivers, so SPEAKERS is a provisional curve heard loudly: SC9 is its follow-up.
+
+**Status (2026-11-13, in main 2026-11-14): built, done.** Built on the branch `rhodes-realism`;
+only this package and `ac.py` came to main, with the filter for `MK1_HARP@2`'s circuit.
+
+- **The premise holds.** `parts.speaker_driver` / `speaker_readout` without a field are R, L, C
+  and Vccs only, and the readout draws no current: the pressure is exactly a fixed filter of the
+  terminal voltage.
+- **The filter.** `scripts/suitcase_speaker_filter.py [--check] [--plot]` lifts each channel's
+  speaker elements out of the built IR and solves pressure over terminal volts by AC analysis,
+  into `config/speaker_filters/rhodes_suitcase_100w.json`: an impulse per channel at 44.1 / 48 /
+  88.2 / 96 kHz; the circuit file's sha256 with CRLF read as LF (a changed circuit, a new harp
+  pin included, makes it stale: rerun the script); a latency of 0.5 ms (23-48 samples). The
+  impulse is tapered to zero over 18-22 kHz and cut at -48 dB of remaining energy (1,975 taps,
+  41 ms at 48 kHz; -55 dB doubled the live cost and dropped out).
+- **Verified** by `scripts/suitcase_speaker_filter_check.py`: two draft renders of the demo's
+  first two bars, readouts on and off; the second, filtered, is -51 dB from the first overall
+  (63 Hz -44, 125 Hz -47, 1 kHz -63, 2 kHz -50, 4 kHz -39, 8 kHz -43 / -50 dB; at 4-8 kHz mostly
+  the delay line's ringing above, which the cut drops; -79 dB before the cut).
+- **The app.** `varimu_app::speaker_filter` (circuitsim's zero-latency partitioned `Convolver`,
+  block 128), `speaker_filter::DEVICES` (rhodes_suitcase), `live::Circuit::with_speaker_filter`
+  (the output then on the file's own 25 Pa full scale; Live adds the filter's latency to its lag
+  and convolves after the resampler and any restart's crossfade, so the cones' state carries
+  across rebuilds), Play's "Hear the speakers" (`panel::set_speakers_heard`, app.json
+  `speakers_heard`), `examples/play.rs --speakers`. Tests: `speaker_filter::tests`, prefs' round
+  trip.
+- **Live load.** The filter's cost is within run-to-run noise (`play.rs --hold-bass 6 --from 48
+  --restrike 2 --mute --buffer 0.05`: 84-98 % mean either way); the Suitcase itself is at its edge
+  on that test with or without it.
+- **The user's decision (2026-11-13):** both sounds are good; a toggle, off by default.
 
 ## SC2. Every key its own: unit draws for the harp
 
@@ -701,10 +790,11 @@ mean a new `MK1_HARP` version.
 
 ## Open decisions (the user's)
 
-1. SC1: DI or SPEAKERS as the Suitcase's default live sound, given the stand-in drivers.
-2. SC2: the panel's names and whether amount 1 (the measured unevenness) is the default or 0.
-3. SC3: adopt the felt contact or keep the switch, after the A/B.
-4. SC6: which of the four bass options, after the table.
+1. SC1: decided (2026-11-13), a toggle, off by default.
+2. SC2: the panel's names and whether amount 1 (the measured unevenness) is the default or 0
+   (and first: whether to fit the hammer's contact; "What was tried, 2026-11-13").
+3. SC3: the rigid felt was tried and withdrawn; a redesign only with a real release reference.
+4. SC6: option (a) tried as MK1_HARP@3 and set aside; the bass swing on @2 stands.
 5. SC8: a noise block on the Suitcase at all, if the floor measures near inaudible.
 6. TS1: Preisach at master only (as decided), live too, or leave JA.
 7. TS2: the draw scheme for units in Rust (port numpy's, or opt-in Philox draws).
