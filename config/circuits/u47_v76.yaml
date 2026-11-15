@@ -54,6 +54,16 @@ full_scale:
     source: 'derived: +24 dB re 0.775 V rms, x sqrt(2): headroom over the +22 dB the specs test at (bb
       sheet 7)'
 controls:
+  supply_u47:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'CHAINS_PLAN.md NH3 (the user''s choice: a switch, ideal by default)'
+    notes: '0 = the NG as a Thevenin source (every render before NH3); 1 = the NG from the mains, inferred
+      from Neumann''s figures: its winding, a selenium bridge, C1 - R2 1k - C2 - R3 1k - C3: ripple and
+      sag from the physics'
   pattern_u47:
     value: 0
     choices:
@@ -67,8 +77,7 @@ controls:
     min: 198.0
     max: 242.0
     unit: V
-    source: 'provisional: model knowledge (the NG''s 220 V strapping; not simulated: the NG is a Thevenin
-      source here)'
+    source: 'provisional: model knowledge (the NG''s 220 V strapping; heard with SUPPLY 1)'
   gain_db_v76:
     value: 34
     choices:
@@ -229,6 +238,46 @@ values:
     value: 4875.0
     source: 'derived: (300 - 105) V / 40 mA (br / ds58: 105 V at 40 mA loaded)'
     notes: the NG's filter resistors, rectifier and windings lumped; the cable's 0.4 V (README) inside
+  mains_hz_u47:
+    value: 50.0
+    source: 'provisional: model knowledge (European mains, where it was made)'
+  ng_t_v_rms_u47:
+    value: 212.1
+    source: 'derived: br / ds58''s about 300 V open-circuit as the winding''s peak, 300 / sqrt(2) (the
+      bridge''s drop at no load left out: provisional)'
+  ng_t_r_ohm_u47:
+    value: 930.4
+    source: 'derived: set so that the NG gives br / ds58''s 105 V at the microphone''s 40 mA with SUPPLY
+      1 (scripts/mic_supply_trim.py): the winding, the primary referred and any dropper the drawing may
+      have, lumped (provisional)'
+  ng_r2_ohm_u47:
+    value: 1000.0
+    source: 'README ''The supply NG'': the 1966 filter C1, R2 1 kOhm, C2, R3 1 kOhm, C3 (the nuvistor
+      conversion notice)'
+  ng_r3_ohm_u47:
+    value: 1000.0
+    source: 'README ''The supply NG'': the 1966 filter''s R3 1 kOhm'
+  ng_c1_f_u47:
+    value: 4.0e-05
+    source: 'provisional: the early NG drawing''s ''5 x 40 uF'' (web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png);
+      the 1966 filter''s C1 not printed'
+  ng_c2_f_u47:
+    value: 4.0e-05
+    source: 'provisional: as ng_c1_f (the 1966 filter''s C2)'
+  ng_arm_c_f_u47:
+    value: 5.2e-09
+    source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.417 sq. in. per cell
+      / 10 cells in series (config/components/b250c75/1.yaml)'
+  ng_c1_v0_v_u47:
+    value: 183.561
+    source: 'derived: C1''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held
+      for the operating point only)'
+  ng_c2_v0_v_u47:
+    value: 144.28
+    source: 'derived: C2''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
+  numerical_leak_ohm_u47:
+    value: 1000000000.0
+    source: 'numerical: a DC path for the NG''s floating winding (not physical)'
   ng_c_f_u47:
     value: 4.0e-05
     source: 'web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png
@@ -798,6 +847,12 @@ devices:
   V1_u47:
     device: VF14T@1
     tolerance: tube
+  GNG_u47:
+    device: B250C75@1
+    instance: false
+    emit: used
+    source: 'web: https://www.radiomuseum.org/r/neumann_stromversorgung_fuer_neumann_typ_u47_ng.html (''250B60
+      or B250C75''; the NG''s rectifier, SUPPLY 1)'
   V1_v76:
     device: EF804S@1
     tolerance: tube
@@ -816,17 +871,123 @@ devices:
 sections:
 - title: 'Neumann U47: supply'
   parts:
-    VNG_u47:
-      V:
-      - ng_u47
-      - '0'
-      v: ng_open_v_u47
-    RNG_u47:
-      R:
-      - ng_u47
-      - b105_u47
-      r: ng_r_ohm_u47
-      tolerance: none
+    SUPPLY_u47:
+      switch: supply_u47
+      parts:
+        VNG_u47:
+          V:
+          - ng_u47
+          - '0'
+          v: ng_open_v_u47
+          in:
+          - 0
+        RNG_u47:
+          R:
+          - ng_u47
+          - b105_u47
+          r: ng_r_ohm_u47
+          tolerance: none
+          in:
+          - 0
+        VT_u47:
+          mains:
+          - wa_u47
+          - wn_u47
+          v_rms: ng_t_v_rms_u47
+          phase_deg: 90.0
+          in:
+          - 1
+        RT_u47:
+          R:
+          - wa_u47
+          - wb_u47
+          r: ng_t_r_ohm_u47
+          tolerance: none
+          in:
+          - 1
+        RTLEAK_u47:
+          R:
+          - wn_u47
+          - '0'
+          r: numerical_leak_ohm_u47
+          tolerance: none
+          in:
+          - 1
+        GNG_u47:
+          bridge:
+          - wb_u47
+          - wn_u47
+          - n1_u47
+          - '0'
+          model: GNG_u47
+          in:
+          - 1
+        CGA_u47:
+          C:
+          - wb_u47
+          - n1_u47
+          c: ng_arm_c_f_u47
+          tolerance: none
+          in:
+          - 1
+        CGB_u47:
+          C:
+          - wn_u47
+          - n1_u47
+          c: ng_arm_c_f_u47
+          tolerance: none
+          in:
+          - 1
+        CGC_u47:
+          C:
+          - '0'
+          - wb_u47
+          c: ng_arm_c_f_u47
+          tolerance: none
+          in:
+          - 1
+        CGD_u47:
+          C:
+          - '0'
+          - wn_u47
+          c: ng_arm_c_f_u47
+          tolerance: none
+          in:
+          - 1
+        CN1_u47:
+          C:
+          - n1_u47
+          - '0'
+          c: ng_c1_f_u47
+          v0: ng_c1_v0_v_u47
+          tolerance: none
+          in:
+          - 1
+        RN2_u47:
+          R:
+          - n1_u47
+          - n2_u47
+          r: ng_r2_ohm_u47
+          tolerance: none
+          in:
+          - 1
+        CN2_u47:
+          C:
+          - n2_u47
+          - '0'
+          c: ng_c2_f_u47
+          v0: ng_c2_v0_v_u47
+          tolerance: none
+          in:
+          - 1
+        RN3_u47:
+          R:
+          - n2_u47
+          - b105_u47
+          r: ng_r3_ohm_u47
+          tolerance: none
+          in:
+          - 1
     CNG_u47:
       C:
       - b105_u47

@@ -21,6 +21,8 @@ varimu.circuit.builder, which expands its parts with the parts library
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     hum: {hz?, field_t, pickups: {PART: {area_m2} | {turn_area_m2}}}  # stray-field hum
     devices: {key: {device, ...}}   # device model instances, in IR model order
+                                    # (`emit: used`: the model only when a part uses
+                                    # it, a switch's other position: CHAINS_PLAN.md NH3)
     sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?, method?,
                 tube_tables?, substeps_in?, when?, parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a

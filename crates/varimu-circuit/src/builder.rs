@@ -50,7 +50,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 15] = [
+const DEVICE_KEYS: [&str; 16] = [
     "device",
     "name",
     "instance",
@@ -66,6 +66,7 @@ const DEVICE_KEYS: [&str; 15] = [
     "notes",
     "tol_scale",
     "lux",
+    "emit",
 ];
 
 // --- Tolerance -------------------------------------------------------------------------
@@ -2889,6 +2890,11 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
         if !unknown.is_empty() {
             return Err(ctx.fail(&where_, format!("unknown keys {unknown:?}")));
         }
+        if let Some(v) = e.get("emit").filter(|v| !v.is_null())
+            && v.as_str() != Some("used")
+        {
+            return Err(ctx.fail(&where_, format!("emit: {v} (one of [\"used\"])")));
+        }
         let file = ctx.text(&where_, e.get("device").unwrap())?;
         // A circuit names the component version it uses (versions::require_pinned).
         let base = versions::require_pinned(&ctx.lib.components_dir(), &file)
@@ -2900,7 +2906,7 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
         }
         let model = if e.get("instance") == Some(&Value::Bool(false)) {
             if e.keys()
-                .any(|k| !["device", "instance", "events", "source", "notes"].contains(&k))
+                .any(|k| !["device", "instance", "events", "source", "notes", "emit"].contains(&k))
             {
                 return Err(ctx.fail(
                     &where_,
@@ -3464,11 +3470,32 @@ pub fn build_ir_hum(
         Some(start) => Some(heater_spec(&ctx, start)?),
         None => None,
     };
+    // A devices entry's `emit: used` (Python's): its model only when an element uses it.
+    let referenced: HashSet<&str> = sections
+        .iter()
+        .flat_map(|s| s.elements.iter())
+        .filter_map(|e| match e {
+            Element::Device(d) => Some(d.model.as_str()),
+            _ => None,
+        })
+        .collect();
+    let emit_used: HashSet<String> = ctx
+        .models
+        .iter()
+        .filter(|(k, _)| {
+            spec.devices
+                .get(k)
+                .and_then(|e| e.as_map())
+                .is_some_and(|m| m.get("emit").is_some())
+        })
+        .map(|(_, m)| m.name().to_string())
+        .collect();
     let mut models: Vec<DeviceModel> = ctx
         .models
         .into_iter()
         .map(|(_, m)| m)
         .filter(|m| !ctx.replaced_models.contains(m.name()))
+        .filter(|m| !emit_used.contains(m.name()) || referenced.contains(m.name()))
         .collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
     models.extend(ctx.macro_models);

@@ -19,7 +19,7 @@
 # output windings strapped for 200 ohm into RLOAD (pd: the sensitivities into 1000 ohm, dropped in
 # a chain). The calibration input (St1 pin 8, the cal line) is a sine source in series with R4 to
 # the ground line, off (0 V) unless a measurement sets cal_v.
-# Supply ideal (the NN 48 b's stabilized 116 V; the 4 V heater not simulated: +H counts as AC
+# Supply ideal by default (the NN 48 b's 116 V; SUPPLY 1 its HV inferred, CHAINS_PLAN.md NH3; the 4 V heater not simulated: +H counts as AC
 # ground for C8). Not modelled: S1's 50 ohm strap, the cable, the heater's hum.
 
 title: "Neumann M 49 c"
@@ -32,11 +32,27 @@ full_scale:
   output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u67.yaml"}
 
 controls:
+  supply: {value: 0, choices: [0, 1], unit: switch, source: "CHAINS_PLAN.md NH3 (the user's choice: a switch, ideal by default)", notes: "0 = +116 V as an ideal source (every render before NH3); 1 = the NN 48 b's HV from the mains, inferred from the NU 67 u's (a winding, a selenium half-wave, C - R - C - R - C and a bleeder): ripple and sag from the physics"}
+  mains_v_rms: {value: 220.0, min: 176.0, max: 242.0, unit: V, source: "man: 110 / 220 V +10 / -20 % (the NN 48 b strapped for 220 V); heard with SUPPLY 1"}
   pattern: {value: 4, choices: [0, 1, 2, 3, 4, 5, 6, 7, 8], unit: position, source: "sch: St1 pin 6, 'adjustable capsule polarizing voltage 0...116 V'; man C.11: 0 V omni, 58 V cardioid, 116 V figure-8 (a continuous potentiometer in the supply: pd p. 2); nine positions, 14.5 V apart", notes: "0 omni, 4 cardioid, 8 figure-8; 1-3 between omni and cardioid, 5-7 toward figure-8"}
   strap: {value: 1, choices: [0, 1], unit: switch, source: "sch: S2 (the head's strap to C1); man D.13: opened, the pattern control has no effect (a fixed cardioid)", notes: "1 closed (the remote pattern control), 0 open"}
 
 values:
   capsule_model: {value: KK49@1, source: "config/components/kk49/1.yaml (K47@3's geometry: the same 2 x 78...83 pF capsule; its network fitted to the M 49 c's curves through this circuit by scripts/fit_kk49.py: reports/mics/kk49_fit.json)"}
+  # The NN 48 b's HV (SUPPLY 1), inferred.
+  mains_hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
+  nn_t_v_rms: {value: 122.523, source: "derived: set so that the microphone gets man's 116 V at its plate current with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nn_t_r_ohm: {value: 2632.0, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in: the NU 67 u's lumped winding resistance as trimmed (neumann_u67.yaml nu_t_r_ohm)"}
+  nn_c1_f: {value: 25.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (C1 25 uF)"}
+  nn_r1_ohm: {value: 6.8e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (R1 6.8 kOhm)"}
+  nn_c3_f: {value: 25.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (C3 25 uF)"}
+  nn_r3_ohm: {value: 8.2e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (R3 8.2 kOhm)"}
+  nn_c4_f: {value: 25.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (C4 25 uF)"}
+  nn_r7_ohm: {value: 160.0e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (R7 160 kOhm, the bleeder)"}
+  nn_gr_c_f: {value: 2.2e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell / 5 cells in series (config/components/e125c20/1.yaml)"}
+  nn_c1_v0_v: {value: 138.958, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  nn_c3_v0_v: {value: 128.448, source: "derived: C3's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nn_c4_v0_v: {value: 115.985, source: "derived: C4's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   pol_front_v: {value: 58.0, source: "derived: sch: the backplate's 'ca. +58 V' (R8 / R9 halve +116 V; no DC through R2) over the grid at 0 V (R5 to the ground line)"}
   pol_rear_0_v: {value: 58.0, source: "derived: sch / man C.11: pin 6 at 0 V (omni): +58 V - 0 V"}
   pol_rear_1_v: {value: 43.5, source: "derived: pin 6 at 14.5 V: +58 V - 14.5 V"}
@@ -111,10 +127,16 @@ tolerance:
     cap: [C1, C2, C3, C5, C6, C7, C8, C9]
 
 devices:
+  GR1: {device: E125C20@1, instance: false, emit: used, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (one E 125 C 20 stack: the winding is about 100 V rms; SUPPLY 1)"}
   V1: {device: AC701@1, tolerance: tube}
 
 # Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
 # it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "man: 110 / 220 V (strapped for 220 V)"}
+
 hum:
   hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
@@ -124,7 +146,22 @@ hum:
 sections:
   - title: supply
     parts:
-      VB: {V: [bplus, "0"], v: bplus_v}
+      # SUPPLY (NH3): 0 +116 V as a source; 1 the NN 48 b's HV, inferred from the NU 67 u's:
+      # a winding, a selenium stack, C1, R1, C3, R3, C4, the bleeder R7.
+      SUPPLY:
+        switch: supply
+        parts:
+          VB: {V: [bplus, "0"], v: bplus_v, in: [0]}
+          VT: {mains: [wa, "0"], v_rms: nn_t_v_rms, phase_deg: 90.0, in: [1]}
+          RT: {R: [wa, wb], r: nn_t_r_ohm, tolerance: none, in: [1]}
+          DGR1: {device: [wb, n1], model: GR1, in: [1]}
+          CGR1: {C: [wb, n1], c: nn_gr_c_f, tolerance: none, in: [1]}
+          CN1: {C: [n1, "0"], c: nn_c1_f, v0: nn_c1_v0_v, tolerance: none, in: [1]}
+          RN1: {R: [n1, n3], r: nn_r1_ohm, tolerance: none, in: [1]}
+          CN3: {C: [n3, "0"], c: nn_c3_f, v0: nn_c3_v0_v, tolerance: none, in: [1]}
+          RN3: {R: [n3, bplus], r: nn_r3_ohm, tolerance: none, in: [1]}
+          CN4: {C: [bplus, "0"], c: nn_c4_f, v0: nn_c4_v0_v, tolerance: none, in: [1]}
+          RN7: {R: [bplus, "0"], r: nn_r7_ohm, tolerance: none, in: [1]}
       R9: {R: [bplus, dv], r: r9_ohm}
       R8: {R: [dv, "0"], r: r8_ohm}
       R12: {R: [p6, cal], r: r12_ohm}

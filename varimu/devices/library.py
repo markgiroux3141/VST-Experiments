@@ -1532,6 +1532,100 @@ def build_b450c80() -> dict[str, Any]:
     }
 
 
+def build_e125c5() -> dict[str, Any]:
+    """The AKG N12K's HV rectifier G2 (CHAINS_PLAN.md NH3): "VR24-101/5 (E125 C5-12?)" on
+    AKG's drawing, a selenium half-wave stack, derived as B450C80's arm is."""
+    cell = build_selenium()
+    pub = _published()["SELENIUM"]
+    rms_v, rms_per_cell = 125.0, pub["rms_v_per_cell_max"]
+    n_cells = math.ceil(rms_v / rms_per_cell)
+    load_a, a_per_in2 = 0.005, 0.8 * pub["bridge_dc_a"]["2"]
+    area = load_a / a_per_in2
+    return {
+        "name": "E125C5",
+        "kind": "junction_diode",
+        "is_a": cell["is_a"] * area,
+        "n": cell["n"] * n_cells,
+        "rs_ohm": cell["rs_ohm"] * n_cells / area,
+        "source": f"derived: {n_cells} SELENIUM cells of {area:.4f} sq. in. in series. AKG's "
+        "drawing 'C 12 + Power Supply C12' (data/schematics/akg_c12/README.md) labels G2 "
+        "'VR24-101/5 (E125 C5-12?)'; the DIN code E 125 C 5 reads 'half-wave (Einweg), 125 V "
+        "rms AC connection, 5 mA into a capacitor' (provisional: model knowledge); cells: "
+        f"125 V over Tarzian's {rms_per_cell} V rms per cell, rounded up; area: 5 mA over "
+        "Tarzian's capacitor-input rating of a 1 sq. in. cell, 80% of 0.225 A (its bridge "
+        "rating standing in for a half-wave's: provisional; Sarkes Tarzian handbook 1950, "
+        "data/datasheets/published_points.yaml). The cell: " + cell["source"],
+        "stack": {
+            "cells_per_arm": n_cells,
+            "area_in2": area,
+            "source": "the derivation above; the stack's capacitance is the circuit's",
+        },
+    }
+
+
+def build_e125c20() -> dict[str, Any]:
+    """Each of the Neumann NU 67 u's two HV rectifiers in series (CHAINS_PLAN.md NH3): Gr1
+    '2 x E 125 C 20' on Neumann's drawing NU67u-930-06, a selenium half-wave stack, derived
+    as B450C80's arm is."""
+    cell = build_selenium()
+    pub = _published()["SELENIUM"]
+    rms_v, rms_per_cell = 125.0, pub["rms_v_per_cell_max"]
+    n_cells = math.ceil(rms_v / rms_per_cell)
+    load_a, a_per_in2 = 0.020, 0.8 * pub["bridge_dc_a"]["2"]
+    area = load_a / a_per_in2
+    return {
+        "name": "E125C20",
+        "kind": "junction_diode",
+        "is_a": cell["is_a"] * area,
+        "n": cell["n"] * n_cells,
+        "rs_ohm": cell["rs_ohm"] * n_cells / area,
+        "source": f"derived: {n_cells} SELENIUM cells of {area:.4f} sq. in. in series. Neumann's "
+        "drawing NU67u-930-06 (data/schematics/neumann_u67/U67-p3.png) labels Gr1 '2 x E125 C 20'; "
+        "the DIN code E 125 C 20 reads 'half-wave (Einweg), 125 V rms AC connection, 20 mA into "
+        "a capacitor' (provisional: model knowledge); cells: 125 V over Tarzian's "
+        f"{rms_per_cell} V rms per cell, rounded up; area: 20 mA over Tarzian's capacitor-input "
+        "rating of a 1 sq. in. cell, 80% of 0.225 A (its bridge rating standing in for a "
+        "half-wave's: provisional; Sarkes Tarzian handbook 1950, "
+        "data/datasheets/published_points.yaml). The cell: " + cell["source"],
+        "stack": {
+            "cells_per_arm": n_cells,
+            "area_in2": area,
+            "source": "the derivation above; the stack's capacitance is the circuit's",
+        },
+    }
+
+
+def build_b250c75() -> dict[str, Any]:
+    """One arm of a B 250 C 75 selenium bridge, the Neumann NG's rectifier (CHAINS_PLAN.md NH3;
+    radiomuseum's NG page: '250B60 or B250C75'), derived as B450C80's arm is."""
+    cell = build_selenium()
+    pub = _published()["SELENIUM"]
+    rms_v, rms_per_cell = 250.0, pub["rms_v_per_cell_max"]
+    n_cells = math.ceil(rms_v / rms_per_cell)
+    load_a, a_per_in2 = 0.075, 0.8 * pub["bridge_dc_a"]["2"]
+    area = load_a / a_per_in2
+    return {
+        "name": "B250C75",
+        "kind": "junction_diode",
+        "is_a": cell["is_a"] * area,
+        "n": cell["n"] * n_cells,
+        "rs_ohm": cell["rs_ohm"] * n_cells / area,
+        "source": f"derived: {n_cells} SELENIUM cells of {area:.3f} sq. in. in series per arm. "
+        "Radiomuseum's page on the Neumann NG names its rectifier '250B60 or B250C75' (web: "
+        "https://www.radiomuseum.org/r/neumann_stromversorgung_fuer_neumann_typ_u47_ng.html); "
+        "the DIN code B 250 C 75 reads 'bridge, 250 V rms AC connection, 75 mA into a capacitor' "
+        "(provisional: model knowledge); cells per arm: 250 V over Tarzian's "
+        f"{rms_per_cell} V rms per cell, rounded up; area: 75 mA over Tarzian's capacitor-input "
+        "rating of a 1 sq. in. cell, 80% of 0.225 A (Sarkes Tarzian handbook 1950, "
+        "data/datasheets/published_points.yaml). The cell: " + cell["source"],
+        "stack": {
+            "cells_per_arm": n_cells,
+            "area_in2": area,
+            "source": "the derivation above; the arm's capacitance is the circuit's",
+        },
+    }
+
+
 # --- Fender 5E3 Deluxe (device builder B9) ------------------------------------------
 
 # Digitizing errors (data/datasheets/*.provenance.yaml): the effective variance adds each
@@ -4242,6 +4336,9 @@ BUILDERS = {
     "5651": build_5651,
     "SELENIUM": build_selenium,
     "B450C80": build_b450c80,
+    "E125C5": build_e125c5,
+    "B250C75": build_b250c75,
+    "E125C20": build_e125c20,
     "EF804S": build_ef804s,
     "E83F": build_e83f,
     "BK4134": build_bk4134,

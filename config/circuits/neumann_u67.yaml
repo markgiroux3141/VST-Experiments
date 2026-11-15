@@ -29,6 +29,8 @@ full_scale:
   output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u47.yaml"}
 
 controls:
+  supply: {value: 0, choices: [0, 1], unit: switch, source: "CHAINS_PLAN.md NH3 (the user's choice: a switch, ideal by default)", notes: "0 = +210 V as an ideal source (every render before NH3); 1 = the NU 67 u's HV from the mains (its drawing): the 210 V winding, Gr1, C1 - R1 - C3 - R3 - C4, R7: ripple and sag from the physics (the heater line stays ideal)"}
+  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: Tr1's 220 V tap (240 / 220 / 127 / 117 V); heard with SUPPLY 1"}
   pattern: {value: 1, choices: [0, 1, 2], unit: position, source: "sch / spec: S3, omni, cardioid, figure-8", notes: "0 omni, 1 cardioid, 2 figure-8"}
   pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: S5 (C10 270p); spec: approx. 10 dB", notes: "0 off, 1 pre-attenuation"}
   bass_cut: {value: 0, choices: [0, 1], unit: switch, source: "sch: S1 (R4 to the anode); spec p. 2: the limit shifts to 100 cps", notes: "0 flat, 1 the 100 Hz cut"}
@@ -43,6 +45,20 @@ values:
   rear_leak_ohm: {value: 1.0e+12, source: "numerical: the floating rear diaphragm's DC path in cardioid (not physical)"}
   numerical_leak_ohm: {value: 1.0e+12, source: "numerical: a DC path for the feedback network when S1 and S2 are both open (the real one held by its capacitors' leakage; not physical)"}
   contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch's contact, ~10 mOhm)"}
+  # The NU 67 u's HV (SUPPLY 1; data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06).
+  mains_hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
+  nu_t_v_rms: {value: 210.0, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: the HV winding '210 V~'"}
+  nu_t_r_ohm: {value: 2632.18, source: "derived: set so that the microphone gets the drawing's +210 V at 0.88 mA with SUPPLY 1 (scripts/mic_supply_trim.py): the winding, the primary referred and the stacks' series resistance beyond their cells' fit, lumped (provisional); C1 then lands near the drawing's +243 V"}
+  nu_c1_f: {value: 25.0e-6, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: C1 25 uF 350 V (+243 V)"}
+  nu_r1_ohm: {value: 6.8e+3, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: R1 6.8 kOhm"}
+  nu_c3_f: {value: 25.0e-6, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: C3 25 uF 350 V (+225 V)"}
+  nu_r3_ohm: {value: 8.2e+3, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: R3 8.2 kOhm"}
+  nu_c4_f: {value: 25.0e-6, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: C4 25 uF 350 V"}
+  nu_r7_ohm: {value: 160.0e+3, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: R7 read as 160 kOhm (the scan's digits are poor; 40 kOhm is the other reading, and 160 k is the one the drawing's +243 / +225 / +210 V and 0.88 mA agree with: 2.19 mA through R1 and R3), a bleeder from B+ to 0 V"}
+  nu_gr1_c_f: {value: 2.2e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell / 5 cells in series, each of Gr1's two stacks (config/components/e125c20/1.yaml)"}
+  nu_c1_v0_v: {value: 243.043, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  nu_c3_v0_v: {value: 228.063, source: "derived: C3's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nu_c4_v0_v: {value: 209.998, source: "derived: C4's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   bplus_v: {value: 210.0, source: "sch: +210 V at contact 5 (St1 5 +A, B+); NU 67 u's drawing: 210 V"}
   heater_line_v: {value: -6.0, source: "derived: sch: the A- line at the tube, -5.7..-6.3 V (its middle)"}
   r14_ohm: {value: 150.0e+3, source: "sch: R14 150k"}
@@ -112,10 +128,16 @@ tolerance:
     cap: [C9, C3, C2, C5, C6, C4, C8, C1, C7, C10, C13]
 
 devices:
+  GR1: {device: E125C20@1, instance: false, emit: used, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: Gr1 2 x E125 C 20 (SUPPLY 1)"}
   V1: {device: EF86@1, tolerance: tube}
 
 # Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
 # it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "data/schematics/neumann_u67/U67-p3.png, Neumann's NU67u-930-06: Tr1 strapped for 220 V"}
+
 hum:
   hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
@@ -125,7 +147,25 @@ hum:
 sections:
   - title: supply
     parts:
-      VB: {V: [bplus, "0"], v: bplus_v}
+      # SUPPLY (NH3): 0 +210 V as a source; 1 the NU 67 u's HV (its drawing): the 210 V winding,
+      # Gr1 (two selenium stacks in series) with their capacitance, C1, R1, C3, R3, C4, R7.
+      SUPPLY:
+        switch: supply
+        parts:
+          VB: {V: [bplus, "0"], v: bplus_v, in: [0]}
+          VT: {mains: [wa, "0"], v_rms: nu_t_v_rms, phase_deg: 90.0, in: [1]}
+          RT: {R: [wa, wb], r: nu_t_r_ohm, tolerance: none, in: [1]}
+          DGR1A: {device: [wb, wc], model: GR1, in: [1]}
+          DGR1B: {device: [wc, n1], model: GR1, in: [1]}
+          CGR1A: {C: [wb, wc], c: nu_gr1_c_f, tolerance: none, in: [1]}
+          CGR1B: {C: [wc, n1], c: nu_gr1_c_f, tolerance: none, in: [1]}
+          RGR1LEAK: {R: [wc, n1], r: numerical_leak_ohm, tolerance: none, in: [1]}
+          CN1: {C: [n1, "0"], c: nu_c1_f, v0: nu_c1_v0_v, tolerance: none, in: [1]}
+          RN1: {R: [n1, n3], r: nu_r1_ohm, tolerance: none, in: [1]}
+          CN3: {C: [n3, "0"], c: nu_c3_f, v0: nu_c3_v0_v, tolerance: none, in: [1]}
+          RN3: {R: [n3, bplus], r: nu_r3_ohm, tolerance: none, in: [1]}
+          CN4: {C: [bplus, "0"], c: nu_c4_f, v0: nu_c4_v0_v, tolerance: none, in: [1]}
+          RN7: {R: [bplus, "0"], r: nu_r7_ohm, tolerance: none, in: [1]}
       VH: {V: [am, "0"], v: heater_line_v}
       R15: {R: [bplus, y], r: r15_ohm}
       R13: {R: [y, z], r: r13_ohm}

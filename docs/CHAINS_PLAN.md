@@ -2139,12 +2139,60 @@ An option per chain, off by default: with both off, every IR, render and print i
   no published noise figure in their READMEs. `varimu/measure/ac.py`'s noise_psd reads
   NoiseCurrents only.
 
+**NH3 built (session 2, 2026-11-15): the tube mics' real supplies, behind a switch.** These are
+the user's calls: a switch, ideal by default; the missing supplies inferred.
+- **A SUPPLY control** (0 / 1) on the U47, U67, C12, M 49 and ELA M 251.
+  - It is a `switch` part in each file's supply section. Position 0 is the old ideal source,
+    first and in its old order, so every default IR equals git HEAD's (checked for all 16 mic and
+    chain files).
+  - Position 1 is the supply from the mains: a `mains` part (the file's new `mains` block), a
+    selenium rectifier, the RC filter.
+  - Start voltages (`v0`) sit on the supply's capacitors, so a render's 1 s settle starts it where
+    it runs. Without them the supply sags for seconds from the operating point's peak charge.
+- **A devices entry's `emit: used`** (both builders): its model is in the IR only when an element
+  uses it. The rectifier's model otherwise reached the IR at position 0. Absent, every circuit is
+  as before: seven files carry unreferenced models today, so no general rule.
+- **Rectifiers**, new components derived as B450C80 is (`library.build_*`), each half-wave stack
+  borrowing Tarzian's bridge rating per sq. in.:
+  - `E125C5@1`, the C12's G2;
+  - `E125C20@1`, the U67's Gr1 (two in series) and the M 49's;
+  - `B250C75@1`, radiomuseum's NG rectifier.
+- **`scripts/mic_supply_trim.py [--write]`** trims each supply to its maker's rail by the secant
+  method on 20-30 s runs, then writes the start voltages:
+
+  | mic | supply | source | trimmed | the rail |
+  | --- | --- | --- | --- | --- |
+  | C12 | N12K's HV | AKG's drawing (legible) | winding 120.1 V rms | B+ 120 V (br) |
+  | U 67 | NU 67 u's HV | its drawing `U67-p3.png` | winding R 2632 Ohm | +210 V |
+  | U 47 | NG, inferred | Neumann's figures, the 1966 filter | winding R 930 Ohm | 105 V at 40 mA |
+  | M 49 | NN 48 b, inferred | the NU 67 u's topology | winding 122.5 V rms | 116 V (man) |
+  | ELA M 251 | inferred | the C12's N12K | winding 109.8 V rms | 120 V |
+
+  - The C12's C4b lands on the old ideal source's 155 V.
+  - The U67's R7 is read as 160 kOhm (its digits are poor; 40 k is the other reading). With it,
+    C1 and C3 land on the drawing's +243 / +225 V (243.0 / 228.1). With R7 trimmed instead (84.5
+    k) C1 read 261 V.
+- **compose_chain** now gives a chain one mains, the preamp's, else a stage's: the units share the
+  wall, so a mic's supply on a 60 Hz preamp runs at 60 Hz. The chains were recomposed.
+- **Hum at the output with SUPPLY 1** (silence, unweighted 20-20 kHz rms; noise-on noise alone in
+  brackets):
+  - C12: ~1 nV (5.0 uV). U 67: 0.4 uV at 50 Hz (4.3 uV). ELA M 251: ~1 nV (8.9 uV).
+  - **U 47: 50 uV at 100 Hz** (13.5 uV): ten times Neumann's "Fremdspannung about 5 uV". The
+    inferred filter's 40 uF are too small. Note that DIN 45 405's Fremdspannung is unweighted and
+    read quasi-peak, the output tap is unstated, and the model's own noise exceeds 5 uV.
+  - **M 49: 5.5 mV at 50 Hz** (3.1 uV): unusable. Its B+ also polarizes the capsule (R8 / R9), so
+    the ripple reaches the grid. The NN 48 b was likely stabilized (the file's old comment; no
+    source found), which an unregulated RC inference can't stand in for.
+  - **Open (the user's):** what to do with these two (CHAINS_PLAN.md NH3's question in the
+    session's report).
+- Tests: `tests/test_mic_supplies.py` (default = ideal with no rectifier model, SUPPLY 1 builds and
+  passes the checks, starts at its rail within 0.2%, the U67's drawing voltages, `emit`'s values,
+  chains on one mains). The app fixtures gain the SUPPLY cases; the agreement passes.
+- Not built: the heater supplies (ideal; their hum is NH4's), the cables' resistance.
+  `varimu check` on m49_v76 now exceeds pre-flight's 4096 switch combinations (6912; its tests
+  check the mic alone).
+
 **Not built yet (the next sessions, in this order):**
-3. **NH3, the tube mics' supplies.** Today their HT is an ideal source behind a resistance.
-   - Model each mic's real supply as circuit in its file: the U47's NG, the U67's NU 67, the C12's
-     N12 / S12, the M 49's NN 48, the ELA M 251's.
-   - The ripple then comes from the physics.
-   - Check: the U47's "Brummspannung about 5 uV" (`data/schematics/neumann_u47/README.md`).
 4. **NH4, heater hum.** AC-heated tubes' heater-cathode leakage and the hum pot's null
    (`reports/chain_spike/` has a provisional model), where a preamp heats on AC.
 5. **NH5, more calibrations.**

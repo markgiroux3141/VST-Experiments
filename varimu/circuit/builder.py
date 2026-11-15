@@ -1546,8 +1546,14 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "temp_c", "events", "source", "notes", "tol_scale", "lux",
+    "area", "temp_c", "events", "source", "notes", "tol_scale", "lux", "emit",
 }  # fmt: skip
+
+# A `devices` entry's `emit: used` (CHAINS_PLAN.md NH3): its model is in the IR only when an
+# element of the build uses it (a switch's other position may: a tube mic's real supply behind
+# its SUPPLY switch), so a build without it is the circuit without the entry. Absent: the model
+# is in the IR whether used or not, as every circuit before it.
+EMIT_VALUES = ("used",)
 
 
 def make_models(ctx: Context) -> dict[str, str]:
@@ -1556,6 +1562,8 @@ def make_models(ctx: Context) -> dict[str, str]:
     types = {}
     for key, e in ctx.spec.devices.items():
         where = f"devices.{key}"
+        if e.get("emit") is not None and e["emit"] not in EMIT_VALUES:
+            raise ctx.fail(where, f"emit: {e['emit']!r} (one of {EMIT_VALUES})")
         unknown = set(e) - _DEVICE_KEYS
         if unknown:
             raise ctx.fail(where, f"unknown keys {sorted(unknown)}")
@@ -1566,7 +1574,7 @@ def make_models(ctx: Context) -> dict[str, str]:
         if "events" in e and not isinstance(base, Thyratron):
             raise ctx.fail(where, "events: a thyratron's tables")
         if e.get("instance", True) is False:
-            if set(e) - {"device", "instance", "events", "source", "notes"}:
+            if set(e) - {"device", "instance", "events", "source", "notes", "emit"}:
                 raise ctx.fail(where, "instance: false takes the device file's model as is")
             if isinstance(base, Photocell):
                 raise ctx.fail(where, "a photocell is an instance (its lux)")
@@ -1980,7 +1988,12 @@ def _build(
         input_node=spec.input_node,
         probes=tuple(VoltageProbe(n) for n in spec.probes),
         models=(
-            *(m for m in ctx.models.values() if m.name not in ctx.replaced_models),
+            *(
+                m
+                for k, m in ctx.models.items()
+                if m.name not in ctx.replaced_models
+                and (ctx.spec.devices[k].get("emit") is None or m.name in _referenced(sections))
+            ),
             *ctx.core_models,
             *ctx.macro_models,
         ),
@@ -1993,6 +2006,11 @@ def _build(
         heaters=None if ctx.heaters is None else _heater_spec(ctx),
     )
     return ir, types
+
+
+def _referenced(sections: list[Section]) -> set[str]:
+    """The models the sections' device elements use."""
+    return {e.model for s in sections for e in s.elements if isinstance(e, Device)}
 
 
 def _source_noise(ctx: Context, sections: list[Section]) -> NoiseSpec | None:

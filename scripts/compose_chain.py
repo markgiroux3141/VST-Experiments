@@ -11,8 +11,9 @@ so nothing collides; the mic's measuring load (its PORTS `drop`) and the preamp'
 test generator go; the mic's output node becomes the preamp's input node (behind where
 the generator was), with the cable across it. The chain's input and control inputs are
 the mic's (unsuffixed: `in`, `p_rear`), its output the preamp's `out`; full scale in from
-the mic, out from the preamp; the preamp's mains, tolerance draws (seed, spread, tube
-spreads) and noise block, the mic's tolerance classes in bands of their own.
+the mic, out from the preamp; one mains (the preamp's, else a stage's), the preamp's
+tolerance draws (seed, spread, tube spreads) and noise block, the mic's tolerance classes in
+bands of their own.
 
 The generated file says it is generated; edit its sources and rerun (`--check` exits 1
 when the file on disk differs: tests/test_chain_matrix.py). The tags and ports are
@@ -184,9 +185,12 @@ def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> di
             out[block] = merged
     if pre.get("noise") or mic.get("noise"):
         out["noise"] = copy.deepcopy(pre.get("noise") or mic.get("noise"))
-    if pre.get("mains"):
-        m = copy.deepcopy(pre["mains"])
-        out["mains"] = {k: rp.param(v) for k, v in m.items()}
+    # One mains for the chain (the room's: the units share the wall), the preamp's, else the
+    # nearest stage's that has one (a tube mic's real supply, CHAINS_PLAN.md NH3).
+    with_mains = [(r, c) for r, c, _ in reversed(stages) if c.get("mains")]
+    if with_mains:
+        r, c = with_mains[0]
+        out["mains"] = {k: r.param(v) for k, v in copy.deepcopy(c["mains"]).items()}
     # Hum (varimu.devices.hum): every stage's pickups, renamed; one stray field and one mains
     # frequency for the chain, the preamp's (the room's mains), else the first stage's.
     hums = [(r, c["hum"]) for r, c, _ in stages if c.get("hum")]

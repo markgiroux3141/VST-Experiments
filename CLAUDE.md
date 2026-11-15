@@ -1086,7 +1086,13 @@ TubeNoise) and `FlickerCurrent`, both builders, SPICE and circuitsim; KF / AF in
 `config/device_noise.yaml` (empty: no sourced flicker yet); the `opamp` macro's `en_v_rthz` /
 `in_a_rthz` / corners; checked against published EIN / self-noise by `scripts/chain_noise_check.py`
 (API 312 and U 87 on their figures; C414 +7 dB, PZM +4: their inferred circuits, options open).
-Open: NH3-NH7 (the tube mics' real supplies, heater hum, calibrations, listening, owed checks).
+**NH3** (the tube mics' supplies): a SUPPLY switch on the U47, U67, C12, M 49 and ELA M 251
+(0 ideal, the default: IRs unchanged; 1 the supply from the mains: a `switch` part, the file's
+`mains` block, selenium stacks `E125C5@1` / `E125C20@1` / `B250C75@1`, capacitors' `v0` at their
+steady state), a devices entry's `emit: used` (its model only when used; both builders),
+`scripts/mic_supply_trim.py [--write]`, chains on one mains (`compose_chain.py`). The C12 and U67
+from their drawings; the U47, M 49 and 251 inferred (the U47 hums 10x Neumann's figure, the M 49
+unusably: open). Open: NH4-NH7 (heater hum, calibrations, listening, owed checks).
 
 **Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
 status):** a circuit file's `heaters: {start?: warm | cold, tap?: KEY}` block gives every triode, pentode

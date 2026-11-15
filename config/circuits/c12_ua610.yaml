@@ -47,6 +47,22 @@ full_scale:
     source: 'derived: +24 dBu peak, x sqrt(2): headroom over the 2-610''s +20 dBm maximum (data/schematics/ua_610/ua_2610_manual_p6.png),
       the V72''s and V76''s'
 controls:
+  mains_v_rms_c12:
+    value: 220.0
+    min: 198.0
+    max: 242.0
+    unit: V
+    source: 'sch: T 24657''s primary tap 220 V (110 / 125 / 145 / 200 / 220 / 245); heard with SUPPLY
+      1'
+  supply_c12:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'CHAINS_PLAN.md NH3 (the user''s choice: a switch, ideal by default)'
+    notes: '0 = the HV as an ideal source at C4''s last capacitor (every render before NH3); 1 = the N12K''s
+      HV from the mains: its winding, G2, C4a, R5, C4b (sch): ripple and sag from the physics'
   pattern_c12:
     value: 4
     choices:
@@ -220,6 +236,36 @@ values:
     value: 100000.0
     source: 'provisional: br''s sensitivity is ''at no load (200 ohms)'': 100 kOhm stands for no load
       at 200 ohm'
+  mains_hz_c12:
+    value: 50.0
+    source: 'provisional: model knowledge (European mains, where it was made)'
+  t_hv_rms_v_c12:
+    value: 120.1
+    source: 'derived: set so that B+ at the microphone is br''s ''plate voltage 120 vdc'' with SUPPLY
+      1 (scripts/mic_supply_trim.py; tests/test_akg_c12.py); the drawing prints no secondary voltage (G2''s
+      E 125 rating bounds it)'
+  t_hv_r_ohm_c12:
+    value: 200.0
+    source: 'provisional: model knowledge (a small mains transformer''s HV winding and its primary reflected,
+      a few hundred ohms at a few mA; its leakage inductance left out)'
+  r5_ohm_c12:
+    value: 5000.0
+    source: 'sch: R5 5 kOhm 1/2 W'
+  c4_f_c12:
+    value: 5.0e-05
+    source: 'sch: C4 2 x 50 uF 350 V (each)'
+  c4a_v0_v_c12:
+    value: 160.374
+    source: 'derived: C4a''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: its start voltage,
+      held for the operating point only, so a render starts the supply where it runs)'
+  c4b_v0_v_c12:
+    value: 155.067
+    source: 'derived: C4b''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py; the ideal source''s
+      hv_v, 155 V, comes out again)'
+  g2_c_f_c12:
+    value: 7.0e-10
+    source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.0278 sq. in. per cell
+      / 5 cells in series (config/components/e125c5/1.yaml)'
   hv_v_c12:
     value: 155.0
     source: 'derived: set so that B+ at the microphone is br''s ''plate voltage 120 vdc'' (tests/test_akg_c12.py)'
@@ -554,6 +600,12 @@ values:
     value: 1.0e-09
     source: 'provisional: model knowledge (10 m of microphone cable, ~100 pF/m between the audio pair;
       the UC 4''s per-metre values weren''t found)'
+mains:
+  v_rms: mains_v_rms_c12
+  hz: mains_hz_c12
+  rated_v_rms:
+    value: 220.0
+    source: 'sch: T 24657''s 220 V tap (the setting it is strapped for)'
 hum:
   hz:
     value: 60.0
@@ -656,6 +708,7 @@ tolerance:
     - R7_c12
     - R10_c12
     - R20_c12
+    - R5_c12
     - RL1_c12
     - RL2_c12
     - RL3_c12
@@ -674,10 +727,17 @@ tolerance:
     - C5B_c12
     - C6_c12
     - C20_c12
+    - C4A_c12
+    - C4B_c12
 devices:
   V1_c12:
     device: 12AY7@1
     tolerance: tube
+  G2_c12:
+    device: E125C5@1
+    instance: false
+    emit: used
+    source: 'sch: G2 VR24-101/5 (E125 C5-12?), the N12K''s HV rectifier (SUPPLY 1)'
   V1A_ua610:
     device: 12AX7@1
     tolerance: tube
@@ -693,11 +753,70 @@ devices:
 sections:
 - title: 'AKG C12: supply'
   parts:
-    VHV_c12:
-      V:
-      - h2_c12
-      - nret_c12
-      v: hv_v_c12
+    SUPPLY_c12:
+      switch: supply_c12
+      parts:
+        VHV_c12:
+          V:
+          - h2_c12
+          - nret_c12
+          v: hv_v_c12
+          in:
+          - 0
+        VT_c12:
+          mains:
+          - wa_c12
+          - nret_c12
+          v_rms: t_hv_rms_v_c12
+          phase_deg: 90.0
+          in:
+          - 1
+        RT_c12:
+          R:
+          - wa_c12
+          - wb_c12
+          r: t_hv_r_ohm_c12
+          tolerance: none
+          in:
+          - 1
+        DG2_c12:
+          device:
+          - wb_c12
+          - h1_c12
+          model: G2_c12
+          in:
+          - 1
+        CG2_c12:
+          C:
+          - wb_c12
+          - h1_c12
+          c: g2_c_f_c12
+          tolerance: none
+          in:
+          - 1
+        C4A_c12:
+          C:
+          - h1_c12
+          - nret_c12
+          c: c4_f_c12
+          v0: c4a_v0_v_c12
+          in:
+          - 1
+        R5_c12:
+          R:
+          - h1_c12
+          - h2_c12
+          r: r5_ohm_c12
+          in:
+          - 1
+        C4B_c12:
+          C:
+          - h2_c12
+          - nret_c12
+          c: c4_f_c12
+          v0: c4b_v0_v_c12
+          in:
+          - 1
     R6_c12:
       R:
       - h2_c12

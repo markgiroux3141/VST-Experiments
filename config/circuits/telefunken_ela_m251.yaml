@@ -28,10 +28,26 @@ full_scale:
   output_volts_peak: {value: 0.5, source: "derived: akg_c12.yaml's (the same capsule into a similar stage, ~10 mV/Pa)"}
 
 controls:
+  supply: {value: 0, choices: [0, 1], unit: switch, source: "CHAINS_PLAN.md NH3 (the user's choice: a switch, ideal by default)", notes: "0 = +120 V as an ideal source (every render before NH3); 1 = an HV from the mains inferred from AKG's N12K (a winding, a selenium half-wave, C - R - C - R - C - R - C): ripple and sag from the physics"}
+  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (its T 24657 on the 220 V tap); heard with SUPPLY 1"}
   pattern: {value: 1, choices: [0, 1, 2], unit: position, source: "akg: the 251 E's head, a three-position pattern switch (O / B / 8)", notes: "0 omni, 1 cardioid, 2 figure-8"}
 
 values:
   capsule_model: {value: CK12@1, source: "derived: akg_c12.yaml's (AKG's CK12; the 251 E used it)"}
+  # The HV from the mains (SUPPLY 1), inferred from the N12K.
+  mains_hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
+  ns_t_v_rms: {value: 109.846, source: "derived: set so that B+ is 120 V (the C12's, as bplus_v) with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  ns_t_r_ohm: {value: 200.0, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (akg_c12.yaml t_hv_r_ohm, itself provisional)"}
+  ns_c4_f: {value: 50.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (C4 2 x 50 uF)"}
+  ns_r5_ohm: {value: 5.0e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (R5 5 kOhm)"}
+  ns_r6_ohm: {value: 5.0e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (R6 5 kOhm)"}
+  ns_c5_f: {value: 50.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (C5 2 x 50 uF)"}
+  ns_r8_ohm: {value: 27.0e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (R8 27 kOhm)"}
+  ns_g_c_f: {value: 0.7e-9, source: "derived: as akg_c12.yaml g2_c_f (config/components/e125c5/1.yaml)"}
+  ns_c4a_v0_v: {value: 147.471, source: "derived: C4a's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  ns_c4b_v0_v: {value: 143.759, source: "derived: C4b's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  ns_c5a_v0_v: {value: 140.046, source: "derived: C5a's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  ns_c5b_v0_v: {value: 120, source: "derived: C5b's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   bplus_v: {value: 120.0, source: "derived: akg_c12.yaml (the C12 brochure's 'plate voltage 120 vdc'); the 251's supply isn't documented (provisional)"}
   pol_front_v: {value: 60.0, source: "derived: B+ x R4 / (R3 + R4) = 60 V on the backplate (no DC in R2 / R9), the front diaphragm at ground"}
   pol_rear_omni_v: {value: 60.0, source: "derived: the rear diaphragm at ground (as the front: omni)"}
@@ -86,10 +102,16 @@ tolerance:
     electrolytic: [C3, C4]
 
 devices:
+  GS: {device: E125C5@1, instance: false, emit: used, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (G2 E125 C5; SUPPLY 1)"}
   V1: {device: 12AY7@1, tolerance: tube}
 
 # Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
 # it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the 251's supply isn't documented; AKG's N12K for the C12 (data/schematics/akg_c12/README.md, sch) stands in (strapped for 220 V)"}
+
 hum:
   hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
@@ -99,7 +121,23 @@ hum:
 sections:
   - title: supply
     parts:
-      VB: {V: [bplus, "0"], v: bplus_v}
+      # SUPPLY (NH3): 0 +120 V as a source; 1 an HV inferred from AKG's N12K: a winding, a
+      # selenium half-wave with its capacitance, C4a, R5, C4b, R6, C5a, R8, C5b.
+      SUPPLY:
+        switch: supply
+        parts:
+          VB: {V: [bplus, "0"], v: bplus_v, in: [0]}
+          VT: {mains: [wa, "0"], v_rms: ns_t_v_rms, phase_deg: 90.0, in: [1]}
+          RT: {R: [wa, wb], r: ns_t_r_ohm, tolerance: none, in: [1]}
+          DGS: {device: [wb, h1], model: GS, in: [1]}
+          CGS: {C: [wb, h1], c: ns_g_c_f, tolerance: none, in: [1]}
+          CN4A: {C: [h1, "0"], c: ns_c4_f, v0: ns_c4a_v0_v, tolerance: none, in: [1]}
+          RN5: {R: [h1, h2], r: ns_r5_ohm, tolerance: none, in: [1]}
+          CN4B: {C: [h2, "0"], c: ns_c4_f, v0: ns_c4b_v0_v, tolerance: none, in: [1]}
+          RN6: {R: [h2, h3], r: ns_r6_ohm, tolerance: none, in: [1]}
+          CN5A: {C: [h3, "0"], c: ns_c5_f, v0: ns_c5a_v0_v, tolerance: none, in: [1]}
+          RN8: {R: [h3, bplus], r: ns_r8_ohm, tolerance: none, in: [1]}
+          CN5B: {C: [bplus, "0"], c: ns_c5_f, v0: ns_c5b_v0_v, tolerance: none, in: [1]}
       # B+ / 2 by R3 / R4, through R2 with C1 to ground (the drawing).
       R3: {R: [bplus, pd], r: r3_ohm}
       R4: {R: [pd, "0"], r: r4_ohm}

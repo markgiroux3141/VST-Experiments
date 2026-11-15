@@ -41,6 +41,23 @@ full_scale:
     source: 'derived: +24 dBu peak, the same scale as api_312.yaml''s and ssl_4000e.yaml''s outputs so
       the chains print comparably'
 controls:
+  supply_u67:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'CHAINS_PLAN.md NH3 (the user''s choice: a switch, ideal by default)'
+    notes: '0 = +210 V as an ideal source (every render before NH3); 1 = the NU 67 u''s HV from the mains
+      (its drawing): the 210 V winding, Gr1, C1 - R1 - C3 - R3 - C4, R7: ripple and sag from the physics
+      (the heater line stays ideal)'
+  mains_v_rms_u67:
+    value: 220.0
+    min: 198.0
+    max: 242.0
+    unit: V
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: Tr1''s 220 V tap (240 /
+      220 / 127 / 117 V); heard with SUPPLY 1'
   pattern_u67:
     value: 1
     choices:
@@ -128,6 +145,51 @@ values:
   contact_ohm_u67:
     value: 0.01
     source: 'provisional: model knowledge (a switch''s contact, ~10 mOhm)'
+  mains_hz_u67:
+    value: 50.0
+    source: 'provisional: model knowledge (European mains, where it was made)'
+  nu_t_v_rms_u67:
+    value: 210.0
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: the HV winding ''210 V~'''
+  nu_t_r_ohm_u67:
+    value: 2632.18
+    source: 'derived: set so that the microphone gets the drawing''s +210 V at 0.88 mA with SUPPLY 1 (scripts/mic_supply_trim.py):
+      the winding, the primary referred and the stacks'' series resistance beyond their cells'' fit, lumped
+      (provisional); C1 then lands near the drawing''s +243 V'
+  nu_c1_f_u67:
+    value: 2.5e-05
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: C1 25 uF 350 V (+243 V)'
+  nu_r1_ohm_u67:
+    value: 6800.0
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: R1 6.8 kOhm'
+  nu_c3_f_u67:
+    value: 2.5e-05
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: C3 25 uF 350 V (+225 V)'
+  nu_r3_ohm_u67:
+    value: 8200.0
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: R3 8.2 kOhm'
+  nu_c4_f_u67:
+    value: 2.5e-05
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: C4 25 uF 350 V'
+  nu_r7_ohm_u67:
+    value: 160000.0
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: R7 read as 160 kOhm (the
+      scan''s digits are poor; 40 kOhm is the other reading, and 160 k is the one the drawing''s +243
+      / +225 / +210 V and 0.88 mA agree with: 2.19 mA through R1 and R3), a bleeder from B+ to 0 V'
+  nu_gr1_c_f_u67:
+    value: 2.2e-09
+    source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell
+      / 5 cells in series, each of Gr1''s two stacks (config/components/e125c20/1.yaml)'
+  nu_c1_v0_v_u67:
+    value: 243.043
+    source: 'derived: C1''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held
+      for the operating point only)'
+  nu_c3_v0_v_u67:
+    value: 228.063
+    source: 'derived: C3''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
+  nu_c4_v0_v_u67:
+    value: 209.998
+    source: 'derived: C4''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
   bplus_v_u67:
     value: 210.0
     source: 'sch: +210 V at contact 5 (St1 5 +A, B+); NU 67 u''s drawing: 210 V'
@@ -488,6 +550,12 @@ values:
     value: 1.0e-09
     source: 'provisional: model knowledge (10 m of microphone cable, ~100 pF/m between the audio pair;
       the UC 4''s per-metre values weren''t found)'
+mains:
+  v_rms: mains_v_rms_u67
+  hz: mains_hz_u67
+  rated_v_rms:
+    value: 220.0
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: Tr1 strapped for 220 V'
 hum:
   hz:
     value: 50.0
@@ -583,6 +651,12 @@ tolerance:
     - C10_u67
     - C13_u67
 devices:
+  GR1_u67:
+    device: E125C20@1
+    instance: false
+    emit: used
+    source: 'data/schematics/neumann_u67/U67-p3.png, Neumann''s NU67u-930-06: Gr1 2 x E125 C 20 (SUPPLY
+      1)'
   V1_u67:
     device: EF86@1
     tolerance: tube
@@ -598,11 +672,121 @@ devices:
 sections:
 - title: 'Neumann U 67: supply'
   parts:
-    VB_u67:
-      V:
-      - bplus_u67
-      - '0'
-      v: bplus_v_u67
+    SUPPLY_u67:
+      switch: supply_u67
+      parts:
+        VB_u67:
+          V:
+          - bplus_u67
+          - '0'
+          v: bplus_v_u67
+          in:
+          - 0
+        VT_u67:
+          mains:
+          - wa_u67
+          - '0'
+          v_rms: nu_t_v_rms_u67
+          phase_deg: 90.0
+          in:
+          - 1
+        RT_u67:
+          R:
+          - wa_u67
+          - wb_u67
+          r: nu_t_r_ohm_u67
+          tolerance: none
+          in:
+          - 1
+        DGR1A_u67:
+          device:
+          - wb_u67
+          - wc_u67
+          model: GR1_u67
+          in:
+          - 1
+        DGR1B_u67:
+          device:
+          - wc_u67
+          - n1_u67
+          model: GR1_u67
+          in:
+          - 1
+        CGR1A_u67:
+          C:
+          - wb_u67
+          - wc_u67
+          c: nu_gr1_c_f_u67
+          tolerance: none
+          in:
+          - 1
+        CGR1B_u67:
+          C:
+          - wc_u67
+          - n1_u67
+          c: nu_gr1_c_f_u67
+          tolerance: none
+          in:
+          - 1
+        RGR1LEAK_u67:
+          R:
+          - wc_u67
+          - n1_u67
+          r: numerical_leak_ohm_u67
+          tolerance: none
+          in:
+          - 1
+        CN1_u67:
+          C:
+          - n1_u67
+          - '0'
+          c: nu_c1_f_u67
+          v0: nu_c1_v0_v_u67
+          tolerance: none
+          in:
+          - 1
+        RN1_u67:
+          R:
+          - n1_u67
+          - n3_u67
+          r: nu_r1_ohm_u67
+          tolerance: none
+          in:
+          - 1
+        CN3_u67:
+          C:
+          - n3_u67
+          - '0'
+          c: nu_c3_f_u67
+          v0: nu_c3_v0_v_u67
+          tolerance: none
+          in:
+          - 1
+        RN3_u67:
+          R:
+          - n3_u67
+          - bplus_u67
+          r: nu_r3_ohm_u67
+          tolerance: none
+          in:
+          - 1
+        CN4_u67:
+          C:
+          - bplus_u67
+          - '0'
+          c: nu_c4_f_u67
+          v0: nu_c4_v0_v_u67
+          tolerance: none
+          in:
+          - 1
+        RN7_u67:
+          R:
+          - bplus_u67
+          - '0'
+          r: nu_r7_ohm_u67
+          tolerance: none
+          in:
+          - 1
     VH_u67:
       V:
       - am_u67

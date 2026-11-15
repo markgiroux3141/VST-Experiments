@@ -40,8 +40,9 @@ full_scale:
   output_volts_peak: {value: 1.0, source: "provisional: model knowledge (~25 mV/Pa at the output (ds58) x 20 Pa = 0.5 V peak, doubled for headroom)"}
 
 controls:
+  supply: {value: 0, choices: [0, 1], unit: switch, source: "CHAINS_PLAN.md NH3 (the user's choice: a switch, ideal by default)", notes: "0 = the NG as a Thevenin source (every render before NH3); 1 = the NG from the mains, inferred from Neumann's figures: its winding, a selenium bridge, C1 - R2 1k - C2 - R3 1k - C3: ripple and sag from the physics"}
   pattern: {value: 0, choices: [0, 1], unit: position, source: "sch: the pattern switch in KK47", notes: "0 cardioid ('Niere'), 1 omni ('Kugel')"}
-  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "provisional: model knowledge (the NG's 220 V strapping; not simulated: the NG is a Thevenin source here)"}
+  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "provisional: model knowledge (the NG's 220 V strapping; heard with SUPPLY 1)"}
 
 values:
   # --- Capsule (sch) --------------------------------------------------------------------
@@ -80,6 +81,20 @@ values:
   # --- Supply (the NG, as a Thevenin source) -----------------------------------------------
   ng_open_v: {value: 300.0, source: "br / ds58: about 300 V open-circuit (README, 'The supply NG')"}
   ng_r_ohm: {value: 4875.0, source: "derived: (300 - 105) V / 40 mA (br / ds58: 105 V at 40 mA loaded)", notes: "the NG's filter resistors, rectifier and windings lumped; the cable's 0.4 V (README) inside"}
+  # The NG from the mains (SUPPLY 1), inferred (the user's call, CHAINS_PLAN.md NH3): the
+  # full-resolution drawing is behind radiomuseum's login; Neumann's figures and the 1966
+  # filter (README, 'The supply NG') set it.
+  mains_hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
+  ng_t_v_rms: {value: 212.1, source: "derived: br / ds58's about 300 V open-circuit as the winding's peak, 300 / sqrt(2) (the bridge's drop at no load left out: provisional)"}
+  ng_t_r_ohm: {value: 930.4, source: "derived: set so that the NG gives br / ds58's 105 V at the microphone's 40 mA with SUPPLY 1 (scripts/mic_supply_trim.py): the winding, the primary referred and any dropper the drawing may have, lumped (provisional)"}
+  ng_r2_ohm: {value: 1.0e+3, source: "README 'The supply NG': the 1966 filter C1, R2 1 kOhm, C2, R3 1 kOhm, C3 (the nuvistor conversion notice)"}
+  ng_r3_ohm: {value: 1.0e+3, source: "README 'The supply NG': the 1966 filter's R3 1 kOhm"}
+  ng_c1_f: {value: 40.0e-6, source: "provisional: the early NG drawing's '5 x 40 uF' (web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png); the 1966 filter's C1 not printed"}
+  ng_c2_f: {value: 40.0e-6, source: "provisional: as ng_c1_f (the 1966 filter's C2)"}
+  ng_arm_c_f: {value: 5.2e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.417 sq. in. per cell / 10 cells in series (config/components/b250c75/1.yaml)"}
+  ng_c1_v0_v: {value: 183.561, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  ng_c2_v0_v: {value: 144.28, source: "derived: C2's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the NG's floating winding (not physical)"}
   ng_c_f: {value: 40.0e-6, source: "web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png (the NG drawing's '5 x 40 uF'; the last section's)"}
 
   # --- Per-instance tolerance (the drawing prints none) ------------------------------------
@@ -104,6 +119,12 @@ tolerance:
 
 devices:
   V1: {device: VF14T@1, tolerance: tube}
+  GNG: {device: B250C75@1, instance: false, emit: used, source: "web: https://www.radiomuseum.org/r/neumann_stromversorgung_fuer_neumann_typ_u47_ng.html ('250B60 or B250C75'; the NG's rectifier, SUPPLY 1)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "ds58: mains 110 / 220 V (the NG strapped for 220 V)"}
 
 # Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
 # it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
@@ -116,8 +137,25 @@ hum:
 sections:
   - title: supply
     parts:
-      VNG: {V: [ng, "0"], v: ng_open_v}
-      RNG: {R: [ng, b105], r: ng_r_ohm, tolerance: none}
+      # SUPPLY (NH3): 0 the NG as a Thevenin source; 1 the NG from the mains (inferred): its
+      # winding (floating, a numerical leak) into a selenium bridge, C1, R2, C2, R3 to C3.
+      SUPPLY:
+        switch: supply
+        parts:
+          VNG: {V: [ng, "0"], v: ng_open_v, in: [0]}
+          RNG: {R: [ng, b105], r: ng_r_ohm, tolerance: none, in: [0]}
+          VT: {mains: [wa, wn], v_rms: ng_t_v_rms, phase_deg: 90.0, in: [1]}
+          RT: {R: [wa, wb], r: ng_t_r_ohm, tolerance: none, in: [1]}
+          RTLEAK: {R: [wn, "0"], r: numerical_leak_ohm, tolerance: none, in: [1]}
+          GNG: {bridge: [wb, wn, n1, "0"], model: GNG, in: [1]}
+          CGA: {C: [wb, n1], c: ng_arm_c_f, tolerance: none, in: [1]}
+          CGB: {C: [wn, n1], c: ng_arm_c_f, tolerance: none, in: [1]}
+          CGC: {C: ["0", wb], c: ng_arm_c_f, tolerance: none, in: [1]}
+          CGD: {C: ["0", wn], c: ng_arm_c_f, tolerance: none, in: [1]}
+          CN1: {C: [n1, "0"], c: ng_c1_f, v0: ng_c1_v0_v, tolerance: none, in: [1]}
+          RN2: {R: [n1, n2], r: ng_r2_ohm, tolerance: none, in: [1]}
+          CN2: {C: [n2, "0"], c: ng_c2_f, v0: ng_c2_v0_v, tolerance: none, in: [1]}
+          RN3: {R: [n2, b105], r: ng_r3_ohm, tolerance: none, in: [1]}
       CNG: {C: [b105, "0"], c: ng_c_f, tolerance: none}
 
   - title: capsule

@@ -53,6 +53,22 @@ full_scale:
     source: 'derived: +24 dB re 0.775 V rms, x sqrt(2): headroom over the +22 dB the specs test at (bb
       sheet 7)'
 controls:
+  supply_m49:
+    value: 0
+    choices:
+    - 0
+    - 1
+    unit: switch
+    source: 'CHAINS_PLAN.md NH3 (the user''s choice: a switch, ideal by default)'
+    notes: '0 = +116 V as an ideal source (every render before NH3); 1 = the NN 48 b''s HV from the mains,
+      inferred from the NU 67 u''s (a winding, a selenium half-wave, C - R - C - R - C and a bleeder):
+      ripple and sag from the physics'
+  mains_v_rms_m49:
+    value: 220.0
+    min: 176.0
+    max: 242.0
+    unit: V
+    source: 'man: 110 / 220 V +10 / -20 % (the NN 48 b strapped for 220 V); heard with SUPPLY 1'
   pattern_m49:
     value: 4
     choices:
@@ -138,6 +154,62 @@ values:
     value: KK49@1
     source: 'config/components/kk49/1.yaml (K47@3''s geometry: the same 2 x 78...83 pF capsule; its network
       fitted to the M 49 c''s curves through this circuit by scripts/fit_kk49.py: reports/mics/kk49_fit.json)'
+  mains_hz_m49:
+    value: 50.0
+    source: 'provisional: model knowledge (European mains, where it was made)'
+  nn_t_v_rms_m49:
+    value: 122.523
+    source: 'derived: set so that the microphone gets man''s 116 V at its plate current with SUPPLY 1
+      (scripts/mic_supply_trim.py)'
+  nn_t_r_ohm_m49:
+    value: 2632.0
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in: the NU 67 u''s lumped winding resistance as trimmed (neumann_u67.yaml nu_t_r_ohm)'
+  nn_c1_f_m49:
+    value: 2.5e-05
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (C1 25 uF)'
+  nn_r1_ohm_m49:
+    value: 6800.0
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (R1 6.8 kOhm)'
+  nn_c3_f_m49:
+    value: 2.5e-05
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (C3 25 uF)'
+  nn_r3_ohm_m49:
+    value: 8200.0
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (R3 8.2 kOhm)'
+  nn_c4_f_m49:
+    value: 2.5e-05
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (C4 25 uF)'
+  nn_r7_ohm_m49:
+    value: 160000.0
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (R7 160 kOhm, the bleeder)'
+  nn_gr_c_f_m49:
+    value: 2.2e-09
+    source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell
+      / 5 cells in series (config/components/e125c20/1.yaml)'
+  nn_c1_v0_v_m49:
+    value: 138.958
+    source: 'derived: C1''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held
+      for the operating point only)'
+  nn_c3_v0_v_m49:
+    value: 128.448
+    source: 'derived: C3''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
+  nn_c4_v0_v_m49:
+    value: 115.985
+    source: 'derived: C4''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
   pol_front_v_m49:
     value: 58.0
     source: 'derived: sch: the backplate''s ''ca. +58 V'' (R8 / R9 halve +116 V; no DC through R2) over
@@ -869,6 +941,13 @@ tolerance:
     - C8_m49
     - C9_m49
 devices:
+  GR1_m49:
+    device: E125C20@1
+    instance: false
+    emit: used
+    source: 'provisional: inferred (the user''s call, CHAINS_PLAN.md NH3): the NN 48 b''s circuit isn''t
+      published (man: 116 V D.C. plate at 0.8 mA only); Neumann''s NU 67 u''s HV (data/schematics/neumann_u67/U67-p3.png)
+      stands in (one E 125 C 20 stack: the winding is about 100 V rms; SUPPLY 1)'
   V1_m49:
     device: AC701@1
     tolerance: tube
@@ -890,11 +969,98 @@ devices:
 sections:
 - title: 'Neumann M 49 c: supply'
   parts:
-    VB_m49:
-      V:
-      - bplus_m49
-      - '0'
-      v: bplus_v_m49
+    SUPPLY_m49:
+      switch: supply_m49
+      parts:
+        VB_m49:
+          V:
+          - bplus_m49
+          - '0'
+          v: bplus_v_m49
+          in:
+          - 0
+        VT_m49:
+          mains:
+          - wa_m49
+          - '0'
+          v_rms: nn_t_v_rms_m49
+          phase_deg: 90.0
+          in:
+          - 1
+        RT_m49:
+          R:
+          - wa_m49
+          - wb_m49
+          r: nn_t_r_ohm_m49
+          tolerance: none
+          in:
+          - 1
+        DGR1_m49:
+          device:
+          - wb_m49
+          - n1_m49
+          model: GR1_m49
+          in:
+          - 1
+        CGR1_m49:
+          C:
+          - wb_m49
+          - n1_m49
+          c: nn_gr_c_f_m49
+          tolerance: none
+          in:
+          - 1
+        CN1_m49:
+          C:
+          - n1_m49
+          - '0'
+          c: nn_c1_f_m49
+          v0: nn_c1_v0_v_m49
+          tolerance: none
+          in:
+          - 1
+        RN1_m49:
+          R:
+          - n1_m49
+          - n3_m49
+          r: nn_r1_ohm_m49
+          tolerance: none
+          in:
+          - 1
+        CN3_m49:
+          C:
+          - n3_m49
+          - '0'
+          c: nn_c3_f_m49
+          v0: nn_c3_v0_v_m49
+          tolerance: none
+          in:
+          - 1
+        RN3_m49:
+          R:
+          - n3_m49
+          - bplus_m49
+          r: nn_r3_ohm_m49
+          tolerance: none
+          in:
+          - 1
+        CN4_m49:
+          C:
+          - bplus_m49
+          - '0'
+          c: nn_c4_f_m49
+          v0: nn_c4_v0_v_m49
+          tolerance: none
+          in:
+          - 1
+        RN7_m49:
+          R:
+          - bplus_m49
+          - '0'
+          r: nn_r7_ohm_m49
+          tolerance: none
+          in:
+          - 1
     R9_m49:
       R:
       - bplus_m49
