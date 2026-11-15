@@ -17,16 +17,23 @@
     linear pot in series, its wiper into a coil tapped 477 / 625 mH and a switched capacitor (16
     n, 8n2, 3n9, 2 n, 1 nF; 1.5-5 kHz); 5K1 shunt; the interstage transformer to the EQP-1A's
     amplifier.
-  - **Why it isn't built yet:** at 1024 px the switches' wiring (which tap and capacitor each
-    position joins) can't be read, and pairing them by their height on the drawing doesn't
-    resonate on the panel's frequencies. Guessing them would be invention.
+  - **How the switches were read (2026-11-15):** the GIF is lossless line art, so a
+    nearest-neighbour zoom shows every wire. Each switch's two decks are drawn mirrored: the
+    coil deck's first contact (its clockwise end, the drawing's dot) pairs with the capacitor
+    deck's last. Under that reading MID CUT's eleven positions resonate at 200, 302, 507, 727,
+    1032, 1564, 2095, 3313, 4987, 6826 and 8631 Hz for knobs 200 ... 7000: on the knob within
+    5% to 2 kHz, the top three 25-37% high (all on the 34 mH tap). LOW BOOST: 221, 358, 777,
+    673, 1027 Hz for 200, 300, 500, 700, 1000 (500 is 55% high). HIGH BOOST: 1.59, 2.22, 3.69,
+    5.15, 7.29 kHz for 1.5 ... 5 kHz (read same-height instead: 1.82, 2.54, 3.69, 4.50, 6.37,
+    a steadier 1.13-1.27x; the mirrored reading is kept for one convention across the drawing).
+    These misses are the reconstruction's parts, reported, not fitted.
+  - The user fetched GroupDIY thread 18056's attachment (2026-11-15): byte-identical to this
+    GIF, so no better copy is known.
 
 ## Wanted
 
-- The redraw a GroupDIY member posted (credited to Greg Boboski: CJ, "never seen a real MEQ 5
-  filter doc"): attachment `meq_5.jpg`, 259.7 KB, in GroupDIY thread 18056
-  (web: https://groupdiy.com/threads/pultec-meq-5-eq-full-schematic.18056/), behind the forum's
-  login; the copy CJ linked on vacuumbrain.com is gone.
+- Pulse Techniques' own drawing, or a measured unit's curves: either would settle the
+  frequencies the reconstruction misses.
 - A Pulse Techniques MEQ-5 manual (vintagedigital.com.au lists one).
 - What tubes the MEQ-5's amplifier has: one post says "12 ax into a 6aq5", Gyraf says the
   EQP-1A's (12AX7, 12AU7) fits.

@@ -41,6 +41,9 @@ checks of varimu.measure.generic and the circuit's own).
 - pultec_hlf3c (passive filter, docs/EQ_PLAN.md EQ1): varimu.measure.filter_suite: every
   position's response by AC analysis (cutoff, knee, slope, the brochure's -40 dB points),
   one +28 dBm render per section against it.
+- pultec_meq5 (equalizer, docs/EQ_PLAN.md EQ2): varimu.measure.meq5_suite: the EQP-1A's
+  screen and THD on the MEQ-5's panels; every position's extreme at full knob against its
+  knob and the published 0-10 dB.
 """
 
 from __future__ import annotations
@@ -172,6 +175,12 @@ def _run_filter(*args, **kwargs):
     return filter_suite.run(*args, **kwargs)
 
 
+def _run_meq5(*args, **kwargs):
+    from varimu.measure import meq5_suite
+
+    return meq5_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
@@ -192,6 +201,7 @@ PROFILES = {
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
     "urei_1176": Profile("urei_1176", "compressor", _run_limiter),
     "pultec_hlf3c": Profile("pultec_hlf3c", "filter", _run_filter),
+    "pultec_meq5": Profile("pultec_meq5", "equalizer", _run_meq5),
 }
 
 

@@ -612,7 +612,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 42] = [
+pub const DEVICES: [Device; 43] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -2129,6 +2129,30 @@ pub const DEVICES: [Device; 42] = [
         method: None,
         partition: None,
     },
+    Device {
+        id: "pultec_meq5",
+        label: "Pultec MEQ-5 Midrange EQ",
+        short: "MEQ-5",
+        about: "Pultec MEQ-5 passive midrange equalizer (low-mid peak, mid dip, high-mid peak) and the EQP-1A's tube make-up amplifier",
+        group: Group::Eq,
+        circuit: "pultec_meq5",
+        panel: None,
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: None,
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2913,7 +2937,7 @@ mod tests {
                     Group::Dynamics,
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
-                (Group::Eq, vec!["pultec_eqp1a", "pultec_hlf3c"]),
+                (Group::Eq, vec!["pultec_eqp1a", "pultec_hlf3c", "pultec_meq5"]),
                 (
                     Group::Amps,
                     vec![
