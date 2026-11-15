@@ -2057,14 +2057,34 @@ An option per chain, off by default: with both off, every IR, render and print i
   the agreement test; room.rs's `hears_follows_the_sources`. A stale `chain_list_reads`
   assertion was fixed (the RE20 is built since WP13).
 
+**NH1 built (session 2, 2026-11-14): noise and hum on inserts.**
+- `print::Slot` has `noise_seed: Option<u64>` (NOISE: `Noise::Seed`, a file block or not) and
+  `hum_t: Option<f64>` (HUM: `Hum::Field`).
+  - Both are None by default, and the JSON writes them only when set (the seed as a string: u64 past
+    2^53). So an older session's slots, chain signatures and print keys are unchanged
+    (`noise_and_hum_default_off_and_leave_older_slots_alone`; `every_session_opens_to_the_same_mix`
+    on the 24 sessions passes).
+  - The old `noise` flag (the file's block) keeps its meaning.
+  - A seed comes from where NOISE was switched on (`Slot::seed_for(track id | "master", k, device)`)
+    and stays in the slot, so a reprint is the same realization.
+- `live::Circuit::with_noise_seed` / `with_hum` / `has_hum`; `Prepared::for_slot` (the print job,
+  `examples/print.rs`).
+  - A further track's copy (a stereo track's right channel, `with_track`) gets its own seed,
+    `live::track_seed(seed, track)`: two dual-mono units' noise is independent. The hum is the same
+    field on both.
+- The insert panels (track and master) have a Noise checkbox and, where the circuit has pickups (of
+  the devices, the V76), a Hum menu (`room::HUM_FIELDS`). A change restarts the live audition (new
+  sources).
+- The Play view: a seeded Noise switch for devices without a block and the Hum menu; its Render
+  follows both.
+- Tests in print.rs: the IR, seeds and keys
+  (`an_inserts_noise_seed_and_hum_change_its_build_and_key`); the V76 printed with HUM by a power
+  transformer has its 50 / 150 Hz lines above the print without
+  (`an_insert_with_hum_prints_the_mains_lines`).
+- Not done: an event take (a keyed instrument) replays the file's noise only (`Performance::noise`).
+  Only keyed instruments have event takes, and none has pickups.
+
 **Not built yet (the next sessions, in this order):**
-1. **NH1, inserts.** The Session's inserts on a preamp device (the V76, ...): `print::Slot` a seeded
-   noise switch that works without a file block (`Noise::Seed`, the seed stored in the slot so a
-   reprint is the same realization) and a hum field.
-   - Plumbing: `live::Circuit` `with_hum` / a seed, `Prepared::load`'s call sites, the insert panel,
-     the Play view.
-   - An existing session's prints must not move: the new fields default off.
-   - The slot's old `noise` flag (the file's block, default true) stays as it is.
 2. **NH2, noise in transistors and op-amps.** Today a BJT, JFET or op-amp chain (SSL, API, 1073,
    the clean pre, the FET mics, the Cloudlifter) only has its resistors' noise.
    - BJT: collector and base shot noise (2qIc, 2qIb at the operating point, per sample like

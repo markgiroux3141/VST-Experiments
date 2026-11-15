@@ -28,7 +28,9 @@ use varimu_app::player::{
     State, input_devices,
 };
 use varimu_app::prefs::{ALIGNMENT_DBFS, KeyTouch, Prefs};
+use varimu_app::print::Slot;
 use varimu_app::render::{Rendered, render};
+use varimu_app::room::HUM_FIELDS;
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::Library;
 use varimu_circuit::spec::CircuitSpec;
@@ -206,6 +208,13 @@ pub struct PlayView {
     /// knobs: the switches show only then).
     has_noise: bool,
     has_heaters: bool,
+    /// A device without a noise block played with its noise seeded (CHAINS_PLAN.md NH1:
+    /// `Circuit::with_noise_seed`, its seed from the device's id); renders follow it.
+    noise_seeded: bool,
+    /// Hum from a stray mains field at the device's pickups (T rms; None off), offered
+    /// where its file has a `hum` block (`has_hum`); renders follow it.
+    hum_t: Option<f64>,
+    has_hum: bool,
     compensate: bool,
     /// A manual gain on the device's output (dB, monitoring only).
     output_db: f64,
@@ -345,6 +354,9 @@ impl PlayView {
             power_on: false,
             has_noise: false,
             has_heaters: false,
+            noise_seeded: false,
+            hum_t: None,
+            has_hum: false,
             compensate: true,
             output_db: 0.0,
             end: None,
@@ -499,9 +511,11 @@ impl PlayView {
         if let Some(d) = self.drawing_device() {
             let k = panel::knobs(&DRAWING, &d.spec);
             let flags = (d.spec.noise.is_some(), d.spec.heaters.is_some());
+            let hum = d.spec.hum.is_some();
             (self.has_harp, self.key_span_db) = (has_harp_part(&d.spec), None);
             self.knobs = k;
             (self.has_noise, self.has_heaters) = flags;
+            self.has_hum = hum;
             return;
         }
         let dev = &DEVICES[self.device];
@@ -511,6 +525,7 @@ impl PlayView {
             Ok(spec) => {
                 self.knobs = panel::knobs(dev, &spec);
                 (self.has_noise, self.has_heaters) = (spec.noise.is_some(), spec.heaters.is_some());
+                self.has_hum = spec.hum.is_some();
                 (self.has_harp, self.key_span_db) = (has_harp_part(&spec), None);
             }
             Err(e) => self.error = Some(e.to_string()),
@@ -542,8 +557,21 @@ impl PlayView {
         Ok(dev
             .live(c)
             .with_noise(self.noise)
+            .with_noise_seed(self.noise_seed())
+            .with_hum(self.hum())
             .with_heaters(heaters)
             .with_events(events))
+    }
+
+    /// The seed of a device without a noise block, its Noise switched on (NH1).
+    fn noise_seed(&self) -> Option<u64> {
+        let dev = DEVICES.get(self.device).unwrap_or(&DRAWING);
+        (self.noise_seeded && !self.has_noise).then(|| Slot::seed_for("play", 0, dev.id))
+    }
+
+    /// The stray field at the device's pickups, where it has them (NH1).
+    fn hum(&self) -> Option<f64> {
+        self.hum_t.filter(|_| self.has_hum)
     }
 
     /// The device's name and id (for files).
@@ -1420,6 +1448,7 @@ impl PlayView {
         let drawing = self.drawing_device().cloned();
         let dev = DEVICES[self.device.min(DEVICES.len() - 1)];
         let noise = self.noise;
+        let (noise_seed, hum) = (self.noise_seed(), self.hum());
         let (a, b) = self.region;
         let stem = clip
             .path
@@ -1446,7 +1475,9 @@ impl PlayView {
                     Some(d) => Circuit::from_spec(d.lib, d.spec, s.cores()?).with_events(s.events),
                     None => Circuit::load(&config, dev.circuit, s.cores()?)?.with_events(s.events),
                 }
-                .with_noise(noise);
+                .with_noise(noise)
+                .with_noise_seed(noise_seed)
+                .with_hum(hum);
                 render(
                     &circuit,
                     &values,
@@ -1576,6 +1607,7 @@ impl PlayView {
             }
         }
         if !self.has_noise {
+            self.seeded_noise_and_hum_ui(ui, cores);
             return;
         }
         let r = ui.checkbox(&mut self.noise, "Noise").on_hover_text(
@@ -1584,6 +1616,53 @@ impl PlayView {
              CPU (tube synth: ~0.3x real time); renders follow this switch.",
         );
         if r.changed()
+            && let Some(p) = &self.player
+            && let Ok(c) = self.circuit(cores)
+        {
+            p.set_circuit(c, panel::values(&self.knobs));
+        }
+        self.seeded_noise_and_hum_ui(ui, cores);
+    }
+
+    /// A device without a noise block: Noise seeded (NH1); a device with stray-field pickups:
+    /// its Hum menu. A change rebuilds the stream (new sources).
+    fn seeded_noise_and_hum_ui(&mut self, ui: &mut egui::Ui, cores: varimu_circuit::Cores) {
+        let mut changed = false;
+        if !self.has_noise {
+            changed |= ui
+                .checkbox(&mut self.noise_seeded, "Noise")
+                .on_hover_text(
+                    "The circuit's own noise (device builder B5): its resistors' Johnson noise, \
+                     its tubes' shot and flicker noise, the mains wander; seeded, so a render \
+                     is reproducible. Renders follow this switch.",
+                )
+                .changed();
+        }
+        if self.has_hum {
+            let shown = HUM_FIELDS
+                .iter()
+                .find(|(t, _)| (*t > 0.0).then_some(*t) == self.hum_t)
+                .map_or("off", |(_, n)| n);
+            ui.label("Hum");
+            egui::ComboBox::from_id_salt("play_hum")
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    for (t, name) in HUM_FIELDS {
+                        let want = (t > 0.0).then_some(t);
+                        if ui.selectable_label(self.hum_t == want, name).clicked() {
+                            self.hum_t = want;
+                            changed = true;
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "A stray mains field at the circuit's transformers and coils (the mains \
+                     frequency with its 3rd and 5th; CHAINS_PLAN.md \"Noise and hum in the \
+                     chains\"). Renders follow it.",
+                );
+        }
+        if changed
             && let Some(p) = &self.player
             && let Ok(c) = self.circuit(cores)
         {

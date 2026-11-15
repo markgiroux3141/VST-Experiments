@@ -37,7 +37,7 @@ use circuitsim::media::NoteEvent;
 use circuitsim::stream::Stream;
 use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_live};
+use varimu_circuit::{Cores, Heaters, Hum, Library, Noise, build_ir_hum};
 
 use crate::performance::Knob;
 use crate::resample::{StreamResampler, resample};
@@ -58,6 +58,12 @@ pub struct Circuit {
     cores: Cores,
     /// Noise sources on (the file's `noise` block; off: none, and their CPU saved).
     noise: bool,
+    /// Noise on with this seed whether or not the file has a block (an insert's NOISE:
+    /// `print::Slot::noise_seed`); None: as `noise` says.
+    noise_seed: Option<u64>,
+    /// Hum from a stray mains field at the file's `hum` pickups (an insert's HUM:
+    /// `print::Slot::hum_t`); nothing without a block.
+    hum: Hum,
     /// Heated cathodes: the file's `heaters` block, or a start (cold: power on).
     heaters: Heaters,
     /// Gas thyratrons as their event kernels, where the file names tables (technique K).
@@ -90,6 +96,8 @@ impl Circuit {
             spec: spec::load_circuit(&path).map_err(|e| e.to_string())?,
             cores,
             noise: true,
+            noise_seed: None,
+            hum: Hum::Off,
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
@@ -108,6 +116,8 @@ impl Circuit {
             spec,
             cores,
             noise: true,
+            noise_seed: None,
+            hum: Hum::Off,
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
@@ -201,9 +211,39 @@ impl Circuit {
         self
     }
 
-    /// Whether its noise sources are on (the file's, when it has them).
+    /// With its noise on at `seed` (B5's sources: resistors, tubes, the mains wander), a file
+    /// block or not, the block's temperature and flicker when it has one; None: as
+    /// [`Circuit::with_noise`] says. A further track's (`with_track`) seed is its own.
+    pub fn with_noise_seed(mut self, seed: Option<u64>) -> Circuit {
+        self.noise_seed = seed;
+        self
+    }
+
+    /// With hum from a stray mains field of `field_t` T rms at the file's `hum` pickups
+    /// (CHAINS_PLAN.md "Noise and hum in the chains"); None: none. Nothing without a block.
+    pub fn with_hum(mut self, field_t: Option<f64>) -> Circuit {
+        self.hum = field_t.map_or(Hum::Off, Hum::Field);
+        self
+    }
+
+    /// Whether the file has stray-field pickups (a `hum` block).
+    pub fn has_hum(&self) -> bool {
+        self.spec.hum.is_some()
+    }
+
+    /// Whether its noise sources are on (the file's, when it has them; or a seed's).
     pub fn noise_on(&self) -> bool {
-        self.noise && self.has_noise()
+        self.noise_seed.is_some() || (self.noise && self.has_noise())
+    }
+
+    /// The build's noise: a seed's (a further track's derived from it), else the file's.
+    fn noise_setting(&self) -> Noise {
+        match (self.noise_seed, &self.track) {
+            (Some(s), None) => Noise::Seed(s),
+            (Some(s), Some(t)) => Noise::Seed(track_seed(s, t)),
+            (None, _) if self.noise => Noise::File,
+            (None, _) => Noise::Off,
+        }
     }
 
     /// Whether the file has noise sources to turn on.
@@ -250,7 +290,7 @@ impl Circuit {
 
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
         let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
-        let noise = if self.noise { Noise::File } else { Noise::Off };
+        let noise = self.noise_setting();
         // Only a file with tables plays them: a thyratron without isn't refused here. A tape
         // part naming its reduction plays that (DELAY_PLAN.md, "The reduced medium").
         let reduced_tape = self
@@ -265,7 +305,7 @@ impl Circuit {
                     .devices
                     .iter()
                     .any(|(_, e)| e.as_map().is_some_and(|m| m.get("events").is_some())));
-        build_ir_live(
+        build_ir_hum(
             &self.lib,
             &self.spec,
             &p,
@@ -274,6 +314,7 @@ impl Circuit {
             self.heaters,
             events,
             self.live_speaker_v.is_none(),
+            self.hum,
         )
         .map_err(|e| e.to_string())
         .and_then(|mut ir| {
@@ -306,6 +347,14 @@ impl Circuit {
     pub fn key_velocity_span_db(&self, values: &Values) -> Result<Option<f64>, String> {
         Ok(key_velocity_span_db(&self.build(values)?))
     }
+}
+
+/// A further track's noise seed from the first's (`Circuit::with_track`): a dual-mono copy's
+/// noise is its own realization, as two units' are (sha256 of the seed and the track's name).
+pub fn track_seed(seed: u64, track: &str) -> u64 {
+    use sha2::{Digest, Sha256};
+    let h = Sha256::digest(format!("varimu track seed {seed} {track}").as_bytes());
+    u64::from_le_bytes(h[..8].try_into().expect("8 bytes"))
 }
 
 /// The Clavinet's strikes from rest replayed in this process (circuitsim's

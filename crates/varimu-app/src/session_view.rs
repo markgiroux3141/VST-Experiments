@@ -141,6 +141,7 @@ use varimu_app::performance::Performance;
 use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey, input_devices};
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, NOT_PRINTED, Slot, find_device};
+use varimu_app::room::HUM_FIELDS;
 use varimu_app::session::{
     Clip, Marker, Mix, MixClip, Monitor, NO_TRACK, OVERVIEW_BIN, Overview, Placed, Printed,
     Session, Take, Track, default_fade, new_clip_id, take_dir,
@@ -371,6 +372,8 @@ struct Audition {
     input: String,
     values: Values,
     gains: (f64, f64, bool, f64),
+    /// NOISE's seed and HUM's field (bits): a change restarts the stream (new sources).
+    noise_hum: (Option<u64>, Option<u64>),
 }
 
 /// The open insert's loop render (the panel's "⟲ loop": `varimu_app::loop_render`): the
@@ -541,6 +544,8 @@ pub struct SessionView {
     /// The master's print asked for (SE1: made when asked for).
     master_wanted: bool,
     knobs: HashMap<String, Result<Vec<Knob>, String>>,
+    /// Whether a device's circuit has stray-field pickups (a `hum` block: HUM is offered).
+    hum_pickups: HashMap<String, bool>,
     audition: Option<Audition>,
     /// The audition's state as the panel shows it (set each frame).
     audition_status: Option<String>,
@@ -827,6 +832,7 @@ impl SessionView {
             master_sel: None,
             master_wanted: false,
             knobs: HashMap::new(),
+            hum_pickups: HashMap::new(),
             audition: None,
             audition_status: None,
             loop_mode: false,
@@ -2202,8 +2208,13 @@ impl SessionView {
         } else {
             self.session.tracks[t].inserts[k].clone()
         };
+        let noise_hum = (slot.noise_seed, slot.hum_t.map(f64::to_bits));
         let same = self.audition.as_ref().is_some_and(|a| {
-            a.track == t && a.slot == k && a.device == slot.device && a.input == input
+            a.track == t
+                && a.slot == k
+                && a.device == slot.device
+                && a.input == input
+                && a.noise_hum == noise_hum
         }) && play.adopted();
         if !same {
             // An instrument plays: only a panel the user just opened takes its place (it
@@ -2243,6 +2254,7 @@ impl SessionView {
                         input,
                         values: slot.values.clone(),
                         gains: (f64::NAN, f64::NAN, false, f64::NAN),
+                        noise_hum,
                     });
                     self.error = None;
                 }
@@ -2344,7 +2356,9 @@ impl SessionView {
         let circuit = d
             .live(Circuit::load(&config, d.circuit, s.cores()?)?)
             .with_events(s.events)
-            .with_noise(slot.noise);
+            .with_noise(slot.noise)
+            .with_noise_seed(slot.noise_seed)
+            .with_hum(slot.hum_t);
         let key = match (side, d.key, &slot.key) {
             (Some(audio), Some(name), Some(route)) => {
                 let inputs = &circuit.spec().cv_inputs;
@@ -3076,6 +3090,7 @@ impl SessionView {
             });
         });
         ui.add_space(4.0);
+        let has_hum = self.has_hum(&device);
         let slot = &mut self.session.master_inserts[k];
         let play_quality = find_device(&slot.device).map_or(Quality::Draft1x, |d| d.quality);
         ui.horizontal(|ui| {
@@ -3144,6 +3159,7 @@ impl SessionView {
                     "The quality it prints at: its play quality while iterating, production                      for the final mix (a tape machine prints in 30 s pieces at once)",
                 );
         });
+        changed |= noise_hum_row(ui, slot, "master", k, has_hum);
         ui.add_space(6.0);
         match knobs {
             Err(e) => {
@@ -3745,6 +3761,21 @@ impl SessionView {
             .clone()
     }
 
+    /// Whether `device`'s circuit has stray-field pickups (its file's `hum` block).
+    fn has_hum(&mut self, device: &str) -> bool {
+        let config = self.root.join("config");
+        *self
+            .hum_pickups
+            .entry(device.to_string())
+            .or_insert_with(|| {
+                let circuit = find_device(device).map_or(device, |d| d.circuit);
+                spec::circuit_path(&config, circuit)
+                    .ok()
+                    .and_then(|p| spec::load_circuit(&p).ok())
+                    .is_some_and(|s| s.hum.is_some())
+            })
+    }
+
     /// `device` added at the end of track `t`'s chain, its panel opened. The first insert
     /// that isn't bypassed gets its trim from the take (the take's loudest stretch to the
     /// alignment level), set once.
@@ -3933,6 +3964,8 @@ impl SessionView {
         if find_device(&device).is_some_and(|d| d.key.is_some()) {
             changed |= self.key_row(ui, t, k);
         }
+        let has_hum = self.has_hum(&device);
+        let owner = self.session.tracks[t].id.clone();
         let slot = &mut self.session.tracks[t].inserts[k];
         let play_quality = find_device(&slot.device).map_or(Quality::Draft1x, |d| d.quality);
         ui.horizontal(|ui| {
@@ -4004,6 +4037,7 @@ impl SessionView {
                      for the final mix (several times slower)",
                 );
         });
+        changed |= noise_hum_row(ui, slot, &owner, k, has_hum);
         ui.add_space(6.0);
         match knobs {
             Err(e) => {
@@ -8739,6 +8773,55 @@ fn take_line(k: &Take, rate: u32) -> String {
 /// Whether a slot's device has a key input (its route is heard).
 fn print_key_input(slot: &Slot) -> bool {
     find_device(&slot.device).is_some_and(|d| d.key.is_some())
+}
+
+/// An insert's NOISE switch and HUM menu (CHAINS_PLAN.md NH1): NOISE seeds its circuit's
+/// noise (switched on: a seed from where it is, kept in the slot so a reprint is the same
+/// realization); HUM a stray mains field at its pickups, offered where the circuit has them.
+fn noise_hum_row(ui: &mut egui::Ui, slot: &mut Slot, owner: &str, k: usize, has_hum: bool) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        let mut on = slot.noise_seed.is_some();
+        if ui
+            .checkbox(&mut on, "Noise")
+            .on_hover_text(
+                "The device's own noise: its resistors' Johnson noise, its tubes' shot and \
+                 flicker noise, the mains wander. Seeded: a reprint is the same hiss.",
+            )
+            .changed()
+        {
+            slot.noise_seed = on.then(|| Slot::seed_for(owner, k, &slot.device));
+            changed = true;
+        }
+        if has_hum {
+            ui.add_space(8.0);
+            ui.label("Hum");
+            let shown = HUM_FIELDS
+                .iter()
+                .find(|(t, _)| Some(*t) == slot.hum_t || (*t == 0.0 && slot.hum_t.is_none()))
+                .map_or_else(
+                    || format!("{:.1e} T", slot.hum_t.unwrap_or(0.0)),
+                    |(_, n)| n.to_string(),
+                );
+            egui::ComboBox::from_id_salt(("insert_hum", owner.to_string(), k))
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    for (t, name) in HUM_FIELDS {
+                        let want = (t > 0.0).then_some(t);
+                        if ui.selectable_label(slot.hum_t == want, name).clicked() {
+                            slot.hum_t = want;
+                            changed = true;
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "A stray mains field at the device's transformers and coils (50 / 60 Hz \
+                     with its 3rd and 5th): the makers' reference is a quiet room",
+                );
+        }
+    });
+    changed
 }
 
 fn knob_ui(

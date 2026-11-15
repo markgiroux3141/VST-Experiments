@@ -68,6 +68,14 @@ pub struct Slot {
     pub tail_s: f64,
     /// Its noise sources on (the circuit file's `noise` block; seeded, so reproducible).
     pub noise: bool,
+    /// NOISE: its circuit's noise on at this seed, a file block or not (resistors, tubes, the
+    /// mains wander; device builder B5), the seed kept so a reprint is the same realization
+    /// (CHAINS_PLAN.md NH1). None: off, the old `noise` flag as it was. Written only when set,
+    /// so older sessions' signatures and prints don't move.
+    pub noise_seed: Option<u64>,
+    /// HUM: a stray mains field (T rms) at its circuit's `hum` pickups; None: off. Written only
+    /// when set.
+    pub hum_t: Option<f64>,
     /// The device's share of the output, the rest the input before the trim (a console's
     /// wet / dry: 1 is the device only; a reverb starts at [`REVERB_WET`]).
     pub wet: f64,
@@ -108,6 +116,8 @@ impl Slot {
                 DEFAULT_TAIL_S
             },
             noise: true,
+            noise_seed: None,
+            hum_t: None,
             wet: if WET_ONLY.contains(&device) {
                 REVERB_WET
             } else {
@@ -117,8 +127,27 @@ impl Slot {
         }
     }
 
+    /// A NOISE seed for the insert `k` of `owner` (a track's id, or "master"): fixed by where
+    /// it was switched on, then kept in the slot (it doesn't follow a move).
+    pub fn seed_for(owner: &str, k: usize, device: &str) -> u64 {
+        let h = Sha256::digest(format!("varimu insert noise {owner} {k} {device}").as_bytes());
+        u64::from_le_bytes(h[..8].try_into().expect("8 bytes"))
+    }
+
     /// The slot as the session's JSON holds it.
     pub fn to_json(&self) -> Json {
+        let mut v = self.to_json_base();
+        if let Some(s) = self.noise_seed {
+            // A string: a u64 seed past 2^53 doesn't survive a JSON number.
+            v["noise_seed"] = json!(s.to_string());
+        }
+        if let Some(t) = self.hum_t {
+            v["hum_t"] = json!(t);
+        }
+        v
+    }
+
+    fn to_json_base(&self) -> Json {
         json!({
             "device": self.device,
             "values": self
@@ -155,6 +184,19 @@ impl Slot {
         }
         s.tail_s = v["tail_s"].as_f64().unwrap_or(DEFAULT_TAIL_S);
         s.noise = v["noise"].as_bool().unwrap_or(true);
+        s.noise_seed = match &v["noise_seed"] {
+            Json::Null => None,
+            Json::String(x) => Some(x.parse().map_err(|_| format!("noise_seed {x}"))?),
+            x => Some(x.as_u64().ok_or(format!("noise_seed {x}"))?),
+        };
+        s.hum_t = match &v["hum_t"] {
+            Json::Null => None,
+            x => Some(
+                x.as_f64()
+                    .filter(|t| *t >= 0.0)
+                    .ok_or(format!("hum_t {x} (T rms, >= 0)"))?,
+            ),
+        };
         s.wet = v["wet"].as_f64().unwrap_or(1.0);
         s.key = match &v["key"] {
             Json::Null => None,
@@ -231,6 +273,18 @@ impl Prepared {
             .with_events(settings.events)
             .with_noise(noise);
         Ok(Prepared { circuit, settings })
+    }
+
+    /// [`Prepared::load`] for `slot`: its device, quality, noise flag, NOISE seed and HUM.
+    pub fn for_slot(config_dir: &Path, slot: &Slot) -> Result<Prepared, String> {
+        let p = Prepared::load(config_dir, &slot.device, slot.quality, slot.noise)?;
+        Ok(Prepared {
+            circuit: p
+                .circuit
+                .with_noise_seed(slot.noise_seed)
+                .with_hum(slot.hum_t),
+            ..p
+        })
     }
 }
 
@@ -1018,7 +1072,7 @@ impl Job {
             let load = || {
                 slots
                     .iter()
-                    .map(|s| Prepared::load(&config_dir, &s.device, s.quality, s.noise))
+                    .map(|s| Prepared::for_slot(&config_dir, s))
                     .collect::<Result<Vec<_>, _>>()
             };
             let preps = load()?;
@@ -1122,6 +1176,141 @@ mod tests {
         let d = std::env::temp_dir().join(format!("varimu_print_{name}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
+    }
+
+    fn count(ir: &circuitsim::ir::CircuitIr, f: fn(&circuitsim::ir::Element) -> bool) -> usize {
+        ir.elements().filter(|e| f(e)).count()
+    }
+
+    fn ir_json(p: &Prepared, slot: &Slot) -> String {
+        serde_json::to_string(&p.circuit.build(&slot.values).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn noise_and_hum_default_off_and_leave_older_slots_alone() {
+        // An older session's slot (no `noise_seed` / `hum_t`): it reads back as it was, writes
+        // nothing new (its chain signature is the same string), and builds the IR it did.
+        let old = Slot::new("telefunken_v76");
+        let j = old.to_json();
+        assert!(j.get("noise_seed").is_none() && j.get("hum_t").is_none());
+        assert_eq!(Slot::from_json(&j).unwrap(), old);
+        let a = Prepared::load(&config(), &old.device, old.quality, old.noise).unwrap();
+        let b = Prepared::for_slot(&config(), &old).unwrap();
+        assert_eq!(ir_json(&a, &old), ir_json(&b, &old));
+        let x = tone(48_000, 0.05, 0.3);
+        assert_eq!(
+            key(&a, &old, &x, None, 48_000).unwrap(),
+            key(&b, &old, &x, None, 48_000).unwrap()
+        );
+        // The old `noise` flag keeps its meaning: the file's block (the V76 has none).
+        let ir = b.circuit.build(&old.values).unwrap();
+        assert!(ir.noise.is_none());
+    }
+
+    #[test]
+    fn an_inserts_noise_seed_and_hum_change_its_build_and_key() {
+        let mut s = Slot::new("telefunken_v76");
+        // A seed past 2^53 survives the session file.
+        s.noise_seed = Some(u64::MAX - 5);
+        s.hum_t = Some(1e-6);
+        assert_eq!(Slot::from_json(&s.to_json()).unwrap(), s);
+        assert!(Slot::from_json(&json!({"device": "x", "hum_t": -1.0})).is_err());
+
+        let off = Slot::new("telefunken_v76");
+        let build = |slot: &Slot| {
+            Prepared::for_slot(&config(), slot)
+                .unwrap()
+                .circuit
+                .build(&slot.values)
+                .unwrap()
+        };
+        let noisy = |e: &circuitsim::ir::Element| {
+            matches!(
+                e,
+                circuitsim::ir::Element::NoiseCurrent(_) | circuitsim::ir::Element::TubeNoise(_)
+            )
+        };
+        let sine =
+            |e: &circuitsim::ir::Element| matches!(e, circuitsim::ir::Element::SineSource(_));
+        let (i0, i1) = (build(&off), build(&s));
+        // NOISE without a file block: resistors' and tubes' sources at the slot's seed.
+        assert_eq!(count(&i0, noisy), 0);
+        assert!(count(&i1, noisy) > 20, "{}", count(&i1, noisy));
+        assert_eq!(i1.noise.as_ref().unwrap().seed, u64::MAX - 5);
+        // HUM: sine sources at the pickups, three harmonics each.
+        let mut h = off.clone();
+        h.hum_t = Some(1e-6);
+        let ih = build(&h);
+        let extra = count(&ih, sine) - count(&i0, sine);
+        assert!(extra > 0 && extra.is_multiple_of(3), "{extra}");
+        assert!(ih.noise.is_none());
+        // A second track's copy (a stereo track's right) has its own realization.
+        let p = Prepared::for_slot(&config(), &s).unwrap();
+        let r = p
+            .circuit
+            .clone()
+            .with_track(Some("r"))
+            .build(&s.values)
+            .unwrap();
+        assert_eq!(
+            r.noise.as_ref().unwrap().seed,
+            crate::live::track_seed(u64::MAX - 5, "r")
+        );
+        assert_ne!(r.noise.as_ref().unwrap().seed, u64::MAX - 5);
+        // Each changes the print's key.
+        let x = tone(48_000, 0.05, 0.3);
+        let k = |slot: &Slot| {
+            key(
+                &Prepared::for_slot(&config(), slot).unwrap(),
+                slot,
+                &x,
+                None,
+                48_000,
+            )
+            .unwrap()
+        };
+        let mut s2 = s.clone();
+        s2.noise_seed = Some(7);
+        let keys = [k(&off), k(&s), k(&h), k(&s2)];
+        for i in 0..keys.len() {
+            for j in i + 1..keys.len() {
+                assert_ne!(keys[i], keys[j]);
+            }
+        }
+        // The seed comes from where it was switched on.
+        assert_eq!(Slot::seed_for("t1", 0, "v"), Slot::seed_for("t1", 0, "v"));
+        assert_ne!(Slot::seed_for("t1", 0, "v"), Slot::seed_for("t2", 0, "v"));
+    }
+
+    #[test]
+    fn an_insert_with_hum_prints_the_mains_lines() {
+        // Silence through the V76: with HUM by a power transformer, 50 Hz and its 3rd stand
+        // well above the print without.
+        let rate = 48_000;
+        let x = Arc::new(vec![0f32; rate as usize]);
+        let no = AtomicBool::new(false);
+        let level = |slot: &Slot, hz: f64| {
+            let p = Prepared::for_slot(&config(), slot).unwrap();
+            let y = print(&p, slot, &x, None, rate, None, |_| {}, &no)
+                .unwrap()
+                .audio;
+            let y = &y[rate as usize / 4..rate as usize];
+            let (mut c, mut s) = (0.0, 0.0);
+            for (i, &v) in y.iter().enumerate() {
+                let ph = 2.0 * std::f64::consts::PI * hz * i as f64 / rate as f64;
+                c += v as f64 * ph.cos();
+                s += v as f64 * ph.sin();
+            }
+            2.0 * (c * c + s * s).sqrt() / y.len() as f64
+        };
+        let mut off = Slot::new("telefunken_v76");
+        off.tail_s = 0.0;
+        let mut on = off.clone();
+        on.hum_t = Some(1e-5);
+        for hz in [50.0, 150.0] {
+            let (a, b) = (level(&off, hz), level(&on, hz));
+            assert!(b > 10.0 * a && b > 1e-6, "{hz} Hz: off {a:.3e}, on {b:.3e}");
+        }
     }
 
     #[test]

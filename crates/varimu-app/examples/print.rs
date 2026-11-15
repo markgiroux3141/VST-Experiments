@@ -95,7 +95,7 @@ fn main() -> Result<(), String> {
     let no = AtomicBool::new(false);
     let mut right: Option<Arc<Vec<f32>>> = None;
     for s in &slots {
-        let p = Prepared::load(&config, &s.device, s.quality, s.noise)?;
+        let p = Prepared::for_slot(&config, s)?;
         let t0 = std::time::Instant::now();
         let mut last = -1i32;
         let r = print(
