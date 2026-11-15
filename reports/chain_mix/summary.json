@@ -1,0 +1,277 @@
+{
+ "chains": {
+  "bass": {
+   "chain": "r44_ua610",
+   "spl_db": 100.0,
+   "over": {
+    "level_ua610": 0.4
+   },
+   "xfmr": "LT1_UA610_s",
+   "junction": "ia_ua610",
+   "supply": null,
+   "why": "44-BX -> UA 610: 'upright bass' in its use note; a bass cab at ~100 dB SPL",
+   "calibration": {
+    "preamp_gain_db": 46.51,
+    "stray_v": 2.5629278164137023e-05
+   }
+  },
+  "guitar": {
+   "chain": "c12_ua610",
+   "spl_db": 85.0,
+   "over": {
+    "level_ua610": 0.4
+   },
+   "xfmr": "LT1_UA610_s",
+   "junction": "ia_ua610",
+   "supply": "VHV_c12",
+   "why": "C12 -> UA 610: the C12's top on an acoustic guitar, ~85 dB SPL (at 90 the 610's first stage overloads on the C12: -34 dB residual, the C12 alone -60; its Lo gain link doesn't help; at 85 -44)",
+   "calibration": {
+    "preamp_gain_db": 46.51,
+    "stray_v": 2.4990592851566307e-05,
+    "ripple_v": 0.5,
+    "ripple_v_rule": 40.25576361767521,
+    "ripple_at_mic_out_v": 3.726174503224157e-08
+   }
+  },
+  "lead vocal": {
+   "chain": "u47_v76",
+   "spl_db": 95.0,
+   "over": {
+    "gain_db_v76": 24
+   },
+   "xfmr": "LT85_V76_s",
+   "junction": "ia_v76",
+   "supply": "VNG_u47",
+   "why": "U47 -> V76: the German broadcast vocal; a singer at ~20 cm, ~95 dB SPL",
+   "calibration": {
+    "preamp_gain_db": 25.56,
+    "stray_v": 2.558273477693329e-05,
+    "stray_v_ein_rule": 4.627540190774299e-06,
+    "ripple_v": 0.02573511140840632
+   }
+  },
+  "harmonies": {
+   "chain": "u67_redd47",
+   "spl_db": 90.0,
+   "over": {
+    "gain_redd47": 34
+   },
+   "xfmr": "LT1_REDD47_s",
+   "junction": "ia_redd47",
+   "supply": "VB_u67",
+   "why": "U67 -> REDD.47: mid-1960s Abbey Road vocals; backing singers a bit back, ~90 dB SPL; the REDD.47 at 34 dB (at 40 its output clipped: -26 dB residual, peaks -4.4 dBFS)",
+   "calibration": {
+    "preamp_gain_db": 33.62,
+    "stray_v": 5.511087958593093e-06,
+    "ripple_v": 0.0009931616256293524
+   }
+  }
+ },
+ "stems": {
+  "bass": {
+   "p1": {
+    "noisy_minus_clean_db": -72.04,
+    "clean": {
+     "residual_vs_dry": -45.12,
+     "residual_this_pass": -45.12
+    },
+    "noisy": {
+     "residual_vs_dry": -45.12,
+     "residual_this_pass": -45.12
+    },
+    "peaks_dbfs": {
+     "clean": -15.3,
+     "noisy": -15.3
+    }
+   },
+   "p4": {
+    "noisy_minus_clean_db": -69.23,
+    "clean": {
+     "residual_vs_dry": -40.25,
+     "residual_this_pass": -51.1
+    },
+    "noisy": {
+     "residual_vs_dry": -40.24,
+     "residual_this_pass": -51.06
+    },
+    "peaks_dbfs": {
+     "clean": -15.8,
+     "noisy": -15.8
+    }
+   },
+   "p8": {
+    "noisy_minus_clean_db": -67.82,
+    "clean": {
+     "residual_vs_dry": -37.19,
+     "residual_this_pass": -54.59
+    },
+    "noisy": {
+     "residual_vs_dry": -37.18,
+     "residual_this_pass": -54.5
+    },
+    "peaks_dbfs": {
+     "clean": -17.9,
+     "noisy": -17.9
+    }
+   }
+  },
+  "guitar": {
+   "p1": {
+    "noisy_minus_clean_db": -58.67,
+    "clean": {
+     "residual_vs_dry": -43.9,
+     "residual_this_pass": -43.9
+    },
+    "noisy": {
+     "residual_vs_dry": -43.78,
+     "residual_this_pass": -43.78
+    },
+    "peaks_dbfs": {
+     "clean": -13.5,
+     "noisy": -13.5
+    }
+   },
+   "p4": {
+    "noisy_minus_clean_db": -52.46,
+    "clean": {
+     "residual_vs_dry": -37.3,
+     "residual_this_pass": -46.3
+    },
+    "noisy": {
+     "residual_vs_dry": -37.18,
+     "residual_this_pass": -46.12
+    },
+    "peaks_dbfs": {
+     "clean": -14.6,
+     "noisy": -14.6
+    }
+   },
+   "p8": {
+    "noisy_minus_clean_db": -44.8,
+    "clean": {
+     "residual_vs_dry": -33.57,
+     "residual_this_pass": -51.71
+    },
+    "noisy": {
+     "residual_vs_dry": -33.27,
+     "residual_this_pass": -50.94
+    },
+    "peaks_dbfs": {
+     "clean": -13.3,
+     "noisy": -13.3
+    }
+   }
+  },
+  "lead vocal": {
+   "p1": {
+    "noisy_minus_clean_db": -66.76,
+    "clean": {
+     "residual_vs_dry": -52.53,
+     "residual_this_pass": -52.53
+    },
+    "noisy": {
+     "residual_vs_dry": -52.26,
+     "residual_this_pass": -52.26
+    },
+    "peaks_dbfs": {
+     "clean": -14.3,
+     "noisy": -14.3
+    }
+   },
+   "p4": {
+    "noisy_minus_clean_db": -59.73,
+    "clean": {
+     "residual_vs_dry": -44.31,
+     "residual_this_pass": -53.58
+    },
+    "noisy": {
+     "residual_vs_dry": -44.09,
+     "residual_this_pass": -53.43
+    },
+    "peaks_dbfs": {
+     "clean": -14.4,
+     "noisy": -14.4
+    }
+   },
+   "p8": {
+    "noisy_minus_clean_db": -57.13,
+    "clean": {
+     "residual_vs_dry": -38.69,
+     "residual_this_pass": -54.82
+    },
+    "noisy": {
+     "residual_vs_dry": -38.61,
+     "residual_this_pass": -54.56
+    },
+    "peaks_dbfs": {
+     "clean": -14.3,
+     "noisy": -14.3
+    }
+   }
+  },
+  "harmonies": {
+   "p1": {
+    "noisy_minus_clean_db": -65.92,
+    "clean": {
+     "residual_vs_dry": -53.96,
+     "residual_this_pass": -53.96
+    },
+    "noisy": {
+     "residual_vs_dry": -53.69,
+     "residual_this_pass": -53.69
+    },
+    "peaks_dbfs": {
+     "clean": -7.7,
+     "noisy": -7.7
+    }
+   },
+   "p4": {
+    "noisy_minus_clean_db": -54.36,
+    "clean": {
+     "residual_vs_dry": -41.35,
+     "residual_this_pass": -47.72
+    },
+    "noisy": {
+     "residual_vs_dry": -41.15,
+     "residual_this_pass": -47.55
+    },
+    "peaks_dbfs": {
+     "clean": -8.1,
+     "noisy": -8.1
+    }
+   },
+   "p8": {
+    "noisy_minus_clean_db": -53.82,
+    "clean": {
+     "residual_vs_dry": null,
+     "residual_this_pass": -44.95
+    },
+    "noisy": {
+     "residual_vs_dry": null,
+     "residual_this_pass": -44.87
+    },
+    "peaks_dbfs": {
+     "clean": -7.7,
+     "noisy": -7.7
+    }
+   }
+  }
+ },
+ "mixes": {
+  "p1": {
+   "added_db_re_mix": -58.75,
+   "added_db_re_quietest_5pct_50ms": -49.08,
+   "added_dbfs_rms": -77.84
+  },
+  "p4": {
+   "added_db_re_mix": -52.98,
+   "added_db_re_quietest_5pct_50ms": -43.8,
+   "added_dbfs_rms": -72.41
+  },
+  "p8": {
+   "added_db_re_mix": -46.07,
+   "added_db_re_quietest_5pct_50ms": -37.62,
+   "added_dbfs_rms": -65.59
+  }
+ }
+}

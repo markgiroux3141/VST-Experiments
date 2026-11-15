@@ -1,0 +1,774 @@
+{
+ "ja": {
+  "bass": {
+   "stage": {
+    "g_u47": {
+     "all": -11.41,
+     "character": -39.03,
+     "tone": -11.42
+    },
+    "a_u47": {
+     "all": -16.85,
+     "character": -42.05,
+     "tone": -16.88
+    },
+    "op_u47": {
+     "all": -17.65,
+     "character": -41.04,
+     "tone": -17.7
+    },
+    "ia_v76": {
+     "all": -38.86,
+     "character": -64.88,
+     "tone": -38.87
+    },
+    "g1_v76": {
+     "all": -6.2,
+     "character": -34.16,
+     "tone": -6.21
+    },
+    "pl2_v76": {
+     "all": -38.58,
+     "character": -66.08,
+     "tone": -38.58
+    },
+    "g3_v76": {
+     "all": -11.77,
+     "character": -42.52,
+     "tone": -11.78
+    },
+    "pl4_v76": {
+     "all": -58.06,
+     "character": -68.94,
+     "tone": -57.8
+    },
+    "out": {
+     "all": -29.91,
+     "character": -55.5,
+     "tone": -29.91
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -11.41,
+     "character": -39.03,
+     "tone": -11.42
+    },
+    "a_u47": {
+     "all": -8.2,
+     "character": -36.69,
+     "tone": -8.21
+    },
+    "op_u47": {
+     "all": -6.19,
+     "character": -33.71,
+     "tone": -6.19
+    },
+    "ia_v76": {
+     "all": -6.03,
+     "character": -33.6,
+     "tone": -6.04
+    },
+    "g1_v76": {
+     "all": -1.84,
+     "character": -30.12,
+     "tone": -1.83
+    },
+    "pl2_v76": {
+     "all": -1.89,
+     "character": -30.17,
+     "tone": -1.88
+    },
+    "g3_v76": {
+     "all": -1.0,
+     "character": -28.08,
+     "tone": -0.99
+    },
+    "pl4_v76": {
+     "all": -1.0,
+     "character": -28.09,
+     "tone": -0.99
+    },
+    "out": {
+     "all": -0.88,
+     "character": -28.42,
+     "tone": -0.88
+    }
+   }
+  },
+  "guitar": {
+   "stage": {
+    "g_u47": {
+     "all": -14.42,
+     "character": -49.55,
+     "tone": -14.42
+    },
+    "a_u47": {
+     "all": -20.31,
+     "character": -45.11,
+     "tone": -20.33
+    },
+    "op_u47": {
+     "all": -24.26,
+     "character": -52.01,
+     "tone": -24.27
+    },
+    "ia_v76": {
+     "all": -42.36,
+     "character": -72.12,
+     "tone": -42.37
+    },
+    "g1_v76": {
+     "all": -10.59,
+     "character": -49.16,
+     "tone": -10.59
+    },
+    "pl2_v76": {
+     "all": -41.49,
+     "character": -72.31,
+     "tone": -41.49
+    },
+    "g3_v76": {
+     "all": -14.43,
+     "character": -54.9,
+     "tone": -14.42
+    },
+    "pl4_v76": {
+     "all": -60.52,
+     "character": -74.29,
+     "tone": -60.49
+    },
+    "out": {
+     "all": -33.66,
+     "character": -70.81,
+     "tone": -33.66
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -14.42,
+     "character": -49.55,
+     "tone": -14.42
+    },
+    "a_u47": {
+     "all": -11.0,
+     "character": -44.66,
+     "tone": -11.0
+    },
+    "op_u47": {
+     "all": -9.44,
+     "character": -44.67,
+     "tone": -9.44
+    },
+    "ia_v76": {
+     "all": -9.28,
+     "character": -44.49,
+     "tone": -9.28
+    },
+    "g1_v76": {
+     "all": -4.42,
+     "character": -39.32,
+     "tone": -4.41
+    },
+    "pl2_v76": {
+     "all": -4.51,
+     "character": -39.27,
+     "tone": -4.51
+    },
+    "g3_v76": {
+     "all": -2.73,
+     "character": -36.14,
+     "tone": -2.72
+    },
+    "pl4_v76": {
+     "all": -2.74,
+     "character": -36.28,
+     "tone": -2.73
+    },
+    "out": {
+     "all": -2.57,
+     "character": -38.78,
+     "tone": -2.56
+    }
+   }
+  },
+  "harmonies": {
+   "stage": {
+    "g_u47": {
+     "all": -22.35,
+     "character": -53.22,
+     "tone": -22.36
+    },
+    "a_u47": {
+     "all": -28.47,
+     "character": -45.65,
+     "tone": -28.55
+    },
+    "op_u47": {
+     "all": -33.34,
+     "character": -66.09,
+     "tone": -33.35
+    },
+    "ia_v76": {
+     "all": -33.48,
+     "character": -92.72,
+     "tone": -33.48
+    },
+    "g1_v76": {
+     "all": -21.39,
+     "character": -64.54,
+     "tone": -21.39
+    },
+    "pl2_v76": {
+     "all": -49.2,
+     "character": -76.32,
+     "tone": -49.21
+    },
+    "g3_v76": {
+     "all": -17.28,
+     "character": -73.97,
+     "tone": -17.28
+    },
+    "pl4_v76": {
+     "all": -61.87,
+     "character": -80.91,
+     "tone": -61.94
+    },
+    "out": {
+     "all": -41.87,
+     "character": -87.67,
+     "tone": -41.87
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -22.35,
+     "character": -53.22,
+     "tone": -22.36
+    },
+    "a_u47": {
+     "all": -19.21,
+     "character": -50.08,
+     "tone": -19.2
+    },
+    "op_u47": {
+     "all": -17.84,
+     "character": -49.76,
+     "tone": -17.84
+    },
+    "ia_v76": {
+     "all": -17.48,
+     "character": -49.74,
+     "tone": -17.48
+    },
+    "g1_v76": {
+     "all": -13.49,
+     "character": -48.88,
+     "tone": -13.49
+    },
+    "pl2_v76": {
+     "all": -13.6,
+     "character": -48.69,
+     "tone": -13.6
+    },
+    "g3_v76": {
+     "all": -10.28,
+     "character": -48.31,
+     "tone": -10.28
+    },
+    "pl4_v76": {
+     "all": -10.28,
+     "character": -48.16,
+     "tone": -10.27
+    },
+    "out": {
+     "all": -10.08,
+     "character": -48.27,
+     "tone": -10.08
+    }
+   }
+  },
+  "lead vocal": {
+   "stage": {
+    "g_u47": {
+     "all": -16.74,
+     "character": -45.93,
+     "tone": -16.74
+    },
+    "a_u47": {
+     "all": -22.55,
+     "character": -46.2,
+     "tone": -22.56
+    },
+    "op_u47": {
+     "all": -26.38,
+     "character": -52.55,
+     "tone": -26.41
+    },
+    "ia_v76": {
+     "all": -36.73,
+     "character": -67.0,
+     "tone": -36.72
+    },
+    "g1_v76": {
+     "all": -13.18,
+     "character": -50.94,
+     "tone": -13.18
+    },
+    "pl2_v76": {
+     "all": -43.62,
+     "character": -63.45,
+     "tone": -43.58
+    },
+    "g3_v76": {
+     "all": -15.75,
+     "character": -59.35,
+     "tone": -15.75
+    },
+    "pl4_v76": {
+     "all": -61.54,
+     "character": -63.26,
+     "tone": -59.42
+    },
+    "out": {
+     "all": -35.83,
+     "character": -63.4,
+     "tone": -35.82
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -16.74,
+     "character": -45.93,
+     "tone": -16.74
+    },
+    "a_u47": {
+     "all": -13.31,
+     "character": -42.7,
+     "tone": -13.3
+    },
+    "op_u47": {
+     "all": -11.74,
+     "character": -45.22,
+     "tone": -11.75
+    },
+    "ia_v76": {
+     "all": -11.56,
+     "character": -45.1,
+     "tone": -11.57
+    },
+    "g1_v76": {
+     "all": -6.68,
+     "character": -41.79,
+     "tone": -6.68
+    },
+    "pl2_v76": {
+     "all": -6.78,
+     "character": -41.64,
+     "tone": -6.78
+    },
+    "g3_v76": {
+     "all": -4.74,
+     "character": -40.44,
+     "tone": -4.74
+    },
+    "pl4_v76": {
+     "all": -4.75,
+     "character": -40.45,
+     "tone": -4.75
+    },
+    "out": {
+     "all": -4.56,
+     "character": -41.66,
+     "tone": -4.56
+    }
+   }
+  }
+ },
+ "linear": {
+  "bass": {
+   "stage": {
+    "g_u47": {
+     "all": -11.49,
+     "character": -39.11,
+     "tone": -11.51
+    },
+    "a_u47": {
+     "all": -16.45,
+     "character": -42.62,
+     "tone": -16.48
+    },
+    "op_u47": {
+     "all": -17.58,
+     "character": -41.08,
+     "tone": -17.64
+    },
+    "ia_v76": {
+     "all": -38.53,
+     "character": -65.37,
+     "tone": -38.54
+    },
+    "g1_v76": {
+     "all": -6.08,
+     "character": -34.36,
+     "tone": -6.09
+    },
+    "pl2_v76": {
+     "all": -38.51,
+     "character": -66.12,
+     "tone": -38.51
+    },
+    "g3_v76": {
+     "all": -11.71,
+     "character": -42.59,
+     "tone": -11.71
+    },
+    "pl4_v76": {
+     "all": -57.97,
+     "character": -68.94,
+     "tone": -57.72
+    },
+    "out": {
+     "all": -29.82,
+     "character": -55.72,
+     "tone": -29.82
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -11.49,
+     "character": -39.11,
+     "tone": -11.51
+    },
+    "a_u47": {
+     "all": -8.11,
+     "character": -36.68,
+     "tone": -8.12
+    },
+    "op_u47": {
+     "all": -6.13,
+     "character": -33.65,
+     "tone": -6.14
+    },
+    "ia_v76": {
+     "all": -5.97,
+     "character": -33.55,
+     "tone": -5.97
+    },
+    "g1_v76": {
+     "all": -1.79,
+     "character": -30.32,
+     "tone": -1.78
+    },
+    "pl2_v76": {
+     "all": -1.84,
+     "character": -30.38,
+     "tone": -1.83
+    },
+    "g3_v76": {
+     "all": -0.97,
+     "character": -28.24,
+     "tone": -0.96
+    },
+    "pl4_v76": {
+     "all": -0.97,
+     "character": -28.26,
+     "tone": -0.96
+    },
+    "out": {
+     "all": -0.86,
+     "character": -28.57,
+     "tone": -0.85
+    }
+   }
+  },
+  "guitar": {
+   "stage": {
+    "g_u47": {
+     "all": -14.49,
+     "character": -49.98,
+     "tone": -14.49
+    },
+    "a_u47": {
+     "all": -20.01,
+     "character": -46.07,
+     "tone": -20.02
+    },
+    "op_u47": {
+     "all": -24.26,
+     "character": -53.13,
+     "tone": -24.27
+    },
+    "ia_v76": {
+     "all": -42.11,
+     "character": -74.05,
+     "tone": -42.1
+    },
+    "g1_v76": {
+     "all": -10.54,
+     "character": -49.87,
+     "tone": -10.53
+    },
+    "pl2_v76": {
+     "all": -41.48,
+     "character": -72.33,
+     "tone": -41.48
+    },
+    "g3_v76": {
+     "all": -14.42,
+     "character": -54.9,
+     "tone": -14.41
+    },
+    "pl4_v76": {
+     "all": -60.48,
+     "character": -74.29,
+     "tone": -60.45
+    },
+    "out": {
+     "all": -33.65,
+     "character": -70.8,
+     "tone": -33.64
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -14.49,
+     "character": -49.98,
+     "tone": -14.49
+    },
+    "a_u47": {
+     "all": -10.94,
+     "character": -44.99,
+     "tone": -10.94
+    },
+    "op_u47": {
+     "all": -9.41,
+     "character": -45.57,
+     "tone": -9.4
+    },
+    "ia_v76": {
+     "all": -9.24,
+     "character": -45.47,
+     "tone": -9.23
+    },
+    "g1_v76": {
+     "all": -4.38,
+     "character": -40.15,
+     "tone": -4.38
+    },
+    "pl2_v76": {
+     "all": -4.48,
+     "character": -40.12,
+     "tone": -4.47
+    },
+    "g3_v76": {
+     "all": -2.71,
+     "character": -36.66,
+     "tone": -2.69
+    },
+    "pl4_v76": {
+     "all": -2.71,
+     "character": -36.82,
+     "tone": -2.7
+    },
+    "out": {
+     "all": -2.55,
+     "character": -39.55,
+     "tone": -2.54
+    }
+   }
+  },
+  "harmonies": {
+   "stage": {
+    "g_u47": {
+     "all": -22.37,
+     "character": -53.26,
+     "tone": -22.37
+    },
+    "a_u47": {
+     "all": -28.4,
+     "character": -45.7,
+     "tone": -28.48
+    },
+    "op_u47": {
+     "all": -33.31,
+     "character": -66.93,
+     "tone": -33.33
+    },
+    "ia_v76": {
+     "all": -33.48,
+     "character": -95.81,
+     "tone": -33.48
+    },
+    "g1_v76": {
+     "all": -21.37,
+     "character": -64.46,
+     "tone": -21.37
+    },
+    "pl2_v76": {
+     "all": -49.2,
+     "character": -76.32,
+     "tone": -49.21
+    },
+    "g3_v76": {
+     "all": -17.29,
+     "character": -73.91,
+     "tone": -17.28
+    },
+    "pl4_v76": {
+     "all": -61.86,
+     "character": -80.92,
+     "tone": -61.93
+    },
+    "out": {
+     "all": -41.86,
+     "character": -87.52,
+     "tone": -41.86
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -22.37,
+     "character": -53.26,
+     "tone": -22.37
+    },
+    "a_u47": {
+     "all": -19.19,
+     "character": -50.18,
+     "tone": -19.19
+    },
+    "op_u47": {
+     "all": -17.83,
+     "character": -49.84,
+     "tone": -17.83
+    },
+    "ia_v76": {
+     "all": -17.47,
+     "character": -49.83,
+     "tone": -17.47
+    },
+    "g1_v76": {
+     "all": -13.48,
+     "character": -48.96,
+     "tone": -13.48
+    },
+    "pl2_v76": {
+     "all": -13.59,
+     "character": -48.76,
+     "tone": -13.59
+    },
+    "g3_v76": {
+     "all": -10.27,
+     "character": -48.36,
+     "tone": -10.27
+    },
+    "pl4_v76": {
+     "all": -10.27,
+     "character": -48.22,
+     "tone": -10.27
+    },
+    "out": {
+     "all": -10.08,
+     "character": -48.34,
+     "tone": -10.07
+    }
+   }
+  },
+  "lead vocal": {
+   "stage": {
+    "g_u47": {
+     "all": -16.77,
+     "character": -45.94,
+     "tone": -16.77
+    },
+    "a_u47": {
+     "all": -22.39,
+     "character": -46.27,
+     "tone": -22.4
+    },
+    "op_u47": {
+     "all": -26.36,
+     "character": -52.4,
+     "tone": -26.39
+    },
+    "ia_v76": {
+     "all": -36.71,
+     "character": -67.04,
+     "tone": -36.71
+    },
+    "g1_v76": {
+     "all": -13.15,
+     "character": -50.96,
+     "tone": -13.15
+    },
+    "pl2_v76": {
+     "all": -43.61,
+     "character": -63.45,
+     "tone": -43.57
+    },
+    "g3_v76": {
+     "all": -15.75,
+     "character": -59.29,
+     "tone": -15.75
+    },
+    "pl4_v76": {
+     "all": -61.51,
+     "character": -63.26,
+     "tone": -59.4
+    },
+    "out": {
+     "all": -35.82,
+     "character": -63.39,
+     "tone": -35.81
+    }
+   },
+   "cumulative": {
+    "g_u47": {
+     "all": -16.77,
+     "character": -45.94,
+     "tone": -16.77
+    },
+    "a_u47": {
+     "all": -13.28,
+     "character": -42.66,
+     "tone": -13.27
+    },
+    "op_u47": {
+     "all": -11.72,
+     "character": -45.14,
+     "tone": -11.73
+    },
+    "ia_v76": {
+     "all": -11.54,
+     "character": -45.07,
+     "tone": -11.54
+    },
+    "g1_v76": {
+     "all": -6.66,
+     "character": -41.88,
+     "tone": -6.66
+    },
+    "pl2_v76": {
+     "all": -6.76,
+     "character": -41.74,
+     "tone": -6.76
+    },
+    "g3_v76": {
+     "all": -4.73,
+     "character": -40.44,
+     "tone": -4.73
+    },
+    "pl4_v76": {
+     "all": -4.74,
+     "character": -40.45,
+     "tone": -4.74
+    },
+    "out": {
+     "all": -4.55,
+     "character": -41.69,
+     "tone": -4.55
+    }
+   }
+  }
+ }
+}

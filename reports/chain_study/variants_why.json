@@ -1,0 +1,14 @@
+{
+ "loud_115": "a loud source (a guitar cab or kick at 115 dB SPL), the V76 turned down 15 dB to 9 dB: realistic, the capsule and tube driven hard",
+ "brownout": "mains at the V76's lowest rating, 198 V (10 % low), the NG's 300 V scaled with it to 270 V",
+ "weak_ng": "a weak NG rectifier: 220 V open circuit instead of 300 (the U47's 105 V rail drops with it)",
+ "tired_vf14": "an aged VF14: half its emission (kg1 doubled)",
+ "small_bv8": "a BV8 on a quarter of the core area with twice the turns: the same inductance, twice the flux density",
+ "hum_heavy": "dried-out filter capacitors: the NG's ripple 40 dB and T90's field 20 dB over spike-2's calibration (out of spec)",
+ "microphonic": "a VF14 Neumann would have rejected: its modes' peaks at -20 dB re the capsule's signal (30 dB over chain_spike's invented 'selected' tube)",
+ "bv8_c30": "BV8 primary self-capacitance 30 pF, not the provisional 150 pF (originals measured 16-28 pF apparent, 'a little over 30 pF' true: groupdiy.com/threads/bv08-transformer-capacitance-comparable-to-mic-cable-capacitance.83565/page-3, forum)",
+ "bv8_l180": "BV8 primary 180 H in the linear limit, not 91 H (clones measured 150 H (AMI) and 211 H (Haufe), level unstated: groupdiy.com/threads/bv-08-transformer-laminations-alloy.52099/, forum); the joint gap 6.26 -> 1.65 um",
+ "t85_dcr3": "T85 primary 3 ohm per half, not the calibrated 77 (a 1974 unit measured ~3 + 3 ohm and 2.7 H: groupdiy.com/threads/v76-input-transformers-acting-weird.77981/, forum; another 6.5 ohm total)",
+ "t89_dcr": "T89 650 / 11 ohm, not the provisional 360 / 5 (groupdiy.com/threads/v76-output-transformer.57129, forum, the reading's origin unknown)",
+ "sourced_all": "all four together"
+}

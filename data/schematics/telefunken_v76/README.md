@@ -113,3 +113,44 @@ web: https://web.archive.org/web/20041218015535/http://www.irt.de:80/IRT/publika
 GroupDIY "V76 tube preamp build" (web: https://groupdiy.com/threads/v76-tube-preamp-build.68498/,
 Jensen transformers): plate voltages 63 / 166 / 90 / 193 V against the drawing's
 67 / 175 / 80 / 170 V; chokes measured about 416 H and 257 H at 100 Hz.
+
+## Found 2026-11-14 (a web search for the wound parts; not yet used by the circuit)
+
+Found while studying the chain's character (`reports/chain_study/`). Confidence per item. There is no
+Bauvorschrift for BV 511, 512 or 516 / 517a: the Wayback listing of irt.de's braunbuch folder has
+only V72_EUE.pdf among the transformer documents.
+
+- **BV 511 (T85)**:
+  - Braunbuch sheet 2 (local `braunbuch_sheet02.png`, primary): "Scheibenübertrager" (disc wound),
+    "stark nickelhaltiges Kernblech", a multilayer mu-metal can with a non-magnetic interlayer; the
+    40 Hz high-pass is its inductance with the network between the primary halves.
+  - Six secondary sections (forum); Sowter's 1004 copy: 6 sections, 4 internal screens, 0.5 + 0.5 :
+    30, 100 % mumetal (vendor, web: https://don-audio.com/1004-Telefunken-V76-Input).
+  - A 1974 Südfunk unit (Murdock, 2021, forum): primary about 3 + 3 ohm, about 2.7 H (2.1 H on bad
+    ones), flat 15 Hz-50 kHz from 150 ohm into 1 MOhm. web:
+    https://groupdiy.com/threads/v76-input-transformers-acting-weird.77981/ (the same thread has a
+    disputed measurement and a ratio of 1:28). Another unit: 6.5 ohm primary (forum, web:
+    https://groupdiy.com/threads/telefunken-v76-80-input-transformer-broken.37755/).
+  - The circuit has 270 turns (about 3.0 H in its linear limit) and 77 ohm per half (calibrated
+    to sheet 10's response).
+- **BV 512 (T89)**:
+  - Braunbuch sheet 3 (primary): a DC-free (parafeed) output transformer "mit unterteilter
+    Zylinderwicklung".
+  - Two primaries in series, three secondaries in parallel, an electrostatic screen, a two-chamber
+    bobbin; "650 ohm / 11 ohm" of unknown origin (forum, web:
+    https://groupdiy.com/threads/v76-output-transformer.57129).
+  - Sowter's 1110 copy: 9 : 1, 50 k / 600 ohm, 50 % nickel, +18 dBu at 30 Hz (vendor, web:
+    https://www.don-audio.com/1110-Telefunken-V76-output).
+  - The circuit has silicon steel and 360 / 5 ohm.
+- **Chokes**: Sowter 1377 for BV 514 (about 400 H, 12.6 kOhm, 3.6 mA) and 1378 for BV 515 (about
+  250 H, about 9 kOhm, 12 mA), both two-chamber (vendor, web:
+  https://sowter.co.uk/acatalog/VINTAGE-RECORDING-AMPLIFIER-TRANSFORMERS-J-to-Z-p2.html). BV 516 / 517a:
+  nothing beyond the drawing.
+- **The V72's output transformer (CTV 72/2), a template for BV 512**: a measured Siemens original
+  (CJ, 2009, forum, web: https://groupdiy.com/threads/v-72-output-transformer.36632). Primary 3,896
+  turns of #38 AWG in two halves; secondary 348 turns of #34 AWG, three in parallel (11.2 : 1);
+  S-P-S-P-S; EI48, 45 laminations interleaved 1 x 1; "22 H per 1000 T, µ ≈ 7,350".
+- Walled or image-only leads: GroupDIY attachments 58925-58928 (the BV 8 capacitance thread), CJ's
+  `v76-opt.jpg` (thread 57129), Ilya's inductor measurements (https://groupdiy.com/goto/post?id=1080045).
+  Haufe and TAB-Funkenwerk answer data requests by email; TAB says Neumann gave them the BV 8's
+  documentation.

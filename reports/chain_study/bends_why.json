@@ -1,0 +1,9 @@
+{
+ "loud_115": "a loud source (a guitar cab or kick at 115 dB SPL), the V76 turned down 15 dB to 9 dB: realistic, the capsule and tube driven hard",
+ "brownout": "mains at the V76's lowest rating, 198 V (10 % low), the NG's 300 V scaled with it to 270 V",
+ "weak_ng": "a weak NG rectifier: 220 V open circuit instead of 300 (the U47's 105 V rail drops with it)",
+ "tired_vf14": "an aged VF14: half its emission (kg1 doubled)",
+ "small_bv8": "a BV8 on a quarter of the core area with twice the turns: the same inductance, twice the flux density",
+ "hum_heavy": "dried-out filter capacitors: the NG's ripple 40 dB and T90's field 20 dB over spike-2's calibration (out of spec)",
+ "microphonic": "a VF14 Neumann would have rejected: its modes' peaks at -20 dB re the capsule's signal (30 dB over chain_spike's invented 'selected' tube)"
+}

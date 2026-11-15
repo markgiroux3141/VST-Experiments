@@ -737,3 +737,27 @@ resonance frequency, the diaphragm-to-backplate gap, backplate thickness, the ho
 - TAB's BV 8 / GN 8b label photo (`bvgn.jpg` on the archived id146 page), for turn counts.
 - worldradiohistory.com's Funkschau (1947-1960) and Funk-Technik for U 47 / M 7 articles.
   The Telefunken-Röhrentaschenbuch 1955 for the VF 14's page.
+
+## Found 2026-11-14 (a web search for the BV 8; not yet used by the circuit)
+
+The leads above were followed up while studying the chain's character (`reports/chain_study/`).
+Confidence per item: primary (the maker's own), vendor, forum.
+
+- **The BV 8's coil label**, "Bv.-08 Spule 1": I rt-gn 1300 turns of 0.07 mm, II bl-bl 200 turns of
+  0.18 mm. Two coils, so 2600 : 400 in all (6.5 : 1, the circuit's ratio and turns). Primary: a photo
+  of the factory label, web: https://www.tab-funkenwerk.org/wp-content/uploads/2019/04/bvgn.jpg.w300h616.jpg
+  on https://www.tab-funkenwerk.org/articles-tech-documents-2/bvo8-transformer/ (the `bvgn.jpg` listed
+  above). The same page's teardown photo shows two small bobbins on UI laminations, probably one coil
+  per leg. That is inferred.
+- **The GN 8b's label**: "1300 - 0,07", "100 - 0,35" (the first only partly legible). Same photo.
+- **Primary inductance of two clones**: Haufe 211 H, AMI 150 H. Forum (o3misha, 2013); level and
+  frequency unstated. web: https://groupdiy.com/threads/bv-08-transformer-laminations-alloy.52099/
+  (the circuit has 91 H, from Haufe's 570 kOhm at 1 kHz).
+- **The core alloy**: Ni 80 %, Mo 4.9 %, Mn 0.5 %, Si 0.3 %, as BraFra read a Neumann document; VAC
+  "A-50 Garantie" / DIN 41301 E3. Moby, who has opened about 25: early BV 8s low-nickel, later high.
+  Forum, same thread.
+- **Primary self-capacitance**: 16-28 pF apparent at 8-100 kHz on an LCR meter, "a little over 30 pF"
+  true, on originals. Forum (Moby / abbey road d enfer, 2023), web:
+  https://groupdiy.com/threads/bv08-transformer-capacitance-comparable-to-mic-cable-capacitance.83565/page-3
+  (the circuit has a provisional 150 pF).
+- Not found: leakage inductance; inductance against level on an original.

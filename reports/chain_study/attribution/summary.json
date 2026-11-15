@@ -1,0 +1,1206 @@
+{
+ "all_ja": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.56,
+   "50": 0.17,
+   "100": 1.01,
+   "200": 0.62,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -44.01,
+     "residual_this_pass": -44.01,
+     "vs_dry": {
+      "all": -0.88,
+      "character": -28.42,
+      "tone": -0.88
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -40.91,
+     "residual_this_pass": -47.28,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.99,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -44.44,
+      "character": -47.15,
+      "tone": -48.13
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -38.74,
+     "residual_this_pass": -48.12,
+     "vs_dry": {
+      "all": -0.27,
+      "character": -17.91,
+      "tone": -0.25
+     },
+     "eqnull_vs_p1": {
+      "all": -26.73,
+      "character": -36.07,
+      "tone": -27.35
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -45.63,
+     "residual_this_pass": -45.63,
+     "vs_dry": {
+      "all": -2.57,
+      "character": -38.78,
+      "tone": -2.56
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -41.02,
+     "residual_this_pass": -46.28,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -32.43,
+      "tone": -0.0
+     },
+     "eqnull_vs_p1": {
+      "all": -45.37,
+      "character": -46.85,
+      "tone": -50.19
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -36.68,
+     "residual_this_pass": -46.81,
+     "vs_dry": {
+      "all": -1.65,
+      "character": -26.45,
+      "tone": -1.62
+     },
+     "eqnull_vs_p1": {
+      "all": -30.13,
+      "character": -39.12,
+      "tone": -30.96
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.62,
+     "residual_this_pass": -45.62,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.27,
+      "tone": -10.08
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.19,
+     "residual_this_pass": -46.17,
+     "vs_dry": {
+      "all": -4.72,
+      "character": -47.63,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.99,
+      "character": -48.4,
+      "tone": -50.08
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.23,
+     "residual_this_pass": -46.95,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -40.14,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.22,
+      "character": -42.58,
+      "tone": -46.92
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -47.8,
+     "residual_this_pass": -47.8,
+     "vs_dry": {
+      "all": -4.56,
+      "character": -41.66,
+      "tone": -4.56
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.3,
+     "residual_this_pass": -50.44,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.21,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -49.38,
+      "character": -50.69,
+      "tone": -54.09
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.1,
+     "residual_this_pass": -49.03,
+     "vs_dry": {
+      "all": -0.51,
+      "character": -26.63,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -41.3,
+      "character": -44.15,
+      "tone": -44.95
+     }
+    }
+   }
+  }
+ },
+ "all_linear": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.55,
+   "50": 0.34,
+   "100": 1.07,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -47.55,
+     "residual_this_pass": -47.55,
+     "vs_dry": {
+      "all": -0.86,
+      "character": -28.57,
+      "tone": -0.85
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -44.44,
+     "residual_this_pass": -50.36,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.97,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -49.33,
+      "character": -50.38,
+      "tone": -52.85
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.24,
+     "residual_this_pass": -48.51,
+     "vs_dry": {
+      "all": -0.25,
+      "character": -18.24,
+      "tone": -0.19
+     },
+     "eqnull_vs_p1": {
+      "all": -28.12,
+      "character": -38.53,
+      "tone": -28.86
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -49.42,
+     "residual_this_pass": -49.42,
+     "vs_dry": {
+      "all": -2.55,
+      "character": -39.55,
+      "tone": -2.54
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.03,
+     "residual_this_pass": -49.98,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -33.28,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -48.89,
+      "character": -50.11,
+      "tone": -53.64
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.51,
+     "residual_this_pass": -49.04,
+     "vs_dry": {
+      "all": -1.61,
+      "character": -24.21,
+      "tone": -1.57
+     },
+     "eqnull_vs_p1": {
+      "all": -32.87,
+      "character": -41.63,
+      "tone": -33.99
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.76,
+     "residual_this_pass": -45.76,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.34,
+      "tone": -10.07
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.36,
+     "residual_this_pass": -46.1,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.61,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.93,
+      "character": -48.36,
+      "tone": -50.06
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.47,
+     "residual_this_pass": -46.92,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -40.18,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.49,
+      "character": -42.61,
+      "tone": -48.34
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.68,
+     "residual_this_pass": -48.68,
+     "vs_dry": {
+      "all": -4.55,
+      "character": -41.69,
+      "tone": -4.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -47.35,
+     "residual_this_pass": -50.02,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -27.25,
+      "tone": -0.51
+     },
+     "eqnull_vs_p1": {
+      "all": -49.22,
+      "character": -50.98,
+      "tone": -53.3
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.24,
+     "residual_this_pass": -50.48,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.24,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -44.03,
+      "character": -45.37,
+      "tone": -50.85
+     }
+    }
+   }
+  }
+ },
+ "only_BV8_U47": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.56,
+   "50": 0.21,
+   "100": 1.03,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -44.98,
+     "residual_this_pass": -44.98,
+     "vs_dry": {
+      "all": -0.88,
+      "character": -28.42,
+      "tone": -0.87
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -42.03,
+     "residual_this_pass": -48.48,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.93,
+      "tone": -0.06
+     },
+     "eqnull_vs_p1": {
+      "all": -45.7,
+      "character": -48.22,
+      "tone": -49.74
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -39.54,
+     "residual_this_pass": -48.89,
+     "vs_dry": {
+      "all": -0.27,
+      "character": -17.92,
+      "tone": -0.25
+     },
+     "eqnull_vs_p1": {
+      "all": -27.34,
+      "character": -36.95,
+      "tone": -27.9
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -47.21,
+     "residual_this_pass": -47.21,
+     "vs_dry": {
+      "all": -2.56,
+      "character": -39.12,
+      "tone": -2.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -43.06,
+     "residual_this_pass": -47.99,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -33.22,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -46.95,
+      "character": -48.4,
+      "tone": -51.66
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -39.28,
+     "residual_this_pass": -48.19,
+     "vs_dry": {
+      "all": -1.63,
+      "character": -26.31,
+      "tone": -1.61
+     },
+     "eqnull_vs_p1": {
+      "all": -29.65,
+      "character": -40.61,
+      "tone": -30.25
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.63,
+     "residual_this_pass": -45.63,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.3,
+      "tone": -10.08
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.18,
+     "residual_this_pass": -46.15,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.67,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.98,
+      "character": -48.33,
+      "tone": -50.14
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.22,
+     "residual_this_pass": -46.95,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -39.98,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.14,
+      "character": -42.46,
+      "tone": -46.96
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.07,
+     "residual_this_pass": -48.07,
+     "vs_dry": {
+      "all": -4.56,
+      "character": -41.68,
+      "tone": -4.56
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.85,
+     "residual_this_pass": -50.54,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.02,
+      "tone": -0.51
+     },
+     "eqnull_vs_p1": {
+      "all": -49.51,
+      "character": -50.84,
+      "tone": -54.18
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.9,
+     "residual_this_pass": -49.6,
+     "vs_dry": {
+      "all": -0.51,
+      "character": -27.05,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -41.95,
+      "character": -44.45,
+      "tone": -46.11
+     }
+    }
+   }
+  }
+ },
+ "only_T85_V76": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.55,
+   "50": 0.3,
+   "100": 1.05,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -46.98,
+     "residual_this_pass": -46.98,
+     "vs_dry": {
+      "all": -0.86,
+      "character": -28.59,
+      "tone": -0.86
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -43.74,
+     "residual_this_pass": -49.66,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -23.07,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -48.27,
+      "character": -49.68,
+      "tone": -51.66
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.43,
+     "residual_this_pass": -49.35,
+     "vs_dry": {
+      "all": -0.25,
+      "character": -18.98,
+      "tone": -0.2
+     },
+     "eqnull_vs_p1": {
+      "all": -27.71,
+      "character": -38.84,
+      "tone": -28.24
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -48.04,
+     "residual_this_pass": -48.04,
+     "vs_dry": {
+      "all": -2.56,
+      "character": -39.54,
+      "tone": -2.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -44.03,
+     "residual_this_pass": -48.66,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -34.03,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -47.74,
+      "character": -49.04,
+      "tone": -52.86
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.23,
+     "residual_this_pass": -48.53,
+     "vs_dry": {
+      "all": -1.63,
+      "character": -27.48,
+      "tone": -1.6
+     },
+     "eqnull_vs_p1": {
+      "all": -32.23,
+      "character": -40.97,
+      "tone": -33.32
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.75,
+     "residual_this_pass": -45.75,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.32,
+      "tone": -10.07
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.41,
+     "residual_this_pass": -46.13,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.6,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.95,
+      "character": -48.42,
+      "tone": -50.06
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.52,
+     "residual_this_pass": -46.94,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -39.67,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.5,
+      "character": -42.73,
+      "tone": -48.05
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.48,
+     "residual_this_pass": -48.48,
+     "vs_dry": {
+      "all": -4.55,
+      "character": -41.7,
+      "tone": -4.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -47.17,
+     "residual_this_pass": -50.23,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -27.7,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -49.38,
+      "character": -50.94,
+      "tone": -53.74
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -41.76,
+     "residual_this_pass": -50.09,
+     "vs_dry": {
+      "all": -0.51,
+      "character": -26.89,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -43.46,
+      "character": -45.04,
+      "tone": -49.45
+     }
+    }
+   }
+  }
+ },
+ "only_L86_V76": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.55,
+   "50": 0.34,
+   "100": 1.07,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -47.55,
+     "residual_this_pass": -47.55,
+     "vs_dry": {
+      "all": -0.86,
+      "character": -28.57,
+      "tone": -0.85
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -44.44,
+     "residual_this_pass": -50.36,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.97,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -49.33,
+      "character": -50.39,
+      "tone": -52.85
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.24,
+     "residual_this_pass": -48.51,
+     "vs_dry": {
+      "all": -0.25,
+      "character": -18.24,
+      "tone": -0.19
+     },
+     "eqnull_vs_p1": {
+      "all": -28.12,
+      "character": -38.53,
+      "tone": -28.86
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -49.42,
+     "residual_this_pass": -49.42,
+     "vs_dry": {
+      "all": -2.55,
+      "character": -39.55,
+      "tone": -2.54
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.03,
+     "residual_this_pass": -49.98,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -33.28,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -48.89,
+      "character": -50.11,
+      "tone": -53.64
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.51,
+     "residual_this_pass": -49.04,
+     "vs_dry": {
+      "all": -1.61,
+      "character": -24.21,
+      "tone": -1.57
+     },
+     "eqnull_vs_p1": {
+      "all": -32.87,
+      "character": -41.63,
+      "tone": -33.99
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.76,
+     "residual_this_pass": -45.76,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.34,
+      "tone": -10.07
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.36,
+     "residual_this_pass": -46.1,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.61,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.93,
+      "character": -48.36,
+      "tone": -50.06
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.47,
+     "residual_this_pass": -46.92,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -40.18,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.49,
+      "character": -42.61,
+      "tone": -48.34
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.68,
+     "residual_this_pass": -48.68,
+     "vs_dry": {
+      "all": -4.55,
+      "character": -41.69,
+      "tone": -4.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -47.35,
+     "residual_this_pass": -50.02,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -27.25,
+      "tone": -0.51
+     },
+     "eqnull_vs_p1": {
+      "all": -49.22,
+      "character": -50.98,
+      "tone": -53.3
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.24,
+     "residual_this_pass": -50.48,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.25,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -44.03,
+      "character": -45.37,
+      "tone": -50.84
+     }
+    }
+   }
+  }
+ },
+ "only_L88_V76": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.55,
+   "50": 0.34,
+   "100": 1.07,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -47.55,
+     "residual_this_pass": -47.55,
+     "vs_dry": {
+      "all": -0.86,
+      "character": -28.57,
+      "tone": -0.85
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -44.44,
+     "residual_this_pass": -50.36,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.97,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -49.33,
+      "character": -50.38,
+      "tone": -52.85
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.24,
+     "residual_this_pass": -48.51,
+     "vs_dry": {
+      "all": -0.25,
+      "character": -18.24,
+      "tone": -0.19
+     },
+     "eqnull_vs_p1": {
+      "all": -28.12,
+      "character": -38.53,
+      "tone": -28.86
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -49.42,
+     "residual_this_pass": -49.42,
+     "vs_dry": {
+      "all": -2.55,
+      "character": -39.55,
+      "tone": -2.54
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.03,
+     "residual_this_pass": -49.98,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -33.28,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -48.89,
+      "character": -50.11,
+      "tone": -53.64
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.51,
+     "residual_this_pass": -49.04,
+     "vs_dry": {
+      "all": -1.61,
+      "character": -24.2,
+      "tone": -1.57
+     },
+     "eqnull_vs_p1": {
+      "all": -32.87,
+      "character": -41.63,
+      "tone": -33.99
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.76,
+     "residual_this_pass": -45.76,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.34,
+      "tone": -10.07
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.36,
+     "residual_this_pass": -46.1,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.61,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.93,
+      "character": -48.36,
+      "tone": -50.06
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.47,
+     "residual_this_pass": -46.92,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -40.19,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.49,
+      "character": -42.61,
+      "tone": -48.34
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.68,
+     "residual_this_pass": -48.68,
+     "vs_dry": {
+      "all": -4.55,
+      "character": -41.69,
+      "tone": -4.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -47.35,
+     "residual_this_pass": -50.02,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -27.25,
+      "tone": -0.51
+     },
+     "eqnull_vs_p1": {
+      "all": -49.22,
+      "character": -50.98,
+      "tone": -53.3
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.23,
+     "residual_this_pass": -50.48,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.24,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -44.03,
+      "character": -45.37,
+      "tone": -50.84
+     }
+    }
+   }
+  }
+ },
+ "only_T89_V76": {
+  "spl_db": 100.0,
+  "h_db_re_1k": {
+   "1k_abs_db": -31.55,
+   "50": 0.34,
+   "100": 1.07,
+   "200": 0.63,
+   "500": 0.15,
+   "2000": -0.12,
+   "5000": 0.17,
+   "10000": 2.7,
+   "15000": 0.51
+  },
+  "stems": {
+   "bass": {
+    "p1": {
+     "residual_vs_dry": -47.54,
+     "residual_this_pass": -47.54,
+     "vs_dry": {
+      "all": -0.86,
+      "character": -28.57,
+      "tone": -0.85
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -44.45,
+     "residual_this_pass": -50.37,
+     "vs_dry": {
+      "all": -0.06,
+      "character": -22.97,
+      "tone": -0.05
+     },
+     "eqnull_vs_p1": {
+      "all": -49.35,
+      "character": -50.4,
+      "tone": -52.88
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.25,
+     "residual_this_pass": -48.51,
+     "vs_dry": {
+      "all": -0.25,
+      "character": -18.24,
+      "tone": -0.19
+     },
+     "eqnull_vs_p1": {
+      "all": -28.1,
+      "character": -38.54,
+      "tone": -28.83
+     }
+    }
+   },
+   "guitar": {
+    "p1": {
+     "residual_vs_dry": -49.42,
+     "residual_this_pass": -49.42,
+     "vs_dry": {
+      "all": -2.55,
+      "character": -39.51,
+      "tone": -2.54
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.03,
+     "residual_this_pass": -49.98,
+     "vs_dry": {
+      "all": -0.01,
+      "character": -33.19,
+      "tone": -0.01
+     },
+     "eqnull_vs_p1": {
+      "all": -48.89,
+      "character": -50.1,
+      "tone": -53.6
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.51,
+     "residual_this_pass": -49.04,
+     "vs_dry": {
+      "all": -1.61,
+      "character": -24.24,
+      "tone": -1.57
+     },
+     "eqnull_vs_p1": {
+      "all": -32.76,
+      "character": -41.63,
+      "tone": -33.84
+     }
+    }
+   },
+   "harmonies": {
+    "p1": {
+     "residual_vs_dry": -45.76,
+     "residual_this_pass": -45.76,
+     "vs_dry": {
+      "all": -10.08,
+      "character": -48.34,
+      "tone": -10.07
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -46.36,
+     "residual_this_pass": -46.1,
+     "vs_dry": {
+      "all": -4.71,
+      "character": -47.61,
+      "tone": -4.71
+     },
+     "eqnull_vs_p1": {
+      "all": -45.93,
+      "character": -48.36,
+      "tone": -50.06
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -40.47,
+     "residual_this_pass": -46.92,
+     "vs_dry": {
+      "all": -0.81,
+      "character": -40.22,
+      "tone": -0.81
+     },
+     "eqnull_vs_p1": {
+      "all": -41.49,
+      "character": -42.61,
+      "tone": -48.34
+     }
+    }
+   },
+   "lead vocal": {
+    "p1": {
+     "residual_vs_dry": -48.68,
+     "residual_this_pass": -48.68,
+     "vs_dry": {
+      "all": -4.55,
+      "character": -41.69,
+      "tone": -4.55
+     }
+    },
+    "p2": {
+     "residual_vs_dry": -47.35,
+     "residual_this_pass": -50.02,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -27.21,
+      "tone": -0.51
+     },
+     "eqnull_vs_p1": {
+      "all": -49.22,
+      "character": -50.99,
+      "tone": -53.3
+     }
+    },
+    "p4": {
+     "residual_vs_dry": -42.24,
+     "residual_this_pass": -50.48,
+     "vs_dry": {
+      "all": -0.52,
+      "character": -26.21,
+      "tone": -0.52
+     },
+     "eqnull_vs_p1": {
+      "all": -44.04,
+      "character": -45.37,
+      "tone": -50.86
+     }
+    }
+   }
+  }
+ }
+}

@@ -23,6 +23,21 @@
         "cracks": 0
       },
       "wall_s_per_audio_s": 8.949052430912213
+    },
+    "air_on_g_string_played": {
+      "incident_spl_db_rms": 90.93047830949892,
+      "spl_1m_db_rms": 60.19421271775808,
+      "spl_1m_db_peak": 91.15005584729927,
+      "mistracking_fraction": 0.0004840435748977856,
+      "uncut_fraction": 0.0,
+      "wow_cents_rms": 13.840324053483409,
+      "wow_cents_peak_to_peak": 57.76822140769448,
+      "damage": {
+        "dust": 1547,
+        "mould_pits": 0,
+        "cracks": 0
+      },
+      "wall_s_per_audio_s": 5.447363184186781
     }
   }
 }
