@@ -332,10 +332,10 @@ hum:
   pickups:
     T1_re20:
       area_m2:
-        value: 0.0001
-        source: 'provisional: no published hum figure; the order of the calibrated pickups (the 4038''s
-          4.2e-5, the 77-DX''s 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike''s
-          spec-bound 1e-4 (reports/chain_spike/)'
+        value: 9.011e-05
+        source: 'calibrated by scripts/hum_calibrate.py to EV''s -130 dBm in a 1 millioersted 60 Hz field,
+          typical (web: https://products.electrovoice.com/na/en/re20), at 150 ohm; the hum-bucking coil
+          cancels the moving coil''s own, so the transformer'
     T1_api312:
       area_m2:
         value: 0.0001

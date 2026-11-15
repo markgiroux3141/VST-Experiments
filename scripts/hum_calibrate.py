@@ -14,7 +14,13 @@ The figures (sources in each circuit's data/schematics README):
 - STC / Coles 4038: +4 dB re 0.0002 dyne/cm^2 equivalent SPL for 1 mG at 50 Hz (BBC Monograph 4,
   p19-21; the brochure: < +5 dB);
 - Shure SM7B: 11 dB equivalent SPL per milli-oersted at 60 Hz (Shure's spec sheet; our SM7 is
-  fitted to the SM7B's curves).
+  fitted to the SM7B's curves);
+- EV RE20: hum pickup -130 dBm in a 60 Hz field of 1 millioersted, typical (EV's product page,
+  web: https://products.electrovoice.com/na/en/re20; 150 ohm), at its transformer (the hum-bucking
+  coil cancels the moving coil's: CHAINS_PLAN.md NH5);
+- Sennheiser MD 421: magnetic-field sensitivity < 5 uV / 5 uT at 50 Hz (the MD 421-II's
+  specification, web: https://www.sennheiser.com/globalassets/digizuite/47848-en-md-421-ii-product-specification-v1.1-en.pdf;
+  a bound, taken at its value: 0.1 uV in 1e-7 T, the hum linear in the field).
 
 dBm is read as the available power E^2 / (4 R) of the open-circuit hum E behind the rated
 impedance R (250 ohm at the 44-BX's and 77-DX's default straps): RCA's matched-load level.
@@ -45,6 +51,8 @@ CAL = [
     ("rca_77dx", "T1", "area_m2", 60.0, ("dbm", -128.0, 250.0)),
     ("coles_4038", "T1", "area_m2", 50.0, ("eq_spl", 4.0)),
     ("shure_sm7", "MC", "turn_area_m2", 60.0, ("eq_spl", 11.0)),
+    ("ev_re20", "T1", "area_m2", 60.0, ("dbm", -130.0, 150.0)),
+    ("sennheiser_md421", "MC", "turn_area_m2", 50.0, ("v_rms", 1.0e-7)),
 ]
 SECONDS = 1.0
 
@@ -84,6 +92,8 @@ def measured_db(name: str, target: tuple, e_rms: float) -> float:
     if target[0] == "dbm":
         r = target[2]
         return 10 * math.log10(e_rms**2 / (4 * r) / 1e-3)
+    if target[0] == "v_rms":  # in dB re 1 V, so the target compares as 20 log10
+        return 20 * math.log10(e_rms)
     s = sensitivity_v_per_pa(name)
     return 20 * math.log10(e_rms / s / 20e-6)
 
@@ -104,8 +114,8 @@ def main() -> None:
             }
         e = hum_rms_v(name, block, FIELD_T)
         got = measured_db(name, target, e)
-        want = target[1]
-        unit = "dBm" if target[0] == "dbm" else "dB eq SPL"
+        want = 20 * math.log10(target[1]) if target[0] == "v_rms" else target[1]
+        unit = {"dbm": "dBm", "eq_spl": "dB eq SPL", "v_rms": "dBV"}[target[0]]
         if args.check:
             ok = abs(got - want) <= 0.5
             bad |= not ok

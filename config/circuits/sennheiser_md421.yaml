@@ -49,7 +49,7 @@ hum:
   hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
   pickups:
-    MC: {turn_area_m2: {value: 2.065e-3, source: "provisional: no published hum figure; the SM7's calibrated voice coil (scripts/hum_calibrate.py)"}}
+    MC: {turn_area_m2: {value: 3.037e-03, source: "calibrated by scripts/hum_calibrate.py to the MD 421-II's < 5 uV / 5 uT at 50 Hz (web: https://www.sennheiser.com/globalassets/digizuite/47848-en-md-421-ii-product-specification-v1.1-en.pdf), a bound taken at its value"}}
 
 sections:
   - title: cartridge

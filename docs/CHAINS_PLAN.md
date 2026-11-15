@@ -2216,11 +2216,18 @@ the user's calls: a switch, ideal by default; the missing supplies inferred.
 - Tests: `tests/test_hum.py` (`test_ac_heaters_hum_only_with_hum_on`,
   `test_the_v76s_heater_hum_sits_under_its_noise`); the app fixtures' hum cases; agreement passes.
 
+**NH5 (session 2, 2026-11-15): two more published hum figures.**
+- `scripts/hum_calibrate.py` (now six, `--check` all within 0.01 dB) gains a `v_rms` target.
+- **EV RE20:** -130 dBm in a 1 mOe 60 Hz field, typical (EV's product page). The transformer T1
+  calibrates to 9.0e-5 m^2 a turn (was a provisional 1e-4); the hum-bucking coil cancels the
+  moving coil's own.
+- **Sennheiser MD 421:** < 5 uV / 5 uT at 50 Hz (the MD 421-II's specification), a bound taken at
+  its value. The voice coil calibrates to 3.0e-3 m^2 (was the SM7's 2.1e-3).
+- Searched, nothing published found: Shure's SM57 / SM58 (only the SM7B's and SM137's figures
+  appear), AKG's D112 (a hum-compensating coil, no figure) and C414 B-ULS, Beyerdynamic's M 160.
+  Neumann prints none. The rest stay provisional.
+
 **Not built yet (the next sessions, in this order):**
-5. **NH5, more calibrations.**
-   - Published hum figures as they turn up: Shure's SM57 / SM58 "electromagnetic hum
-     sensitivity", EV's RE20, Neumann's and AKG's data sheets, Jensen's JT-115K-E (in its can).
-   - Each goes into `hum_calibrate.py`'s CAL list and its file's `area_m2`.
 6. **NH6, listening.** The user renders a scene with Noise / Hum on and off.
 7. **NH7, owed checks.** The full pytest and `--verify` (the builder edits of sessions 1-2 and
    NH2's `varimu/circuit` / `varimu/devices` edits moved every Python render's cache key); `cargo

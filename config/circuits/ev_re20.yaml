@@ -51,7 +51,7 @@ hum:
   hz: {value: 60.0, source: "provisional: model knowledge (US mains, where it was made)"}
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
   pickups:
-    T1: {area_m2: {value: 1.0e-4, source: "provisional: no published hum figure; the order of the calibrated pickups (the 4038's 4.2e-5, the 77-DX's 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike's spec-bound 1e-4 (reports/chain_spike/)"}}
+    T1: {area_m2: {value: 9.011e-05, source: "calibrated by scripts/hum_calibrate.py to EV's -130 dBm in a 1 millioersted 60 Hz field, typical (web: https://products.electrovoice.com/na/en/re20), at 150 ohm; the hum-bucking coil cancels the moving coil's own, so the transformer"}}
 
 sections:
   - title: cartridge

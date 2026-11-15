@@ -328,8 +328,10 @@ hum:
   pickups:
     MC_md421:
       turn_area_m2:
-        value: 0.002065
-        source: 'provisional: no published hum figure; the SM7''s calibrated voice coil (scripts/hum_calibrate.py)'
+        value: 0.003037
+        source: 'calibrated by scripts/hum_calibrate.py to the MD 421-II''s < 5 uV / 5 uT at 50 Hz (web:
+          https://www.sennheiser.com/globalassets/digizuite/47848-en-md-421-ii-product-specification-v1.1-en.pdf),
+          a bound taken at its value'
     T1_api312:
       area_m2:
         value: 0.0001
