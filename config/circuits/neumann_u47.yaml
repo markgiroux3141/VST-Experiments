@@ -89,11 +89,11 @@ values:
   ng_t_r_ohm: {value: 930.4, source: "derived: set so that the NG gives br / ds58's 105 V at the microphone's 40 mA with SUPPLY 1 (scripts/mic_supply_trim.py): the winding, the primary referred and any dropper the drawing may have, lumped (provisional)"}
   ng_r2_ohm: {value: 1.0e+3, source: "README 'The supply NG': the 1966 filter C1, R2 1 kOhm, C2, R3 1 kOhm, C3 (the nuvistor conversion notice)"}
   ng_r3_ohm: {value: 1.0e+3, source: "README 'The supply NG': the 1966 filter's R3 1 kOhm"}
-  ng_c1_f: {value: 40.0e-6, source: "provisional: the early NG drawing's '5 x 40 uF' (web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png); the 1966 filter's C1 not printed"}
-  ng_c2_f: {value: 40.0e-6, source: "provisional: as ng_c1_f (the 1966 filter's C2)"}
+  ng_c1_f: {value: 0.000126636, source: "derived: C1 and C2 (equal) sized so the 100 Hz line at the output is ds58's 'Fremdspannung' about 5 uV with SUPPLY 1 (scripts/mic_supply_trim.py; the user's call: Neumann's figure as the hum alone); the 1966 filter's C1 not printed, the early drawing's '5 x 40 uF' gave 10x the hum"}
+  ng_c2_f: {value: 0.000126636, source: "derived: as ng_c1_f (the 1966 filter's C2)"}
   ng_arm_c_f: {value: 5.2e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.417 sq. in. per cell / 10 cells in series (config/components/b250c75/1.yaml)"}
-  ng_c1_v0_v: {value: 183.561, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
-  ng_c2_v0_v: {value: 144.28, source: "derived: C2's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  ng_c1_v0_v: {value: 183.609, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  ng_c2_v0_v: {value: 144.318, source: "derived: C2's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the NG's floating winding (not physical)"}
   ng_c_f: {value: 40.0e-6, source: "web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png (the NG drawing's '5 x 40 uF'; the last section's)"}
 

@@ -43,6 +43,9 @@ TRIMS = {
         "probe": "b105",
         "target": 105.0,  # br / ds58: 105 V at 40 mA loaded (data/schematics/neumann_u47/README.md)
         "v0": {"ng_c1_v0_v": ("n1", "0"), "ng_c2_v0_v": ("n2", "0")},
+        # ds58: "Fremdspannung" (hum and noise at the output) about 5 uV: the inferred filter's
+        # C1 and C2 (equal) sized so the 100 Hz line alone is that (the user's call).
+        "hum": {"caps": ("ng_c1_f", "ng_c2_f"), "hz": 100.0, "target_v": 5e-6},
     },
     "neumann_u67": {
         "set": {"supply": 1},
@@ -56,7 +59,7 @@ TRIMS = {
         "knob": "nn_t_v_rms",
         "probe": "bplus",
         "target": 116.0,  # man: the NN 48 b's 116 V D.C. plate (data/schematics/neumann_m49)
-        "v0": {"nn_c1_v0_v": ("n1", "0"), "nn_c3_v0_v": ("n3", "0"), "nn_c4_v0_v": ("bplus", "0")},
+        "v0": {"nn_c1_v0_v": ("nn1", "0"), "nn_c3_v0_v": ("nn3", "0"), "nn_c4_v0_v": ("bplus", "0")},
     },
     "telefunken_ela_m251": {
         "set": {"supply": 1},
@@ -91,9 +94,23 @@ def steady(name: str, values: dict, nodes: set[str], seconds: float) -> dict[str
     return out
 
 
-def trim(name: str, t: dict, seconds: float) -> dict[str, float]:
+def hum_line(name: str, values: dict, hz: float, seconds: float = 2.0) -> float:
+    """The output's line at `hz` (rms V) over `seconds` of silence, noise off."""
     c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
-    k0 = float(spec.resolve(c)[t["knob"]])
+    ir = builder.build_ir(c, spec.resolve(c, values))
+    st = TransientSettings.from_sim_settings(engine="circuitsim")
+    n = int(seconds * st.sample_rate)
+    ctl = {k.name: np.zeros(n) for k in ir.controls} or None
+    y = fast.run_transient(ir, np.zeros(n), settings=st, controls=ctl).vectors["v(out)"]
+    t = np.arange(n) / st.sample_rate
+    return float(2 * abs(np.mean(y * np.exp(-2j * np.pi * hz * t))) / np.sqrt(2))
+
+
+def trim(name: str, t: dict, seconds: float, extra: dict | None = None) -> dict[str, float]:
+    c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
+    extra = extra or {}
+    t = {**t, "set": {**t["set"], **extra}}
+    k0 = float(spec.resolve(c, extra).get(t["knob"]))
     nodes = {t["probe"], *(n for pair in t["v0"].values() for n in pair)}
     # The secant method from the present value and 92% of it, until the rail is within 0.05 V.
     pts: list[tuple[float, float, dict]] = []
@@ -140,7 +157,23 @@ def main() -> None:
             continue
         print(name)
         values = trim(name, t, a.seconds)
-        print("  ->", {k: round(v, 4) for k, v in values.items()})
+        if "hum" in t:  # the filter sized to the hum figure, the rail re-trimmed each time
+            h = t["hum"]
+            c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
+            caps = {k: float(spec.resolve(c)[k]) for k in h["caps"]}
+            for _ in range(6):
+                line = hum_line(name, {**t["set"], **caps, **values}, h["hz"])
+                print(f"  {h['hz']:g} Hz line {line * 1e6:.3f} uV rms (target "
+                      f"{h['target_v'] * 1e6:g}) with {caps}", flush=True)  # fmt: skip
+                if abs(line / h["target_v"] - 1) < 0.05:
+                    break
+                f = (line / h["target_v"]) ** 0.5  # hum ~ 1 / (C1 C2)
+                caps = {k: v * f for k, v in caps.items()}
+                values = trim(name, t, a.seconds, extra={**caps, t["knob"]: values[t["knob"]]})
+            else:
+                raise SystemExit(f"{name}: the hum didn't converge")
+            values = {**caps, **values}
+        print("  ->", {k: round(v, 9) for k, v in values.items()})
         if a.write:
             write(name, values)
             print(f"  wrote {name}.yaml")

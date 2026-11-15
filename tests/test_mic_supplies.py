@@ -102,3 +102,47 @@ def test_a_chain_carries_its_mics_supply_on_one_mains(chain, key):
     assert "VT_" + key.split("_", 1)[1] not in {e.name for e in builder.build(c).ir.elements()}
     names = {e.name for e in builder.build(c, {key: 1}).ir.elements()}
     assert f"VT_{key.split('_', 1)[1]}" in names
+
+
+def _supply_nodes(parts: dict, inside: bool, sup: set, rest: set) -> None:
+    for e in parts.values():
+        if "switch" in e:
+            for se in e["parts"].values():
+                s_ = inside or (e["switch"] == "supply" and se.get("in") == [1])
+                _supply_nodes({"x": se}, s_, sup, rest)
+            continue
+        nodes = {str(x) for k, v in e.items() if isinstance(v, list) and k != "in" for x in v}
+        (sup if inside else rest).update(nodes)
+
+
+# The nodes where a supply meets its microphone (its rail, the C12's return and C4b's node).
+JOINS = {"0", "bplus", "b105", "nret", "h2"}
+
+
+@pytest.mark.parametrize("name", MICS)
+def test_a_supplys_nodes_are_its_own(name):
+    """A real supply's inner nodes meet nothing of the microphone's (the M 49's once took the
+    capsule's C2 / C3 node `n3`, wiring its ripple into the polarization filter)."""
+    sup: set[str] = set()
+    rest: set[str] = set()
+    for s in _load(name).sections:
+        _supply_nodes(s["parts"], False, sup, rest)
+    assert (sup & rest) - JOINS == set()
+
+
+# ds58's "Fremdspannung" about 5 uV, the U47's inferred filter sized to it (mic_supply_trim.py);
+# the others' measured 2026-11-15: C12 / 251 ~1 nV, U67 0.40 uV, M 49 0.43 uV at 50 Hz.
+HUM = {"neumann_u47": (100.0, 4.5e-6, 5.5e-6)}
+
+
+@pytest.mark.parametrize("name", MICS)
+def test_the_real_supplys_hum_at_the_output(name):
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import sys
+
+    sys.path.insert(0, str(CONFIG_DIR.parent / "scripts"))
+    import mic_supply_trim as trim
+
+    hz, lo, hi = HUM.get(name, (50.0, 0.0, 1.0e-6))
+    line = trim.hum_line(name, {"supply": 1}, hz, seconds=1.0)
+    assert lo <= line <= hi, f"{name}: {line * 1e6:.3f} uV rms at {hz:g} Hz"

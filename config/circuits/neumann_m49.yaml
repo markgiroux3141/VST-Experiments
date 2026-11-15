@@ -41,7 +41,7 @@ values:
   capsule_model: {value: KK49@1, source: "config/components/kk49/1.yaml (K47@3's geometry: the same 2 x 78...83 pF capsule; its network fitted to the M 49 c's curves through this circuit by scripts/fit_kk49.py: reports/mics/kk49_fit.json)"}
   # The NN 48 b's HV (SUPPLY 1), inferred.
   mains_hz: {value: 50.0, source: "provisional: model knowledge (European mains, where it was made)"}
-  nn_t_v_rms: {value: 122.523, source: "derived: set so that the microphone gets man's 116 V at its plate current with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nn_t_v_rms: {value: 122.14, source: "derived: set so that the microphone gets man's 116 V at its plate current with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   nn_t_r_ohm: {value: 2632.0, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in: the NU 67 u's lumped winding resistance as trimmed (neumann_u67.yaml nu_t_r_ohm)"}
   nn_c1_f: {value: 25.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (C1 25 uF)"}
   nn_r1_ohm: {value: 6.8e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (R1 6.8 kOhm)"}
@@ -50,9 +50,9 @@ values:
   nn_c4_f: {value: 25.0e-6, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (C4 25 uF)"}
   nn_r7_ohm: {value: 160.0e+3, source: "provisional: inferred (the user's call, CHAINS_PLAN.md NH3): the NN 48 b's circuit isn't published (man: 116 V D.C. plate at 0.8 mA only); Neumann's NU 67 u's HV (data/schematics/neumann_u67/U67-p3.png) stands in (R7 160 kOhm, the bleeder)"}
   nn_gr_c_f: {value: 2.2e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell / 5 cells in series (config/components/e125c20/1.yaml)"}
-  nn_c1_v0_v: {value: 138.958, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
-  nn_c3_v0_v: {value: 128.448, source: "derived: C3's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
-  nn_c4_v0_v: {value: 115.985, source: "derived: C4's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nn_c1_v0_v: {value: 138.801, source: "derived: C1's steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held for the operating point only)"}
+  nn_c3_v0_v: {value: 128.465, source: "derived: C3's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
+  nn_c4_v0_v: {value: 116, source: "derived: C4's steady state with SUPPLY 1 (scripts/mic_supply_trim.py)"}
   pol_front_v: {value: 58.0, source: "derived: sch: the backplate's 'ca. +58 V' (R8 / R9 halve +116 V; no DC through R2) over the grid at 0 V (R5 to the ground line)"}
   pol_rear_0_v: {value: 58.0, source: "derived: sch / man C.11: pin 6 at 0 V (omni): +58 V - 0 V"}
   pol_rear_1_v: {value: 43.5, source: "derived: pin 6 at 14.5 V: +58 V - 14.5 V"}
@@ -154,12 +154,12 @@ sections:
           VB: {V: [bplus, "0"], v: bplus_v, in: [0]}
           VT: {mains: [wa, "0"], v_rms: nn_t_v_rms, phase_deg: 90.0, in: [1]}
           RT: {R: [wa, wb], r: nn_t_r_ohm, tolerance: none, in: [1]}
-          DGR1: {device: [wb, n1], model: GR1, in: [1]}
-          CGR1: {C: [wb, n1], c: nn_gr_c_f, tolerance: none, in: [1]}
-          CN1: {C: [n1, "0"], c: nn_c1_f, v0: nn_c1_v0_v, tolerance: none, in: [1]}
-          RN1: {R: [n1, n3], r: nn_r1_ohm, tolerance: none, in: [1]}
-          CN3: {C: [n3, "0"], c: nn_c3_f, v0: nn_c3_v0_v, tolerance: none, in: [1]}
-          RN3: {R: [n3, bplus], r: nn_r3_ohm, tolerance: none, in: [1]}
+          DGR1: {device: [wb, nn1], model: GR1, in: [1]}
+          CGR1: {C: [wb, nn1], c: nn_gr_c_f, tolerance: none, in: [1]}
+          CN1: {C: [nn1, "0"], c: nn_c1_f, v0: nn_c1_v0_v, tolerance: none, in: [1]}
+          RN1: {R: [nn1, nn3], r: nn_r1_ohm, tolerance: none, in: [1]}
+          CN3: {C: [nn3, "0"], c: nn_c3_f, v0: nn_c3_v0_v, tolerance: none, in: [1]}
+          RN3: {R: [nn3, bplus], r: nn_r3_ohm, tolerance: none, in: [1]}
           CN4: {C: [bplus, "0"], c: nn_c4_f, v0: nn_c4_v0_v, tolerance: none, in: [1]}
           RN7: {R: [bplus, "0"], r: nn_r7_ohm, tolerance: none, in: [1]}
       R9: {R: [bplus, dv], r: r9_ohm}

@@ -206,22 +206,23 @@ values:
     value: 1000.0
     source: 'README ''The supply NG'': the 1966 filter''s R3 1 kOhm'
   ng_c1_f_u47:
-    value: 4.0e-05
-    source: 'provisional: the early NG drawing''s ''5 x 40 uF'' (web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png);
-      the 1966 filter''s C1 not printed'
+    value: 0.000126636
+    source: 'derived: C1 and C2 (equal) sized so the 100 Hz line at the output is ds58''s ''Fremdspannung''
+      about 5 uV with SUPPLY 1 (scripts/mic_supply_trim.py; the user''s call: Neumann''s figure as the
+      hum alone); the 1966 filter''s C1 not printed, the early drawing''s ''5 x 40 uF'' gave 10x the hum'
   ng_c2_f_u47:
-    value: 4.0e-05
-    source: 'provisional: as ng_c1_f (the 1966 filter''s C2)'
+    value: 0.000126636
+    source: 'derived: as ng_c1_f (the 1966 filter''s C2)'
   ng_arm_c_f_u47:
     value: 5.2e-09
     source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.417 sq. in. per cell
       / 10 cells in series (config/components/b250c75/1.yaml)'
   ng_c1_v0_v_u47:
-    value: 183.561
+    value: 183.609
     source: 'derived: C1''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held
       for the operating point only)'
   ng_c2_v0_v_u47:
-    value: 144.28
+    value: 144.318
     source: 'derived: C2''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
   numerical_leak_ohm_u47:
     value: 1000000000.0

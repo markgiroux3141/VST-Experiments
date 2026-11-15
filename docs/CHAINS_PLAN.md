@@ -2177,14 +2177,16 @@ the user's calls: a switch, ideal by default; the missing supplies inferred.
 - **Hum at the output with SUPPLY 1** (silence, unweighted 20-20 kHz rms; noise-on noise alone in
   brackets):
   - C12: ~1 nV (5.0 uV). U 67: 0.4 uV at 50 Hz (4.3 uV). ELA M 251: ~1 nV (8.9 uV).
-  - **U 47: 50 uV at 100 Hz** (13.5 uV): ten times Neumann's "Fremdspannung about 5 uV". The
-    inferred filter's 40 uF are too small. Note that DIN 45 405's Fremdspannung is unweighted and
-    read quasi-peak, the output tap is unstated, and the model's own noise exceeds 5 uV.
-  - **M 49: 5.5 mV at 50 Hz** (3.1 uV): unusable. Its B+ also polarizes the capsule (R8 / R9), so
-    the ripple reaches the grid. The NN 48 b was likely stabilized (the file's old comment; no
-    source found), which an unregulated RC inference can't stand in for.
-  - **Open (the user's):** what to do with these two (CHAINS_PLAN.md NH3's question in the
-    session's report).
+  - **U 47:** with the early drawing's 40 uF for C1 / C2 it hummed 50 uV at 100 Hz (13.5 uV), ten
+    times Neumann's "Fremdspannung about 5 uV". The user's call: calibrate. C1 = C2 = 127 uF
+    (`mic_supply_trim.py`'s hum stage) put the 100 Hz line at 5.0 uV, Neumann's figure taken as
+    the hum alone. DIN 45 405's Fremdspannung is unweighted and read quasi-peak, the output tap
+    is unstated, and the model's own noise exceeds 5 uV, so the target is an upper bound.
+  - **M 49:** 0.43 uV at 50 Hz (3.1 uV), under its noise like the U 67's. A first build read 5.5
+    mV: its supply reused the capsule's C2 / C3 node `n3`, wiring the ripple into the
+    polarization filter (a bug, fixed and guarded by `test_a_supplys_nodes_are_its_own`). The
+    user then kept the unregulated RC inference: no stabilizer (the file's old "stabilized"
+    comment has no source).
 - Tests: `tests/test_mic_supplies.py` (default = ideal with no rectifier model, SUPPLY 1 builds and
   passes the checks, starts at its rail within 0.2%, the U67's drawing voltages, `emit`'s values,
   chains on one mains). The app fixtures gain the SUPPLY cases; the agreement passes.

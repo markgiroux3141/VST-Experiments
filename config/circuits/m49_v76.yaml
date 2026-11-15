@@ -158,7 +158,7 @@ values:
     value: 50.0
     source: 'provisional: model knowledge (European mains, where it was made)'
   nn_t_v_rms_m49:
-    value: 122.523
+    value: 122.14
     source: 'derived: set so that the microphone gets man''s 116 V at its plate current with SUPPLY 1
       (scripts/mic_supply_trim.py)'
   nn_t_r_ohm_m49:
@@ -201,14 +201,14 @@ values:
     source: 'derived: Tarzian''s 0.125 uF per sq. in. (published_points.yaml) x 0.111 sq. in. per cell
       / 5 cells in series (config/components/e125c20/1.yaml)'
   nn_c1_v0_v_m49:
-    value: 138.958
+    value: 138.801
     source: 'derived: C1''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py: a start voltage, held
       for the operating point only)'
   nn_c3_v0_v_m49:
-    value: 128.448
+    value: 128.465
     source: 'derived: C3''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
   nn_c4_v0_v_m49:
-    value: 115.985
+    value: 116
     source: 'derived: C4''s steady state with SUPPLY 1 (scripts/mic_supply_trim.py)'
   pol_front_v_m49:
     value: 58.0
@@ -998,21 +998,21 @@ sections:
         DGR1_m49:
           device:
           - wb_m49
-          - n1_m49
+          - nn1_m49
           model: GR1_m49
           in:
           - 1
         CGR1_m49:
           C:
           - wb_m49
-          - n1_m49
+          - nn1_m49
           c: nn_gr_c_f_m49
           tolerance: none
           in:
           - 1
         CN1_m49:
           C:
-          - n1_m49
+          - nn1_m49
           - '0'
           c: nn_c1_f_m49
           v0: nn_c1_v0_v_m49
@@ -1021,15 +1021,15 @@ sections:
           - 1
         RN1_m49:
           R:
-          - n1_m49
-          - n3_m49
+          - nn1_m49
+          - nn3_m49
           r: nn_r1_ohm_m49
           tolerance: none
           in:
           - 1
         CN3_m49:
           C:
-          - n3_m49
+          - nn3_m49
           - '0'
           c: nn_c3_f_m49
           v0: nn_c3_v0_v_m49
@@ -1038,7 +1038,7 @@ sections:
           - 1
         RN3_m49:
           R:
-          - n3_m49
+          - nn3_m49
           - bplus_m49
           r: nn_r3_ohm_m49
           tolerance: none
