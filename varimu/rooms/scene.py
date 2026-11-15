@@ -63,6 +63,11 @@ JSON):
         surface: floor               # optional: a boundary mic (floor | ceiling | wall N):
         gap_m: 0.001                 # its position moved onto that surface, gap_m inside, aimed
                                      # into the room (`surface_placement`; the PZM, WP26)
+        noise: false                 # optional: the chain's noise sources on (device builder
+                                     # B5: resistors, windings, tubes; a seed per print)
+        hum: false                   # optional: true = the stray mains field's hum at the
+                                     # chain's `hum` block field (varimu.devices.hum), or a
+                                     # field in T rms (1e-7 a quiet room, 1e-6 near equipment)
     settings:{quality: production, ism_s: 0.08, seed: 0, tail_s: null,
                wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
@@ -111,6 +116,7 @@ import hashlib
 import json
 import os
 import time
+import zlib
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -170,6 +176,8 @@ class MicSpec:
     hears: list[str] | None = None
     passes: str = "together"  # together | separate
     free_field: bool = False
+    noise: bool = False  # the chain's noise sources on (a seed per print: `print_seed`)
+    hum: bool | float = False  # the stray field's hum: True at the chain's field, or T rms
 
 
 @dataclass
@@ -271,6 +279,8 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
                 _hears(m, sources),
                 passes,
                 bool(m.get("free_field", False)),
+                bool(m.get("noise", False)),
+                _hum_setting(m),
             )
         )
     st = d.get("settings") or {}
@@ -289,6 +299,21 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         str(r.get("source", "")),
         None if not st.get("wave_crossover_hz") else float(st["wave_crossover_hz"]),
     )
+
+
+def _hum_setting(m: dict) -> bool | float:
+    h = m.get("hum", False)
+    if isinstance(h, bool):
+        return h
+    if isinstance(h, int | float) and h >= 0:
+        return float(h)
+    raise ValueError(f"mic {m['name']}: hum is true, false or a field in T rms, not {h!r}")
+
+
+def print_seed(scene_seed: int, mic: str, source: str | None) -> int:
+    """The noise seed of mic `mic`'s print of `source` (None: all it hears together): each print
+    its own realization, every other print's unchanged when one is added (crc32 of its names)."""
+    return ((scene_seed & 0xFFFFFFFF) << 32) | zlib.crc32(f"{mic}|{source or ''}".encode())
 
 
 def _hears(m: dict, sources: list[SourceSpec]) -> list[str] | None:
@@ -775,15 +800,18 @@ def print_chain(
     rear: np.ndarray,
     quality: str,
     progress: Callable[[float], None] | None = None,
+    noise: int | None = None,
+    hum: bool | float = False,
 ) -> np.ndarray:
     """A mic's chain driven by its entries' pressures: the chain's `out` at its full scale
-    (cached)."""
+    (cached: the key is the IR's, which holds the noise seed and the hum's sources); `noise` a
+    seed (None: the file's, none for a chain), `hum` as MicSpec's."""
     from varimu.circuit import builder, spec
     from varimu.sim import fast
     from varimu.sim.io import full_scale
 
     c = spec.load_circuit(spec.circuit_path(chain))
-    ir = builder.build(c, over).ir
+    ir = builder.build(c, over, noise=noise, hum=hum).ir
     s = _settings(quality)
     key = _print_key(ir.to_json(), front, rear, s)
     path = CACHE / f"{key}.npy"
@@ -875,7 +903,10 @@ def render(
             log(f"progress {done.mean():.4f}")
             countdown.update(float(done.mean()))
 
-        return print_chain(m.chain, m.set, front, rear, scene.quality, prog)
+        seed = None
+        if m.noise:
+            seed = print_seed(scene.seed, m.name, None if si is None else scene.sources[si].name)
+        return print_chain(m.chain, m.set, front, rear, scene.quality, prog, seed, m.hum)
 
     t1 = time.perf_counter()
     with ThreadPoolExecutor(workers) as ex:
@@ -925,6 +956,8 @@ def render(
             "hears": [scene.sources[si].name for si in heard[mi]],
             "passes": "separate" if split[mi] else "together",
             "free_field": bool(m.free_field or free_field_room(scene.room)),
+            "noise": m.noise,
+            "hum": m.hum,
         }
         result["mics"].append(entry)
         solos = {si: outs[(mi, si)] for si in heard[mi] if (mi, si) in outs}

@@ -41,7 +41,8 @@ pub mod yaml;
 pub mod yaml_out;
 
 pub use builder::{
-    Cores, Heaters, Noise, build_ir, build_ir_events, build_ir_live, build_ir_noise, build_ir_with,
+    Cores, Heaters, Hum, Noise, build_ir, build_ir_events, build_ir_hum, build_ir_live,
+    build_ir_noise, build_ir_with,
 };
 pub use circuitsim::ir;
 pub use devices::Library;

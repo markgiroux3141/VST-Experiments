@@ -1998,6 +1998,96 @@ Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
 in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/README.md`.
 
+## Noise and hum in the chains (2026-11-14, the user's ask)
+
+An option per chain, off by default: with both off, every IR, render and print is what it was.
+
+**Built (session 1, 2026-11-14):**
+- **Noise** was already B5's build option (`builder.build(..., noise=seed)`, Rust `Noise::Seed`,
+  no file block needed). The chains just never passed one. Now:
+  - a Room scene's mic takes `noise: true`;
+  - each print gets its own seed (`scene.print_seed`: the scene's seed and crc32 of mic | source),
+    so two mics or two passes never share a realization.
+- **Hum from a stray mains field** (`varimu/devices/hum.py`):
+  - **The block.** A circuit file's `hum` block (`spec.py`'s docstring: `hz?`, `field_t`,
+    `pickups`) names its pickups:
+    - a transformer part's effective area `area_m2`: each winding of N turns sees N A dB/dt;
+    - a `moving_coil` / `ribbon_motor` part's coil turn-area `turn_area_m2` (IR element
+      `L<PART>_le`).
+  - **The build option.** `build(..., hum=True | field_t)` (Rust `build_ir_hum`, `Hum::On` /
+    `Hum::Field`) puts one sine source per harmonic of the field (1 : 0.1 : 0.02 at 1 / 3 / 5x the
+    mains; EMFs 1 : 0.3 : 0.1) in series with each pickup, phase 0.
+    - They join the mains wander's sources (when the noise is on).
+    - No engine change: the IR's `SineSource`.
+    - With hum off nothing is added: every IR unchanged, checked against git HEAD's files for all
+      81 changed circuit files (one, `r77_a351`, differed for a stale RECORD LEVEL: the chain hadn't
+      been recomposed after the 351 family's 2026-11-12 re-alignment; recomposed now).
+  - **Calibrated to published figures** by `scripts/hum_calibrate.py [--check]` (all four within
+    0.01 dB):
+
+    | mic | published | pickup |
+    | --- | --- | --- |
+    | 44-BX | -115 dBm in 1 mG | T1 1.671e-3 m^2 |
+    | 77-DX | -128 dBm | T1 1.753e-4 m^2 |
+    | 4038 | +4 dB eq SPL in 1 mG at 50 Hz | T1 4.225e-5 m^2 |
+    | SM7 | 11 dB eq SPL per mOe | coil 2.065e-3 m^2 |
+
+    Every other transformer pickup is provisional at 1e-4 m^2 a turn, every other moving coil at
+    the SM7's value.
+  - **Where.** Every mic and preamp with a transformer or a moving coil has a block (29 files; the
+    three generated preamps through `hum.transformer_block` in their generators).
+    - The 4134 omni, the carbon F1, the Cloudlifter, the clean pre and the Portastudio have no
+      pickup.
+    - `compose_chain.py` merges the stages' pickups: one field and one frequency, the preamp's (its
+      `mains` block or its `hz`), else the mic's.
+  - **Default field: 1e-7 T** (1 mG, the makers' reference: a quiet room); 1 uT is near equipment,
+    10 uT next to a power transformer.
+- **Python and Rust agree.**
+  - The Python builder and varimu-circuit's builder.
+  - `export_app_fixtures.py` adds `hum=True` and `hum=3e-06` cases (noise on) for every circuit
+    with a block; the agreement test passes bit for bit.
+- **Room renders.**
+  - A scene mic's `hum: true | <T rms>` and `noise: true` (`MicSpec.noise` / `.hum`, `print_chain`);
+    render.json records both; the print cache keys on the IR, so noisy / humming prints cache apart.
+  - The Room view's mic panel has a Noise checkbox and a Hum menu (off / quiet room / near equipment
+    / by a power transformer; `room::HUM_FIELDS`, `RoomMic::noise` / `hum_t`).
+  - `rooms/balance.py` builds with both off (its linear stand-in stays noiseless).
+- **Tests:** `tests/test_hum.py` (off = no block, per-winding amplitudes, the wander, chain
+  merging, scene parsing and seeds, a V76 render's 50 / 150 / 250 Hz lines linear in the field);
+  the agreement test; room.rs's `hears_follows_the_sources`. A stale `chain_list_reads`
+  assertion was fixed (the RE20 is built since WP13).
+
+**Not built yet (the next sessions, in this order):**
+1. **NH1, inserts.** The Session's inserts on a preamp device (the V76, ...): `print::Slot` a seeded
+   noise switch that works without a file block (`Noise::Seed`, the seed stored in the slot so a
+   reprint is the same realization) and a hum field.
+   - Plumbing: `live::Circuit` `with_hum` / a seed, `Prepared::load`'s call sites, the insert panel,
+     the Play view.
+   - An existing session's prints must not move: the new fields default off.
+   - The slot's old `noise` flag (the file's block, default true) stays as it is.
+2. **NH2, noise in transistors and op-amps.** Today a BJT, JFET or op-amp chain (SSL, API, 1073,
+   the clean pre, the FET mics, the Cloudlifter) only has its resistors' noise.
+   - BJT: collector and base shot noise (2qIc, 2qIb at the operating point, per sample like
+     `TubeNoise`) and RB's Johnson noise, KF flicker.
+   - JFET: channel noise 8kT gm / 3 and flicker.
+   - The `opamp` macro: en / in from each datasheet (`data/datasheets/opamps/README.md`).
+   - A Python reference and circuitsim, as B5's `TubeNoise` (DEVICE_BUILDER_PLAN.md B5).
+   - Check against each one's published EIN or self-noise (from its README's sources).
+3. **NH3, the tube mics' supplies.** Today their HT is an ideal source behind a resistance.
+   - Model each mic's real supply as circuit in its file: the U47's NG, the U67's NU 67, the C12's
+     N12 / S12, the M 49's NN 48, the ELA M 251's.
+   - The ripple then comes from the physics.
+   - Check: the U47's "Brummspannung about 5 uV" (`data/schematics/neumann_u47/README.md`).
+4. **NH4, heater hum.** AC-heated tubes' heater-cathode leakage and the hum pot's null
+   (`reports/chain_spike/` has a provisional model), where a preamp heats on AC.
+5. **NH5, more calibrations.**
+   - Published hum figures as they turn up: Shure's SM57 / SM58 "electromagnetic hum
+     sensitivity", EV's RE20, Neumann's and AKG's data sheets, Jensen's JT-115K-E (in its can).
+   - Each goes into `hum_calibrate.py`'s CAL list and its file's `area_m2`.
+6. **NH6, listening.** The user renders a scene with Noise / Hum on and off.
+7. **NH7, owed checks.** The full pytest and `--verify` (the builder edit moved every Python render's
+   cache key once); `cargo clippy` for the two crates touched.
+
 ## Owed
 
 Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP4 added thirteen
@@ -2170,3 +2260,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   (`ports_m`), a node-name collision with the coil fixed and guarded, `RE20_OT@1`, `R_RE20@1` (on axis
   1.42 dB rms; proximity, sides and tilt known misses), `ev_re20.yaml`, re20_api312 / re20_n1073
   composed: **51 of 51, the list complete.**
+- 2026-11-14: noise and hum as a chain option ("Noise and hum in the chains"): hum blocks in 29
+  mic / preamp files (four calibrated to published figures), the builders' `hum` option, chains
+  merged, Room scenes and the Room view's mic panel; NH1-NH7 left. Not committed.

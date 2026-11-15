@@ -1071,6 +1071,16 @@ circuitsim's `noise.rs` the port (DK solver only: current columns), SPICE via fi
 (`io.run_transient(..., noise=)`). Spectra vs theory and the engines' agreement:
 `tests/test_noise_spectra.py`. The app's Play view has a "Noise" switch (off saves the CPU).
 
+**Noise and hum in the chains (2026-11-14; CHAINS_PLAN.md "Noise and hum in the chains"):** a
+circuit file's `hum` block names its stray-field pickups (a transformer's `area_m2` a turn, a moving
+coil's `turn_area_m2`; `varimu/devices/hum.py`), off unless a build asks (`build(..., hum=True |
+field_t)`, Rust `build_ir_hum`): series sine EMFs at 1 / 3 / 5x the mains, on the mains wander; off,
+every IR unchanged. 29 mic / preamp files have one (the 44-BX, 77-DX, 4038 and SM7 calibrated to
+their makers' figures by `scripts/hum_calibrate.py [--check]`, the rest provisional), chains merge
+them (`compose_chain.py`). A Room scene's mic takes `noise: true` (a seed per print:
+`scene.print_seed`) and `hum: true | T rms`; the Room view's mic panel has both. Open: NH1-NH7
+there (inserts, BJT / JFET / op-amp noise, the tube mics' real supplies, heater hum).
+
 **Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
 status):** a circuit file's `heaters: {start?: warm | cold, tap?: KEY}` block gives every triode, pentode
 and vacuum diode one cathode temperature (IR `heaters` block + `HeatedCathode` per tube),

@@ -19,6 +19,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
+    hum: {hz?, field_t, pickups: {PART: {area_m2} | {turn_area_m2}}}  # stray-field hum
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?, method?,
                 tube_tables?, substeps_in?, when?, parts: {NAME: {<macro>: <nodes>, ...}}}]
@@ -85,6 +86,14 @@ rated mains (and B5's mains wander when the noise has it); `start` warm (default
 or series rheostat on the panel: tube_synth's HEATER). Renders can override it
 (`build(..., heaters=)`).
 
+`hum` (optional, 2026-11-14; varimu.devices.hum) says where a stray mains field induces hum:
+`pickups` maps a transformer part to its effective area `area_m2` (each winding of N turns sees
+N area_m2 dB/dt), or a `moving_coil` / `ribbon_motor` part to its coil's turn-area
+`turn_area_m2` (N A: the EMF in series with its coil's inductance, IR element `L<PART>_le`);
+`field_t` is the field's rms when hum is on (a parameter or {value, source}), `hz` its frequency
+(a parameter key or {value, source}; absent: the `mains` block's `hz`). It is off unless a
+build turns it on (`build(..., hum=True | field_t)`): the file's block alone changes no IR.
+
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
 """
@@ -125,6 +134,7 @@ _TOP_KEYS = {
     "sections",
     "noise",
     "heaters",
+    "hum",
     "exceptions",
 }
 
@@ -158,6 +168,7 @@ class CircuitSpec:
     full_scale_unit: str = "V"  # the output's: "V", or "Pa" (output_pascals_peak)
     noise: dict[str, Any] | None = None  # the `noise` block as written (None: no noise)
     heaters: dict[str, Any] | None = None  # the `heaters` block (None: cathodes not heated)
+    hum: dict[str, Any] | None = None  # the `hum` block as written (None: no pickups)
     # Physics exceptions (`exceptions: {NAME: {kind, tables, <nodes>, replaces, parts?,
     # renders?, source}}`): in an events build the parts `replaces` names are dropped and the
     # kind's event element (named NAME, its tables config/events/<tables>.json) stands in
@@ -346,6 +357,9 @@ def load_circuit(path: Path) -> CircuitSpec:
             seed = noise["seed"]
             if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:
                 errors.append(f"noise.seed: {seed!r} is not an integer in [0, 2^64)")
+    hum = data.get("hum")
+    if hum is not None:
+        _check_hum(hum, errors)
     exceptions = data.get("exceptions") or {}
     part_names = {str(n) for s in sections if isinstance(s, Mapping)
                   for n in (s.get("parts") or {})}  # fmt: skip
@@ -389,6 +403,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         full_scale_unit=unit,
         noise=noise,
         heaters=heaters,
+        hum=hum,
         exceptions=dict(exceptions),
     )
 
@@ -477,3 +492,19 @@ def check_genome_links(spec: CircuitSpec) -> list[str]:
         elif not b.min <= v <= b.max:
             problems.append(f"{key}: nominal {v} outside [{b.min}, {b.max}] ({path})")
     return problems
+
+
+def _check_hum(hum: Any, errors: list[str]) -> None:
+    """The `hum` block's shape (its values are checked where the builder reads them)."""
+    if not isinstance(hum, Mapping) or set(hum) - {"hz", "field_t", "pickups", "source", "notes"}:
+        errors.append("hum: a mapping {hz?, field_t, pickups, source?, notes?}")
+        return
+    if "field_t" not in hum or not isinstance(hum.get("pickups"), Mapping) or not hum["pickups"]:
+        errors.append("hum: needs field_t and a non-empty pickups mapping")
+        return
+    for name, pk in hum["pickups"].items():
+        ok = isinstance(pk, Mapping) and (
+            set(pk) == {"area_m2"} or set(pk) == {"turn_area_m2"}
+        )
+        if not ok:
+            errors.append(f"hum.pickups.{name}: {{area_m2}} or {{turn_area_m2}}")

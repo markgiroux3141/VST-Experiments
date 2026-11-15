@@ -416,6 +416,26 @@ values:
     value: 1.0e-09
     source: 'provisional: model knowledge (10 m of microphone cable, ~100 pF/m between the audio pair;
       the UC 4''s per-metre values weren''t found)'
+hum:
+  hz:
+    value: 50.0
+    source: 'provisional: model knowledge (European mains, where it was made)'
+  field_t:
+    value: 1.0e-07
+    source: 'provisional: the makers'' reference field for hum pickup (RCA''s 1e-3 gauss, Shure''s milli-oersted,
+      the BBC''s 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power
+      transformer'
+  pickups:
+    T1_r44:
+      area_m2:
+        value: 0.001671
+        source: calibrated by scripts/hum_calibrate.py to RCA's -115 dBm in 1e-3 gauss (ib)
+    T1_n1073:
+      area_m2:
+        value: 0.0001
+        source: 'provisional: no published hum figure; the order of the calibrated pickups (the 4038''s
+          4.2e-5, the 77-DX''s 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike''s
+          spec-bound 1e-4 (reports/chain_spike/)'
 tolerance:
   source: 'provisional: classes by part type (see the tol_* values)'
   seed: passive_seed_n1073

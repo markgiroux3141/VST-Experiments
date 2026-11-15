@@ -165,6 +165,14 @@ devices:
   V2A: {device: 12AY7@1, tolerance: tube}
   V2B: {device: 12AY7@1, tolerance: tube}
 
+# Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
+# it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
+hum:
+  hz: {value: 60.0, source: "provisional: model knowledge (US mains, where it was made)"}
+  field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
+  pickups:
+    T1: {area_m2: {value: 1.0e-4, source: "provisional: no published hum figure; the order of the calibrated pickups (the 4038's 4.2e-5, the 77-DX's 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike's spec-bound 1e-4 (reports/chain_spike/)"}}
+
 sections:
   - title: supply
     parts:

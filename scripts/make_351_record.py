@@ -53,6 +53,7 @@ import yaml
 
 from varimu.circuit import spec
 from varimu.config import CONFIG_DIR, REPO_ROOT
+from varimu.devices import hum
 
 BASE = "ampex_351"
 OUT = "ampex_351_record"
@@ -166,6 +167,7 @@ def compose(base: dict, alignment: dict, added: dict) -> dict:
         "values": values,
         "mains": copy.deepcopy(base["mains"]),
         "tolerance": tol,
+        "hum": hum.transformer_block("T1", None),
         "devices": devices,
         "sections": sections,
     }

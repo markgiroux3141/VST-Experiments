@@ -82,7 +82,7 @@ controls:
       shorter distances'''
     notes: '0: M (music), 1: V1, 2: V2 (voice: the reactor''s low cut)'
   record_level_a351:
-    value: 0.9447651829377177
+    value: 0.9498869512281529
     min: 0.0
     max: 1.0
     unit: rotation
@@ -507,6 +507,23 @@ mains:
   rated_v_rms:
     value: 117.0
     source: 'sch: note 6 (the drawing''s voltages at a 117 V line; 6T4''s ratings aren''t printed)'
+hum:
+  field_t:
+    value: 1.0e-07
+    source: 'provisional: the makers'' reference field for hum pickup (RCA''s 1e-3 gauss, Shure''s milli-oersted,
+      the BBC''s 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power
+      transformer'
+  pickups:
+    T1_r77:
+      area_m2:
+        value: 0.0001753
+        source: calibrated by scripts/hum_calibrate.py to RCA's -128 dBm in 1e-3 gauss (ib2)
+    T1_a351:
+      area_m2:
+        value: 0.0001
+        source: 'provisional: no published hum figure; the order of the calibrated pickups (the 4038''s
+          4.2e-5, the 77-DX''s 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike''s
+          spec-bound 1e-4 (reports/chain_spike/)'
 tolerance:
   source: 'sch: note 1 (resistors 10% unless specified, printed tolerances per part); capacitors and tubes
     provisional (see the tol_* values); 6T1''s parts as the machine''s'

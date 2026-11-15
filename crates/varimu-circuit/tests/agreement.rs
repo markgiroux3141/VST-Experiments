@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_live, spec};
+use varimu_circuit::{Cores, Heaters, Hum, Library, Noise, build_ir_hum, spec};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -161,8 +161,14 @@ fn rust_builds_the_ir_python_builds() {
             };
             let events = case.get("events") == Some(&Json::Bool(true));
             let readout = case.get("speaker_readout") != Some(&Json::Bool(false));
-            let built = spec::resolve(&c, &overrides)
-                .and_then(|p| build_ir_live(&lib, &c, &p, cores, noise, heaters, events, readout));
+            let hum = match case.get("hum") {
+                None | Some(Json::Bool(false)) => Hum::Off,
+                Some(Json::Bool(true)) => Hum::On,
+                Some(f) => Hum::Field(f.as_f64().expect("a field in T")),
+            };
+            let built = spec::resolve(&c, &overrides).and_then(|p| {
+                build_ir_hum(&lib, &c, &p, cores, noise, heaters, events, readout, hum)
+            });
             let ir = match built {
                 Ok(ir) => ir,
                 Err(e) => {

@@ -19,6 +19,7 @@ import sys
 import yaml
 
 from varimu.config import CONFIG_DIR
+from varimu.devices import hum
 
 SRC = CONFIG_DIR / "circuits" / "api_2520_test.yaml"
 OUT = CONFIG_DIR / "circuits" / "api_312.yaml"
@@ -343,6 +344,7 @@ def make() -> str:
                 "pot": ["RGAIN"],
             },
         },
+        "hum": hum.transformer_block("T1", 60.0),
         "devices": src["devices"],
         "sections": [rails, *PRE_SECTIONS, amp],
     }

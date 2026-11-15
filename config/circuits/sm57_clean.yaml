@@ -138,6 +138,20 @@ values:
     value: 1.0e-09
     source: 'provisional: model knowledge (10 m of microphone cable, ~100 pF/m between the audio pair;
       the UC 4''s per-metre values weren''t found)'
+hum:
+  hz:
+    value: 60.0
+    source: 'provisional: model knowledge (US mains, where it was made)'
+  field_t:
+    value: 1.0e-07
+    source: 'provisional: the makers'' reference field for hum pickup (RCA''s 1e-3 gauss, Shure''s milli-oersted,
+      the BBC''s 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power
+      transformer'
+  pickups:
+    MC_sm57:
+      turn_area_m2:
+        value: 0.002065
+        source: 'provisional: no published hum figure; the SM7''s calibrated voice coil (scripts/hum_calibrate.py)'
 tolerance:
   source: 'provisional: classes by part type (see the tol_* values)'
   seed: passive_seed_clean

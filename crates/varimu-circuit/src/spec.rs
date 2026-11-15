@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 17] = [
+const TOP_KEYS: [&str; 18] = [
     "title",
     "input",
     "cv_inputs",
@@ -27,6 +27,7 @@ const TOP_KEYS: [&str; 17] = [
     "sections",
     "noise",
     "heaters",
+    "hum",
     "exceptions",
 ];
 
@@ -98,6 +99,8 @@ pub struct CircuitSpec {
     pub noise: Option<Map>,
     /// The `heaters` block (device builder B6; None: cathodes not heated).
     pub heaters: Option<Map>,
+    /// The `hum` block as written (spec.py's `hum`; None: no pickups).
+    pub hum: Option<Map>,
     /// Physics exceptions (spec.py's `exceptions`; empty: none), in file order.
     pub exceptions: Map,
 }
@@ -547,6 +550,11 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         }
     }
     let noise = noise.and_then(Value::as_map).cloned();
+    let hum = data.get("hum").filter(|v| !v.is_null());
+    if let Some(h) = hum {
+        check_hum(h, &mut errors);
+    }
+    let hum = hum.and_then(Value::as_map).cloned();
     let heaters = data.get("heaters").filter(|v| !v.is_null());
     if let Some(h) = heaters {
         match h.as_map() {
@@ -657,8 +665,35 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         full_scale,
         noise,
         heaters,
+        hum,
         exceptions,
     })
+}
+
+/// The `hum` block's shape (spec.py's `_check_hum`; its values are checked where the builder
+/// reads them).
+fn check_hum(h: &Value, errors: &mut Vec<String>) {
+    let ok_keys = ["hz", "field_t", "pickups", "source", "notes"];
+    let Some(m) = h
+        .as_map()
+        .filter(|m| m.keys().all(|k| ok_keys.contains(&k)))
+    else {
+        errors.push("hum: a mapping {hz?, field_t, pickups, source?, notes?}".into());
+        return;
+    };
+    let pickups = m.get("pickups").and_then(Value::as_map);
+    if !m.contains("field_t") || pickups.is_none_or(|p| p.is_empty()) {
+        errors.push("hum: needs field_t and a non-empty pickups mapping".into());
+        return;
+    }
+    for (name, pk) in pickups.unwrap().iter() {
+        let keys: Vec<&str> = pk.as_map().map(|m| m.keys().collect()).unwrap_or_default();
+        if keys != ["area_m2"] && keys != ["turn_area_m2"] {
+            errors.push(format!(
+                "hum.pickups.{name}: {{area_m2}} or {{turn_area_m2}}"
+            ));
+        }
+    }
 }
 
 /// config/circuits/<name>.yaml under the config directory.

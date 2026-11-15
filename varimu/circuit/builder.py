@@ -236,6 +236,7 @@ from varimu.circuit.ir import (
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
 from varimu.devices import cathode as cathode_mod
+from varimu.devices import hum as hum_mod
 from varimu.devices import noise as noise_mod
 from varimu.devices import ribbon as ribbon_mod
 from varimu.devices import versions
@@ -288,6 +289,9 @@ class Context:
     section_tolerance: str | None = None  # the current section's `tolerance`
     mains_sines: list[str] = field(default_factory=list)  # the mains macro's sources
     noise: Noise | None = None  # noise sources on (B5)
+    hum: Hum | None = None  # the stray field's hum on (varimu.devices.hum)
+    # transformer part -> its windings (the hum's pickups find them here)
+    winding_parts: dict[str, list[Winding]] = field(default_factory=dict)
     parallel: dict[str, int] = field(default_factory=dict)  # model name -> `parallel`
     types: dict[str, str] = field(default_factory=dict)  # model name -> its device's name
     heaters: str | None = None  # heated cathodes (B6): "warm" | "cold" start, None: off
@@ -697,6 +701,7 @@ def _transformer(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
         raise ctx.fail(name, str(err)) from err
     if ctx.cores != "linear":
         ctx.core_models.append(model)
+    ctx.winding_parts[name] = [e for e in els if isinstance(e, Winding)]
     return els + _component_capacitors(ctx, name, spec, a["shields"])
 
 
@@ -1595,9 +1600,10 @@ def context(
     heaters: bool | str | None = None,
     events: bool = False,
     speaker_readout: bool = True,
+    hum: bool | float | None = None,
 ) -> Context:
     """A build's context for resolved parameters `p` (see spec.resolve); `noise`,
-    `heaters`, `events` and `speaker_readout` as build_ir's."""
+    `heaters`, `events`, `speaker_readout` and `hum` as build_ir's."""
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
@@ -1614,6 +1620,7 @@ def context(
     q.update(spec.derive(q))
     ctx = Context(spec, q, cores, tolerance(spec, q))
     ctx.noise = _noise(ctx, noise)
+    ctx.hum = _hum(ctx, hum)
     ctx.heaters = _heaters(spec, heaters)
     ctx.events = bool(events)
     ctx.speaker_readout = bool(speaker_readout)
@@ -1678,6 +1685,90 @@ def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:
     return Noise(seed, float(t), float(kf), float(mains))
 
 
+@dataclass(frozen=True)
+class Hum:
+    """A build's hum: the field (T rms at the fundamental), its frequency, and the pickups:
+    (part, the element it acts on, area_m2 per turn or None, turn_area_m2 or None)."""
+
+    field_t: float
+    hz: float
+    pickups: tuple[tuple[str, str, float | None, float | None], ...]
+
+
+def _hum(ctx: Context, hum: bool | float | None) -> Hum | None:
+    """The build's hum: None or False, off (whatever the file says); True, on at the block's
+    `field_t`; a number, on at that field (T rms). A circuit without a `hum` block has none."""
+    if hum is None or hum is False:
+        return None
+    if not (hum is True or (isinstance(hum, int | float) and hum >= 0)):
+        raise ValueError(f"hum: {hum!r} (None, a bool, or a field in T rms)")
+    block = ctx.spec.hum
+    if block is None:
+        return None
+    w = "hum"
+    field_t = float(ctx.physical(f"{w}.field_t", block["field_t"])) if hum is True else float(hum)
+    if "hz" in block:
+        hz = float(ctx.physical(f"{w}.hz", block["hz"]))
+    elif ctx.spec.mains:
+        hz = float(ctx.ref(w, ctx.spec.mains["hz"]))
+    else:
+        raise ctx.fail(w, "needs `hz` (the circuit has no `mains` block)")
+    pickups = []
+    for name, pk in block["pickups"].items():
+        where = f"hum.pickups.{name}"
+        if "area_m2" in pk:
+            pickups.append((str(name), str(name), float(ctx.physical(where, pk["area_m2"])), None))
+        else:
+            ta = float(ctx.physical(where, pk["turn_area_m2"]))
+            pickups.append((str(name), f"L{str(name).upper()}_le", None, ta))  # its coil
+    return Hum(field_t, hz, tuple(pickups))
+
+
+def _apply_hum(ctx: Context, sections: list[Section]) -> list[Section]:
+    """The hum's EMFs: after each pickup's winding (or element) a chain of sine sources, one per
+    harmonic, its `a` end moved onto the chain's last node (varimu.devices.hum)."""
+    h = ctx.hum
+    emf: dict[str, float] = {}  # element -> turn-area (m^2)
+    for name, target, area, ta in h.pickups:
+        if area is not None:
+            if target not in ctx.winding_parts:
+                raise ctx.fail(f"hum.pickups.{name}", "not a transformer part of the build")
+            for wnd in ctx.winding_parts[target]:
+                emf[wnd.name] = wnd.turns * area
+        else:
+            emf[target] = ta
+    found: set[str] = set()
+    out = []
+    for sec in sections:
+        els: list[Element] = []
+        for e in sec.elements:
+            if e.name not in emf:
+                els.append(e)
+                continue
+            if not isinstance(e, Winding | Inductor | Resistor):
+                raise ctx.fail("hum.pickups", f"{e.name}: not a winding, inductor or resistor")
+            found.add(e.name)
+            ta = emf[e.name]
+            prev, srcs = e.a, []
+            for k, (n, weight) in enumerate(hum_mod.HARMONICS):
+                last = k == len(hum_mod.HARMONICS) - 1
+                nxt = f"{e.name}_hum" if last else f"{e.name}_hum{k + 1}"
+                amp = SQRT2 * ta * (2.0 * PI * n * h.hz) * h.field_t * weight
+                srcs.append(SineSource(f"VHUM_{e.name}_{n}", prev, nxt, 0.0, amp, n * h.hz, 0.0))
+                prev = nxt
+            els.append(dataclasses.replace(e, a=prev))
+            els += srcs
+            ctx.mains_sines += [x.name for x in srcs]
+        out.append(dataclasses.replace(sec, elements=tuple(els)))
+    if missing := sorted(set(emf) - found):
+        raise ctx.fail("hum.pickups", f"elements not in the build: {missing}")
+    return out
+
+
+SQRT2 = 2.0**0.5
+PI = 3.141592653589793
+
+
 def build_ir(
     spec: CircuitSpec,
     p: Mapping[str, Any],
@@ -1687,8 +1778,11 @@ def build_ir(
     events: bool = False,
     speaker_readout: bool = True,
     literal: bool = False,
+    hum: bool | float | None = None,
 ) -> CircuitIR:
-    """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
+    """The circuit IR for resolved parameters `p`; `hum`: the stray field's hum (`_hum`:
+    None or False off, True at the file block's field, a number that field in T rms; nothing
+    without a `hum` block); `cores`: "ja" or "linear" (each core
     in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
     (the block's seed or 0); an integer, on with that seed; `heaters`: None, the file's
     `heaters` block; False, none; True, on; "warm" / "cold", on with that start; `events`:
@@ -1698,7 +1792,7 @@ def build_ir(
     C3; docs/RHODES_PLAN.md RH3); `literal`: the circuit's physics exceptions never stand in
     (an exception with `renders: true` otherwise does in every build: the reference runs
     behind its tables use this)."""
-    return _build(spec, p, cores, noise, heaters, events, speaker_readout, literal)[0]
+    return _build(spec, p, cores, noise, heaters, events, speaker_readout, literal, hum)[0]
 
 
 def _build(
@@ -1710,8 +1804,9 @@ def _build(
     events: bool = False,
     speaker_readout: bool = True,
     literal: bool = False,
+    hum: bool | float | None = None,
 ) -> tuple[CircuitIR, dict]:
-    ctx = context(spec, p, cores, noise, heaters, events, speaker_readout)
+    ctx = context(spec, p, cores, noise, heaters, events, speaker_readout, hum)
     types = make_models(ctx)
     # Physics exceptions (spec.exceptions; an events build, or every build for one with
     # `renders: true`, never a literal one): each one's replaced parts are expanded as usual
@@ -1787,6 +1882,8 @@ def _build(
             else x
             for x in sections
         ]
+    if ctx.hum is not None:
+        sections = _apply_hum(ctx, sections)
     kept_models = {e.model for x in sections for e in x.elements if isinstance(e, Device)}
     ctx.replaced_models |= dropped_models - kept_models
     if ctx.missing_class:
@@ -1851,12 +1948,13 @@ def build(
     heaters: bool | str | None = None,
     events: bool = False,
     literal: bool = False,
+    hum: bool | float | None = None,
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
     does one with control inputs (ngspice runs none). `noise`, `heaters`, `events` as
-    build_ir's, and `literal`."""
+    build_ir's, and `literal`, `hum`."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -1865,7 +1963,7 @@ def build(
     cores = cores or devices.get("cores", "ja")
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir, types = _build(spec, p, cores, noise, heaters, events, literal=literal)
+    ir, types = _build(spec, p, cores, noise, heaters, events, literal=literal, hum=hum)
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}

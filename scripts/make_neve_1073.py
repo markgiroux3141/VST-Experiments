@@ -17,6 +17,7 @@ import sys
 import yaml
 
 from varimu.config import CONFIG_DIR
+from varimu.devices import hum
 
 OUT = CONFIG_DIR / "circuits" / "neve_1073.yaml"
 
@@ -439,6 +440,7 @@ def doc() -> dict:
             "bands": {"r5": "tol_resistor_pct", "cap": "tol_cap_pct"},
             "classes": {"r5": r_parts, "cap": c_parts},
         },
+        "hum": hum.transformer_block("T1", 50.0),
         "devices": {
             "QS": {
                 "device": "BC550C@1",

@@ -40,6 +40,14 @@ values:
   contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch's contact, ~10 mOhm)"}
   load_ohm: {value: 1.0e+6, source: "shure: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
 
+# Hum from a stray mains field (2026-11-14; varimu/devices/hum.py): off unless a build turns
+# it on (`build(..., hum=True | field_t)`); the pickup's EMF in series with its windings.
+hum:
+  hz: {value: 60.0, source: "provisional: model knowledge (US mains, where it was made)"}
+  field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
+  pickups:
+    MC: {turn_area_m2: {value: 0.002065, source: "calibrated by scripts/hum_calibrate.py to Shure's 11 dB equivalent SPL per milli-oersted at 60 Hz (the SM7B's spec sheet)"}}
+
 sections:
   - title: cartridge
     parts:

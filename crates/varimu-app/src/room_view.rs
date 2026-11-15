@@ -16,8 +16,8 @@ use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::player::Player;
 use varimu_app::room::{
-    self, Balance, CEILINGS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, QUALITIES, RenderJob,
-    RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
+    self, Balance, CEILINGS, DIRECTIVITIES, HUM_FIELDS, MATERIALS, OBJECT_KINDS, PRESETS,
+    QUALITIES, RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
 };
 use varimu_app::session::{Mix, MixClip};
 use varimu_app::settings::{Quality, Settings};
@@ -1303,6 +1303,34 @@ impl RoomView {
                 .response
                 .on_hover_text(
                     "A boundary mic (a PZM): placed on that surface, 1 mm inside, aimed into                      the room when it renders; the surface's reflection arrives with the                      direct sound (+6 dB, no comb). Wall N starts at the plan's corner N.",
+                );
+        });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut m.noise, "Noise").on_hover_text(
+                "The chain's own noise (device builder B5): Johnson noise of its resistors \
+                 and windings, the tubes' shot and flicker noise, the mains wander. Transistors \
+                 and op-amps have no noise model yet. A seed per print: two mics, or two \
+                 passes, never share a realization. About 3x the render time.",
+            );
+            ui.label("Hum");
+            let shown = HUM_FIELDS
+                .iter()
+                .find(|(t, _)| *t == m.hum_t)
+                .map(|(_, n)| n.to_string())
+                .unwrap_or_else(|| format!("{:.2} uT", m.hum_t * 1e6));
+            egui::ComboBox::from_id_salt(("mic_hum", i))
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    for (t, n) in HUM_FIELDS {
+                        ui.selectable_value(&mut m.hum_t, t, n);
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "A stray mains field through the chain's transformers and voice coils \
+                     (varimu/devices/hum.py): 50 or 60 Hz with its 3rd and 5th harmonics, as \
+                     much as each pickup lets through (the 44-BX, 77-DX, 4038 and SM7 \
+                     calibrated to their makers' figures, the rest provisional).",
                 );
         });
         ui.add_enabled_ui(!room_free, |ui| {

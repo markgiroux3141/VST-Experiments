@@ -306,6 +306,20 @@ mains:
     value: 120.0
     source: 'web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (the
       reproduction power transformer''s primary; its voltages are taken at it)'
+hum:
+  hz:
+    value: 60.0
+    source: 'provisional: model knowledge (US mains, where it was made)'
+  field_t:
+    value: 1.0e-07
+    source: 'provisional: the makers'' reference field for hum pickup (RCA''s 1e-3 gauss, Shure''s milli-oersted,
+      the BBC''s 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power
+      transformer'
+  pickups:
+    MC_bullet:
+      turn_area_m2:
+        value: 0.002065
+        source: 'provisional: no published hum figure; the SM7''s calibrated voice coil (scripts/hum_calibrate.py)'
 tolerance:
   source: 'provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)'
   seed: passive_seed_f5e3

@@ -188,6 +188,19 @@ def fixture(name: str) -> dict[str, Any]:
                 },
             }
         )
+    if c.hum is not None:  # the stray field's hum (varimu.devices.hum), the mains wander on it
+        for field in (True, 3.0e-6):
+            ir = builder.build_ir(c, spec.resolve(c, {}), "ja", NOISE_SEED, hum=field).to_dict()
+            entry = {"name": f"hum={field}", "overrides": {}, "cores": "ja", "noise": NOISE_SEED}
+            entry["hum"] = field
+            if ir.get("noise") != default.get("noise"):
+                entry["noise_block"] = ir.get("noise")
+            entry["sections"] = {
+                str(i): _harps_as_default(s, default)
+                for i, s in enumerate(ir["sections"])
+                if s != default["sections"][i]
+            }
+            out.append(entry)
     return {"circuit": name, "default": default, "cases": out}
 
 

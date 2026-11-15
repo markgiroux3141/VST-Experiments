@@ -136,8 +136,12 @@ struct Context<'a> {
     /// Noise sources on (B5): the seed, the resistors' temperature, K_f, the mains
     /// wander's rms.
     noise: Option<(u64, f64, f64, f64)>,
-    /// The `mains` parts' sources, in order of expansion.
+    /// The `mains` parts' sources, in order of expansion (then the hum's).
     mains_sines: Vec<String>,
+    /// The stray field's hum on (Python's `Hum`).
+    hum: Option<HumSetting>,
+    /// Transformer part -> its windings (name, turns): the hum's pickups find them here.
+    winding_parts: HashMap<String, Vec<(String, f64)>>,
     /// Model name -> its `devices` entry's `parallel` (1 for `instance: false`).
     parallel: HashMap<String, i64>,
     /// Model name -> its device file's model name (the tube type).
@@ -274,6 +278,194 @@ fn heater_spec(ctx: &Context, start: &str) -> Result<HeaterSpec, Error> {
         heater_ratio: ratio,
         start: start.to_string(),
     })
+}
+
+/// A build's hum from a stray mains field ([`build_ir_hum`]), as Python's
+/// `build_ir(..., hum=)` (varimu/devices/hum.py): nothing without the file's `hum` block.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Hum {
+    Off,
+    /// On, at the block's `field_t`.
+    On,
+    /// On, at this field (T rms).
+    Field(f64),
+}
+
+/// The field's harmonics (harmonic, amplitude re the fundamental): varimu.devices.hum's.
+pub const HUM_HARMONICS: [(u32, f64); 3] = [(1, 1.0), (3, 0.1), (5, 0.02)];
+
+/// A build's hum: the field (T rms), its frequency, and the pickups (part, element it acts
+/// on, area per turn or turn-area).
+#[derive(Debug, Clone)]
+struct HumSetting {
+    field_t: f64,
+    hz: f64,
+    pickups: Vec<(String, String, Option<f64>, Option<f64>)>,
+}
+
+/// The build's hum (Python's `_hum`).
+fn hum_setting(ctx: &Context, hum: Hum) -> Result<Option<HumSetting>, Error> {
+    let field = match hum {
+        Hum::Off => return Ok(None),
+        Hum::On => None,
+        Hum::Field(f) if f >= 0.0 => Some(f),
+        Hum::Field(f) => return Err(Error(format!("hum: {f} (a field in T rms, >= 0)"))),
+    };
+    let Some(block) = ctx.spec.hum.as_ref() else {
+        return Ok(None);
+    };
+    let num = |w: &str, x: &Value| -> Result<f64, Error> {
+        let v = ctx.physical(w, x)?;
+        ctx.float(w, &v)
+    };
+    let field_t = match field {
+        Some(f) => f,
+        None => num(
+            "hum.field_t",
+            block.get("field_t").expect("checked in load_circuit"),
+        )?,
+    };
+    let hz = match (block.get("hz"), ctx.spec.mains.as_ref()) {
+        (Some(x), _) => num("hum.hz", x)?,
+        (None, Some(m)) => {
+            let k = m.get("hz").and_then(Value::as_str).unwrap_or_default();
+            let v = ctx.reference("hum", k)?;
+            ctx.float("hum", &v)?
+        }
+        (None, None) => {
+            return Err(ctx.fail("hum", "needs `hz` (the circuit has no `mains` block)"));
+        }
+    };
+    let mut pickups = Vec::new();
+    let map = block
+        .get("pickups")
+        .and_then(Value::as_map)
+        .expect("checked in load_circuit");
+    for (name, pk) in map.iter() {
+        let w = format!("hum.pickups.{name}");
+        let pk = pk.as_map().expect("checked in load_circuit");
+        if let Some(a) = pk.get("area_m2") {
+            pickups.push((name.to_string(), name.to_string(), Some(num(&w, a)?), None));
+        } else {
+            let ta = num(&w, pk.get("turn_area_m2").expect("checked in load_circuit"))?;
+            pickups.push((
+                name.to_string(),
+                format!("L{}_le", name.to_uppercase()),
+                None,
+                Some(ta),
+            ));
+        }
+    }
+    Ok(Some(HumSetting {
+        field_t,
+        hz,
+        pickups,
+    }))
+}
+
+/// The hum's EMFs (Python's `_apply_hum`): after each pickup's winding (or coil) a chain of
+/// sine sources, one per harmonic, its `a` end moved onto the chain's last node.
+fn apply_hum(ctx: &mut Context, sections: Vec<Section>) -> Result<Vec<Section>, Error> {
+    let h = ctx.hum.clone().expect("hum on");
+    let mut emf: HashMap<String, f64> = HashMap::new();
+    for (name, target, area, ta) in &h.pickups {
+        match (area, ta) {
+            (Some(area), _) => {
+                let Some(ws) = ctx.winding_parts.get(target) else {
+                    return Err(ctx.fail(
+                        &format!("hum.pickups.{name}"),
+                        "not a transformer part of the build",
+                    ));
+                };
+                for (w, turns) in ws {
+                    emf.insert(w.clone(), turns * area);
+                }
+            }
+            (None, Some(ta)) => {
+                emf.insert(target.clone(), *ta);
+            }
+            (None, None) => unreachable!(),
+        }
+    }
+    let mut found: HashSet<String> = HashSet::new();
+    let mut out = Vec::with_capacity(sections.len());
+    for mut sec in sections {
+        let mut els = Vec::with_capacity(sec.elements.len());
+        for e in sec.elements {
+            let Some(&ta) = emf.get(e.name()) else {
+                els.push(e);
+                continue;
+            };
+            let name = e.name().to_string();
+            let a = match &e {
+                Element::Winding(w) => w.a.clone(),
+                Element::Inductor(l) => l.a.clone(),
+                Element::Resistor(r) => r.a.clone(),
+                _ => {
+                    return Err(ctx.fail(
+                        "hum.pickups",
+                        format!("{name}: not a winding, inductor or resistor"),
+                    ));
+                }
+            };
+            found.insert(name.clone());
+            let mut prev = a;
+            let mut srcs = Vec::new();
+            for (k, &(n, weight)) in HUM_HARMONICS.iter().enumerate() {
+                let nxt = if k == HUM_HARMONICS.len() - 1 {
+                    format!("{name}_hum")
+                } else {
+                    format!("{name}_hum{}", k + 1)
+                };
+                let n = f64::from(n);
+                let amp = std::f64::consts::SQRT_2
+                    * ta
+                    * (2.0 * std::f64::consts::PI * n * h.hz)
+                    * h.field_t
+                    * weight;
+                srcs.push(SineSource {
+                    name: format!("VHUM_{name}_{}", n as u32),
+                    pos: prev.clone(),
+                    neg: nxt.clone(),
+                    offset_v: 0.0,
+                    amplitude_v: amp,
+                    freq_hz: n * h.hz,
+                    phase_deg: 0.0,
+                });
+                prev = nxt;
+            }
+            els.push(match e {
+                Element::Winding(mut w) => {
+                    w.a = prev;
+                    Element::Winding(w)
+                }
+                Element::Inductor(mut l) => {
+                    l.a = prev;
+                    Element::Inductor(l)
+                }
+                Element::Resistor(mut r) => {
+                    r.a = prev;
+                    Element::Resistor(r)
+                }
+                _ => unreachable!(),
+            });
+            for src in srcs {
+                ctx.mains_sines.push(src.name.clone());
+                els.push(Element::SineSource(src));
+            }
+        }
+        sec.elements = els;
+        out.push(sec);
+    }
+    let mut missing: Vec<&String> = emf.keys().filter(|k| !found.contains(*k)).collect();
+    if !missing.is_empty() {
+        missing.sort_unstable();
+        return Err(ctx.fail(
+            "hum.pickups",
+            format!("elements not in the build: {missing:?}"),
+        ));
+    }
+    Ok(out)
 }
 
 /// A build's noise ([`build_ir_noise`]), as Python's `build_ir(..., noise=)`.
@@ -887,6 +1079,16 @@ fn expand_part(
     };
     let a = resolve_params(ctx, name, &m, entry)?;
     let els = expand(ctx, kind, name, conn, &nodes, &a)?;
+    if kind == "transformer" {
+        let ws = els
+            .iter()
+            .filter_map(|e| match e {
+                Element::Winding(w) => Some((w.name.clone(), w.turns)),
+                _ => None,
+            })
+            .collect();
+        ctx.winding_parts.insert(name.to_string(), ws);
+    }
     if kind == "mains" {
         ctx.mains_sines.push(name.to_string());
     }
@@ -2854,6 +3056,32 @@ pub fn build_ir_live(
     events: bool,
     speaker_readout: bool,
 ) -> Result<CircuitIr, Error> {
+    build_ir_hum(
+        lib,
+        spec,
+        p,
+        cores,
+        noise,
+        heaters,
+        events,
+        speaker_readout,
+        Hum::Off,
+    )
+}
+
+/// [`build_ir_live`] with the stray field's hum set: Python's `build_ir(..., hum=)`.
+#[allow(clippy::too_many_arguments)]
+pub fn build_ir_hum(
+    lib: &Library,
+    spec: &CircuitSpec,
+    p: &Params,
+    cores: Cores,
+    noise: Noise,
+    heaters: Heaters,
+    events: bool,
+    speaker_readout: bool,
+    hum: Hum,
+) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
     if events {
         // A control's `events` value is its setting in an events build (the 351's
@@ -2885,6 +3113,8 @@ pub fn build_ir_live(
         section_tolerance: None,
         noise: None,
         mains_sines: Vec::new(),
+        hum: None,
+        winding_parts: HashMap::new(),
         parallel: HashMap::new(),
         types: HashMap::new(),
         heaters: heaters_setting(spec, heaters),
@@ -2894,6 +3124,7 @@ pub fn build_ir_live(
         speaker_readout,
     };
     ctx.noise = noise_setting(&ctx, noise)?;
+    ctx.hum = hum_setting(&ctx, hum)?;
     ctx.tolerance = tolerance(&ctx)?;
     make_models(&mut ctx)?;
     // Physics exceptions (spec.exceptions; an events build, or every build for one with
@@ -3015,6 +3246,9 @@ pub fn build_ir_live(
                 s.tube_tables = None;
             }
         }
+    }
+    if ctx.hum.is_some() {
+        sections = apply_hum(&mut ctx, sections)?;
     }
     let kept_models: HashSet<&str> = sections
         .iter()

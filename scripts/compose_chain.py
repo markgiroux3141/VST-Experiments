@@ -187,6 +187,23 @@ def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> di
     if pre.get("mains"):
         m = copy.deepcopy(pre["mains"])
         out["mains"] = {k: rp.param(v) for k, v in m.items()}
+    # Hum (varimu.devices.hum): every stage's pickups, renamed; one stray field and one mains
+    # frequency for the chain, the preamp's (the room's mains), else the first stage's.
+    hums = [(r, c["hum"]) for r, c, _ in stages if c.get("hum")]
+    if hums:
+        r0, h0 = next(((r, h) for r, h in hums if r is rp), hums[0])
+        hb: dict[str, Any] = {}
+        if "hz" in h0:
+            hb["hz"] = copy.deepcopy(r0.param(h0["hz"]))
+        elif not pre.get("mains"):  # a preamp's mains block sets it; else a stage's own hz
+            hb["hz"] = copy.deepcopy(next(r.param(h["hz"]) for r, h in hums if "hz" in h))
+        hb["field_t"] = copy.deepcopy(r0.param(h0["field_t"]))
+        hb["pickups"] = {
+            r.part_name(n): {k: copy.deepcopy(r.param(v)) for k, v in pk.items()}
+            for r, h in hums
+            for n, pk in h["pickups"].items()
+        }
+        out["hum"] = hb
     tol = copy.deepcopy(pre["tolerance"])
     tol = {
         "source": tol["source"],

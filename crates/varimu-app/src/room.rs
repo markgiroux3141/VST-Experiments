@@ -786,7 +786,22 @@ pub struct RoomMic {
     /// corner the wall starts at): scene.py moves it onto that surface, 1 mm inside, aimed
     /// into the room (the PZM, CHAINS_PLAN.md WP26). None: where `pos` puts it.
     pub surface: Option<String>,
+    /// The chain's noise sources on (scene.py's `noise`: resistors, windings, tubes; a seed
+    /// per print).
+    pub noise: bool,
+    /// The stray mains field's hum (scene.py's `hum`, varimu/devices/hum.py): the field in T
+    /// rms, 0 off.
+    pub hum_t: f64,
 }
+
+/// The Room view's hum fields (T rms) and their names: the makers' reference field, near
+/// equipment, next to a power transformer (varimu/devices/hum.py's FIELD_SOURCE).
+pub const HUM_FIELDS: [(f64, &str); 4] = [
+    (0.0, "off"),
+    (1.0e-7, "quiet room (0.1 uT)"),
+    (1.0e-6, "near equipment (1 uT)"),
+    (1.0e-5, "by a power transformer (10 uT)"),
+];
 
 impl RoomMic {
     pub fn new(name: &str, chain_id: &str, pos: [f64; 3], azimuth_deg: f64) -> RoomMic {
@@ -810,6 +825,8 @@ impl RoomMic {
             separate_passes: false,
             free_field: false,
             surface: None,
+            noise: false,
+            hum_t: 0.0,
         }
     }
 
@@ -1220,6 +1237,7 @@ impl Scene {
                 "azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg, "pan": m.pan,
                 "hears": m.hears, "separate_passes": m.separate_passes,
                 "free_field": m.free_field, "surface": m.surface,
+                "noise": m.noise, "hum_t": m.hum_t,
             })).collect::<Vec<_>>(),
         })
     }
@@ -1324,6 +1342,8 @@ impl Scene {
                             separate_passes: m["separate_passes"].as_bool().unwrap_or(false),
                             free_field: m["free_field"].as_bool().unwrap_or(false),
                             surface: m["surface"].as_str().map(str::to_string),
+                            noise: m["noise"].as_bool().unwrap_or(false),
+                            hum_t: f(m, "hum_t", 0.0),
                         })
                         .collect()
                 })
@@ -1413,6 +1433,12 @@ impl Scene {
                 }
                 if let Some(sf) = &m.surface {
                     v["surface"] = json!(sf);
+                }
+                if m.noise {
+                    v["noise"] = json!(true);
+                }
+                if m.hum_t > 0.0 {
+                    v["hum"] = json!(m.hum_t);
                 }
                 v
             }).collect::<Vec<_>>(),
@@ -2038,6 +2064,16 @@ mod tests {
         let m = &json["mics"][0];
         assert!(m.get("hears").is_none() && m.get("passes").is_none());
         assert!(m.get("free_field").is_none());
+        assert!(m.get("noise").is_none() && m.get("hum").is_none());
+        s.mics[0].noise = true;
+        s.mics[0].hum_t = 1e-6;
+        let m = &s.render_json(&BTreeMap::new())["mics"][0];
+        assert_eq!(
+            (m["noise"].as_bool(), m["hum"].as_f64()),
+            (Some(true), Some(1e-6))
+        );
+        let back = Scene::from_state(&s.state());
+        assert_eq!((back.mics[0].noise, back.mics[0].hum_t), (true, 1e-6));
         s.mics[0].hears = Some(vec!["A".to_string(), "gone".to_string()]);
         s.mics[0].separate_passes = true;
         s.mics[0].free_field = true;
@@ -2099,7 +2135,7 @@ mod tests {
         ] {
             assert!(ids.contains(&id), "{id}");
         }
-        assert!(!ids.contains(&"re20_api312")); // not built (WP13): not offered
+        assert!(ids.contains(&"re20_api312")); // WP13, built 2026-11-12
         assert!(ids.contains(&"r121_api312") && ids.contains(&"pzm_clean")); // WP16, WP26
         assert!(ids.contains(&"c4038_v72")); // the 4038 (WP8)
         let r = list.iter().find(|c| c.id == "r44_v76").unwrap(); // a ribbon (WP6)
