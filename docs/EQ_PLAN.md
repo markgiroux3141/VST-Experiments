@@ -38,9 +38,9 @@ are unchanged (CLAUDE.md "Hard rules").
 | # | Unit | Fills | What's new | Sources | Status |
 |---|---|---|---|---|---|
 | EQ1 | **Pultec HLF-3C** | passive high-pass / low-pass, 18 dB / oct | nothing (passives) | Pulse Techniques' sheet + a hand-drawn schematic with the 3C's table (found) | **built 2026-11-15** |
-| EQ2 | **Pultec MEQ-5** | mids: low-mid peak, mid dip, high-mid peak; the EQP-1A's partner | its network; its amplifier is the EQP-1A's family | gyraf.dk's reverse-engineered schematic (transformers guessed); a user manual listed by vintagedigital.com.au | to source |
-| EQ3 | **API 550A** | 3-band proportional-Q console EQ (1967-70s) | the EQ card's networks; the 2520 exists (CHAINS_PLAN.md WP12) | API's brochure; technicalaudio.com's "API 550 Equalizer Versions" | to source |
-| EQ4 | **Neve 1073's EQ** | inductor mids, shelves, its HPF | the EQ cards on the built mic path (B13 = CHAINS WP11) | Neve's drawings (data/schematics/neve_1073/README.md) | mic path built |
+| EQ2 | **Pultec MEQ-5** | mids: low-mid peak, mid dip, high-mid peak; the EQP-1A's partner | its network; its amplifier is the EQP-1A's family | Gyraf's 2002 reconstruction (switch wiring unreadable at its 1024 px); a GroupDIY redraw behind the login (data/schematics/pultec_meq5/README.md) | **waits on a source** |
+| EQ3 | **API 550A** | 3-band proportional-Q console EQ (1967-70s) | the EQ card's networks; the 2520 exists (CHAINS_PLAN.md WP12) | API's drawing 613-759 (a clean 400 ppi rescan) and the 550 / 550A sheets, found (data/schematics/api_550a/README.md) | **tracing** |
+| EQ4 | **Neve 1073's EQ** | inductor mids, shelves, its HPF | the EQ cards on the built mic path (B13 = CHAINS WP11) | Neve's EH10023, B182, B205, B211 (in the 1073 packet); its switches EK20065 / EK20066 / EK20105 missing | mic path built |
 | EQ5 | **Langevin EQ-251A** | a passive program EQ with slide controls in 1 dB steps (the Motown family) | its network; a make-up amp (to see on the drawing) | elektrotanya's EQ-251A schematic archive; a hand drawing credited to Rick Chinn (GroupDIY) | to source |
 | EQ6 | **Altec 9067B / 9069B filter** | a sharper passive filter than the HLF-3C (to confirm: m-derived / Chebyshev sections) | nothing (passives) | GroupDIY threads; Altec's sheets to find | to source |
 | EQ7 | **Helios 69 and EMI TG12345 EQs** | the British console EQs of Olympic and Abbey Road | the EQ boards on the built mic paths (CHAINS WP19, WP20) | the mic paths' sources; the EQ boards to trace | mic paths built |
@@ -111,3 +111,9 @@ stop band can be read, where the model already lands; so nothing is fitted.
 ## Status
 
 - 2026-11-15: written; EQ1 built (circuit, sources, profile, tests, app device).
+- 2026-11-15 (later): EQ2 blocked on its source: Gyraf's MEQ-5 reconstruction is too coarse to read
+  which tap and capacitor each position joins, and the better redraw is a GroupDIY attachment (the
+  user's to fetch). EQ3 moved up: API's 550A drawing found as a clean rescan with the 550 / 550A
+  sheets; the HF band's structure read (A1's reciprocal bridge on S8A, the twin-T decks, the
+  proportional-Q decks S8B / S8C); the rest of the tracing is listed in its README. EQ4's packet
+  holds Neve's EQ boards but not its three switch drawings.
