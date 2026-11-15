@@ -21,6 +21,18 @@ HARMONICS_SOURCE = (
     "current's odd harmonics, the 3rd ~10 % and the 5th ~2 % of the fundamental)"
 )
 
+# An AC-heated tube's hum (CHAINS_PLAN.md NH4): a `hum` block's `heaters` entry's values.
+HEATER_KEYS = ("v_rms", "imbalance", "c_hk_f", "r_hk_ohm")
+C_HK_F = 5.0e-12
+R_HK_OHM = 1.0e8
+NULL = 0.02
+HEATER_SOURCE = (
+    "provisional: model knowledge (typical heater-cathode figures: a few pF and 10^8 ohm of "
+    "leakage; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 "
+    "study: with one end grounded the V76 fails its -120 dB acceptance limit, so a passing unit "
+    "was balanced"
+)
+
 FIELD_T = 1.0e-7
 FIELD_SOURCE = (
     "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's "

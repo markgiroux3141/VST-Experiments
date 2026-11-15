@@ -112,3 +112,50 @@ def test_the_v76_hums_at_the_mains_and_its_odd_harmonics():
     lo, hi = lines[1e-6], lines[1e-5]
     assert lo[0] > 10 * lo[1] > 0 and lo[1] > lo[2] > 0  # the fundamental leads
     assert 20 * math.log10(hi[0] / lo[0]) == pytest.approx(20.0, abs=0.3)  # linear in the field
+
+
+# --- AC heaters (CHAINS_PLAN.md NH4) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["telefunken_v76", "telefunken_v72", "emi_redd47", "u47_v76"])
+def test_ac_heaters_hum_only_with_hum_on(name):
+    """Each listed tube gets VHH_ (a sine at the mains, sqrt(2) imbalance v_rms / 2), RHH_ and
+    CHH_ from its own node to its cathode, after its device element; nothing with hum off."""
+    c = _load(name)
+    assert not [e for e in builder.build(c).ir.elements() if e.name.startswith("VHH_")]
+    ir = builder.build(c, hum=True).ir
+    els = list(ir.elements())
+    heaters = c.hum["heaters"]
+    assert len([e for e in els if e.name.startswith("VHH_")]) == len(heaters)
+    q = spec.resolve(c)
+    for dev, h in heaters.items():
+        i = next(k for k, e in enumerate(els) if e.name == dev)
+        src, r, cap = els[i + 1 : i + 4]
+        k = els[i].nodes[-1]
+        assert isinstance(src, SineSource) and src.name == f"VHH_{dev}"
+        assert src.freq_hz == 50.0 and src.phase_deg == 0.0
+        want = math.sqrt(2) * q[h["imbalance"]] * q[h["v_rms"]] / 2
+        assert src.amplitude_v == pytest.approx(want, rel=1e-15)
+        assert (r.name, r.b, r.r_ohm) == (f"RHH_{dev}", k, q[h["r_hk_ohm"]])
+        assert (cap.name, cap.b, cap.c_f) == (f"CHH_{dev}", k, q[h["c_hk_f"]])
+    # With the noise on, the mains wander moves them as it does the mains.
+    wander = builder.build(c, hum=True, noise=1).ir.noise.mains_sources
+    assert {f"VHH_{d}" for d in heaters} <= set(wander)
+
+
+def test_the_v76s_heater_hum_sits_under_its_noise():
+    """Balanced heaters 2 % off null: the V76's 50 Hz line (the field at 0, the heaters alone)
+    under its own noise at the output (measured 10.4 uV against 21.9 uV rms), as a unit that met
+    its -120 dB acceptance (reports/chain_spike/)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    c = _load("telefunken_v76")
+    st = TransientSettings.from_sim_settings(engine="circuitsim")
+    n = int(1.0 * st.sample_rate)
+    ir = builder.build(c, hum=0.0).ir
+    y = fast.run_transient(ir, np.zeros(n), settings=st).vectors["v(out)"]
+    t = np.arange(n) / st.sample_rate
+    line = 2 * abs(np.mean(y * np.exp(-2j * np.pi * 50.0 * t))) / math.sqrt(2)
+    assert 5e-6 < line < 20e-6, f"{line * 1e6:.2f} uV rms"

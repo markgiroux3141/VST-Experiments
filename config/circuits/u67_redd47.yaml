@@ -361,6 +361,22 @@ values:
   tol_cap_pct_u67:
     value: 10.0
     source: 'provisional: model knowledge (film capacitors)'
+  hh_v_rms_redd47:
+    value: 6.3
+    source: 'data/schematics/emi_redd47/README.md: heaters 6.3 V a.c. at 0.5 A (the wiring not printed:
+      a balanced winding assumed, provisional)'
+  hh_imbalance_redd47:
+    value: 0.02
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
+  hh_c_f_redd47:
+    value: 5.0e-12
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
+  hh_r_ohm_redd47:
+    value: 100000000.0
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
   source_impedance_ohm_redd47:
     value: 200.0
     source: 'txt: ''a 200 ohm source'' (the input impedance and rumble filter paragraph)'
@@ -578,6 +594,22 @@ hum:
         source: 'provisional: no published hum figure; the order of the calibrated pickups (the 4038''s
           4.2e-5, the 77-DX''s 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike''s
           spec-bound 1e-4 (reports/chain_spike/)'
+  heaters:
+    XV1_redd47:
+      v_rms: hh_v_rms_redd47
+      imbalance: hh_imbalance_redd47
+      c_hk_f: hh_c_f_redd47
+      r_hk_ohm: hh_r_ohm_redd47
+    XV2A_redd47:
+      v_rms: hh_v_rms_redd47
+      imbalance: hh_imbalance_redd47
+      c_hk_f: hh_c_f_redd47
+      r_hk_ohm: hh_r_ohm_redd47
+    XV2B_redd47:
+      v_rms: hh_v_rms_redd47
+      imbalance: hh_imbalance_redd47
+      c_hk_f: hh_c_f_redd47
+      r_hk_ohm: hh_r_ohm_redd47
 tolerance:
   source: 'provisional: classes by part type (see the tol_* values)'
   seed: passive_seed_redd47

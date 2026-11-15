@@ -1092,7 +1092,9 @@ TubeNoise) and `FlickerCurrent`, both builders, SPICE and circuitsim; KF / AF in
 steady state), a devices entry's `emit: used` (its model only when used; both builders),
 `scripts/mic_supply_trim.py [--write]`, chains on one mains (`compose_chain.py`). The C12 and U67
 from their drawings; the U47, M 49 and 251 inferred (the U47's filter sized to Neumann's ~5 uV
-hum; the others hum under their noise). Open: NH4-NH7 (heater hum, calibrations, listening, owed checks).
+hum; the others hum under their noise). **NH4** (heater hum): a `hum` block's `heaters` (a tube's AC heater `imbalance` off its null into its
+cathode through R / C_hk, with hum on; the V76, V72, REDD.47). Open: NH5-NH7 (calibrations, listening,
+owed checks).
 
 **Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
 status):** a circuit file's `heaters: {start?: warm | cold, tap?: KEY}` block gives every triode, pentode

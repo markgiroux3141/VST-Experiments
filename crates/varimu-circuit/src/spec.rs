@@ -673,14 +673,25 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
 /// The `hum` block's shape (spec.py's `_check_hum`; its values are checked where the builder
 /// reads them).
 fn check_hum(h: &Value, errors: &mut Vec<String>) {
-    let ok_keys = ["hz", "field_t", "pickups", "source", "notes"];
+    let ok_keys = ["hz", "field_t", "pickups", "heaters", "source", "notes"];
     let Some(m) = h
         .as_map()
         .filter(|m| m.keys().all(|k| ok_keys.contains(&k)))
     else {
-        errors.push("hum: a mapping {hz?, field_t, pickups, source?, notes?}".into());
+        errors.push("hum: a mapping {hz?, field_t, pickups, heaters?, source?, notes?}".into());
         return;
     };
+    if let Some(hs) = m.get("heaters").and_then(Value::as_map) {
+        for (name, h) in hs.iter() {
+            let mut keys: Vec<&str> = h.as_map().map(|m| m.keys().collect()).unwrap_or_default();
+            keys.sort_unstable();
+            if keys != ["c_hk_f", "imbalance", "r_hk_ohm", "v_rms"] {
+                errors.push(format!(
+                    "hum.heaters.{name}: {{v_rms, imbalance, c_hk_f, r_hk_ohm}}"
+                ));
+            }
+        }
+    }
     let pickups = m.get("pickups").and_then(Value::as_map);
     if !m.contains("field_t") || pickups.is_none_or(|p| p.is_empty()) {
         errors.push("hum: needs field_t and a non-empty pickups mapping".into());

@@ -16,9 +16,9 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use circuitsim::ir::{
-    CircuitIr, Coupling, Device, DeviceModel, Element, FlickerCurrent, HeatedCathode, HeaterSpec,
-    Inductor, MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TransistorNoise,
-    TubeNoise, Vccs, VoltageSource,
+    Capacitor, CircuitIr, Coupling, Device, DeviceModel, Element, FlickerCurrent, HeatedCathode,
+    HeaterSpec, Inductor, MagneticCore, NoiseCurrent, NoiseSpec, Probe, Resistor, Section,
+    SineSource, TransistorNoise, TubeNoise, Vccs, VoltageSource,
 };
 use circuitsim::noise as nz;
 
@@ -302,7 +302,12 @@ struct HumSetting {
     field_t: f64,
     hz: f64,
     pickups: Vec<(String, String, Option<f64>, Option<f64>)>,
+    /// AC heaters (NH4): (device element, v_rms, imbalance, c_hk_f, r_hk_ohm).
+    heaters: Vec<(String, [f64; 4])>,
 }
+
+/// A `hum` block's heater entry's keys (Python's `varimu.devices.hum.HEATER_KEYS`).
+const HEATER_KEYS: [&str; 4] = ["v_rms", "imbalance", "c_hk_f", "r_hk_ohm"];
 
 /// The build's hum (Python's `_hum`).
 fn hum_setting(ctx: &Context, hum: Hum) -> Result<Option<HumSetting>, Error> {
@@ -357,10 +362,23 @@ fn hum_setting(ctx: &Context, hum: Hum) -> Result<Option<HumSetting>, Error> {
             ));
         }
     }
+    let mut heaters = Vec::new();
+    if let Some(hs) = block.get("heaters").and_then(Value::as_map) {
+        for (name, ht) in hs.iter() {
+            let ht = ht.as_map().expect("checked in load_circuit");
+            let mut v = [0.0; 4];
+            for (slot, k) in v.iter_mut().zip(HEATER_KEYS) {
+                let w = format!("hum.heaters.{name}.{k}");
+                *slot = num(&w, ht.get(k).expect("checked in load_circuit"))?;
+            }
+            heaters.push((name.to_string(), v));
+        }
+    }
     Ok(Some(HumSetting {
         field_t,
         hz,
         pickups,
+        heaters,
     }))
 }
 
@@ -464,6 +482,73 @@ fn apply_hum(ctx: &mut Context, sections: Vec<Section>) -> Result<Vec<Section>, 
         return Err(ctx.fail(
             "hum.pickups",
             format!("elements not in the build: {missing:?}"),
+        ));
+    }
+    if h.heaters.is_empty() {
+        return Ok(out);
+    }
+    apply_heater_hum(ctx, &h, out)
+}
+
+/// AC heaters' hum (Python's `_apply_heater_hum`): after each listed tube's device element, a
+/// sine source on its own node and the heater-cathode leakage and capacitance to its cathode.
+fn apply_heater_hum(
+    ctx: &mut Context,
+    h: &HumSetting,
+    sections: Vec<Section>,
+) -> Result<Vec<Section>, Error> {
+    let heat: HashMap<&str, [f64; 4]> = h.heaters.iter().map(|(n, v)| (n.as_str(), *v)).collect();
+    let mut found: HashSet<String> = HashSet::new();
+    let mut out = Vec::with_capacity(sections.len());
+    for mut sec in sections {
+        let mut els = Vec::with_capacity(sec.elements.len());
+        for e in sec.elements {
+            let hit = match &e {
+                Element::Device(d) => heat.get(d.name.as_str()).map(|v| (d.clone(), *v)),
+                _ => None,
+            };
+            els.push(e);
+            let Some((d, [v_rms, imbalance, c_hk, r_hk])) = hit else {
+                continue;
+            };
+            found.insert(d.name.clone());
+            let node = format!("{}_hh", d.name.to_lowercase());
+            let k = d.nodes.last().expect("a device has pins").clone();
+            let amp = std::f64::consts::SQRT_2 * imbalance * v_rms / 2.0;
+            let name = format!("VHH_{}", d.name);
+            ctx.mains_sines.push(name.clone());
+            els.push(Element::SineSource(SineSource {
+                name,
+                pos: node.clone(),
+                neg: "0".into(),
+                offset_v: 0.0,
+                amplitude_v: amp,
+                freq_hz: h.hz,
+                phase_deg: 0.0,
+            }));
+            els.push(Element::Resistor(Resistor {
+                name: format!("RHH_{}", d.name),
+                a: node.clone(),
+                b: k.clone(),
+                r_ohm: r_hk,
+            }));
+            els.push(Element::Capacitor(Capacitor {
+                name: format!("CHH_{}", d.name),
+                a: node,
+                b: k,
+                c_f: c_hk,
+                v0_v: None,
+            }));
+        }
+        sec.elements = els;
+        out.push(sec);
+    }
+    let mut missing: Vec<&&str> = heat.keys().filter(|k| !found.contains(**k)).collect();
+    if !missing.is_empty() {
+        missing.sort_unstable();
+        return Err(ctx.fail(
+            "hum.heaters",
+            format!("device elements not in the build: {missing:?}"),
         ));
     }
     Ok(out)

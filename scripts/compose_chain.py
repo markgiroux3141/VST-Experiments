@@ -207,6 +207,13 @@ def compose(mic_name: str, pre_name: str, booster_name: str | None = None) -> di
             for r, h in hums
             for n, pk in h["pickups"].items()
         }
+        heaters = {
+            r.part_name(n): {k: copy.deepcopy(r.param(v)) for k, v in ht.items()}
+            for r, h in hums
+            for n, ht in (h.get("heaters") or {}).items()
+        }
+        if heaters:  # AC-heated tubes (CHAINS_PLAN.md NH4), their device elements renamed
+            hb["heaters"] = heaters
         out["hum"] = hb
     tol = copy.deepcopy(pre["tolerance"])
     tol = {

@@ -2194,9 +2194,29 @@ the user's calls: a switch, ideal by default; the missing supplies inferred.
   `varimu check` on m49_v76 now exceeds pre-flight's 4096 switch combinations (6912; its tests
   check the mic alone).
 
+**NH4 built (session 2, 2026-11-15): AC heaters' hum, under the hum option.**
+- A `hum` block's optional `heaters` (both spec loaders and builders, `varimu/devices/hum.py`):
+  - Each entry is a tube's device element with `v_rms`, `imbalance`, `c_hk_f` and `r_hk_ohm`.
+  - With hum on, a sine of sqrt(2) imbalance v_rms / 2 at the mains (`VHH_<dev>`, on the mains
+    wander when the noise is on) drives the cathode through the heater-cathode leakage and
+    capacitance (`RHH_` / `CHH_`).
+  - It models a centre-tapped winding or hum pot `imbalance` off its null. With hum off, nothing
+    is added.
+- Where the sources say AC:
+  - the V76: XV1-XV4; V1 has its own winding with a 250 ohm hum pot;
+  - the V72: XV41 / 42, on a winding with a hum pot;
+  - the REDD.47: XV1, XV2A / B, "6.3 V a.c.", the wiring not printed.
+  - All at 6.3 V, 5 pF, 100 MOhm and 2 % off null (provisional, `reports/chain_spike/`'s V76
+    study: grounded at one end, the V76 fails its -120 dB acceptance).
+  - `compose_chain.py` merges the heaters (renamed); every default IR unchanged.
+- Measured (the field at 0, the heaters alone; at the output, noise rms in brackets): V76 10.4 uV
+  at 50 Hz (21.9 uV), V72 3.8 uV (19.8 uV), REDD.47 1.0 uV (33.8 uV), each under its noise.
+- Not done: the UA 610 (its heater supply isn't stated), the 351 record path (2V4 / 2V5 on 12.6
+  V AC, in a generated file), heater-grid capacitance.
+- Tests: `tests/test_hum.py` (`test_ac_heaters_hum_only_with_hum_on`,
+  `test_the_v76s_heater_hum_sits_under_its_noise`); the app fixtures' hum cases; agreement passes.
+
 **Not built yet (the next sessions, in this order):**
-4. **NH4, heater hum.** AC-heated tubes' heater-cathode leakage and the hum pot's null
-   (`reports/chain_spike/` has a provisional model), where a preamp heats on AC.
 5. **NH5, more calibrations.**
    - Published hum figures as they turn up: Shure's SM57 / SM58 "electromagnetic hum
      sensitivity", EV's RE20, Neumann's and AKG's data sheets, Jensen's JT-115K-E (in its can).

@@ -19,7 +19,8 @@ varimu.circuit.builder, which expands its parts with the parts library
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
-    hum: {hz?, field_t, pickups: {PART: {area_m2} | {turn_area_m2}}}  # stray-field hum
+    hum: {hz?, field_t, pickups: {PART: {area_m2} | {turn_area_m2}},  # stray-field hum
+          heaters?: {DEVICE: {v_rms, imbalance, c_hk_f, r_hk_ohm}}}  # AC heaters' hum (NH4)
     devices: {key: {device, ...}}   # device model instances, in IR model order
                                     # (`emit: used`: the model only when a part uses
                                     # it, a switch's other position: CHAINS_PLAN.md NH3)
@@ -95,6 +96,11 @@ N area_m2 dB/dt), or a `moving_coil` / `ribbon_motor` part to its coil's turn-ar
 `field_t` is the field's rms when hum is on (a parameter or {value, source}), `hz` its frequency
 (a parameter key or {value, source}; absent: the `mains` block's `hz`). It is off unless a
 build turns it on (`build(..., hum=True | field_t)`): the file's block alone changes no IR.
+Its optional `heaters` (CHAINS_PLAN.md NH4) names tubes heated on AC by their device element
+(XV1): the heater's `v_rms` on a centre-tapped winding `imbalance` (a fraction) off its null, into
+the cathode through the heater-cathode capacitance `c_hk_f` and leakage `r_hk_ohm`. With hum on,
+a sine source of sqrt(2) imbalance v_rms / 2 at the mains frequency (no field harmonics: the heater
+voltage is the mains', `hz`) drives the cathode through them (varimu.devices.hum).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -305,9 +311,9 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
-        elif {"decimate", "lag_samples", "method", "tube_tables", "substeps_in"} & set(
-            s
-        ) and s.get("substeps", 1) < 2:
+        elif {"decimate", "lag_samples", "method", "tube_tables", "substeps_in"} & set(s) and s.get(
+            "substeps", 1
+        ) < 2:
             # (`owns` may be a single-rate section's too: a stiff driver keeping a node a
             # partition's other part only sees, circuitsim's partition.rs "A single-rate claim")
             errors.append(
@@ -498,15 +504,23 @@ def check_genome_links(spec: CircuitSpec) -> list[str]:
 
 def _check_hum(hum: Any, errors: list[str]) -> None:
     """The `hum` block's shape (its values are checked where the builder reads them)."""
-    if not isinstance(hum, Mapping) or set(hum) - {"hz", "field_t", "pickups", "source", "notes"}:
-        errors.append("hum: a mapping {hz?, field_t, pickups, source?, notes?}")
+    if not isinstance(hum, Mapping) or set(hum) - {
+        "hz",
+        "field_t",
+        "pickups",
+        "heaters",
+        "source",
+        "notes",
+    }:
+        errors.append("hum: a mapping {hz?, field_t, pickups, heaters?, source?, notes?}")
         return
+    for name, h in (hum.get("heaters") or {}).items():
+        if not isinstance(h, Mapping) or set(h) != {"v_rms", "imbalance", "c_hk_f", "r_hk_ohm"}:
+            errors.append(f"hum.heaters.{name}: {{v_rms, imbalance, c_hk_f, r_hk_ohm}}")
     if "field_t" not in hum or not isinstance(hum.get("pickups"), Mapping) or not hum["pickups"]:
         errors.append("hum: needs field_t and a non-empty pickups mapping")
         return
     for name, pk in hum["pickups"].items():
-        ok = isinstance(pk, Mapping) and (
-            set(pk) == {"area_m2"} or set(pk) == {"turn_area_m2"}
-        )
+        ok = isinstance(pk, Mapping) and (set(pk) == {"area_m2"} or set(pk) == {"turn_area_m2"})
         if not ok:
             errors.append(f"hum.pickups.{name}: {{area_m2}} or {{turn_area_m2}}")

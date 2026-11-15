@@ -39,6 +39,11 @@ controls:
   mains_hz: {value: 50.0, min: 50.0, max: 60.0, unit: Hz, source: "bb sheet 3: 50 Hz"}
 
 values:
+  # AC heaters' hum (CHAINS_PLAN.md NH4; heard only with hum on).
+  hh_v_rms: {value: 6.3, source: "data/schematics/telefunken_v72/README.md: CT V72/N's heater winding 6-7 with the 250 ohm hum pot (EF804S, 6.3 V)"}
+  hh_imbalance: {value: 0.02, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
+  hh_c_f: {value: 5.0e-12, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
+  hh_r_ohm: {value: 1.0e+8, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
   # --- Input: CT V72/1 (sch pos. 1, BV 191), C30, R11 ----------------------------------
   source_impedance_ohm: {value: 200.0, source: "bb sheet 3: the specs are measured from a 200 ohm generator"}
   t1_model: {value: BV191@3, source: "config/components/bv191/3.yaml: NWDR Bauvorschrift Nr. 191 (CT V72/1) compiled by varimu-components (docs/COMPONENT_EDITOR_PLAN.md C2 steps 5-6)"}
@@ -147,6 +152,10 @@ hum:
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
   pickups:
     T1: {area_m2: {value: 1.0e-4, source: "provisional: no published hum figure; the order of the calibrated pickups (the 4038's 4.2e-5, the 77-DX's 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike's spec-bound 1e-4 (reports/chain_spike/)"}}
+  heaters:
+    XV41: {v_rms: hh_v_rms, imbalance: hh_imbalance, c_hk_f: hh_c_f, r_hk_ohm: hh_r_ohm}
+    XV42: {v_rms: hh_v_rms, imbalance: hh_imbalance, c_hk_f: hh_c_f, r_hk_ohm: hh_r_ohm}
+
 
 sections:
   - title: power supply

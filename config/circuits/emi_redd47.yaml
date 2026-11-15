@@ -29,6 +29,11 @@ controls:
   fine_gain: {value: 0.1346, min: 0.0, max: 1.0, unit: fraction, source: "sch: VR1 5k (FINE GAIN SET, a screwdriver preset), the fraction of its resistance in circuit", notes: "trimmed by scripts/redd47_trim.py for 40 dB at the mid position (txt: 'the pre-set gain control ... re-adjusted to give the nominal ... insertion gain at the mid-position of the switch')"}
 
 values:
+  # AC heaters' hum (CHAINS_PLAN.md NH4; heard only with hum on).
+  hh_v_rms: {value: 6.3, source: "data/schematics/emi_redd47/README.md: heaters 6.3 V a.c. at 0.5 A (the wiring not printed: a balanced winding assumed, provisional)"}
+  hh_imbalance: {value: 0.02, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
+  hh_c_f: {value: 5.0e-12, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
+  hh_r_ohm: {value: 1.0e+8, source: "provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or hum pot ~2 % off its null), reports/chain_spike/'s V76 study (CHAINS_PLAN.md NH4)"}
   source_impedance_ohm: {value: 200.0, source: "txt: 'a 200 ohm source' (the input impedance and rumble filter paragraph)"}
   r_load_ohm: {value: 200.0, source: "txt: 'with a 200 ohm load connected between terminals 2/5 and 2/6'"}
   contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch's contact, ~10 mOhm)"}
@@ -112,6 +117,11 @@ hum:
   field_t: {value: 1.0e-7, source: "provisional: the makers' reference field for hum pickup (RCA's 1e-3 gauss, Shure's milli-oersted, the BBC's 1 mG; 1 G = 100 uT in air): a quiet room. ~1 uT near equipment, ~10 uT next to a power transformer"}
   pickups:
     T1: {area_m2: {value: 1.0e-4, source: "provisional: no published hum figure; the order of the calibrated pickups (the 4038's 4.2e-5, the 77-DX's 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike's spec-bound 1e-4 (reports/chain_spike/)"}}
+  heaters:
+    XV1: {v_rms: hh_v_rms, imbalance: hh_imbalance, c_hk_f: hh_c_f, r_hk_ohm: hh_r_ohm}
+    XV2A: {v_rms: hh_v_rms, imbalance: hh_imbalance, c_hk_f: hh_c_f, r_hk_ohm: hh_r_ohm}
+    XV2B: {v_rms: hh_v_rms, imbalance: hh_imbalance, c_hk_f: hh_c_f, r_hk_ohm: hh_r_ohm}
+
 
 sections:
   - title: input

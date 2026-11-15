@@ -1777,6 +1777,8 @@ class Hum:
     field_t: float
     hz: float
     pickups: tuple[tuple[str, str, float | None, float | None], ...]
+    # AC heaters (NH4): (device element, v_rms, imbalance, c_hk_f, r_hk_ohm)
+    heaters: tuple[tuple[str, float, float, float, float], ...] = ()
 
 
 def _hum(ctx: Context, hum: bool | float | None) -> Hum | None:
@@ -1805,7 +1807,12 @@ def _hum(ctx: Context, hum: bool | float | None) -> Hum | None:
         else:
             ta = float(ctx.physical(where, pk["turn_area_m2"]))
             pickups.append((str(name), f"L{str(name).upper()}_le", None, ta))  # its coil
-    return Hum(field_t, hz, tuple(pickups))
+    heaters = []
+    for name, ht in (block.get("heaters") or {}).items():
+        where = f"hum.heaters.{name}"
+        vals = [float(ctx.physical(f"{where}.{k}", ht[k])) for k in hum_mod.HEATER_KEYS]
+        heaters.append((str(name), *vals))
+    return Hum(field_t, hz, tuple(pickups), tuple(heaters))
 
 
 def _apply_hum(ctx: Context, sections: list[Section]) -> list[Section]:
@@ -1846,6 +1853,34 @@ def _apply_hum(ctx: Context, sections: list[Section]) -> list[Section]:
         out.append(dataclasses.replace(sec, elements=tuple(els)))
     if missing := sorted(set(emf) - found):
         raise ctx.fail("hum.pickups", f"elements not in the build: {missing}")
+    return _apply_heater_hum(ctx, out) if h.heaters else out
+
+
+def _apply_heater_hum(ctx: Context, sections: list[Section]) -> list[Section]:
+    """AC heaters' hum (NH4): after each listed tube's device element, a sine source on its own
+    node and the heater-cathode leakage and capacitance from there to the cathode (its last
+    pin)."""
+    h = ctx.hum
+    heat = {name: rest for name, *rest in h.heaters}
+    found: set[str] = set()
+    out = []
+    for sec in sections:
+        els: list[Element] = []
+        for e in sec.elements:
+            els.append(e)
+            if not (isinstance(e, Device) and e.name in heat):
+                continue
+            found.add(e.name)
+            v_rms, imbalance, c_hk, r_hk = heat[e.name]
+            node, k = f"{e.name.lower()}_hh", e.nodes[-1]
+            amp = SQRT2 * imbalance * v_rms / 2.0
+            src = SineSource(f"VHH_{e.name}", node, GROUND, 0.0, amp, h.hz, 0.0)
+            els += [src, Resistor(f"RHH_{e.name}", node, k, r_hk),
+                    Capacitor(f"CHH_{e.name}", node, k, c_hk)]  # fmt: skip
+            ctx.mains_sines.append(src.name)
+        out.append(dataclasses.replace(sec, elements=tuple(els)))
+    if missing := sorted(set(heat) - found):
+        raise ctx.fail("hum.heaters", f"device elements not in the build: {missing}")
     return out
 
 

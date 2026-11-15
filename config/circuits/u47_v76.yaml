@@ -306,6 +306,23 @@ values:
     value: 3.0
     genome: tubes.instance.mu_pct
     source: 'provisional: model knowledge (grid-pitch tolerance, a few %)'
+  hh_v_rms_v76:
+    value: 6.3
+    source: 'data/schematics/telefunken_v76/README.md: heaters 6.3 V (AC), V1 on its own winding with
+      a 250 ohm hum pot (the others'' winding taken as balanced too: grounded at one end, a unit fails
+      the -120 dB acceptance, reports/chain_spike/)'
+  hh_imbalance_v76:
+    value: 0.02
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
+  hh_c_f_v76:
+    value: 5.0e-12
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
+  hh_r_ohm_v76:
+    value: 100000000.0
+    source: 'provisional: model knowledge (typical heater-cathode figures; a centre-tapped winding or
+      hum pot ~2 % off its null), reports/chain_spike/''s V76 study (CHAINS_PLAN.md NH4)'
   source_impedance_ohm_v76:
     value: 200.0
     source: 'bb sheet 5: the specs are measured from a 200 ohm source'
@@ -740,6 +757,27 @@ hum:
         source: 'provisional: no published hum figure; the order of the calibrated pickups (the 4038''s
           4.2e-5, the 77-DX''s 1.8e-4 m^2 a turn: scripts/hum_calibrate.py) and of the V76 hum spike''s
           spec-bound 1e-4 (reports/chain_spike/)'
+  heaters:
+    XV1_v76:
+      v_rms: hh_v_rms_v76
+      imbalance: hh_imbalance_v76
+      c_hk_f: hh_c_f_v76
+      r_hk_ohm: hh_r_ohm_v76
+    XV2_v76:
+      v_rms: hh_v_rms_v76
+      imbalance: hh_imbalance_v76
+      c_hk_f: hh_c_f_v76
+      r_hk_ohm: hh_r_ohm_v76
+    XV3_v76:
+      v_rms: hh_v_rms_v76
+      imbalance: hh_imbalance_v76
+      c_hk_f: hh_c_f_v76
+      r_hk_ohm: hh_r_ohm_v76
+    XV4_v76:
+      v_rms: hh_v_rms_v76
+      imbalance: hh_imbalance_v76
+      c_hk_f: hh_c_f_v76
+      r_hk_ohm: hh_r_ohm_v76
 tolerance:
   source: 'provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)'
   seed: passive_seed_v76
