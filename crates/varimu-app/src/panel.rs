@@ -612,7 +612,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 41] = [
+pub const DEVICES: [Device; 42] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -2104,6 +2104,31 @@ pub const DEVICES: [Device; 41] = [
         method: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
+    Device {
+        id: "pultec_hlf3c",
+        label: "Pultec HLF-3C Program Filter",
+        short: "HLF-3C",
+        about: "Pultec HLF-3C passive high-pass and low-pass filter: constant-K LC sections in a 600 ohm line",
+        group: Group::Eq,
+        circuit: "pultec_hlf3c",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // A passive LC network, linear: a few states, no Newton (docs/EQ_PLAN.md EQ1).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: None,
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2888,7 +2913,7 @@ mod tests {
                     Group::Dynamics,
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
-                (Group::Eq, vec!["pultec_eqp1a"]),
+                (Group::Eq, vec!["pultec_eqp1a", "pultec_hlf3c"]),
                 (
                     Group::Amps,
                     vec![

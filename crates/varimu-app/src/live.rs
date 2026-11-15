@@ -429,6 +429,8 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             ),
             Element::NoiseCurrent(n) => ("NoiseCurrent", &n.name, vec![&n.a, &n.b]),
             Element::TubeNoise(t) => ("TubeNoise", &t.name, vec![]),
+            Element::FlickerCurrent(n) => ("FlickerCurrent", &n.name, vec![&n.a, &n.b]),
+            Element::TransistorNoise(t) => ("TransistorNoise", &t.name, vec![]),
             Element::HeatedCathode(h) => ("HeatedCathode", &h.name, vec![]),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),

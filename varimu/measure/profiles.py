@@ -38,6 +38,9 @@ checks of varimu.measure.generic and the circuit's own).
 - urei_1176 (FET limiter, B12): varimu.measure.limiter_suite: UA's reissue manual's
   figures: gain, response, maximum output, static curves per ratio, attack and release
   on the GR line, THD while limiting.
+- pultec_hlf3c (passive filter, docs/EQ_PLAN.md EQ1): varimu.measure.filter_suite: every
+  position's response by AC analysis (cutoff, knee, slope, the brochure's -40 dB points),
+  one +28 dBm render per section against it.
 """
 
 from __future__ import annotations
@@ -50,7 +53,8 @@ from typing import Any
 @dataclass(frozen=True)
 class Profile:
     circuit: str
-    kind: str  # "compressor" | "equalizer" | "guitar_amp" | "tape_machine" | "mic_preamp"
+    # "compressor" | "equalizer" | "filter" | "guitar_amp" | "tape_machine" | "mic_preamp"
+    kind: str
     run: Callable[..., dict[str, Any]]
 
 
@@ -162,6 +166,12 @@ def _run_deck(*args, **kwargs):
     return deck_suite.run(*args, **kwargs)
 
 
+def _run_filter(*args, **kwargs):
+    from varimu.measure import filter_suite
+
+    return filter_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
@@ -181,6 +191,7 @@ PROFILES = {
     "ampex_351_record": Profile("ampex_351_record", "mic_preamp", _run_a351_record),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
     "urei_1176": Profile("urei_1176", "compressor", _run_limiter),
+    "pultec_hlf3c": Profile("pultec_hlf3c", "filter", _run_filter),
 }
 
 

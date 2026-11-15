@@ -46,8 +46,8 @@ summing stage, not to the fader.
 | # | Insert | Fills | What's new to build | Status |
 |---|---|---|---|---|
 | MX1 | **SSL 4000 E channel filters and EQ** | HPF / LPF, a 4-band parametric: the clean workhorse | the EQ card's circuit; the `opamp` part and the E's mic amp exist (CHAINS_PLAN.md WP4) | |
-| MX2 | **Pultec HLF-3C** | coloured passive HP / LP | a make-up amp (a decision); nothing new in the models | |
-| MX3 | **Pultec MEQ-5** | coloured mids: the EQP-1A's partner | nothing new | |
+| MX2 | **Pultec HLF-3C** | coloured passive HP / LP | a make-up amp (a decision); nothing new in the models | built 2026-11-15: EQ_PLAN.md EQ1 |
+| MX3 | **Pultec MEQ-5** | coloured mids: the EQP-1A's partner | nothing new | EQ_PLAN.md EQ2 |
 | MX4 | **Teletronix LA-2A** | the vocal and bass leveler | the T4B (an electroluminescent panel on CdS cells), a 6AQ5 fit | |
 | MX5 | **A VCA gate / expander** | drum gating, cleanup | the gate's detector and timing; the Blackmer cell exists (B11) | |
 | MX6 | **De-essing: K4 on the keyed compressors** | a filtered sidechain | SIDECHAIN_PLAN.md K4 | |
@@ -188,3 +188,7 @@ sibilance by a measured amount while leaving the voiced band within a stated tol
 ## Status
 
 Nothing built (2026-11-09).
+
+2026-11-15: the EQ items moved to [EQ_PLAN.md](EQ_PLAN.md) (MX1 = its EQ8, MX2 = EQ1, MX3 =
+EQ2). MX2, the HLF-3C, is built there: decision 3 resolved without an amp (the filter reads 0 dB
+in its matched line, the brochure's "insertion loss: zero").
