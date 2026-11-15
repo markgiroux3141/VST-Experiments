@@ -2227,16 +2227,27 @@ the user's calls: a switch, ideal by default; the missing supplies inferred.
   appear), AKG's D112 (a hum-compensating coil, no figure) and C414 B-ULS, Beyerdynamic's M 160.
   Neumann prints none. The rest stay provisional.
 
-**Not built yet (the next sessions, in this order):**
+**NH7, owed checks: done (2026-11-15).**
+- The full pytest: 1777 passed and 3 failed (2 h 20 min). None of the 3 failures comes from this
+  work, and all fail the same with it stashed:
+  - `tests/test_circuit_ir.py::test_a_multirate_sections_decimation_and_ownership_round_trip`
+    expects `owns` without substeps to be refused, which the 5E3's live speaker allowed (stale);
+  - `tests/test_kicad.py`'s symbol check: the macro `noise_source` has no KiCad symbol;
+  - `tests/test_profiles.py`'s 5E3 aliasing order (production -25.7 dB vs -31.6 expected).
+- `slice_report.py --verify` passes:
+  - behaviour within 0.01 dB;
+  - waveforms -71.8 to -83.3 dB against exact ngspice, -77.1 dB against the converged solution,
+    all inside their bounds.
+- `cargo clippy --all-targets`:
+  - clean on circuitsim (also with `--all-features`) and varimu-circuit;
+  - varimu-app only fails the older `panel.rs` `DEVICES` "large array defined as const".
+- Ruff: the files this work touched are clean. Thirteen older files would be reformatted
+  (`varimu/devices/library.py`'s speaker fits among them), and 32 older lint findings remain in
+  scripts.
+- Also older: `m49_v76`'s pre-flight now exceeds the 4096-combination cap.
+
+**Not built yet:**
 6. **NH6, listening.** The user renders a scene with Noise / Hum on and off.
-7. **NH7, owed checks.** The full pytest and `--verify` (the builder edits of sessions 1-2 and
-   NH2's `varimu/circuit` / `varimu/devices` edits moved every Python render's cache key); `cargo
-   clippy` for the crates touched (circuitsim and varimu-circuit pass with `--all-targets`,
-   circuitsim with `--all-features` too). Found on the way, older than this work:
-   - `tests/test_circuit_ir.py::test_a_multirate_sections_decimation_and_ownership_round_trip`
-     expects `owns` without substeps to be refused, which the 5E3's live speaker allowed (stale);
-   - varimu-app's clippy: `panel.rs` `DEVICES` "large array defined as const";
-   - `ruff format --check`: `varimu/circuit/spec.py` and `varimu/devices/library.py`.
 
 ## Owed
 
@@ -2412,4 +2423,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   composed: **51 of 51, the list complete.**
 - 2026-11-14: noise and hum as a chain option ("Noise and hum in the chains"): hum blocks in 29
   mic / preamp files (four calibrated to published figures), the builders' `hum` option, chains
-  merged, Room scenes and the Room view's mic panel; NH1-NH7 left. Not committed.
+  merged, Room scenes and the Room view's mic panel.
+- 2026-11-14/15: NH1-NH5 built and NH7's checks run (each in its own commit; the section's
+  status lists the numbers). Left: NH6, the user listens.

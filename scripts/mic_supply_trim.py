@@ -59,7 +59,11 @@ TRIMS = {
         "knob": "nn_t_v_rms",
         "probe": "bplus",
         "target": 116.0,  # man: the NN 48 b's 116 V D.C. plate (data/schematics/neumann_m49)
-        "v0": {"nn_c1_v0_v": ("nn1", "0"), "nn_c3_v0_v": ("nn3", "0"), "nn_c4_v0_v": ("bplus", "0")},
+        "v0": {
+            "nn_c1_v0_v": ("nn1", "0"),
+            "nn_c3_v0_v": ("nn3", "0"),
+            "nn_c4_v0_v": ("bplus", "0"),
+        },
     },
     "telefunken_ela_m251": {
         "set": {"supply": 1},

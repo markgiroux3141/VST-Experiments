@@ -1094,7 +1094,9 @@ steady state), a devices entry's `emit: used` (its model only when used; both bu
 from their drawings; the U47, M 49 and 251 inferred (the U47's filter sized to Neumann's ~5 uV
 hum; the others hum under their noise). **NH4** (heater hum): a `hum` block's `heaters` (a tube's AC heater `imbalance` off its null into its
 cathode through R / C_hk, with hum on; the V76, V72, REDD.47). **NH5**: the RE20 and MD 421 calibrated too
-(six in all). Open: NH6 (the user listens), NH7 (owed checks).
+(six in all). **NH7** (2026-11-15): pytest 1777 passed, 3 older failures (multirate `owns`, the kicad
+`noise_source` symbol, 5E3 aliasing); `--verify` PASS; clippy clean but varimu-app's older `DEVICES`.
+Open: NH6 (the user listens).
 
 **Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
 status):** a circuit file's `heaters: {start?: warm | cold, tap?: KEY}` block gives every triode, pentode
