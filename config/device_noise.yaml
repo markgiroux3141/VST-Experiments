@@ -1,0 +1,7 @@
+# Transistor flicker noise (CHAINS_PLAN.md NH2): SPICE's KF and AF per component, any version
+# (keyed by the name without @N: flicker is the part type's, versions refit its DC model).
+# The density is KF |I|^AF / f (A^2/Hz): a BJT's base current, a JFET's drain current
+# (varimu.devices.noise.flicker_k). A component not listed has no flicker (its shot and
+# channel noise are physics and always on under the noise). Read by varimu/circuit/builder.py
+# and varimu-circuit's builder only when a build's noise is on: no IR without noise reads it.
+flicker: {}

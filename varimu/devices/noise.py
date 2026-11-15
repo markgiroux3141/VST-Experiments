@@ -27,6 +27,13 @@ sections, two per decade from `F_LO_HZ`, in parallel form (all residues positive
 immittance), within +-0.03 dB of 1/f from 0.01 Hz to 10 kHz, flat below F_LO_HZ; it starts
 in its stationary state at sample 0 (the state drawn from its own stream), so no warm-up.
 
+**Transistors and op-amps** (CHAINS_PLAN.md NH2): a BJT's collector and base shot noise and
+base flicker, a JFET's channel noise and drain flicker and its gate's shot noise
+(`shot_a2_of`, `channel_a2`, `flicker_k`, SPICE's forms), at the last accepted step's currents
+and gm as a tube's; an op-amp's input noise as a white current (NoiseCurrent) and a 1/f one
+(FlickerCurrent: unit flicker times sqrt(kf_a2)) into its first stage's output, where they are
+its datasheet's en and in referred to the input (varimu.circuit.parts.opamp_noise).
+
 **Densities** (one-sided, per hertz): `johnson_a2` (4kT/R), `shot_a2` (a tube's plate
 current: 4 k T0 beta gm, beta 2.5 at T0 290 K, i.e. R_eq = 2.5 / gm; a pentode's partition
 noise (Ib / Ik)(4 k T0 beta)(gm + 8 Ic2)), `grid_shot_a2` (2 q |Ig|), and flicker as a
@@ -174,6 +181,33 @@ def shot_a2(gm_s: float, ib_a: float = 0.0, ic2_a: float = 0.0, partition: float
 def grid_shot_a2(ig_a: float) -> float:
     """Full shot noise of grid current, 2 q |Ig| (no space-charge smoothing at the grid)."""
     return 2.0 * Q_E * abs(ig_a)
+
+
+# Transistors (CHAINS_PLAN.md NH2): SPICE's noise sources for the BJT and the JFET.
+TRANSISTOR_SOURCE = (
+    "SPICE's device noise (ngspice manual, ch. 15.3.5 '.noise', and bjtnoise.c / jfetnoise.c): "
+    "a BJT's collector and base shot noise 2 q Ic and 2 q Ib with base flicker KF Ib^AF / f, a "
+    "JFET's channel noise (8/3) k T gm with drain flicker KF Id^AF / f; Van der Ziel, Noise in "
+    "Solid State Devices and Circuits (Wiley, 1986), ch. 4-5, for the forms (the JFET's 2/3 "
+    "the long-channel saturated value)"
+)
+JFET_CHANNEL_GAMMA = 2.0 / 3.0
+
+
+def shot_a2_of(i_a: float) -> float:
+    """Full shot noise of a junction current, 2 q |I| (a BJT's collector and base, a JFET's
+    gate)."""
+    return 2.0 * Q_E * abs(i_a)
+
+
+def channel_a2(gm_s: float, temperature_k: float) -> float:
+    """A JFET's channel noise, 4 k T (2/3) gm (A^2/Hz); zero where gm <= 0 (cut off)."""
+    return 4.0 * K_B * temperature_k * JFET_CHANNEL_GAMMA * max(gm_s, 0.0)
+
+
+def flicker_k(kf: float, i_a: float, af: float) -> float:
+    """A transistor's flicker coefficient: the density is kf |I|^af / f (A^2/Hz)."""
+    return kf * abs(i_a) ** af if kf > 0.0 else 0.0
 
 
 # --- Flicker ------------------------------------------------------------------------------

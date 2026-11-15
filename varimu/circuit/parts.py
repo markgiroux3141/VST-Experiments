@@ -612,8 +612,10 @@ def opamp(
     held between -swing_v and +swing_v by D<NAME>_p / D<NAME>_n on sources V<NAME>_p /
     V<NAME>_n (the output's swing a diode drop past them): the output clips and recovers
     at once, as an op-amp whose internal stages saturate. No crossover distortion: its
-    harmonics are the clamp's. Noise is the circuit's (an equivalent resistor at its input
-    under the noise block).
+    harmonics are the clamp's. Noise (CHAINS_PLAN.md NH2): the part's optional `en_v_rthz`,
+    `in_a_rthz` and their 1/f corners give the builder's noise sources (into <name>_1 and at
+    the inputs: varimu.circuit.builder); without them the op-amp is noiseless (a circuit may
+    model en as an equivalent resistor at its input instead).
 
     `slew_v_per_s` (needs the clamp's diode model) limits the input stage, as a differential
     pair's tail does: G<NAME>_s drives the input, scaled, into <name>_s (R<NAME>_s, 1 / gm, to

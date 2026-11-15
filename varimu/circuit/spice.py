@@ -59,6 +59,7 @@ from varimu.circuit.ir import (
     DeviceModel,
     EdgeEvents,
     Element,
+    FlickerCurrent,
     Harp,
     HeatedCathode,
     HeaterSpec,
@@ -76,6 +77,7 @@ from varimu.circuit.ir import (
     Spring,
     Tape,
     ThyratronEvents,
+    TransistorNoise,
     TubeNoise,
     Vccs,
     VoltageSource,
@@ -172,7 +174,13 @@ def noise_streams(ir: CircuitIR) -> list:
                     _nz(el.name), ir.noise.seed, el.name, nz.STREAM_MAIN, False, ir.noise.rate_hz
                 )
             )
-        elif isinstance(el, TubeNoise):
+        elif isinstance(el, FlickerCurrent):
+            out.append(
+                NoiseStream(
+                    _nz(el.name), ir.noise.seed, el.name, nz.STREAM_FLICKER, True, ir.noise.rate_hz
+                )
+            )
+        elif isinstance(el, TubeNoise | TransistorNoise):
             for suffix, stream, flicker in (
                 ("s", nz.STREAM_MAIN, False),
                 ("g", nz.STREAM_GRID, False),
@@ -272,7 +280,7 @@ def cathode_k_ev() -> float:
 
 
 def noise_lines(
-    el: NoiseCurrent | TubeNoise,
+    el: NoiseCurrent | TubeNoise | FlickerCurrent | TransistorNoise,
     rate_hz: float,
     devices: Mapping[str, Device],
     models: Mapping[str, DeviceModel],
@@ -286,6 +294,10 @@ def noise_lines(
     if isinstance(el, NoiseCurrent):
         sigma = math.sqrt(el.psd_a2_hz * half)
         return [f"G{el.name} {el.a} {el.b} {_nz(el.name)} 0 {num(sigma)}"]
+    if isinstance(el, FlickerCurrent):
+        return [f"G{el.name} {el.a} {el.b} {_nz(el.name)} 0 {num(math.sqrt(el.kf_a2))}"]
+    if isinstance(el, TransistorNoise):
+        return transistor_noise_lines(el, half, devices, models)
     d = devices[el.device]
     m = models[d.model]
     target = instance_target(m)
@@ -324,6 +336,67 @@ def noise_lines(
         f"+{gm}*{rt}*v({_nz(el.name + '_f')})}}",
         f"B{b}_g {g} {k} I={{sqrt({num(2 * nz.Q_E * half)}*abs({ig})+1e-60)"
         f"*v({_nz(el.name + '_g')})}}",
+    ]
+    return lines
+
+
+def transistor_noise_lines(
+    el: TransistorNoise,
+    half: float,
+    devices: Mapping[str, Device],
+    models: Mapping[str, DeviceModel],
+) -> list[str]:
+    """A transistor's noise in SPICE (CHAINS_PLAN.md NH2), as a tube's: copies of the
+    transistor on E sources (loading nothing), their pins sensed by zero-volt sources; a JFET's
+    second copy has its gate GM_DELTA_V up (gm by difference). B sources from the collector /
+    drain and the base / gate to the emitter / source (pins c, b, e and d, g, s)."""
+    d = devices[el.device]
+    m = models[d.model]
+    target = instance_target(m)
+    letter = "Q" if el.family == "bjt" else "J"
+    temp = f" temp={num(m.temp_k - 273.15)}" if isinstance(m, Bjt) and m.temp_k is not None else ""
+    b = el.name.lower()
+    pins = list(d.nodes)
+    ref, ctl = pins[2], pins[1]
+    lines = [f"* noise of {d.name} (NH2): its currents from copies of the transistor"]
+    copied = {}
+    for i, n in enumerate(pins):
+        copied[i] = f"{b}_e{i}"
+        lines.append(f"E{b}_e{i} {copied[i]} 0 {n} 0 1")
+    copies = 2 if el.family == "jfet" else 1
+    if copies == 2:
+        lines.append(f"V{b}_d {b}_gd {copied[1]} dc {num(GM_DELTA_V)}")
+    for c in range(copies):
+        nodes = []
+        for i in range(3):
+            src = f"{b}_gd" if (c == 1 and i == 1) else copied[i]
+            if i == 2:
+                nodes.append(src)  # the reference pin: its current returns through E
+                continue
+            node = f"{b}_c{c}p{i}"
+            lines.append(f"V{b}_c{c}s{i} {src} {node} dc 0")
+            nodes.append(node)
+        lines.append(f"{letter}{b}_c{c} {' '.join(nodes)} {target}{temp}")
+    i0, i1 = f"i(V{b}_c0s0)", f"i(V{b}_c0s1)"
+    q2 = num(2 * nz.Q_E * half)
+    zs, zg, zf = (_nz(f"{el.name}_{x}") for x in ("s", "g", "f"))
+
+    def flick(i: str) -> str:
+        if el.kf <= 0:
+            return ""
+        return f"+sqrt({num(el.kf)}*pwr(abs({i}),{num(el.af)})+1e-60)*v({zf})"
+
+    if el.family == "bjt":
+        main = f"sqrt({q2}*abs({i0})+1e-60)*v({zs})"
+        ctrl = f"sqrt({q2}*abs({i1})+1e-60)*v({zg}){flick(i1)}"
+    else:
+        gm = f"max((i(V{b}_c1s0)-{i0})/{num(GM_DELTA_V)},0)"
+        k4 = num(4 * nz.K_B * el.temperature_k * nz.JFET_CHANNEL_GAMMA * half)
+        main = f"sqrt({k4}*{gm}+1e-60)*v({zs}){flick(i0)}"
+        ctrl = f"sqrt({q2}*abs({i1})+1e-60)*v({zg})"
+    lines += [
+        f"B{b}_p {pins[0]} {ref} I={{{main}}}",
+        f"B{b}_g {ctl} {ref} I={{{ctrl}}}",
     ]
     return lines
 
@@ -578,7 +651,7 @@ def emit(
                 continue  # its HeatedCathode emits it
             elif isinstance(el, HeatedCathode):
                 lines += heated_lines(el, ir.heaters, devices, models)
-            elif isinstance(el, NoiseCurrent | TubeNoise):
+            elif isinstance(el, NoiseCurrent | TubeNoise | FlickerCurrent | TransistorNoise):
                 assert ir.noise is not None  # validated
                 lines += noise_lines(el, ir.noise.rate_hz, devices, models)
             elif ir.noise is not None and el.name in ir.noise.mains_sources:

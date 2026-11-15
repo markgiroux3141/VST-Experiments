@@ -275,6 +275,33 @@ fn noise_run(
                 columns.push((inst.pins[0], inst.pins[k]));
                 columns.push((inst.pins[grid], inst.pins[k]));
             }
+            Element::FlickerCurrent(n) => {
+                specs.push(NoiseSpec::Flicker {
+                    name: n.name.clone(),
+                    kf_a2: n.kf_a2,
+                });
+                columns.push((node(&n.a), node(&n.b)));
+            }
+            Element::TransistorNoise(t) => {
+                let (d, inst) = instances
+                    .iter()
+                    .enumerate()
+                    .find(|(_, i)| i.name.split('+').any(|n| n == t.device))
+                    .expect("validated: a transistor instance");
+                let bank = inst.name.split('+').count();
+                // Pins (c, b, e) or (d, g, s): ports 0 and 1 relative to pin 2.
+                specs.push(NoiseSpec::Transistor {
+                    name: t.name.clone(),
+                    device: d,
+                    share: 1.0 / bank as f64,
+                    jfet: t.family == "jfet",
+                    temperature_k: t.temperature_k,
+                    kf: t.kf,
+                    af: t.af,
+                });
+                columns.push((inst.pins[0], inst.pins[2]));
+                columns.push((inst.pins[1], inst.pins[2]));
+            }
             _ => {}
         }
     }
@@ -572,6 +599,8 @@ impl Mna {
                 Element::Coupling(_)
                 | Element::NoiseCurrent(_)
                 | Element::TubeNoise(_)
+                | Element::FlickerCurrent(_)
+                | Element::TransistorNoise(_)
                 | Element::HeatedCathode(_)
                 | Element::Plate(_)
                 | Element::Spring(_)

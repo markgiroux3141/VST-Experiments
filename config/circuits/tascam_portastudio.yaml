@@ -52,6 +52,7 @@ values:
   u_r_out_ohm: {value: 50.0, source: "provisional: model knowledge (a 4558-class op-amp's open-loop output resistance, tens of ohms)"}
   u_swing_v: {value: 2.44, source: "derived: the 424's rail, sm: M5237L with R704 36k / R705 5.6k, 1.25 V x (1 + 36 / 5.6) = 9.29 V, halved by R706 / R707 (U703): +-4.64 V about the half rail, less the sheet's 1.6 V of headroom (Vom +-13.4 V on +-15 V, RL >= 10 kOhm), less the clamp diode's ~0.6 V"}
   u_noise_ohm: {value: 1251.0, source: "derived: the uPC4570's 4.5 nV/rtHz at 1 kHz (web: its sheet) as a resistor's Johnson noise at 20 C, (4.5e-9)^2 / 4kT (heard only under a noise block)"}
+  u_in_a_rthz: {value: 0.7e-12, source: "web: https://www.renesas.com/en/document/dst/upc4570-datasheet (in 0.7 pA/rtHz at 1 kHz typ.; data/datasheets/opamps/README.md; no corner published: white only; heard only under the noise, CHAINS_PLAN.md NH2)"}
   passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
   passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
   tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (carbon film resistors in a 1991 consumer machine)"}
@@ -87,7 +88,7 @@ sections:
   - title: trim
     parts:
       RN: {R: [up, unp], r: u_noise_ohm, tolerance: none}
-      U101: {opamp: [unp, um, uo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      U101: {opamp: [unp, um, uo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v, in_a_rthz: u_in_a_rthz}
       R102: {R: [uo, um], r: r102_ohm}
       C102: {C: [uo, um], c: c102_f}
       C103: {C: [um, w], c: c103_f}

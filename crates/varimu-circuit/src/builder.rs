@@ -16,9 +16,9 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use circuitsim::ir::{
-    CircuitIr, Coupling, Device, DeviceModel, Element, HeatedCathode, HeaterSpec, Inductor,
-    MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TubeNoise, Vccs,
-    VoltageSource,
+    CircuitIr, Coupling, Device, DeviceModel, Element, FlickerCurrent, HeatedCathode, HeaterSpec,
+    Inductor, MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TransistorNoise,
+    TubeNoise, Vccs, VoltageSource,
 };
 use circuitsim::noise as nz;
 
@@ -481,7 +481,7 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 12] = [
+const NOISY: [(&str, Option<&str>); 14] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
@@ -494,7 +494,94 @@ const NOISY: [(&str, Option<&str>); 12] = [
     ("clav_strings", None),
     ("moving_coil", None),
     ("ribbon_motor", None),
+    ("bjt", None),
+    ("jfet", None),
 ];
+
+/// config/device_noise.yaml's flicker entry for a transistor component (its name, any
+/// version): (kf, af); (0, 1) when it isn't listed (Python's `_flicker_of`).
+fn flicker_of(ctx: &Context, component: &str) -> Result<(f64, f64), Error> {
+    let path = ctx.lib.config_dir().join("device_noise.yaml");
+    let d = crate::yaml::load(&path)?;
+    let base = component.split('@').next().unwrap_or(component);
+    let Some(e) = d
+        .as_map()
+        .and_then(|m| m.get("flicker"))
+        .and_then(|f| f.as_map())
+        .and_then(|f| f.get(base))
+    else {
+        return Ok((0.0, 1.0));
+    };
+    let num = |k: &str| {
+        e.as_map()
+            .and_then(|m| m.get(k))
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| Error(format!("{}: flicker.{base}.{k}", path.display())))
+    };
+    Ok((num("kf")?, num("af")?))
+}
+
+/// The op-amp's noise parameters (Python's `OPAMP_NOISE_KEYS`).
+const OPAMP_NOISE_KEYS: [&str; 4] = ["en_v_rthz", "in_a_rthz", "en_corner_hz", "in_corner_hz"];
+
+/// An op-amp part's noise (Python's `_opamp_noise`): en into its integrator node, in at its
+/// inputs, each with its 1/f corner.
+fn opamp_noise(
+    ctx: &Context,
+    name: &str,
+    entry: &Map,
+    els: &[Element],
+) -> Result<Vec<Element>, Error> {
+    let mut v = [None; 4];
+    for (slot, k) in v.iter_mut().zip(OPAMP_NOISE_KEYS) {
+        if let Some(x) = entry.get(k).filter(|x| !x.is_null()) {
+            let w = format!("{name}.{k}");
+            let val = ctx.physical(&w, x)?;
+            *slot = Some(ctx.float(&w, &val)?);
+        }
+    }
+    let [en, inn, en_c, in_c] = v;
+    let upper = name.to_uppercase();
+    let r_in = els
+        .iter()
+        .find_map(|e| match e {
+            Element::Resistor(r) if r.name == format!("R{upper}_i") => Some(r),
+            _ => None,
+        })
+        .ok_or_else(|| ctx.fail(name, "an op-amp without its input resistor"))?;
+    let n1 = format!("{}_1", name.to_lowercase());
+    let mut terms: Vec<(&str, String, String, f64, Option<f64>)> = Vec::new();
+    if let Some(en) = en {
+        let gm_en = parts::OPAMP_GM_S * en;
+        terms.push(("en", "0".into(), n1.clone(), gm_en * gm_en, en_c));
+    }
+    if let Some(i) = inn {
+        let a2 = i * i;
+        terms.push(("ip", r_in.a.clone(), "0".into(), a2, in_c));
+        terms.push(("im", r_in.b.clone(), "0".into(), a2, in_c));
+    }
+    let mut out = Vec::new();
+    for (tag, a, b, psd, corner) in terms {
+        if a == b {
+            continue; // an input on ground: its current noise flows nowhere
+        }
+        out.push(Element::NoiseCurrent(NoiseCurrent {
+            name: format!("IN_{upper}_{tag}"),
+            a: a.clone(),
+            b: b.clone(),
+            psd_a2_hz: psd,
+        }));
+        if let Some(c) = corner.filter(|c| *c > 0.0) {
+            out.push(Element::FlickerCurrent(FlickerCurrent {
+                name: format!("IF_{upper}_{tag}"),
+                a,
+                b,
+                kf_a2: psd * c,
+            }));
+        }
+    }
+    Ok(out)
+}
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
 fn numerical(ctx: &Context, x: Option<&Value>) -> bool {
@@ -519,14 +606,23 @@ fn numerical(ctx: &Context, x: Option<&Value>) -> bool {
 }
 
 /// A part's noise elements (Python's `_noise_elements`).
-fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Vec<Element> {
+fn noise_elements(
+    ctx: &Context,
+    kind: &str,
+    name: &str,
+    entry: &Map,
+    els: &[Element],
+) -> Result<Vec<Element>, Error> {
     let Some((_, temperature, kf, _)) = ctx.noise else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
+    if kind == "opamp" {
+        return opamp_noise(ctx, name, entry, els);
+    }
     let mut out = Vec::new();
     if let Some((_, key)) = NOISY.iter().find(|(k, _)| *k == kind) {
         if key.is_some_and(|k| numerical(ctx, entry.get(k))) {
-            return out;
+            return Ok(out);
         }
         let cores: HashSet<&str> = els
             .iter()
@@ -554,6 +650,21 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
                 }));
             }
         }
+        if kind == "bjt" || kind == "jfet" {
+            for e in els {
+                let Element::Device(d) = e else { continue };
+                let component = ctx.types.get(&d.model).unwrap_or(&d.model);
+                let (kf, af) = flicker_of(ctx, component)?;
+                out.push(Element::TransistorNoise(TransistorNoise {
+                    name: format!("BN_{}", d.name),
+                    device: d.name.clone(),
+                    family: kind.to_string(),
+                    temperature_k: temperature,
+                    kf,
+                    af,
+                }));
+            }
+        }
     } else if kind == "device" {
         for e in els {
             let Element::Device(d) = e else { continue };
@@ -575,7 +686,7 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
             }));
         }
     }
-    out
+    Ok(out)
 }
 
 /// The build's noise (Python's `_noise`).
@@ -955,6 +1066,11 @@ fn macro_of(kind: &str) -> Macro {
                 opt("swing_v", Physical),
                 opt("slew_v_per_s", Physical),
                 opt("open_collector", Device),
+                // Noise (CHAINS_PLAN.md NH2): read only under the circuit's noise.
+                opt("en_v_rthz", Physical),
+                opt("in_a_rthz", Physical),
+                opt("en_corner_hz", Physical),
+                opt("in_corner_hz", Physical),
             ],
             false,
         ),
@@ -1116,7 +1232,7 @@ fn expand_part(
         }
     }
     if ctx.noise.is_some() {
-        let extra = noise_elements(ctx, kind, entry, &els);
+        let extra = noise_elements(ctx, kind, name, entry, &els)?;
         els.extend(extra);
     }
     if ctx.heaters.is_some() && kind == "device" {

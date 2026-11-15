@@ -27,9 +27,10 @@ Conventions:
   the cone's motion without loading it). A new element kind, not a new schema:
   circuits without one write the same JSON;
 - noise (device builder B5, varimu.devices.noise): the circuit's `noise` block (its
-  seed) and the elements NoiseCurrent (a resistor's Johnson noise) and TubeNoise (a tube
-  instance's shot, grid-current shot and flicker noise), all optional: an IR without
-  noise reads and writes as before;
+  seed) and the elements NoiseCurrent (a resistor's Johnson noise), TubeNoise (a tube
+  instance's shot, grid-current shot and flicker noise), FlickerCurrent (a fixed 1/f current:
+  an op-amp's noise corners) and TransistorNoise (a BJT's or JFET's shot, channel and flicker
+  noise; CHAINS_PLAN.md NH2), all optional: an IR without noise reads and writes as before;
 - heated cathodes (device builder B6, varimu.devices.cathode): the circuit's `heaters` block
   (the oxide constants, the heater's voltage ratio, warm or cold start) and a HeatedCathode
   per tube instance; optional as noise is;
@@ -588,6 +589,47 @@ class TubeNoise:
 
 
 @dataclass(frozen=True)
+class FlickerCurrent:
+    """1/f noise current of one-sided density `kf_a2 / f` (A^2/Hz at f in Hz) from a through
+    the source to b (CHAINS_PLAN.md NH2: an op-amp's voltage and current noise below their
+    corners). Its samples are unit flicker (varimu.devices.noise.FlickerFilter) on the streams
+    key(seed, name, STREAM_FLICKER) and STREAM_FLICKER_START, times sqrt(kf_a2)."""
+
+    name: str
+    a: str
+    b: str
+    kf_a2: float
+
+
+TRANSISTOR_FAMILIES = ("bjt", "jfet")
+
+
+@dataclass(frozen=True)
+class TransistorNoise:
+    """A transistor instance's noise (CHAINS_PLAN.md NH2) on device element `device`, its
+    currents and gm at the last accepted step, as two currents to its reference pin (the
+    emitter, the source) like TubeNoise's:
+
+    - `family` "bjt" (pins c, b, e): collector shot noise 2 q |Ic| from c to e; base shot noise
+      2 q |Ib| and flicker kf |Ib|^af / f from b to e (SPICE's BJT noise; RB's Johnson noise
+      is its part's resistor's).
+    - `family` "jfet" (pins d, g, s): channel noise (8 / 3) k T gm and flicker kf |Id|^af / f
+      from d to s (SPICE's JFET noise, gm = dId / dVgs); the gate's shot noise 2 q |Ig| from
+      g to s.
+
+    `temperature_k` is the channel's (a JFET's thermal noise; unused by a BJT). kf in
+    A^(2 - af) (SPICE's KF), af dimensionless (AF); kf 0: no flicker. varimu.devices.noise
+    has the densities and streams."""
+
+    name: str
+    device: str
+    family: str
+    temperature_k: float
+    kf: float
+    af: float
+
+
+@dataclass(frozen=True)
 class HeatedCathode:
     """Device element `device` (a triode, pentode or vacuum diode instance) has a heated
     cathode (B6): its currents follow the circuit's cathode temperature through the
@@ -751,6 +793,8 @@ Element = (
     | Vccs
     | NoiseCurrent
     | TubeNoise
+    | FlickerCurrent
+    | TransistorNoise
     | HeatedCathode
     | Device
     | Plate
@@ -815,6 +859,8 @@ _PREFIX = {
     Vccs: "G",
     NoiseCurrent: "I",
     TubeNoise: "B",
+    FlickerCurrent: "I",
+    TransistorNoise: "B",
     HeatedCathode: "B",
     Plate: "V",
     Spring: "V",
@@ -849,7 +895,7 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b, el.core)
     if isinstance(el, Vccs):
         return (el.pos, el.neg, el.ctrl_pos, el.ctrl_neg)
-    if isinstance(el, NoiseCurrent):
+    if isinstance(el, NoiseCurrent | FlickerCurrent):
         return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
@@ -997,7 +1043,9 @@ class CircuitIR:
             Section(
                 s.title,
                 tuple(
-                    e for e in s.elements if not isinstance(e, Device | TubeNoise | HeatedCathode)
+                    e
+                    for e in s.elements
+                    if not isinstance(e, Device | TubeNoise | TransistorNoise | HeatedCathode)
                 ),
             )
             for s in self.sections
@@ -1104,6 +1152,16 @@ class CircuitIR:
             elif isinstance(el, TubeNoise):
                 for what in ("shot_k", "partition", "flicker_v2"):
                     _nonneg(f"{el.name}.{what}", getattr(el, what))
+            elif isinstance(el, FlickerCurrent):
+                _nonneg(f"{el.name}.kf_a2", el.kf_a2)
+            elif isinstance(el, TransistorNoise):
+                if el.family not in TRANSISTOR_FAMILIES:
+                    raise IRError(
+                        f"{el.name}: family {el.family!r}, not one of {TRANSISTOR_FAMILIES}"
+                    )
+                _positive(f"{el.name}.temperature_k", el.temperature_k)
+                _nonneg(f"{el.name}.kf", el.kf)
+                _positive(f"{el.name}.af", el.af)
             elif isinstance(el, HeatedCathode):
                 _positive(f"{el.name}.is0_a", el.is0_a)
             elif isinstance(el, Plate):
@@ -1163,6 +1221,15 @@ class CircuitIR:
                     raise IRError(f"{el.name}: {el.device} is not a triode or pentode instance")
                 if el.partition > 0 and not isinstance(m, Pentode):
                     raise IRError(f"{el.name}: partition noise needs a pentode")
+                if el.device in noisy:
+                    raise IRError(f"{el.name}: {el.device} has noise twice")
+                noisy.add(el.device)
+            if isinstance(el, TransistorNoise):
+                d = devices.get(el.device)
+                m = None if d is None else models[d.model]
+                want = Bjt if el.family == "bjt" else jfet_mod.Jfet
+                if not isinstance(m, want):
+                    raise IRError(f"{el.name}: {el.device} is not a {el.family.upper()} instance")
                 if el.device in noisy:
                     raise IRError(f"{el.name}: {el.device} has noise twice")
                 noisy.add(el.device)
@@ -1478,6 +1545,8 @@ _ELEMENT_KINDS = {
     "vccs": Vccs,
     "noise_current": NoiseCurrent,
     "tube_noise": TubeNoise,
+    "flicker_current": FlickerCurrent,
+    "transistor_noise": TransistorNoise,
     "heated_cathode": HeatedCathode,
     "device": Device,
     "plate": Plate,

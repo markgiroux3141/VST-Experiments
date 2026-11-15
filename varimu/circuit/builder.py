@@ -173,7 +173,15 @@ is in every build, the circuit's noise on or off (its stream keyed by the file's
 else 0). Every
 triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
 varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
-independent cathodes average).
+independent cathodes average). A `bjt` or `jfet` part (CHAINS_PLAN.md NH2) gets its
+parasitic resistors' Johnson noise (RB, RC, RE; RD, RS) and a TransistorNoise `BN_<name>` (the
+block's temperature_k for a JFET's channel; KF and AF from config/device_noise.yaml by the
+component's name, none listed: no flicker). An `opamp` part with the datasheet's noise
+(`en_v_rthz`, `in_a_rthz`, each with an optional 1/f corner `en_corner_hz` / `in_corner_hz`)
+gets `IN_<NAME>_en` (a NoiseCurrent of (OPAMP_GM_S en)^2 into its integrator node: en referred
+to the input through the first stage), `IN_<NAME>_ip` / `IN_<NAME>_im` (in from each input to
+ground) and, with a corner, FlickerCurrents `IF_<NAME>_en` / `_ip` / `_im` of density
+white x corner / f; an op-amp without them is noiseless (the circuit's own resistors aside).
 
 Event kernels (HYBRID_PHYSICS_PLAN.md H3; `build(..., events=True)`, off by default): every
 `device` part of a thyratron becomes its ThyratronEvents (its `devices` entry's `events`
@@ -203,6 +211,7 @@ from typing import Any
 
 from varimu.circuit import parts, spice
 from varimu.circuit.ir import (
+    GROUND,
     Capacitor,
     CircuitIR,
     Control,
@@ -211,6 +220,7 @@ from varimu.circuit.ir import (
     DeviceModel,
     EdgeEvents,
     Element,
+    FlickerCurrent,
     HeatedCathode,
     HeaterSpec,
     Inductor,
@@ -226,6 +236,7 @@ from varimu.circuit.ir import (
     TapeReduction,
     TapeReductionPoint,
     ThyratronEvents,
+    TransistorNoise,
     TubeNoise,
     Vccs,
     VoltageProbe,
@@ -362,8 +373,26 @@ class Noise:
 _NOISY = {
     "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
     "capsule": None, "capsule_dual": None, "harp": None, "clav_strings": None, "moving_coil": None,
-    "ribbon_motor": None,
+    "ribbon_motor": None, "bjt": None, "jfet": None,
 }  # fmt: skip
+
+DEVICE_NOISE_FILE = Path(__file__).resolve().parents[2] / "config" / "device_noise.yaml"
+
+
+def device_noise_table() -> dict[str, dict]:
+    """config/device_noise.yaml's `flicker` block: component name -> {kf, af, source}."""
+    import yaml
+
+    d = yaml.safe_load(DEVICE_NOISE_FILE.read_text(encoding="utf-8")) or {}
+    return dict(d.get("flicker") or {})
+
+
+def _flicker_of(component: str) -> tuple[float, float]:
+    """(kf, af) of a transistor component (its name, any version); (0, 1): none listed."""
+    e = device_noise_table().get(component.split("@", 1)[0])
+    if e is None:
+        return 0.0, 1.0
+    return float(e["kf"]), float(e["af"])
 
 
 def _numerical(ctx: Context, x: Any) -> bool:
@@ -378,10 +407,14 @@ def _numerical(ctx: Context, x: Any) -> bool:
     return False
 
 
-def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element]) -> list[Element]:
+def _noise_elements(
+    ctx: Context, kind: str, name: str, entry: Mapping, els: list[Element]
+) -> list[Element]:
     """A part's noise elements (the module docstring says which)."""
     nz = ctx.noise
     out: list[Element] = []
+    if kind == "opamp":
+        return _opamp_noise(ctx, name, entry, els)
     if kind in _NOISY:
         key = _NOISY[kind]
         if key is not None and _numerical(ctx, entry.get(key)):
@@ -395,6 +428,13 @@ def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element])
             if isinstance(e, Resistor) and e.a not in cores and e.b not in cores:
                 psd = 4.0 * noise_mod.K_B * nz.temperature_k / e.r_ohm
                 out.append(NoiseCurrent(f"IN_{e.name}", e.a, e.b, psd))
+        if kind in ("bjt", "jfet"):
+            for e in els:
+                if isinstance(e, Device):
+                    kf, af = _flicker_of(ctx.types.get(e.model, e.model))
+                    out.append(
+                        TransistorNoise(f"BN_{e.name}", e.name, kind, nz.temperature_k, kf, af)
+                    )
     elif kind == "device":
         by_name = {m.name: m for m in ctx.models.values()}
         for e in els:
@@ -409,6 +449,37 @@ def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element])
                         nz.flicker_v2 / ctx.parallel.get(m.name, 1),
                     )
                 )
+    return out
+
+
+OPAMP_NOISE_KEYS = ("en_v_rthz", "in_a_rthz", "en_corner_hz", "in_corner_hz")
+
+
+def _opamp_noise(ctx: Context, name: str, entry: Mapping, els: list[Element]) -> list[Element]:
+    """An op-amp part's noise (the module docstring): en into its integrator node, in at its
+    inputs, each with its 1/f corner."""
+    v = {
+        k: None if entry.get(k) is None else float(ctx.physical(f"{name}.{k}", entry[k]))
+        for k in OPAMP_NOISE_KEYS
+    }
+    upper = name.upper()
+    r_in = next(e for e in els if isinstance(e, Resistor) and e.name == f"R{upper}_i")
+    n1 = f"{name.lower()}_1"
+    out: list[Element] = []
+    terms = []
+    if v["en_v_rthz"] is not None:
+        gm_en = parts.OPAMP_GM_S * v["en_v_rthz"]
+        terms.append(("en", GROUND, n1, gm_en * gm_en, v["en_corner_hz"]))
+    if v["in_a_rthz"] is not None:
+        a2 = v["in_a_rthz"] * v["in_a_rthz"]
+        terms += [("ip", r_in.a, GROUND, a2, v["in_corner_hz"]),
+                  ("im", r_in.b, GROUND, a2, v["in_corner_hz"])]  # fmt: skip
+    for tag, a, b, psd, corner in terms:
+        if a == b:
+            continue  # an input on ground: its current noise flows nowhere
+        out.append(NoiseCurrent(f"IN_{upper}_{tag}", a, b, psd))
+        if corner is not None and corner > 0:
+            out.append(FlickerCurrent(f"IF_{upper}_{tag}", a, b, psd * corner))
     return out
 
 
@@ -497,7 +568,7 @@ def expand_part(ctx: Context, name: str, entry: Mapping, *, extra=()) -> list[El
     if ctx.events and kind == "device":
         els = [_events_element(ctx, e) if isinstance(e, Device) else e for e in els]
     if ctx.noise is not None:
-        els = els + _noise_elements(ctx, kind, entry, els)
+        els = els + _noise_elements(ctx, kind, name, entry, els)
     if ctx.heaters is not None and kind == "device":
         els = els + _heated(ctx, els)
     return els
@@ -1428,6 +1499,11 @@ for _name, _macro in {
             "swing_v": Param("physical", None),
             "slew_v_per_s": Param("physical", None),
             "open_collector": Param("device", None),
+            # Noise (CHAINS_PLAN.md NH2): read only under the circuit's noise.
+            "en_v_rthz": Param("physical", None),
+            "in_a_rthz": Param("physical", None),
+            "en_corner_hz": Param("physical", None),
+            "in_corner_hz": Param("physical", None),
         },
         optional_nodes=1,
     ),

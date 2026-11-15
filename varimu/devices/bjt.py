@@ -38,8 +38,9 @@ the device (internal nodes where a resistance is nonzero; varimu.circuit.parts.b
 the device's nonlinear depletion charge: CJE at zero bias (a forward-biased junction's is
 at least that), CJC at a stated reverse bias (the component file's `parasitics` block says
 which). RB is constant (IRB, RBM unused). No substrate, no excess phase.
-No noise yet (shot noise of the junctions and RB's Johnson noise are later work: a `bjt`
-part gets no noise elements under a noise block).
+Noise (CHAINS_PLAN.md NH2): under a circuit's noise a `bjt` part gets a TransistorNoise
+(collector and base shot noise, base flicker from config/device_noise.yaml) and its parasitic
+resistors' Johnson noise (RB, RC, RE): varimu.devices.noise, varimu.circuit.builder.
 
 **Temperature (2026-11-06, DEVICE_BUILDER_PLAN.md B11).** A model whose `temp_k` is set is
 evaluated at that junction temperature, by SPICE's scaling (ngspice `bjttemp.c`, TLEV 0):

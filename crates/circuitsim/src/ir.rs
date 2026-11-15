@@ -205,6 +205,9 @@ fn opt_count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<usize>, D:
     }
 }
 
+/// [`TransistorNoise::family`]'s values.
+pub const TRANSISTOR_FAMILIES: [&str; 2] = ["bjt", "jfet"];
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Element {
@@ -218,6 +221,8 @@ pub enum Element {
     Vccs(Vccs),
     NoiseCurrent(NoiseCurrent),
     TubeNoise(TubeNoise),
+    FlickerCurrent(FlickerCurrent),
+    TransistorNoise(TransistorNoise),
     HeatedCathode(HeatedCathode),
     Device(Device),
     Plate(Plate),
@@ -831,6 +836,34 @@ pub struct TubeNoise {
     pub flicker_v2: f64,
 }
 
+/// A 1/f noise current of one-sided density `kf_a2 / f` (A^2/Hz) from `a` through the
+/// source to `b` (CHAINS_PLAN.md NH2: an op-amp's noise below its corners): unit flicker
+/// ([`crate::noise`]) on its own streams, times `sqrt(kf_a2)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FlickerCurrent {
+    pub name: String,
+    pub a: String,
+    pub b: String,
+    pub kf_a2: f64,
+}
+
+/// A transistor instance's noise (CHAINS_PLAN.md NH2) on device element `device`, at the last
+/// accepted step's currents and gm, as two currents to its reference pin like
+/// [`TubeNoise`]'s: `family` "bjt" (pins c, b, e): `2 q |Ic|` c to e; `2 q |Ib|` and flicker
+/// `kf |Ib|^af / f` b to e. "jfet" (pins d, g, s): `(8/3) k T gm` and flicker `kf |Id|^af / f`
+/// d to s; `2 q |Ig|` g to s. Python's `varimu.circuit.ir.TransistorNoise`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransistorNoise {
+    pub name: String,
+    pub device: String,
+    pub family: String,
+    pub temperature_k: f64,
+    pub kf: f64,
+    pub af: f64,
+}
+
 /// Device element `device` (a triode, pentode or vacuum diode instance) has a heated
 /// cathode (B6): its currents follow the circuit's cathode temperature (the space-charge
 /// shift and the emission ceiling, [`crate::cathode`]); `is0_a` its emission at the rated
@@ -1269,6 +1302,8 @@ impl Element {
             Element::Vccs(e) => &e.name,
             Element::NoiseCurrent(e) => &e.name,
             Element::TubeNoise(e) => &e.name,
+            Element::FlickerCurrent(e) => &e.name,
+            Element::TransistorNoise(e) => &e.name,
             Element::HeatedCathode(e) => &e.name,
             Element::Device(e) => &e.name,
             Element::Plate(e) => &e.name,
@@ -1297,7 +1332,10 @@ impl Element {
             Element::Winding(e) => vec![&e.a, &e.b, &e.core],
             Element::Vccs(e) => vec![&e.pos, &e.neg, &e.ctrl_pos, &e.ctrl_neg],
             Element::NoiseCurrent(e) => vec![&e.a, &e.b],
-            Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
+            Element::FlickerCurrent(e) => vec![&e.a, &e.b],
+            Element::TubeNoise(_) | Element::TransistorNoise(_) | Element::HeatedCathode(_) => {
+                vec![]
+            }
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
             Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
             Element::Spring(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
@@ -1329,12 +1367,16 @@ impl Element {
             Element::Resistor(e) => vec![&mut e.a, &mut e.b],
             Element::Capacitor(e) => vec![&mut e.a, &mut e.b],
             Element::Inductor(e) => vec![&mut e.a, &mut e.b],
-            Element::Coupling(_) | Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
+            Element::Coupling(_)
+            | Element::TubeNoise(_)
+            | Element::TransistorNoise(_)
+            | Element::HeatedCathode(_) => vec![],
             Element::VoltageSource(e) => vec![&mut e.pos, &mut e.neg],
             Element::SineSource(e) => vec![&mut e.pos, &mut e.neg],
             Element::Winding(e) => vec![&mut e.a, &mut e.b, &mut e.core],
             Element::Vccs(e) => vec![&mut e.pos, &mut e.neg, &mut e.ctrl_pos, &mut e.ctrl_neg],
             Element::NoiseCurrent(e) => vec![&mut e.a, &mut e.b],
+            Element::FlickerCurrent(e) => vec![&mut e.a, &mut e.b],
             Element::Device(e) => e.nodes.iter_mut().collect(),
             Element::Plate(e) => vec![&mut e.sense_pos, &mut e.sense_neg, &mut e.out],
             Element::Spring(e) => vec![&mut e.sense_pos, &mut e.sense_neg, &mut e.out],
@@ -1731,6 +1773,22 @@ impl CircuitIr {
                     nonneg(&format!("{name}.flicker_v2"), e.flicker_v2)?;
                     'B'
                 }
+                Element::FlickerCurrent(e) => {
+                    nonneg(&format!("{name}.kf_a2"), e.kf_a2)?;
+                    'I'
+                }
+                Element::TransistorNoise(e) => {
+                    if !TRANSISTOR_FAMILIES.contains(&e.family.as_str()) {
+                        return err(format!(
+                            "{name}: family {:?}, not one of {TRANSISTOR_FAMILIES:?}",
+                            e.family
+                        ));
+                    }
+                    positive(&format!("{name}.temperature_k"), e.temperature_k)?;
+                    nonneg(&format!("{name}.kf"), e.kf)?;
+                    positive(&format!("{name}.af"), e.af)?;
+                    'B'
+                }
                 Element::HeatedCathode(e) => {
                     positive(&format!("{name}.is0_a"), e.is0_a)?;
                     'B'
@@ -2035,6 +2093,26 @@ impl CircuitIr {
                 };
                 if t.partition > 0.0 && !pentode {
                     return err(format!("{}: partition noise needs a pentode", t.name));
+                }
+                if !noisy.insert(t.device.as_str()) {
+                    return err(format!("{}: {} has noise twice", t.name, t.device));
+                }
+            }
+            if let Element::TransistorNoise(t) = el {
+                let m = devices
+                    .get(t.device.as_str())
+                    .map(|d| models[d.model.as_str()]);
+                let ok = match t.family.as_str() {
+                    "bjt" => matches!(m, Some(DeviceModel::Bjt(_))),
+                    _ => matches!(m, Some(DeviceModel::Jfet(_))),
+                };
+                if !ok {
+                    return err(format!(
+                        "{}: {} is not a {} instance",
+                        t.name,
+                        t.device,
+                        t.family.to_uppercase()
+                    ));
                 }
                 if !noisy.insert(t.device.as_str()) {
                     return err(format!("{}: {} has noise twice", t.name, t.device));

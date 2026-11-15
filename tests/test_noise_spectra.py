@@ -17,6 +17,11 @@ CASES = {
     "johnson": lambda: nt.johnson(),
     "triode": lambda: nt.tube("12AX7@1", vb=250.0, rl=100e3, vg=-1.5),
     "pentode": lambda: nt.tube("6V6GT@1", vb=250.0, rl=5e3, vg=-12.5, vs=250.0),
+    # CHAINS_PLAN.md NH2: a fixed 1/f current, a BJT's shot and base flicker, a JFET's channel
+    # noise and drain flicker.
+    "flicker": lambda: nt.flicker(),
+    "bjt": lambda: nt.bjt(),
+    "jfet": lambda: nt.jfet(),
 }
 
 
@@ -36,32 +41,41 @@ def _check(bands, tol_low_db: float, tol_db: float, split_hz: float = 256.0):
     assert not bad, f"bands off theory (centre Hz, dB): {bad}; all: {bands}"
 
 
+# Cases whose low octaves are 1/f: their estimate scatters +-1.3 dB over seeds in 4 s, within
+# 0.53 dB in 16 s (measured over seeds 11-14, NH2).
+LONG = {"flicker", "bjt", "jfet"}
+
+
 @pytest.mark.parametrize("name", CASES)
 def test_circuitsim_spectra_match_theory(name):
-    """4 s at production, 16 Hz-16 kHz: within 0.5 dB per octave from 256 Hz up (measured
-    within 0.30), 1.0 dB below (few bins: measured within 0.47)."""
+    """4 s at production (16 s for LONG), 16 Hz-16 kHz: within 0.5 dB per octave from 256 Hz
+    up (measured within 0.30), 1.0 dB below (few bins: measured within 0.53)."""
     case = CASES[name]()
-    v = nt.run(case, 4.0, "circuitsim")
+    v = nt.run(case, 16.0 if name in LONG else 4.0, "circuitsim")
     _check(nt.octaves(case, v, 16.0, 20000.0), 1.0, 0.5)
 
 
 @pytest.mark.parametrize("name", CASES)
 def test_ngspice_spectra_match_theory(name):
-    """1 s (ngspice runs these ~3-30x slower than real time), 64 Hz-16 kHz: within 0.6 dB
-    per octave from 256 Hz up, 1.0 dB below (measured within 0.45)."""
+    """1 s (3 s for LONG; ngspice runs these ~3-30x slower than real time), 64 Hz-16 kHz:
+    within 0.6 dB per octave from 256 Hz up, 1.0 dB below (measured within 0.45)."""
     _ngspice()
     case = CASES[name]()
-    v = nt.run(case, 1.0, "ngspice")
+    v = nt.run(case, 3.0 if name in LONG else 1.0, "ngspice")
     _check(nt.octaves(case, v, 64.0, 20000.0, nperseg=2**13), 1.0, 0.6)
 
 
-def test_the_engines_agree_on_the_noise_waveform():
+@pytest.mark.parametrize("name", ["triode", "bjt", "jfet"])
+def test_the_engines_agree_on_the_noise_waveform(name):
     """The same streams through both engines (ngspice as a reference: a timepoint on every
     sample; at its production settings its interpolation leaves -31 dB): the triode's noise
-    (shot and flicker) below 20 kHz. Measured -61 dB here (-51 dB on triode_stage.yaml, a
-    ~0.1-0.2% level offset, where circuitsim's 2x and 8x agree to -53 dB): bound -55 dB."""
+    (shot and flicker) below 20 kHz, a BJT's (collector and base shot, base flicker) and a
+    JFET's (channel, drain flicker; NH2). Triode measured -61 dB here (-51 dB on
+    triode_stage.yaml, a ~0.1-0.2% level offset, where circuitsim's 2x and 8x agree to
+    -53 dB), the BJT -106 dB, the JFET -78 dB (its gm by ngspice's 1 mV difference): bound
+    -55 dB."""
     _ngspice()
-    case = CASES["triode"]()
+    case = CASES[name]()
     a = nt.run(case, 0.25, "circuitsim", settle_s=0.05)
     b = nt.run(case, 0.25, "ngspice", reference=True, settle_s=0.05)
     sos = butter(8, 20000.0, fs=nt.RATE, output="sos")

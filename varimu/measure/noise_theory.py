@@ -105,6 +105,106 @@ def tube(device: str, *, vb: float, rl: float, vg: float, vs: float | None = Non
     return Case(_ir(device, els, (m,)), "v(out)", theory)
 
 
+def flicker(r_ohm: float = 1e4, c_f: float = 1e-8, kf_a2: float = 1e-19) -> Case:
+    """A fixed 1/f current (CHAINS_PLAN.md NH2) into R || C: S_v = R^2 kf / f / (1 + (f/fc)^2)."""
+    els = (
+        I.Resistor("RIN", "in", "0", 1e3),
+        I.Resistor("R1", "out", "0", r_ohm),
+        I.FlickerCurrent("IF_1", "out", "0", kf_a2),
+        I.Capacitor("C1", "out", "0", c_f),
+    )
+    fc = 1 / (2 * np.pi * r_ohm * c_f)
+
+    def theory(f, op):
+        return r_ohm**2 * kf_a2 / f / (1 + (f / fc) ** 2) * nz.interp_gain(f, RATE)
+
+    return Case(_ir("flicker", els, ()), "v(out)", theory)
+
+
+def bjt(
+    device: str = "BC550C@1",
+    *,
+    vcc: float = 15.0,
+    rl: float = 5e3,
+    rs: float = 1e3,
+    vbb: float = 0.62,
+    kf: float = 1e-15,
+    af: float = 1.2,
+) -> Case:
+    """A common-emitter stage (NH2): the base through `rs` from a stiff `vbb`, the collector
+    through `rl` to `vcc`, the emitter grounded; transistor noise only (its parasitics zeroed,
+    no resistor noise). Collector shot noise into rl || 1/go, and the base's shot and flicker
+    noise through Zb = rs || r_pi times gm: S_v = R^2 (2 q Ic + gm^2 Zb^2 (2 q Ib + kf Ib^af / f)),
+    the model's gm, r_pi, go and currents at the run's operating point (dIb / dVce's feedback
+    left out: ~1e-4 of it)."""
+    m = dataclasses.replace(
+        load_device(device), name="QM", rb_ohm=0.0, rc_ohm=0.0, re_ohm=0.0, cje_f=0.0, cjc_f=0.0
+    )
+    els = [
+        I.Resistor("RIN", "in", "0", 1e3),
+        I.VoltageSource("VCC", "c", "0", vcc),
+        I.Resistor("RL", "c", "out", rl),
+        I.VoltageSource("VBB", "bb", "0", vbb),
+        I.Resistor("RS", "bb", "b", rs),
+        I.Device("Q1", "QM", ("out", "b", "0")),
+        I.TransistorNoise("BN_Q1", "Q1", "bjt", T_K, kf, af),
+    ]
+
+    def theory(f, op):
+        vce = op["v(out)"]
+        ic = (vcc - vce) / rl
+        # The base voltage that gives ic at vce (bisection on the model).
+        lo, hi = 0.3, 0.9
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            lo, hi = (mid, hi) if float(m.currents(vce, mid)[0]) < ic else (lo, mid)
+        vbe = 0.5 * (lo + hi)
+        _, ib = (float(x) for x in m.currents(vce, vbe))
+        j = m.jacobian(vce, vbe)
+        go, gm, gpi = float(j[0][0]), float(j[0][1]), float(j[1][1])
+        zb = 1 / (1 / rs + gpi)
+        r = 1 / (1 / rl + go)
+        base = 2 * nz.Q_E * ib + nz.flicker_k(kf, ib, af) / f
+        return r**2 * (2 * nz.Q_E * ic + gm**2 * zb**2 * base) * nz.interp_gain(f, RATE)
+
+    return Case(_ir("bjt", els, (m,)), "v(out)", theory)
+
+
+def jfet(
+    device: str = "2N5457@1",
+    *,
+    vdd: float = 15.0,
+    rl: float = 4.7e3,
+    vg: float = -0.5,
+    kf: float = 1e-16,
+    af: float = 1.0,
+) -> Case:
+    """A common-source stage (NH2): the gate on a stiff `vg`, the drain through `rl` to `vdd`,
+    the source grounded; transistor noise only (no RD / RS, no resistor noise). Channel noise
+    and drain flicker into rl || 1/gds: S_v = R^2 ((8/3) k T gm + kf Id^af / f) (the gate's shot
+    noise shorted by the stiff gate)."""
+    m = dataclasses.replace(load_device(device), name="JM", rd_ohm=0.0, rs_ohm=0.0)
+    els = [
+        I.Resistor("RIN", "in", "0", 1e3),
+        I.VoltageSource("VDD", "d", "0", vdd),
+        I.Resistor("RL", "d", "out", rl),
+        I.VoltageSource("VG", "g", "0", vg),
+        I.Device("J1", "JM", ("out", "g", "0")),
+        I.TransistorNoise("BN_J1", "J1", "jfet", T_K, kf, af),
+    ]
+
+    def theory(f, op):
+        vds = op["v(out)"]
+        idr, _ = (float(x) for x in m.currents(vds, vg))
+        j = m.jacobian(vds, vg)
+        gds, gm = float(j[0][0]), float(j[0][1])
+        r = 1 / (1 / rl + gds)
+        s = nz.channel_a2(gm, T_K) + nz.flicker_k(kf, idr, af) / f
+        return r**2 * s * nz.interp_gain(f, RATE)
+
+    return Case(_ir("jfet", els, (m,)), "v(out)", theory)
+
+
 def _renamed(m: Triode | Pentode, name: str):
     import dataclasses
 

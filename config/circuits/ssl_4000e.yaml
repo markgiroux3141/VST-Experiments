@@ -95,6 +95,8 @@ values:
   u_r_out_ohm: {value: 30.0, source: "provisional: model knowledge (a 5534's open-loop output resistance, tens of ohms; as clean_pre.yaml)"}
   u_swing_v: {value: 15.4, source: "derived: the sheet's 26 V peak to peak on +-15 V (2 V short of each rail) on the 82E01's +-18 V rails, 16 V, less the clamp diode's ~0.6 V"}
   u_noise_ohm: {value: 989.0, source: "derived: the NE5534's (not A) 4 nV/rtHz at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf) as a resistor's Johnson noise at 20 C, (4e-9)^2 / 4kT (heard only under a noise block)"}
+  u_in_a_rthz: {value: 0.6e-12, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (SLOS070D, Electrical Characteristics, typ.: In 0.6 pA/rtHz at 1 kHz, NE5534; heard only under the noise, CHAINS_PLAN.md NH2)"}
+  u_in_corner_hz: {value: 491.0, source: "derived: In 2.5 pA/rtHz at 30 Hz against 0.6 at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (SLOS070D, Electrical Characteristics, typ.)), as in^2 (1 + fc / f): fc = 30 ((2.5 / 0.6)^2 - 1)"}
   passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
   passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
   tol_resistor_pct: {value: 5.0, source: "sch: '* = 5% tol' (the starred parts; the unstarred ones too, provisional)"}
@@ -152,7 +154,7 @@ sections:
   - title: mic amp
     parts:
       RN: {R: [sy, t1p], r: u_noise_ohm, tolerance: none}
-      U1: {opamp: [t1p, n19, t1o], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      U1: {opamp: [t1p, n19, t1o], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v, in_a_rthz: u_in_a_rthz, in_corner_hz: u_in_corner_hz}
       R9: {R: [n19, n3], r: r9_ohm}
       C3: {C: [n3, "0"], c: c3_f}
       R10: {R: [n19, n4], r: r10_ohm}

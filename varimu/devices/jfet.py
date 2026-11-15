@@ -37,7 +37,9 @@ The device is stateless, like the BJT: the gate junctions' depletion charge isn'
 device's. RD and RS are linear elements the `jfet` part macro places around the device
 (internal nodes where nonzero), CGS and CGD linear capacitors at zero bias (an upper bound:
 a few pF, which audio impedances don't reach). No temperature (VTOTC, BETATCE, XTI, EG
-keep their TNOM values), no noise yet.
+keep their TNOM values). Noise (CHAINS_PLAN.md NH2): under a circuit's noise a `jfet` part
+gets a TransistorNoise (channel noise (8/3) k T gm, drain flicker, the gate's shot noise) and
+RD's and RS's Johnson noise.
 
 Component files (kind `jfet`, config/components/<name>/<N>.yaml): `polarity`, a `dc` block
 (vto_v, beta_a_per_v2, lambda_per_v, is_a, n, b, pb_v), a `parasitics` block (rd_ohm, rs_ohm,

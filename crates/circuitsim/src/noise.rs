@@ -423,6 +423,32 @@ enum Source {
         sig_grid: f64,
         gm: f64,
     },
+    /// A fixed 1/f current (`ir::FlickerCurrent`): unit flicker times `rt` = sqrt(kf_a2).
+    Flicker {
+        name: String,
+        col: usize,
+        rt: f64,
+        z: Stream,
+    },
+    /// A transistor's noise (`ir::TransistorNoise`): column `col` from port 0's pin (c, d)
+    /// to the reference pin, `col + 1` from port 1's (b, g).
+    Transistor {
+        name: String,
+        col: usize,
+        device: usize,
+        share: f64,
+        jfet: bool,
+        temperature_k: f64,
+        kf: f64,
+        af: f64,
+        main: Stream,
+        ctl: Stream,
+        flicker: Stream,
+        /// From the last accepted step: the white streams' deviations, the flicker's scale.
+        sig_main: f64,
+        sig_ctl: f64,
+        flick_rt: f64,
+    },
 }
 
 /// What [`NoiseRun::new`] takes per source.
@@ -441,7 +467,26 @@ pub enum NoiseSpec {
         partition: f64,
         flicker_v2: f64,
     },
+    /// A 1/f current of density `kf_a2 / f`.
+    Flicker {
+        name: String,
+        kf_a2: f64,
+    },
+    /// A BJT's (`jfet` false) or JFET's noise, `device` an instance index.
+    Transistor {
+        name: String,
+        device: usize,
+        share: f64,
+        jfet: bool,
+        temperature_k: f64,
+        kf: f64,
+        af: f64,
+    },
 }
+
+/// A JFET's channel noise factor: 4 k T gamma gm, gamma 2/3 (SPICE's (8/3) k T gm; Python's
+/// `varimu.devices.noise.JFET_CHANNEL_GAMMA`).
+pub const JFET_CHANNEL_GAMMA: f64 = 2.0 / 3.0;
 
 /// A run's noise sources (B5), as current columns of the circuit: a resistor's one
 /// (its two nodes), a tube's two (plate to cathode, control grid to cathode). The
@@ -478,8 +523,8 @@ impl NoiseRun {
         columns: Vec<(Option<usize>, Option<usize>)>,
         mains: Option<(f64, Vec<usize>)>,
     ) -> NoiseRun {
-        let tubes = specs.iter().any(|s| matches!(s, NoiseSpec::Tube { .. }));
-        let filter = (tubes || mains.is_some()).then(|| FlickerFilter::new(rate_hz));
+        let flickers = specs.iter().any(|s| !matches!(s, NoiseSpec::White { .. }));
+        let filter = (flickers || mains.is_some()).then(|| FlickerFilter::new(rate_hz));
         let mains = mains.map(|(rms, waves)| {
             let f = filter.as_ref().expect("made with a mains wander");
             let mut s = Stream::new(
@@ -544,12 +589,68 @@ impl NoiseRun {
                     });
                     col += 2;
                 }
+                NoiseSpec::Flicker { name, kf_a2 } => {
+                    let flick = Flicker::new(
+                        filter
+                            .as_ref()
+                            .expect("made when there are flicker sources"),
+                        key(seed, &name, STREAM_FLICKER),
+                        key(seed, &name, STREAM_FLICKER_START),
+                    );
+                    sources.push(Source::Flicker {
+                        z: Stream::new(
+                            Normals::new(key(seed, &name, STREAM_FLICKER), 0),
+                            Some(flick),
+                        ),
+                        name,
+                        col,
+                        rt: kf_a2.sqrt(),
+                    });
+                    col += 1;
+                }
+                NoiseSpec::Transistor {
+                    name,
+                    device,
+                    share,
+                    jfet,
+                    temperature_k,
+                    kf,
+                    af,
+                } => {
+                    let white =
+                        |stream| Stream::new(Normals::new(key(seed, &name, stream), 0), None);
+                    let flick = Flicker::new(
+                        filter.as_ref().expect("made when there are transistors"),
+                        key(seed, &name, STREAM_FLICKER),
+                        key(seed, &name, STREAM_FLICKER_START),
+                    );
+                    sources.push(Source::Transistor {
+                        main: white(STREAM_MAIN),
+                        ctl: white(STREAM_GRID),
+                        flicker: Stream::new(
+                            Normals::new(key(seed, &name, STREAM_FLICKER), 0),
+                            Some(flick),
+                        ),
+                        name,
+                        col,
+                        device,
+                        share,
+                        jfet,
+                        temperature_k,
+                        kf,
+                        af,
+                        sig_main: 0.0,
+                        sig_ctl: 0.0,
+                        flick_rt: 0.0,
+                    });
+                    col += 2;
+                }
             }
         }
         assert_eq!(
             col,
             columns.len(),
-            "a column per white source, two per tube"
+            "a column per white or flicker source, two per tube or transistor"
         );
         NoiseRun {
             seed,
@@ -608,6 +709,14 @@ impl NoiseRun {
                     grid.seek(k0, w, None);
                     flicker.seek(k0, w, f);
                 }
+                Source::Flicker { z, .. } => z.seek(k0, w, f),
+                Source::Transistor {
+                    main, ctl, flicker, ..
+                } => {
+                    main.seek(k0, w, None);
+                    ctl.seek(k0, w, None);
+                    flicker.seek(k0, w, f);
+                }
             }
         }
     }
@@ -631,6 +740,24 @@ impl NoiseRun {
                 } => {
                     out[*col] = sig_shot * shot.at(local) + gm * flicker_rt * flicker.at(local);
                     out[*col + 1] = sig_grid * grid.at(local);
+                }
+                Source::Flicker { col, rt, z, .. } => out[*col] = rt * z.at(local),
+                Source::Transistor {
+                    col,
+                    jfet,
+                    main,
+                    ctl,
+                    flicker,
+                    sig_main,
+                    sig_ctl,
+                    flick_rt,
+                    ..
+                } => {
+                    // The flicker rides on the drain (a JFET) or the base (a BJT).
+                    let f = flick_rt * flicker.at(local);
+                    let (fm, fc) = if *jfet { (f, 0.0) } else { (0.0, f) };
+                    out[*col] = sig_main * main.at(local) + fm;
+                    out[*col + 1] = sig_ctl * ctl.at(local) + fc;
                 }
             }
         }
@@ -694,6 +821,37 @@ impl NoiseRun {
     pub fn observe_with(&mut self, mut eval: impl FnMut(usize) -> ([f64; 4], [f64; 16])) {
         let rate = self.rate_hz;
         for s in &mut self.sources {
+            if let Source::Transistor {
+                device,
+                share,
+                jfet,
+                temperature_k,
+                kf,
+                af,
+                sig_main,
+                sig_ctl,
+                flick_rt,
+                ..
+            } = s
+            {
+                let (i, g) = eval(*device);
+                // Two ports, row-major: g[1] = d I(port 0) / d V(port 1), a JFET's gm.
+                let (i0, i1) = (i[0] * *share, i[1] * *share);
+                let main = if *jfet {
+                    4.0 * K_B * *temperature_k * JFET_CHANNEL_GAMMA * (g[1] * *share).max(0.0)
+                } else {
+                    2.0 * Q_E * i0.abs()
+                };
+                *sig_main = white_sigma(main, rate);
+                *sig_ctl = white_sigma(2.0 * Q_E * i1.abs(), rate);
+                let fi = if *jfet { i0 } else { i1 };
+                *flick_rt = if *kf > 0.0 {
+                    (*kf * fi.abs().powf(*af)).sqrt()
+                } else {
+                    0.0
+                };
+                continue;
+            }
             let Source::Tube {
                 device,
                 share,
@@ -770,6 +928,39 @@ impl NoiseRun {
                         (*shot, *grid, *flicker) = (os.clone(), og.clone(), of.clone());
                         (*sig_shot, *sig_grid, *gm) = (*oss, *osg, *ogm);
                     }
+                    (
+                        Source::Flicker { name, z, .. },
+                        Source::Flicker {
+                            name: on, z: oz, ..
+                        },
+                    ) if name == on => {
+                        *z = oz.clone();
+                    }
+                    (
+                        Source::Transistor {
+                            name,
+                            main,
+                            ctl,
+                            flicker,
+                            sig_main,
+                            sig_ctl,
+                            flick_rt,
+                            ..
+                        },
+                        Source::Transistor {
+                            name: on,
+                            main: om,
+                            ctl: oc,
+                            flicker: of,
+                            sig_main: osm,
+                            sig_ctl: osc,
+                            flick_rt: ofr,
+                            ..
+                        },
+                    ) if name == on => {
+                        (*main, *ctl, *flicker) = (om.clone(), oc.clone(), of.clone());
+                        (*sig_main, *sig_ctl, *flick_rt) = (*osm, *osc, *ofr);
+                    }
                     _ => {}
                 }
             }
@@ -793,6 +984,126 @@ mod tests {
                 0x7e68_b68a_ec7b_a23b
             ]
         );
+    }
+
+    /// A run of one transistor's (or a flicker current's) noise at fixed currents and gm:
+    /// `n` samples of each column.
+    fn transistor_columns(jfet: bool, kf: f64, n: usize) -> Vec<Vec<f64>> {
+        let spec = NoiseSpec::Transistor {
+            name: "BN_Q1".into(),
+            device: 0,
+            share: 1.0,
+            jfet,
+            temperature_k: 300.0,
+            kf,
+            af: 1.0,
+        };
+        let mut run = NoiseRun::new(
+            5,
+            96_000.0,
+            vec![spec],
+            vec![(Some(0), None), (Some(1), None)],
+            None,
+        );
+        run.set_step(1.0 / 96_000.0).unwrap();
+        // Ic / Id 1 mA, Ib / Ig 2 uA; a JFET's gm (d I0 / d V1) 4 mS.
+        let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
+        (i[0], i[1], g[1]) = (1e-3, 2e-6, 4e-3);
+        run.observe_with(|_| (i, g));
+        let mut cols = vec![Vec::with_capacity(n); 2];
+        let mut out = [0.0; 2];
+        for k in 0..n as u64 {
+            run.begin_sample(k);
+            run.fill(0.0, &mut out);
+            cols[0].push(out[0]);
+            cols[1].push(out[1]);
+        }
+        cols
+    }
+
+    fn var(x: &[f64]) -> f64 {
+        x.iter().map(|v| v * v).sum::<f64>() / x.len() as f64
+    }
+
+    #[test]
+    fn a_transistors_white_columns_have_their_densities() {
+        let n = 200_000;
+        let (half, tol) = (48_000.0, 0.02); // fs / 2; ~3 sigma of a 200k-sample variance
+        let close = |got: f64, want: f64, what: &str| {
+            assert!((got / want - 1.0).abs() < tol, "{what}: {got:e} vs {want:e}");
+        };
+        let b = transistor_columns(false, 0.0, n);
+        close(var(&b[0]), 2.0 * Q_E * 1e-3 * half, "BJT collector 2 q Ic");
+        close(var(&b[1]), 2.0 * Q_E * 2e-6 * half, "BJT base 2 q Ib");
+        let j = transistor_columns(true, 0.0, n);
+        let channel = 4.0 * K_B * 300.0 * JFET_CHANNEL_GAMMA * 4e-3;
+        close(var(&j[0]), channel * half, "JFET channel (8/3) k T gm");
+        close(var(&j[1]), 2.0 * Q_E * 2e-6 * half, "JFET gate 2 q Ig");
+    }
+
+    #[test]
+    fn a_transistors_flicker_rides_on_its_base_or_its_drain() {
+        let n = 4_000;
+        let (b0, b1) = (
+            transistor_columns(false, 0.0, n),
+            transistor_columns(false, 1e-12, n),
+        );
+        assert_eq!(b0[0], b1[0], "a BJT's collector carries no flicker");
+        assert_ne!(b0[1], b1[1], "a BJT's flicker is on its base");
+        let (j0, j1) = (
+            transistor_columns(true, 0.0, n),
+            transistor_columns(true, 1e-12, n),
+        );
+        assert_ne!(j0[0], j1[0], "a JFET's flicker is on its drain");
+        assert_eq!(j0[1], j1[1], "a JFET's gate carries no flicker");
+    }
+
+    #[test]
+    fn a_carried_run_continues_its_transistor_and_flicker_streams() {
+        let specs = || {
+            vec![
+                NoiseSpec::Flicker {
+                    name: "IF_U1_en".into(),
+                    kf_a2: 1e-20,
+                },
+                NoiseSpec::Transistor {
+                    name: "BN_J1".into(),
+                    device: 0,
+                    share: 1.0,
+                    jfet: true,
+                    temperature_k: 300.0,
+                    kf: 1e-15,
+                    af: 1.0,
+                },
+            ]
+        };
+        let cols = || vec![(Some(0), None), (Some(1), None), (Some(2), None)];
+        let make = || {
+            let mut r = NoiseRun::new(9, 96_000.0, specs(), cols(), None);
+            r.set_step(1.0 / 96_000.0).unwrap();
+            r
+        };
+        let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
+        (i[0], g[1]) = (1e-3, 4e-3);
+        let mut whole = make();
+        whole.observe_with(|_| (i, g));
+        let mut a = make();
+        a.observe_with(|_| (i, g));
+        let (mut x, mut y) = ([0.0; 3], [0.0; 3]);
+        for k in 0..500 {
+            whole.begin_sample(k);
+            a.begin_sample(k);
+        }
+        // A parameter change rebuilds the run: the new one carries the old one's streams.
+        let mut b = make();
+        b.carry(&a);
+        for k in 500..900 {
+            whole.begin_sample(k);
+            b.begin_sample(k);
+            whole.fill(0.5, &mut x);
+            b.fill(0.5, &mut y);
+            assert_eq!(x, y, "sample {k}");
+        }
     }
 
     #[test]

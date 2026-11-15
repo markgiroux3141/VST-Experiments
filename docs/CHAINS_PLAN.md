@@ -2084,15 +2084,62 @@ An option per chain, off by default: with both off, every IR, render and print i
 - Not done: an event take (a keyed instrument) replays the file's noise only (`Performance::noise`).
   Only keyed instruments have event takes, and none has pickups.
 
+**NH2 built (session 2, 2026-11-14/15): noise in transistors and op-amps.**
+- Two new IR elements, both optional, in Python (`varimu/circuit/ir.py`), SPICE
+  (`spice.transistor_noise_lines`) and circuitsim (`ir.rs`, `noise.rs`, `mna.rs`):
+  - `TransistorNoise` (`family` bjt / jfet), on a device as `TubeNoise` is, at the last accepted
+    step's currents and gm. A BJT: 2 q |Ic| c to e; 2 q |Ib| and flicker KF |Ib|^AF / f b to e. A
+    JFET: (8/3) k T gm and flicker KF |Id|^AF / f d to s; 2 q |Ig| g to s. SPICE's forms
+    (`noise.TRANSISTOR_SOURCE`). SPICE reads the currents (and a JFET's gm, by a 1 mV difference)
+    off copies of the transistor, as it does for tubes.
+  - `FlickerCurrent`: a fixed 1/f current (an op-amp's corners).
+- The builders (Python and varimu-circuit, bit for bit):
+  - A `bjt` / `jfet` part gets its TransistorNoise and its parasitic resistors' Johnson noise.
+  - KF / AF come from `config/device_noise.yaml` by component name. It is empty: no transistor
+    has a sourced flicker figure yet, so flicker is off everywhere (shot and channel noise are
+    physics and always on under the noise).
+  - The `opamp` macro's optional `en_v_rthz`, `in_a_rthz`, `en_corner_hz`, `in_corner_hz`: en as
+    a current of (OPAMP_GM_S en)^2 into the integrator node (exactly input-referred through G1),
+    in at each input, a corner as a FlickerCurrent.
+- The files: `in` on the gain op-amps where a sheet gives it. SSL U1 is an NE5534 (0.6 pA, corner
+  491 Hz) and the clean pre U1 an NE5534A (0.4 pA, 392 Hz), both from TI's SLOS070D; the Tascam
+  U101 is a uPC4570 (0.7 pA, white only). Their en stays the existing RN resistors. The TL071's
+  in is fA-level, so none. The chains were recomposed, and all 20 changed files build HEAD's IR
+  with noise off.
+- Tests:
+  - `tests/test_noise_spectra.py` gains the cases flicker, bjt and jfet, against theory in both
+    engines. The 1/f cases run 16 s in circuitsim (4 s scatters ±1.3 dB in the low octaves) and
+    3 s in ngspice.
+  - The waveform agreement of ngspice and circuitsim: BJT -106 dB, JFET -78 dB.
+  - `tests/test_device_noise.py` covers the builder's rules; noise.rs's unit tests cover the
+    densities, where the flicker rides, and carry.
+  - The app fixtures: only noise-on cases moved; agreement passes.
+- **Against published figures** (`scripts/chain_noise_check.py` -> `reports/chain_noise/summary.json`;
+  production renders, 2 s; "before" strips NH2's sources):
+
+  | chain | now | before NH2 | published |
+  | --- | --- | --- | --- |
+  | SSL 4000 E, dBu (A, 69.6 dB, 150 R) | -129.4 | -130.9 | < -130.6 |
+  | API 312, dBu (20-20 k, 58 dB) | -129.0 | -129.2 | -129 |
+  | U 87, dB (CCIR rms; DIN reads qp) | 25.7 | 25.4 | ~26 |
+  | KM 84, dB-A | 18.5 | 17.9 | 17 |
+  | U 47 fet, dB-A | 15.2 | 13.6 | 18 |
+  | C414 B-ULS, dB-A | 21.3 | 19.5 | 14 |
+  | PZM, dB-A | 24.0 | 24.0 | 20 |
+
+  - The SSL is 1.2 dB over its "<" figure: U1's in through the JT-115K's ~15 kOhm secondary. The
+    reissue may use an NE5534A, and the model runs at 313 K.
+  - The C414 and PZM misses predate NH2. Their noise by part
+    (scratch attribution, A-weighted alone):
+    - The C414's inferred electronics: RS1 17.2, Q1's junction 16.0, RD 14.1; the capsule 5.9.
+    - The PZM's capsule acoustic resistances (RK1) 21.5 and its gate resistor RG 20.3.
+  - Options for you, nothing changed: refit those circuits' inferred values toward the published
+    noise, or leave them as is. The U 47 fet is 2.8 dB quieter than its sheet.
+- Not done: flicker data (KF / AF) for any transistor. The 1073, Helios, TG and Cloudlifter have
+  no published noise figure in their READMEs. `varimu/measure/ac.py`'s noise_psd reads
+  NoiseCurrents only.
+
 **Not built yet (the next sessions, in this order):**
-2. **NH2, noise in transistors and op-amps.** Today a BJT, JFET or op-amp chain (SSL, API, 1073,
-   the clean pre, the FET mics, the Cloudlifter) only has its resistors' noise.
-   - BJT: collector and base shot noise (2qIc, 2qIb at the operating point, per sample like
-     `TubeNoise`) and RB's Johnson noise, KF flicker.
-   - JFET: channel noise 8kT gm / 3 and flicker.
-   - The `opamp` macro: en / in from each datasheet (`data/datasheets/opamps/README.md`).
-   - A Python reference and circuitsim, as B5's `TubeNoise` (DEVICE_BUILDER_PLAN.md B5).
-   - Check against each one's published EIN or self-noise (from its README's sources).
 3. **NH3, the tube mics' supplies.** Today their HT is an ideal source behind a resistance.
    - Model each mic's real supply as circuit in its file: the U47's NG, the U67's NU 67, the C12's
      N12 / S12, the M 49's NN 48, the ELA M 251's.
@@ -2105,8 +2152,14 @@ An option per chain, off by default: with both off, every IR, render and print i
      sensitivity", EV's RE20, Neumann's and AKG's data sheets, Jensen's JT-115K-E (in its can).
    - Each goes into `hum_calibrate.py`'s CAL list and its file's `area_m2`.
 6. **NH6, listening.** The user renders a scene with Noise / Hum on and off.
-7. **NH7, owed checks.** The full pytest and `--verify` (the builder edit moved every Python render's
-   cache key once); `cargo clippy` for the two crates touched.
+7. **NH7, owed checks.** The full pytest and `--verify` (the builder edits of sessions 1-2 and
+   NH2's `varimu/circuit` / `varimu/devices` edits moved every Python render's cache key); `cargo
+   clippy` for the crates touched (circuitsim and varimu-circuit pass with `--all-targets`,
+   circuitsim with `--all-features` too). Found on the way, older than this work:
+   - `tests/test_circuit_ir.py::test_a_multirate_sections_decimation_and_ownership_round_trip`
+     expects `owns` without substeps to be refused, which the 5E3's live speaker allowed (stale);
+   - varimu-app's clippy: `panel.rs` `DEVICES` "large array defined as const";
+   - `ruff format --check`: `varimu/circuit/spec.py` and `varimu/devices/library.py`.
 
 ## Owed
 

@@ -134,6 +134,11 @@ values:
     value: 1251.0
     source: 'derived: the uPC4570''s 4.5 nV/rtHz at 1 kHz (web: its sheet) as a resistor''s Johnson noise
       at 20 C, (4.5e-9)^2 / 4kT (heard only under a noise block)'
+  u_in_a_rthz_porta:
+    value: 7.0e-13
+    source: 'web: https://www.renesas.com/en/document/dst/upc4570-datasheet (in 0.7 pA/rtHz at 1 kHz typ.;
+      data/datasheets/opamps/README.md; no corner published: white only; heard only under the noise, CHAINS_PLAN.md
+      NH2)'
   passive_seed_porta:
     value: 0
     source: 'numerical: which set of parts a unit is built from'
@@ -302,6 +307,7 @@ sections:
       r_in_ohm: u_r_in_ohm_porta
       clamp: DCLAMP_porta
       swing_v: u_swing_v_porta
+      in_a_rthz: u_in_a_rthz_porta
     R102_porta:
       R:
       - uo_porta

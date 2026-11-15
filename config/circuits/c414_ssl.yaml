@@ -375,6 +375,14 @@ values:
     value: 989.0
     source: 'derived: the NE5534''s (not A) 4 nV/rtHz at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf)
       as a resistor''s Johnson noise at 20 C, (4e-9)^2 / 4kT (heard only under a noise block)'
+  u_in_a_rthz_ssl:
+    value: 6.0e-13
+    source: 'web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (SLOS070D, Electrical Characteristics,
+      typ.: In 0.6 pA/rtHz at 1 kHz, NE5534; heard only under the noise, CHAINS_PLAN.md NH2)'
+  u_in_corner_hz_ssl:
+    value: 491.0
+    source: 'derived: In 2.5 pA/rtHz at 30 Hz against 0.6 at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf
+      (SLOS070D, Electrical Characteristics, typ.)), as in^2 (1 + fc / f): fc = 30 ((2.5 / 0.6)^2 - 1)'
   passive_seed_ssl:
     value: 0
     source: 'numerical: which set of parts a unit is built from'
@@ -826,6 +834,8 @@ sections:
       r_in_ohm: u_r_in_ohm_ssl
       clamp: DCLAMP_ssl
       swing_v: u_swing_v_ssl
+      in_a_rthz: u_in_a_rthz_ssl
+      in_corner_hz: u_in_corner_hz_ssl
     R9_ssl:
       R:
       - n19_ssl

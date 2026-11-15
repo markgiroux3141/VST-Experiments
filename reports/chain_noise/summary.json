@@ -1,0 +1,92 @@
+{
+ "ssl_4000e": {
+  "source": "data/schematics/ssl_4000e/README.md: SSL's reissue of the 82E01 circuit, EIN < -130.6 dBu (A, 70 dB, 150R); here at its most gain, ~69.6 dB",
+  "published": -130.6,
+  "bound": "less than",
+  "weight": "A",
+  "gain_db": 68.64988464365004,
+  "set": {
+   "mic_gain": 1.0
+  },
+  "now": -129.35452777598226,
+  "now_out_v": 0.0007142419199856768,
+  "before_nh2": -130.91206366968254,
+  "before_nh2_out_v": 0.0005969920411694837,
+  "now_minus_published_db": 1.2454722240177318
+ },
+ "api_312": {
+  "source": "data/schematics/api_312/README.md: API's 1972 Circuit Specifications, Fig. 1 (58 dB), equivalent input noise -129 dBm, 20-20 kHz unweighted",
+  "published": -129.0,
+  "bound": "about",
+  "weight": "flat",
+  "gain_db": 58.003202572294725,
+  "set": {
+   "gain": 0.8087158203125
+  },
+  "now": -128.96183890476715,
+  "now_out_v": 0.00021935405944573685,
+  "before_nh2": -129.21193147996806,
+  "before_nh2_out_v": 0.0002131282638919712,
+  "now_minus_published_db": 0.038161095232851494
+ },
+ "neumann_u87": {
+  "source": "data/schematics/neumann_u87/README.md: Neumann's 1970s catalog, self-noise ~26 dB (DIN 45 405, quasi-peak); sensitivity 7.7 mV/Pa as K87@2's fit reached",
+  "published": 26.0,
+  "bound": "about",
+  "weight": "CCIR",
+  "set": {},
+  "now": 25.663674474100794,
+  "now_out_v": 2.9560001008627167e-06,
+  "before_nh2": 25.3519543981559,
+  "before_nh2_out_v": 2.8517959029317944e-06,
+  "now_minus_published_db": -0.3363255258992055
+ },
+ "neumann_km84": {
+  "source": "data/schematics/neumann_km84/README.md: 17 dB-A (and 25 dB DIN 45 405); sensitivity 5 mV/Pa as KK84@1's fit reached",
+  "published": 17.0,
+  "bound": "about",
+  "weight": "A",
+  "set": {},
+  "now": 18.45310209913354,
+  "now_out_v": 8.368644221264899e-07,
+  "before_nh2": 17.876486658121806,
+  "before_nh2_out_v": 7.831128186187813e-07,
+  "now_minus_published_db": 1.4531020991335417
+ },
+ "neumann_u47_fet": {
+  "source": "data/schematics/neumann_u47_fet/README.md: Neumann's brochure, 18 dB-A; sensitivity 8 mV/Pa as the circuit reached (CHAINS_PLAN.md WP25)",
+  "published": 18.0,
+  "bound": "about",
+  "weight": "A",
+  "set": {},
+  "now": 15.197580521438441,
+  "now_out_v": 9.204474708400224e-07,
+  "before_nh2": 13.636699781501422,
+  "before_nh2_out_v": 7.690506998835184e-07,
+  "now_minus_published_db": -2.802419478561559
+ },
+ "akg_c414": {
+  "source": "data/schematics/akg_c414/README.md: AKG's C414 B-ULS sheet, 14 dB-A; sensitivity 12.5 mV/Pa as fitted (WP23)",
+  "published": 14.0,
+  "bound": "about",
+  "weight": "A",
+  "set": {},
+  "now": 21.299511792246136,
+  "now_out_v": 2.9034583353468252e-06,
+  "before_nh2": 19.53094560975764,
+  "before_nh2_out_v": 2.368575807788219e-06,
+  "now_minus_published_db": 7.299511792246136
+ },
+ "crown_pzm": {
+  "source": "data/schematics/crown_pzm/README.md: 20 dB(A); sensitivity 7 mV/Pa as fitted (WP26)",
+  "published": 20.0,
+  "bound": "about",
+  "weight": "A",
+  "set": {},
+  "now": 24.009391489386914,
+  "now_out_v": 2.2212508660799016e-06,
+  "before_nh2": 23.987680232534,
+  "before_nh2_out_v": 2.2157055590101845e-06,
+  "now_minus_published_db": 4.009391489386914
+ }
+}

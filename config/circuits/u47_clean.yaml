@@ -220,6 +220,14 @@ values:
     value: 757.0
     source: 'derived: the NE5534A''s 3.5 nV/rtHz at 1 kHz (data/datasheets/opamps/README.md) as a resistor''s
       Johnson noise at 20 C, (3.5e-9)^2 / 4kT (heard only under a noise block)'
+  u_in_a_rthz_clean:
+    value: 4.0e-13
+    source: 'web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (SLOS070D, Electrical Characteristics,
+      typ.: In 0.4 pA/rtHz at 1 kHz, NE5534A; heard only under the noise, CHAINS_PLAN.md NH2)'
+  u_in_corner_hz_clean:
+    value: 392.0
+    source: 'derived: In 1.5 pA/rtHz at 30 Hz against 0.4 at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf
+      (SLOS070D, Electrical Characteristics, typ.)), as in^2 (1 + fc / f): fc = 30 ((1.5 / 0.4)^2 - 1)'
   r_f_ohm_clean:
     value: 10000.0
     source: 'provisional: model knowledge (the feedback resistor)'
@@ -514,6 +522,8 @@ sections:
       r_in_ohm: u_r_in_ohm_clean
       clamp: DCLAMP_clean
       swing_v: u_swing_v_clean
+      in_a_rthz: u_in_a_rthz_clean
+      in_corner_hz: u_in_corner_hz_clean
     RF_clean:
       R:
       - uo_clean
