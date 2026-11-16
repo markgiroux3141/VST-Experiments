@@ -1,5 +1,8 @@
 # Track separation: diverging tracks through physical recording chains
 
+**2026-11-16:** revisited, with processing by any means allowed and the listening still owed,
+as work packages SR0-SR13: [SEPARATION_FABLE.md](SEPARATION_FABLE.md).
+
 **2026-11-04:** the research behind the cues below, grouping measures beyond the glimpses,
 and corrections (independent flutter doesn't separate; space selects streams more than it
 forms them): [SCENE_ANALYSIS.md](SCENE_ANALYSIS.md).

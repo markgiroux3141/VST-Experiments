@@ -1089,6 +1089,18 @@ Found: per-pass flutter separates nothing (SEPARATION_PLAN.md's "common fate" wi
 half its glimpses, and its intermodulation lands on a root only for octaves and fifths in
 equal temperament. Proposals there (glue without mud: share the supply, not the
 nonlinearity); nothing validated by ear yet.
+**Separation revisited** ([docs/SEPARATION_FABLE.md](docs/SEPARATION_FABLE.md), 2026-11-16, a
+brainstorm by Claude Fable 5 at the user's request, written as work packages a later session can
+build from the doc alone; nothing run, nothing built): the user's two goals (maximum separation;
+each sound its own colour: warm, cold, bright, dark) and their ruling that **any processing is
+allowed** for separation, analog devices still preferred. Two tiers: an oracle tier (plain DSP in
+`varimu/separation/`, never in a circuit or the app) saying what any processing can buy, and the
+physical tier asked how much of it devices recover. SR0 a bench on the *Did She Mention My Name*
+stems, SR1 the listening owed since 2026-10-31 (it decides which measures may be quoted), then
+SR2 mask-aware ducking, SR3 onset protection and lead-ahead, SR4 a modulation signature, SR5
+mid / side unmasking, SR6 depth, SR7 a chain atlas of timbre descriptors, SR8 assigning colours
+per track, SR9 physical cousins (keyed duckers, tape pre-delay, the just third), SR10 an
+optimizer over real knobs, SR11-SR13 optional. Its "Open decisions" are the user's.
 
 **Noise (device builder B5, 2026-10-30; DEVICE_BUILDER_PLAN.md B5's status):** a circuit
 file's `noise: {seed}` block turns on Johnson noise (IR `NoiseCurrent` per resistor of R /
