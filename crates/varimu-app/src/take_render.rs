@@ -61,7 +61,7 @@ impl Prepared {
             Quality::Production => base,
             _ => device.play_settings(&base),
         };
-        let c = Circuit::load(config_dir, device.circuit, settings.cores()?)?;
+        let c = Circuit::load(config_dir, device.circuit_at(quality), settings.cores()?)?;
         let c = match quality {
             Quality::Production => c,
             _ => device.live(c),

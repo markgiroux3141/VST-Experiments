@@ -81,6 +81,11 @@ pub struct Device {
     /// twelve LC oscillators: one solve a sample, its frequency warping compensated in the
     /// circuit's coils, docs/NOVACHORD_PLAN.md NV5).
     pub method: Option<&'static str>,
+    /// The circuit file its drafts run in `circuit`'s place (Play, auditions, draft prints;
+    /// production renders `circuit`): the same panel, cheaper parts (the API 550A's 2520s
+    /// and followers as op-amp macros, docs/EQ_PLAN.md EQ3 "Live"). Its controls are
+    /// `circuit`'s. None: `circuit` at every quality.
+    pub live_circuit: Option<&'static str>,
 }
 
 /// Devices whose mod wheel turns its knob from the top of its range down: the
@@ -497,6 +502,15 @@ impl Device {
     }
 
     /// The settings it plays at: `s` (its quality's) with its cores.
+    /// The circuit file it runs at `quality`: [`Device::live_circuit`] at the drafts,
+    /// [`Device::circuit`] at production.
+    pub fn circuit_at(&self, quality: Quality) -> &'static str {
+        match self.live_circuit {
+            Some(c) if quality != Quality::Production => c,
+            _ => self.circuit,
+        }
+    }
+
     pub fn play_settings(&self, s: &Settings) -> Settings {
         let mut s = s.clone();
         if let Some(c) = self.cores {
@@ -612,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 43] = [
+pub const DEVICES: [Device; 44] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -643,6 +657,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -667,6 +682,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -699,6 +715,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // The P12R's pressure readout (its back wave's delay line and the cone's modes,
         // ~60 states) on a thread of its own: it only senses the driver, a sample late
         // (`Device::live`; COMPONENT_EDITOR_PLAN.md C3's speed). In one solve it took the
@@ -732,6 +749,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -758,6 +776,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -784,6 +803,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -814,6 +834,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -864,6 +885,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&[
             "resonance",
             "|",
@@ -911,6 +933,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
@@ -944,6 +967,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
         // inputs stay in the first part). The cuts are the VCA's grids (`ga`, `gt`), and the
         // saw's edge crosses at `ga`: extrapolated it was doubled for a sample (peaks 49 V
@@ -972,6 +996,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1010,6 +1035,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -1053,6 +1079,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // Cut at the media: both record sides with the input, each channel's tape, repro
         // and output on a thread of its own (a tape senses its record head a sample late:
         // partition.rs), the supplies and the capstan's last.
@@ -1094,6 +1121,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         pitch2: None,
     },
     Device {
@@ -1127,6 +1155,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1155,6 +1184,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1186,6 +1216,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: Some(20.0),
         newton: None,
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "rhodes_suitcase",
@@ -1234,6 +1265,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: Some(14.0),
         newton: Some((4e-3, 4e-2)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "clavinet_d6",
@@ -1280,6 +1312,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "novachord",
@@ -1348,6 +1381,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: Some(NOVACHORD_SPEAKER_V),
         newton: None,
         method: Some("trap"),
+        live_circuit: None,
     },
     Device {
         id: "nickel_organ",
@@ -1379,6 +1413,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "victorian_voice",
@@ -1411,6 +1446,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "foil_reverb",
@@ -1434,6 +1470,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1458,6 +1495,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1482,6 +1520,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // The LFO, the lamp and the rails on a thread of their own: the cells sense the
         // lamp's thermal node (a 1 F capacitor's) and the rail a sample late.
         partition: Some(&["lfo", "lamp", "rails"]),
@@ -1518,6 +1557,7 @@ pub const DEVICES: [Device; 43] = [
         partition: None,
         newton: Some((1e-5, 1e-5)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "urei_1176",
@@ -1552,6 +1592,7 @@ pub const DEVICES: [Device; 43] = [
         // times the THD at 10 dB of gain reduction (DEVICE_BUILDER_PLAN.md B12).
         newton: Some((1e-5, 1e-5)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "minimoog_filter_board",
@@ -1585,6 +1626,7 @@ pub const DEVICES: [Device; 43] = [
         // 4 % cutoff error, as in the SSL's log-domain cells.
         newton: Some((1e-5, 1e-5)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "minimoog_vco",
@@ -1618,6 +1660,7 @@ pub const DEVICES: [Device; 43] = [
         // draft's 10 mV put tens of cents of error on it and broke the triangle's fold.
         newton: Some((1e-3, 1e-3)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "minimoog_voice",
@@ -1769,6 +1812,7 @@ pub const DEVICES: [Device; 43] = [
         ]),
         newton: Some((1e-5, 1e-5)),
         method: None,
+        live_circuit: None,
     },
     Device {
         id: "ampex_351_insert",
@@ -1808,6 +1852,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -1847,6 +1892,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -1888,6 +1934,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -1913,6 +1960,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
@@ -1948,6 +1996,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         // The supply (with the bias supply) on a thread of its own: its rails sit behind the
         // reservoir and filter capacitors; the closed box's readout is small (no delay line).
         partition: Some(&["power supply"]),
@@ -1976,6 +2025,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
@@ -2002,6 +2052,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
@@ -2027,6 +2078,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
@@ -2052,6 +2104,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["power supply"]),
     },
     Device {
@@ -2077,6 +2130,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["power supply"]),
     },
     Device {
@@ -2102,6 +2156,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: Some(&["SPK readout", "|", "power supply"]),
     },
     Device {
@@ -2127,6 +2182,7 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
         partition: None,
     },
     Device {
@@ -2151,6 +2207,34 @@ pub const DEVICES: [Device; 43] = [
         live_speaker_v: None,
         newton: None,
         method: None,
+        live_circuit: None,
+        partition: None,
+    },
+    Device {
+        id: "api_550a",
+        label: "API 550A Equalizer",
+        short: "550A",
+        about: "API 550A three-band proportional-Q console equalizer (2520 op-amps, discrete followers, reciprocal stepped bands, band-pass filter)",
+        group: Group::Eq,
+        circuit: "api_550a",
+        panel: None,
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: Some("api_550a_live"),
+        // The discrete circuit plays 2.1x real time at draft-1x (30 transistors): the drafts
+        // run its op-amp-macro twin (EQ_PLAN.md EQ3 "Live"), production the discrete one.
         partition: None,
     },
 ];
@@ -2908,6 +2992,26 @@ mod tests {
     }
 
     #[test]
+    fn a_live_circuit_has_its_circuits_controls() {
+        let mut seen = 0;
+        for d in DEVICES.iter() {
+            let Some(live) = d.live_circuit else { continue };
+            seen += 1;
+            assert_eq!(
+                spec_of(live).controls,
+                spec_of(d.circuit).controls,
+                "{}",
+                d.id
+            );
+            assert_eq!(d.circuit_at(Quality::Production), d.circuit);
+            for q in [Quality::Draft, Quality::Draft1x, Quality::Draft2x] {
+                assert_eq!(d.circuit_at(q), live);
+            }
+        }
+        assert!(seen > 0);
+    }
+
+    #[test]
     fn menus_offer_the_kept_devices_in_sections() {
         let ids = |m: Vec<(Group, Vec<usize>)>| -> Vec<(Group, Vec<&str>)> {
             m.into_iter()
@@ -2937,7 +3041,10 @@ mod tests {
                     Group::Dynamics,
                     vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
                 ),
-                (Group::Eq, vec!["pultec_eqp1a", "pultec_hlf3c", "pultec_meq5"]),
+                (
+                    Group::Eq,
+                    vec!["pultec_eqp1a", "pultec_hlf3c", "pultec_meq5", "api_550a"]
+                ),
                 (
                     Group::Amps,
                     vec![

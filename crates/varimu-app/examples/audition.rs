@@ -98,7 +98,8 @@ fn main() -> Result<(), String> {
         }));
         p
     } else {
-        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?.with_events(s.events);
+        let circuit =
+            Circuit::load(&config, d.circuit_at(s.quality), s.cores()?)?.with_events(s.events);
         let v0 = turn.as_ref().map_or(sets.clone(), |(_, a, _)| values(a));
         let key = match &key_file {
             None => None,

@@ -212,7 +212,11 @@ fn main() -> Result<(), String> {
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
     varimu_app::panel::set_speakers_heard(dev.id, speakers);
     let circuit = dev
-        .live(Circuit::load(config, dev.circuit, s.cores()?)?)
+        .live(Circuit::load(
+            config,
+            dev.circuit_at(s.quality),
+            s.cores()?,
+        )?)
         .with_events(s.events)
         .with_noise(noise);
     let panel = knobs(dev, circuit.spec());
@@ -344,7 +348,8 @@ fn main() -> Result<(), String> {
             .find(|d| d.id == id.as_str())
             .ok_or(format!("unknown device {id}"))?;
         let es = d.play_settings(&Settings::load(config, d.quality)?);
-        let c = Circuit::load(config, d.circuit, es.cores()?)?.with_events(es.events);
+        let c =
+            Circuit::load(config, d.circuit_at(es.quality), es.cores()?)?.with_events(es.events);
         let mut ev = values(&knobs(d, c.spec()));
         for (k, x) in end_sets {
             set(&mut ev, &k, x);

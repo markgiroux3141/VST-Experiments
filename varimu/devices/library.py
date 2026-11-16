@@ -1875,10 +1875,20 @@ def build_el34() -> dict[str, Any]:
                 "ig2_a": float(m.ig2(vg1, vg2)),
             },
             "push_pull_idle_model": [
-                {"va_v": 400, "vg2_v": 393, "vg1_v": -36,
-                 "ip_a": float(m.ip(-36.0, 393.0, 400.0)), "ig2_a": float(m.ig2(-36.0, 393.0))},
-                {"va_v": 375, "vg2_v": 368, "vg1_v": -33,
-                 "ip_a": float(m.ip(-33.0, 368.0, 375.0)), "ig2_a": float(m.ig2(-33.0, 368.0))},
+                {
+                    "va_v": 400,
+                    "vg2_v": 393,
+                    "vg1_v": -36,
+                    "ip_a": float(m.ip(-36.0, 393.0, 400.0)),
+                    "ig2_a": float(m.ig2(-36.0, 393.0)),
+                },
+                {
+                    "va_v": 375,
+                    "vg2_v": 368,
+                    "vg1_v": -33,
+                    "ip_a": float(m.ip(-33.0, 368.0, 375.0)),
+                    "ig2_a": float(m.ig2(-33.0, 368.0)),
+                },
             ],  # fmt: skip
         },
     }
@@ -2112,9 +2122,7 @@ def build_g12m() -> dict[str, Any]:
     resp = speaker_fit.load_curves(DATASHEETS, "celestion_g12m")
     z = load_csv("voicecoil_g12h55_impedance.csv")
     # The G12H's measured impedance as a trace in dB (kz 1, z0 0 at their bounds' edge).
-    curves = speaker_fit.Curves(
-        resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1])
-    )
+    curves = speaker_fit.Curves(resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1]))
     fit = speaker_fit.fit(
         ts,
         curves,
@@ -2179,9 +2187,7 @@ def build_celestion_blue() -> dict[str, Any]:
     ts = g12m_thiele_small("CELESTION_BLUE")
     resp = speaker_fit.load_curves(DATASHEETS, "celestion_blue")
     z = load_csv("voicecoil_g12h55_impedance.csv")
-    curves = speaker_fit.Curves(
-        resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1])
-    )
+    curves = speaker_fit.Curves(resp.response_hz, resp.response_db, z[:, 0], 20 * np.log10(z[:, 1]))
     fit = speaker_fit.fit(
         ts,
         curves,
@@ -3030,6 +3036,42 @@ def build_2n5087() -> dict[str, Any]:
         "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N5087.LIB (2N5087, 8/18/10 rev "
         "A: IS 2.45f, BF 1.135k, VAF 139, IKF 21.2m, ISE 380f, NE 2.00, BR 4.00, VAR 20.0, "
         "IKR 45.0m, RE 106, RB 426, RC 42.6, CJE 9.65p, CJC 11.8p, VJC 0.300, MJC 0.300)",
+    )
+
+
+def build_2n5088() -> dict[str, Any]:
+    """The 2N5088 (the API 550A's A3-A6 followers' NPNs: docs/EQ_PLAN.md EQ3). Its NK
+    1.2265 (PSpice's high-injection exponent) isn't in the model: IKF 0.76 A is far above
+    the followers' ~5 mA. The card's TF / XTF / VTF / ITF / TR (charge storage) aren't
+    either: the model's capacitances are depletion only."""
+    return _bjt_from_numbers(
+        "2N5088",
+        "npn",
+        {
+            "IS": 38.116e-15,
+            "BF": 599.06,
+            "VAF": 100.0,
+            "IKF": 0.76234,
+            "ISE": 38.128e-15,
+            "NE": 1.9979,
+            "BR": 10.364,
+            "VAR": 100.0,
+            "IKR": 1.5810,
+            "ISC": 803.76e-15,
+            "NC": 1.5928,
+            "RB": 9.7439,
+            "RC": 0.23381,
+            "CJE": 11.658e-12,
+            "CJC": 5.3208e-12,
+            "VJC": 0.42236,
+            "MJC": 0.29245,
+        },  # fmt: skip
+        "Central Semiconductor's 2N5088 SPICE model (8/18/10 rev A; Central's licence forbids "
+        "redistributing the card, so its numbers are cited here)",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N5088.LIB (2N5088, 8/18/10 rev "
+        "A: IS 38.116f, BF 599.06, VAF 100, IKF .76234, ISE 38.128f, NE 1.9979, BR 10.364, "
+        "VAR 100, IKR 1.5810, ISC 803.76f, NC 1.5928, RB 9.7439, RC .23381, CJE 11.658p, CJC "
+        "5.3208p, VJC .42236, MJC .29245)",
     )
 
 
@@ -4322,6 +4364,7 @@ BUILDERS = {
     "2N3707": build_2n3707,
     "2N3053": build_2n3053,
     "2N5087": build_2n5087,
+    "2N5088": build_2n5088,
     "2N4033": build_2n4033,
     "2N5784": build_2n5784,
     "2N5781": build_2n5781,

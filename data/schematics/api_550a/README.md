@@ -51,5 +51,53 @@ capacitors per band, so its frequencies come from the circuit.
   R106 200; secondary 3-7, terminals 2 HI-1, 3 HI-2, 4 LOW. **Rails:** CR1 / CR2 series diodes,
   R100 3.9K, LED DS1, S1 the EQ IN / OUT (also S1's contacts in each band).
 
-Still to trace: where R8's line, contact 1's line and R48 go; the twin-T's nodes against A3-A5;
-S1's contacts in each band; S4 / S5.
+## The trace, complete (2026-11-15; built as config/circuits/api_550a.yaml by scripts/make_api_550a.py)
+
+Read from the 200 ppi PNG (the 400 ppi PDF's Wayback copy now answers bots with a block page).
+Corrections to the readings above: the followers' capacitors C57-C60 read 39 pF in the inset (not
+33); the "twin-T" is not a twin-T (below); the two S8C parts both labelled R47 are 2740 (in the
+chain, called R46 in the circuit file) and 6650 (the chain's end).
+
+- **The signal path.** Input -> A1 (+ input; HF boost in its feedback) -> C1 / C2 ... the band-pass
+  -> R99 -> A6 -> the HF cut string (R8 at A6's output ... contact 1's end) -> R75 1K -> A4 (R81
+  2.2M to LOW) -> the MF cut string (R59 ... R63) -> R73 1K -> A3 (R49 2.2M) -> the LF cut string
+  (R33 ... R37) -> R53 1K -> A2's + input (R79 2.2M, C40 120 pF to COM). A2's feedback: A2's output
+  -> R106 200 -> node X -> the MF boost string (R58 ... R54) -> R77 1K -> A5 (R82 2.2M) -> the LF
+  boost string (R32 ... R28) -> R72 1K -> A2's - input (R80 15M and C61 10 pF from A2's output).
+  A1's boost string: R7 at A1's output ... contact 11's end -> R71 1K -> A1's - input. X -> R76
+  56 -> terminal 11 (the gain trim). A2 -> C41 500 uF || R101 47 -> T1 pin 1; pin 2 to terminal 5
+  (power common); secondary pin 3 terminal 2 (HI-1), pins 4-5 strapped, pin 6 terminal 3 (HI-2,
+  the tap), pin 7 terminal 4 (LOW).
+- **Across strings:** C37 68 pF A1's output to its - input (the HF boost string and R71); C43 47
+  pF X to the MF boost string's end; C56 47 pF A4's output to the MF cut string's end; C39 47 pF
+  A5's output to the LF boost string's end. None across the HF and LF cut strings.
+- **A band** (HF named; LF S6x / S7x / S4, MF S10x / S11x): S8A's rotor W taps the boost string
+  (contacts 7-11) or the cut string (1-5); contact 6 -> R48 10K -> M. The drive decks S8D (contact
+  1 -> A6's output, the cut source) and S8E (contact 11 -> A1's output, the boost source) put M on
+  a source; their arcs, drawn from one template in all three bands, overlap at position 6 by a few
+  degrees: read (the user's call, 2026-11-15) as S8D on 1-6, S8E on 7-11. LF: S6D -> A3's output,
+  S6E -> A5's; R50 10K. MF: S10C -> A4's output, S10D -> X; R52 10K.
+- **PEAK:** W -> S1 (the band's EQ IN deck) -> S5 common -> PEAK (4) -> S9B's rotor -> S9B's
+  capacitor -> the bus P; S9A's rotor is M, its capacitor M to P; S8B's rotor is P, onto its chain
+  (contact 5's node ... contact 1's node -> R42 3920) -> HF's B (C38's +). MF has no S5: S1 ->
+  S11A's rotor (W side), S11B's rotor is M; S10B's chain ends R68 3920 to ground. LF: S7B W side,
+  S7A M side, S6B's chain R22 3920 to ground.
+- **SHELF:** HF: S5's SHELF (6) -> S9C's rotor -> its capacitor -> S8C's rotor (the chain to R47
+  6650) -> B: a high shelf. LF: S4's SHELF (6) -> the S7C capacitors' bus, which is also S6C's
+  rotor (its chain to R27 6340 -> C14 22 uF + ; C14 - to ground), and S7C's rotor is M: a low
+  shelf (the resistor to ground in parallel with the capacitor to M).
+- **B, ground:** C38 125/4V from HF's B to ground (its - plate on LOW); the LF and MF Q chains'
+  return and C14's - plate run along one line to C38's - plate, ground.
+- **The arcs:** every frequency deck (S7A-C, S9A-C, S11A-B) and drive deck is drawn with an arc
+  rotor, a progressive shorting contact: each step clockwise adds the next capacitor in parallel
+  (S9A at position 1 C45, then + C32, + C33, + C34, + C31; S11A / S11B the pairs C29 / C30, + C27
+  / C28, + C25 / C26, + C23 / C24, + C21 / C22). So position 1, the most counter-clockwise (Note
+  8), is each band's highest frequency.
+- **The band-pass's ground:** the shunt elements' bus G -> S2 contact 3 -> a line to the S1 deck
+  beside C38 -> B; R107 18K from A1's output to G, R15 330K from G to B. S2's contact 1 is open.
+- **The proportional-Q decks** (S8B / S8C, S6B / S6C, S10B) join positions k and 12 - k to the
+  same tap (the frames); 6 is open.
+- **The followers** (inset): IN -> Q1 2N5087 base (emitter -> R85 39K to +V and Q2's base;
+  collector to -V); Q2 2N5088 (collector R83 430 to +V, emitter OUT); Q4 2N5088 sink (collector
+  OUT, base on R102 36K / R86 2.2K, emitter R84 200 to -V); C57 39 pF IN to Q4's emitter; C62 22
+  pF IN to Q4's base (A5 only).

@@ -44,6 +44,9 @@ checks of varimu.measure.generic and the circuit's own).
 - pultec_meq5 (equalizer, docs/EQ_PLAN.md EQ2): varimu.measure.meq5_suite: the EQP-1A's
   screen and THD on the MEQ-5's panels; every position's extreme at full knob against its
   knob and the published 0-10 dB.
+- api_550a (equalizer, docs/EQ_PLAN.md EQ3): varimu.measure.api550a_suite: the network (every
+  band, position and step by AC analysis of api_550a_network.yaml), a screen and a few panels
+  rendered against it, THD to +28 dBm.
 """
 
 from __future__ import annotations
@@ -181,6 +184,12 @@ def _run_meq5(*args, **kwargs):
     return meq5_suite.run(*args, **kwargs)
 
 
+def _run_api550a(*args, **kwargs):
+    from varimu.measure import api550a_suite
+
+    return api550a_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
@@ -202,6 +211,7 @@ PROFILES = {
     "urei_1176": Profile("urei_1176", "compressor", _run_limiter),
     "pultec_hlf3c": Profile("pultec_hlf3c", "filter", _run_filter),
     "pultec_meq5": Profile("pultec_meq5", "equalizer", _run_meq5),
+    "api_550a": Profile("api_550a", "equalizer", _run_api550a),
 }
 
 

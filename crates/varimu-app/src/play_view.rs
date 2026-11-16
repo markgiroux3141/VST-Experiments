@@ -544,7 +544,10 @@ impl PlayView {
     fn circuit(&self, cores: varimu_circuit::Cores) -> Result<Circuit, String> {
         let c = match self.drawing_device() {
             Some(d) => Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
-            None => Circuit::load(&self.config_dir, DEVICES[self.device].circuit, cores)?,
+            None => {
+                let dev = &DEVICES[self.device];
+                Circuit::load(&self.config_dir, dev.circuit_at(dev.quality), cores)?
+            }
         };
         let heaters = if self.power_on {
             varimu_circuit::Heaters::Cold
@@ -1235,7 +1238,7 @@ impl PlayView {
     fn end_device(&self) -> Option<Result<EndDevice, String>> {
         let dev = &DEVICES[self.end?];
         Some(self.settings_for(dev).and_then(|s| {
-            let c = Circuit::load(&self.config_dir, dev.circuit, s.cores()?)?
+            let c = Circuit::load(&self.config_dir, dev.circuit_at(s.quality), s.cores()?)?
                 .with_events(s.events)
                 .with_noise(false);
             Ok(EndDevice {

@@ -2354,7 +2354,7 @@ impl SessionView {
         let d = find_device(&slot.device).ok_or(format!("no device {}", slot.device))?;
         let s = d.play_settings(&Settings::load(&config, d.quality)?);
         let circuit = d
-            .live(Circuit::load(&config, d.circuit, s.cores()?)?)
+            .live(Circuit::load(&config, d.circuit_at(d.quality), s.cores()?)?)
             .with_events(s.events)
             .with_noise(slot.noise)
             .with_noise_seed(slot.noise_seed)

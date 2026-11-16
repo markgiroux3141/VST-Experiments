@@ -138,7 +138,11 @@ fn main() -> Result<(), String> {
     let k = s.oversample as usize;
     let titles: Vec<&str> = s.partition.iter().map(String::as_str).collect();
     let circuit = dev
-        .live(Circuit::load(&config, dev.circuit, s.cores()?)?)
+        .live(Circuit::load(
+            &config,
+            dev.circuit_at(s.quality),
+            s.cores()?,
+        )?)
         .with_apart_from(&titles)
         .with_events(s.events)
         .with_noise(noise);

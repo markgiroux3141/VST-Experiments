@@ -265,7 +265,9 @@ impl Prepared {
     ) -> Result<Prepared, String> {
         let base = Settings::load(config_dir, quality)?;
         let (circuit, settings) = match find_device(device) {
-            Some(d) if quality != Quality::Production => (d.circuit, d.play_settings(&base)),
+            Some(d) if quality != Quality::Production => {
+                (d.circuit_at(quality), d.play_settings(&base))
+            }
             Some(d) => (d.circuit, base),
             None => (device, base),
         };
