@@ -745,6 +745,23 @@ side-to-side pan (its stereo "vibrato") is future work too, nothing built: RHODE
 "The side-to-side pan" (the Suitcase after the BJT model, a tube stereo panner chain end
 first, or a Leslie; the user's pick).
 
+**The Wurlitzer 200A** ([docs/WURLITZER_PLAN.md](docs/WURLITZER_PLAN.md), 2026-11-20, the user's
+ask; WZ1-WZ2 built the same day, branch `wurlitzer`, the plan's "Status"): Sandvik steel reeds read by an electrostatic pickup (a +150 V comb plate, each
+reed a grounded capacitor plate in its cutout: i = V dC/dt into the plate's node, shared by all 64
+keys) into the 200A's own BJT preamp, LED / LDR vibrato and power amplifier; two outputs, the user's
+call: SPEAKERS (two 16 ohm 4" x 6") and AUX OUT (its line jack, no speaker). Milestones WZ0-WZ7 on
+the Rhodes' pattern (`keyed.rs`, a compiled component, live and production tiers). Sources
+`data/schematics/wurlitzer_200a/README.md` (the 200 / 200A service manual, its last page the 200A's
+schematic; Vintage Vibe's reed blanks; Pfeifle DAFx-17); missing: reed lengths, the pickup's
+geometry, the transistors' JEDEC types. A real 200A's single notes, recorded direct (octaves 2, 4,
+6; vibrato 5.74 Hz, ~6 dB p-p): `real instrument samples/Pie-finger Wurlitzer 200A sample set/`,
+surveyed in the plan's "Reference: the Pie-finger set". **WZ1:** `varimu/wurlitzer/` (reed FE tuned by
+length, the pickup's 2D electrostatic map cached in `cache/wurlitzer/`, a strike with the felt in the
+step), `config/wurlitzer/200a.yaml`, `tests/test_wurlitzer.py`, `scripts/wurlitzer_key_study.py [--fit]`.
+**WZ2:** `config/circuits/wurlitzer_200a.yaml` (traced from Tropical Fish's sharp scan; the reeds as the
+input `in` through CREEDS; `out` the AUX jack, `spk` a resistive load until WZ5), `tests/test_wurlitzer_200a.py`,
+`scripts/wurlitzer_amp_study.py`: the vibrato 5.52 Hz unfitted (real 5.73), R17 fitted to its 6.2 dB.
+
 Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01; picked up
 2026-11-04 for one track keying another's 670, the kick ducking the bass; branch `sidechain`):
 **K1 done**, the keyed 670 `config/circuits/fairchild_670_keyed.yaml`, generated from the

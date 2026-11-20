@@ -1,0 +1,356 @@
+# The Wurlitzer 200A's electronics (docs/WURLITZER_PLAN.md, WZ2): the pickup plate and its
+# polarizing supply, the reed bar preamp with the LED / LDR vibrato in its feedback, the
+# volume chain, the AUX output stage, the power amplifier and the mains supply, one netlist.
+# Sources: data/schematics/wurlitzer_200a/README.md. "the drawing" = the Model 200A schematic,
+# Tropical Fish's scan of Wurlitzer's 200 / 200A diagrams, p. 23
+# (wurlitzer-200-200a-schematics-diagrams.pdf; the service manual's last page is the same drawing).
+#
+# What the drawing gives (designators are the drawing's):
+#   plate     the pickup ("mounting screw to pickup") through R1 22K to node pa; R2 1 MEG from the
+#             +150 V line to pa; C1 .022 to TR-1's base. The reeds are grounded through the reed bar
+#             casting.
+#   preamp    TR-1 / TR-2 direct coupled on +15 V: R4 150K and R6 1.8K the collector loads, C3 / C4
+#             100 pF Miller caps, R5 33K and C5 4.7 uF from TR-1's emitter to the feedback node x,
+#             TR-2's emitter R7 270 + R8 820 to ground with C7 22 uF across both, R3 470K from the
+#             R7 / R8 junction back to TR-1's base (the DC servo), D1 and C2 220 pF from the base to
+#             x (bootstrapped), C6 4.7 uF out, R10 56K from the output to x, R9 6.8K to the amp
+#             board. With x to ground through Z, the AC gain is ~1 + 56K / Z.
+#   vibrato   x leaves the board (point 1) to the 50K VIBRATO control: x on its top, ground on its
+#             bottom, 18K from x to the wiper, the wiper to LG-1's cell (pin 4; pin 3 grounded).
+#             VIBRATO off: Z = 50K || 18K, no modulation; full: Z = 50K || the cell.
+#             The oscillator: TR-3 / TR-4 a Darlington, its collector fed from +15 V through R18 680
+#             ohm, LG-1's LED (pins 2 -> 1) and R17 (a 4.7K trimmer, 203717-2); a twin-T (C16, C17
+#             .12, R12 27K; R13, R14 680K, C18 .12) from the collector back to TR-3's base; R15
+#             680K base to ground, R16 10K TR-4's base to ground. The drawing: 11.5 V p-p at the
+#             collector. (The 200's text, manual p.5: preset to 5.75 Hz.)
+#   volume    R9 -> point 3 -> R11, a 25K "reed bar volume" trimmer (203717-1, wiper tied to its
+#             top: a rheostat) -> point 13 -> the 10K main volume (203643-001) to ground, its wiper
+#             -> point 15 -> the power amp.
+#   AUX       "Headphone & aux. output, early production" (200A, 214A, 214VA): from point 13 (the
+#             main volume's top: "from main volume") through the 100K AUX volume (203755, model
+#             200A only) to point 9, C23 1 uF, R41 27K into TR-15; TR-15 / TR-16 a feedback pair
+#             (R42 120K, R43 1.8K, R44 15K, R45 680, R46, R48 180, R47 56K, C24 / C25 39 pF, C27 47
+#             uF), C26 4.7 uF to point 11, the 1K screwdriver trim (204524) to the AUX OUTPUT jack:
+#             "maximum output signal level approx. .4 V AC". The late production's Darlington
+#             (144769) and R59 680 aren't drawn here.
+#   power amp TR-7 / TR-8 a PNP pair (142128) fed from +15 V by R28 10K ("select R28 for 0 V DC at
+#             point 16"), C8 4.7 uF / C9 .001 / R27 15K at its input, R29 1K TR-7's collector load;
+#             TR-14 (203719) the voltage amplifier with C11 100 pF; TR-9 (137159) the bias control
+#             (R34 160, R35 220; R58 "opt" not fitted); R32 / R33 1.8K bootstrapped by C12 100 uF;
+#             Sziklai output pairs TR-10 (203719) + TR-11 (PNP, 507661-1 / 203735) and TR-12 (PNP,
+#             203718) + TR-13 (NPN, 507664-1 / 203734), R36 / R39 270, C13 / C14 100 pF, R37 / R38
+#             .47 ohm 2 W; feedback R31 15K / R30 220 + C10 22 uF (37 dB); Zobel R40 12 + C15 .1 uF;
+#             +-22.5 V rails.
+#   output    point 16 -> the earphone jack (it swaps the speakers for 8 ohm 5 W, the phones through
+#             470 ohm) -> two 16 ohm 4" x 6" P.M. speakers (202243) in parallel. WZ2 loads the amp
+#             with two 16 ohm resistors; the speakers are WZ5's.
+#   supply    a centre-tapped secondary (X1 / X2, the tap X4 grounded) into D2-D5 (142350) and C28 /
+#             C29 2200 uF: +-22.5 V unregulated; IC-1 (142349, a 723-type) regulates +15 V (ideal
+#             here, as the Suitcase's regulators); the winding's extension to X3 through D6 (600
+#             PIV) into R49 56K, C30 .33, R50 8.2 MEG, R51 1 MEG, C31 .33, R52 22 MEG, R56 1 MEG, C34
+#             .33: +150 V. The mains through a .5 A slo-blo, the switch on the volume control.
+#
+# The reeds (WZ1, varimu/wurlitzer/) are not in this file yet: their capacitance to the plate is
+# the capacitor CREEDS from the audio input `in`, a source standing for V0 dC(t) / C_reeds, so the
+# current into the plate is V0 dC/dt to first order (WZ4 replaces it with the reeds' medium).
+
+title: "Wurlitzer 200A electronics (plate, preamp, LED / LDR vibrato, AUX out, power amp, supply)"
+input: in
+probes: [out, spk, pk, pa, b1, c2, x, po, p13, p15, c34, o, v15, vpos, vneg, hv150, vw]
+
+full_scale:
+  input_volts_peak: {value: 2.0, source: "provisional: model knowledge (the reeds' equivalent voltage V0 dC / C_reeds: a hard bass strike, WZ1's ~0.3 pF swing at 150 V over ~31 pF of reeds, is ~1.5 V)"}
+  output_volts_peak: {value: 1.0, source: "the drawing: the AUX output's 'maximum output signal level approx. .4 V AC' (0.57 V peak), with headroom"}
+
+controls:
+  mains_v_rms: {value: 117.0, min: 105.0, max: 127.0, unit: V, source: "manual p.3: 'All operate from 117 volt, 50/60 Hertz A.C.'"}
+  volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 200A's VOLUME knob, the 10K main volume; default a design choice)"}
+  vibrato: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 200A's VIBRATO knob, the 50K control; off by default)"}
+  aux_volume: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 100K AUX volume, 203755, model 200A only; fully up: the AUX jack's level set by its 1K trim)"}
+  aux_trim: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 1K screwdriver trim, 204524, at the AUX jack: fully up, the drawing's approx. .4 V AC maximum)"}
+  reedbar_trim: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (R11, the 25K 'reed bar volume' trimmer, 203717-1, between the preamp and the main volume: 0 = no series resistance; its factory setting is unknown)"}
+  vib_trim: {value: 0.056, min: 0.0, max: 1.0, unit: rotation, source: "fit (2026-11-20, scripts/wurlitzer_amp_study.py --only vibrato_fit): R17, the 4.7K trimmer (203717-2) in the LED's string, at ~260 ohm puts VIBRATO full's depth at the Pie-finger set's (6.2 dB p-p, its octave 4 measured as the model is) with the VTL5C2 stand-in; the depth peaks ~9 dB near a quarter turn and falls toward 0 (the cell saturated)"}
+
+values:
+  mains_hz: {value: 60.0, source: "manual p.3 (50 / 60 Hz; the US 60)"}
+  # --- the plate (the pickup) and the reeds' stand-in
+  r1_ohm: {value: 22.0e+3, source: "the drawing: R1 22K, the pickup to pa"}
+  r2_ohm: {value: 1.0e+6, source: "the drawing: R2 1 MEG, +150 V to pa"}
+  c1_f: {value: 0.022e-6, source: "the drawing: C1 .022, pa to TR-1's base"}
+  c_reeds_f: {value: 31.0e-12, source: "derived: WZ1's field maps (varimu/wurlitzer/spec.py standing_f), the 64 reeds' standing capacitance to the plate at the voicing (~0.45-0.50 pF each); its geometry provisional"}
+  c_plate_stray_f: {value: 50.0e-12, source: "provisional: model knowledge (the comb plate to the grounded reed bar and the shield over the reed bars, and its lead to the preamp board mounted between the reed bars)"}
+  r_in_ohm: {value: 1.0e+9, source: "numerical: a DC path for the test input's node"}
+  # --- the reed bar preamp (the drawing)
+  r3_ohm: {value: 470.0e+3, source: "the drawing: R3 470K"}
+  r4_ohm: {value: 150.0e+3, source: "the drawing: R4 150K"}
+  r5_ohm: {value: 33.0e+3, source: "the drawing: R5 33K"}
+  r6_ohm: {value: 1.8e+3, source: "the drawing: R6 1.8K"}
+  r7_ohm: {value: 270.0, source: "the drawing: R7 270 ohm"}
+  r8_ohm: {value: 820.0, source: "the drawing: R8 820 ohm"}
+  r9_ohm: {value: 6.8e+3, source: "the drawing: R9 6.8K"}
+  r10_ohm: {value: 56.0e+3, source: "the drawing: R10 56K"}
+  c2_f: {value: 220.0e-12, source: "the drawing: C2 220 PF"}
+  c3_f: {value: 100.0e-12, source: "the drawing: C3 100 PF"}
+  c4_f: {value: 100.0e-12, source: "the drawing: C4 100 PF"}
+  c5_f: {value: 4.7e-6, source: "the drawing: C5 4.7 MFD"}
+  c6_f: {value: 4.7e-6, source: "the drawing: C6 4.7 MFD"}
+  c7_f: {value: 22.0e-6, source: "the drawing: C7 22 MFD"}
+  tr1: {value: 2N5088@1, source: "provisional: model knowledge (TR-1, TR-2, TR-5, TR-6, TR-15 are Wurlitzer 142083-3, a small-signal NPN; the 2N5088, a high-gain US NPN of the period, stands in until the house number's JEDEC type is found: WZ0)"}
+  d1: {value: 1N4148@1, source: "provisional: model knowledge (D1 is Wurlitzer 142136, '25 PIV 10 MA', a small-signal silicon diode)"}
+  # --- the vibrato (the drawing)
+  r_vibrato_ohm: {value: 50.0e+3, source: "the drawing: the 50K VIBRATO control (201812)"}
+  r_vib_series_ohm: {value: 18.0e+3, source: "the drawing: 18K from x to the VIBRATO control's wiper (an 18K 1/4 W, the note: 203721 and 203730 assemblies, models 200A, 214A, 214VA)"}
+  r12_ohm: {value: 27.0e+3, source: "the drawing: R12 27K"}
+  r13_ohm: {value: 680.0e+3, source: "the drawing: R13 680K"}
+  r14_ohm: {value: 680.0e+3, source: "the drawing: R14 680K"}
+  r15_ohm: {value: 680.0e+3, source: "the drawing: R15 680K"}
+  r16_ohm: {value: 10.0e+3, source: "the drawing: R16 10K"}
+  r17_ohm: {value: 4.7e+3, source: "the drawing: R17 4.7K, a trimmer (203717-2)"}
+  r18_ohm: {value: 680.0, source: "the drawing: R18 680 ohm"}
+  c16_f: {value: 0.12e-6, source: "the drawing: C16 .12"}
+  c17_f: {value: 0.12e-6, source: "the drawing: C17 .12"}
+  c18_f: {value: 0.12e-6, source: "the drawing: C18 .12"}
+  kick_v: {value: 0.5, source: "numerical: C16's start voltage, held for the operating point only: a kick so the oscillator starts (a simulation sits at its unstable equilibrium otherwise)"}
+  tr3: {value: 2N5088@1, source: "provisional: model knowledge (TR-3, TR-4 are Wurlitzer 142083-2, a small-signal NPN; the 200's manual p.5: 'TR-4, a Darlington Pair transistor'; drawn as TR-3 / TR-4 here)"}
+  lg1: {value: VTL5C2@2, source: "provisional: model knowledge (LG-1, Wurlitzer 142312, an LED / LDR pair of unpublished type; the VTL5C2 Vactrol stands in, as for the Rhodes Suitcase, until the depth and shape are fitted to the Pie-finger set; Vintage Vibe sells a 200A LDR: web: https://www.vintagevibe.com/products/wurlitzer-200a-ldr)"}
+  opto_state_c_f: {value: 1.0, source: "numerical: the optocoupler's state node capacitor (varimu/devices/opto.py: 1 F, the device's convention)"}
+  # --- the volume chain (the drawing)
+  r11_ohm: {value: 25.0e+3, source: "the drawing: R11, the 25K reed bar volume (203717-1)"}
+  r_volume_ohm: {value: 10.0e+3, source: "the drawing: the 10K main volume control (203643-001)"}
+  volume_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper, ~10% at half rotation)"}
+  # --- the AUX output, early production (the drawing)
+  r_aux_volume_ohm: {value: 100.0e+3, source: "the drawing: the 100K AUX volume control (203755, model 200A only)"}
+  c23_f: {value: 1.0e-6, source: "the drawing: C23 1 MFD"}
+  r41_ohm: {value: 27.0e+3, source: "the drawing: R41 27K"}
+  r42_ohm: {value: 120.0e+3, source: "the drawing: R42 120K"}
+  r43_ohm: {value: 1.8e+3, source: "the drawing: R43 1.8K"}
+  r44_ohm: {value: 15.0e+3, source: "the drawing: R44 15K"}
+  r45_ohm: {value: 680.0, source: "the drawing: R45 680 ohm"}
+  r46_ohm: {value: 120.0, source: "the drawing: R46 120 ohm (printed on the late production's stage; the early one's R46 has no value)"}
+  r47_ohm: {value: 56.0e+3, source: "the drawing: R47 56K"}
+  r48_ohm: {value: 180.0, source: "the drawing: R48 180 ohm"}
+  c24_f: {value: 39.0e-12, source: "the drawing: C24 39 PF"}
+  c25_f: {value: 39.0e-12, source: "the drawing: C25 39 PF"}
+  c26_f: {value: 4.7e-6, source: "the drawing: C26 4.7 MFD"}
+  c27_f: {value: 47.0e-6, source: "the drawing: C27 47 MFD 10 V"}
+  r_aux_trim_ohm: {value: 1.0e+3, source: "the drawing: the 1K screwdriver adjust (204524) at the AUX OUTPUT jack"}
+  r_aux_load_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a line input: a console's or interface's, ~10 kOhm)"}
+  tr16: {value: 2N3053@1, source: "provisional: model knowledge (TR-16 is Wurlitzer 203719 in the early production, as TR-10 and TR-14: a medium NPN; the 2N3053 stands in)"}
+  # --- the power amplifier (the drawing)
+  c8_f: {value: 4.7e-6, source: "the drawing: C8 4.7 MFD"}
+  c9_f: {value: 0.001e-6, source: "the drawing: C9 .001"}
+  r27_ohm: {value: 15.0e+3, source: "the drawing: R27 15K"}
+  r28_ohm: {value: 10.0e+3, source: "the drawing: R28 10K ('select R28 for 0 volts DC at point 16')"}
+  r29_ohm: {value: 1.0e+3, source: "the drawing: R29 1K"}
+  r30_ohm: {value: 220.0, source: "the drawing: R30 220 ohm"}
+  r31_ohm: {value: 15.0e+3, source: "the drawing: R31 15K (feedback)"}
+  c10_f: {value: 22.0e-6, source: "the drawing: C10 22 MFD"}
+  c11_f: {value: 100.0e-12, source: "the drawing: C11 100 PF"}
+  c12_f: {value: 100.0e-6, source: "the drawing: C12 100 MFD (the bootstrap)"}
+  c13_f: {value: 100.0e-12, source: "the drawing: C13 100 PF"}
+  c14_f: {value: 100.0e-12, source: "the drawing: C14 100 PF"}
+  r32_ohm: {value: 1.8e+3, source: "the drawing: R32 1.8K"}
+  r33_ohm: {value: 1.8e+3, source: "the drawing: R33 1.8K"}
+  r34_ohm: {value: 160.0, source: "the drawing: R34 160 ohm"}
+  r35_ohm: {value: 220.0, source: "the drawing: R35 220 ohm"}
+  r36_ohm: {value: 270.0, source: "the drawing: R36 270 ohm"}
+  r37_ohm: {value: 0.47, source: "the drawing: R37 .47 ohm 2 W"}
+  r38_ohm: {value: 0.47, source: "the drawing: R38 .47 ohm 2 W"}
+  r39_ohm: {value: 270.0, source: "the drawing: R39 270 ohm"}
+  r40_ohm: {value: 12.0, source: "the drawing: R40 12 ohm"}
+  c15_f: {value: 0.1e-6, source: "the drawing: C15 .1"}
+  r_speaker_ohm: {value: 16.0, source: "the drawing: 'speaker load, model 200A': two 16 ohm 4\" x 6\" P.M. (202243) in parallel; resistors until WZ5's speakers"}
+  tr7: {value: 2N5087@1, source: "provisional: model knowledge (TR-7, TR-8 are Wurlitzer 142128, a small-signal PNP; the 2N5087, the 2N5088's complement, stands in)"}
+  tr9: {value: 2N3904@1, source: "provisional: model knowledge (TR-9 is Wurlitzer 137159-1, the bias control; a small-signal NPN)"}
+  tr10: {value: 2N3053@1, source: "provisional: model knowledge (TR-10, TR-14 are Wurlitzer 203719, drivers: a medium NPN)"}
+  tr12: {value: 2N4033@1, source: "provisional: model knowledge (TR-12 is Wurlitzer 203718, the PNP driver: a medium PNP)"}
+  tr11: {value: RCA30B@1, source: "provisional: model knowledge (TR-11 is Wurlitzer 507661-1 / 203735, a plastic PNP power transistor (manual p.35); a TIP30-class PNP stands in)"}
+  tr13: {value: RCA29B@1, source: "provisional: model knowledge (TR-13 is Wurlitzer 507664-1 / 203734, a plastic NPN power transistor; a TIP29-class NPN stands in)"}
+  # --- the supply (the drawing; the transformer's values provisional)
+  pt_half_rms_v: {value: 16.6, source: "provisional: calibrated by hand (each half of the centre-tapped secondary for the drawing's +-22.5 V at idle: 22.5 V plus a rectifier's drop, ~23.5 V peak); WZ2's trim script refines it"}
+  pt_hv_rms_v: {value: 122.5, source: "calibrated (2026-11-20, scripts/wurlitzer_amp_study.py --only idle): the winding to X3 for the drawing's +150 V at the preamp at idle (112 V rms gave 143.4 V, 117.2 gave 146.5, 120.0 settled at 146.98 over 12 s of silence; the 200's text says 160-170 V at the pickup, Pfeifle measured 130 V)"}
+  pt_r_half_ohm: {value: 1.0, source: "provisional: model knowledge (a ~40 W transformer's secondary half, copper and the primary referred)"}
+  pt_r_hv_ohm: {value: 200.0, source: "provisional: model knowledge (the HV extension's thin wire)"}
+  pt_leakage_h: {value: 1.0e-3, source: "provisional: model knowledge (a small transformer's leakage referred to a secondary half)"}
+  pt_c_f: {value: 1.0e-9, source: "provisional: model knowledge (a winding's capacitance at the rectifier nodes)"}
+  c28_f: {value: 2200.0e-6, source: "the drawing: C28 2200 MFD (-22.5 V)"}
+  c29_f: {value: 2200.0e-6, source: "the drawing: C29 2200 MFD (+22.5 V)"}
+  rectifier: {value: SI_RECTIFIER@1, source: "provisional: model knowledge (D2-D5 are Wurlitzer 142350, D6 202050 '600 PIV 1 A': silicon rectifiers; config/components/si_rectifier/1.yaml)"}
+  v15_v: {value: 15.0, source: "the drawing: '+15 V DC to preamp' (IC-1, 142349, regulating from +22.5 V; ideal here: its output impedance and ripple rejection aren't modelled)"}
+  r49_ohm: {value: 56.0e+3, source: "the drawing: R49 56K"}
+  r50_ohm: {value: 8.2e+6, source: "the drawing: R50 8.2 MEG"}
+  r51_ohm: {value: 1.0e+6, source: "the drawing: R51 1 MEG"}
+  r52_ohm: {value: 22.0e+6, source: "the drawing: R52 22 MEG"}
+  r56_ohm: {value: 1.0e+6, source: "the drawing: R56 1 MEG"}
+  c30_f: {value: 0.33e-6, source: "the drawing: C30 .33"}
+  c31_f: {value: 0.33e-6, source: "the drawing: C31 .33"}
+  c34_f: {value: 0.33e-6, source: "the drawing: C34 .33"}
+  hv30_v0: {value: 156.8, source: "numerical: C30's start voltage at its steady state (the megohm filter takes seconds to charge; held for the operating point only)"}
+  hv31_v0: {value: 150.0, source: "numerical: C31's and C34's start voltage at their steady state (R51 / R52's divider of C30's)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 117.0, source: "manual p.3: 117 V"}
+
+devices:
+  TR1: {device: tr1}
+  TR2: {device: tr1}
+  TR3: {device: tr3}
+  TR4: {device: tr3}
+  TR7: {device: tr7}
+  TR8: {device: tr7}
+  TR9: {device: tr9}
+  TR10: {device: tr10}
+  TR11: {device: tr11}
+  TR12: {device: tr12}
+  TR13: {device: tr13}
+  TR14: {device: tr10}
+  TR15: {device: tr1}
+  TR16: {device: tr16}
+  D1: {device: d1}
+  DSI: {device: rectifier}
+  LG1: {device: lg1}
+
+sections:
+  - title: plate
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      CREEDS: {C: [in, pk], c: c_reeds_f, tolerance: none}
+      CPLATE: {C: [pk, "0"], c: c_plate_stray_f, tolerance: none}
+      R1: {R: [pk, pa], r: r1_ohm}
+      R2: {R: [hv150, pa], r: r2_ohm}
+      C1: {C: [pa, b1], c: c1_f}
+
+  - title: preamp
+    parts:
+      DD1: {device: [x, b1], model: D1}
+      C2: {C: [b1, x], c: c2_f}
+      R3: {R: [b1, j2], r: r3_ohm}
+      QTR1: {bjt: [c1, b1, e1], model: TR1}
+      R4: {R: [v15, c1], r: r4_ohm}
+      C3: {C: [c1, b1], c: c3_f}
+      R5: {R: [e1, x], r: r5_ohm}
+      C5: {C: [e1, x], c: c5_f}
+      QTR2: {bjt: [c2, c1, e2], model: TR2}
+      R6: {R: [v15, c2], r: r6_ohm}
+      C4: {C: [c2, c1], c: c4_f}
+      R7: {R: [e2, j2], r: r7_ohm}
+      R8: {R: [j2, "0"], r: r8_ohm}
+      C7: {C: [e2, "0"], c: c7_f}
+      C6: {C: [c2, po], c: c6_f}
+      R10: {R: [po, x], r: r10_ohm}
+      R9: {R: [po, p3], r: r9_ohm}
+      # the VIBRATO control and LG-1's cell
+      RVIB: {pot: ["0", vw, x], r: r_vibrato_ohm, at: vibrato}
+      R18K: {R: [x, vw], r: r_vib_series_ohm}
+      XLG1: {device: [la, lk, lgs, vw, "0"], model: LG1}
+      CLGS: {C: [lgs, "0"], c: opto_state_c_f, tolerance: none}
+
+  - title: vibrato oscillator
+    parts:
+      R18: {R: [v15, la], r: r18_ohm}
+      R17: {rheostat: [lk, c34], r: r17_ohm, at: vib_trim}
+      QTR3: {bjt: [c34, b3, e3], model: TR3}
+      QTR4: {bjt: [c34, e3, "0"], model: TR4}
+      R15: {R: [b3, "0"], r: r15_ohm}
+      R16: {R: [e3, "0"], r: r16_ohm}
+      C17: {C: [c34, tt], c: c17_f}
+      C16: {C: [tt, b3], c: c16_f, v0: kick_v}
+      R12: {R: [tt, "0"], r: r12_ohm}
+      R14: {R: [c34, tm], r: r14_ohm}
+      R13: {R: [tm, b3], r: r13_ohm}
+      C18: {C: [tm, "0"], c: c18_f}
+
+  - title: volume
+    parts:
+      R11: {rheostat: [p3, p13], r: r11_ohm, at: reedbar_trim}
+      RVOL: {pot: ["0", p15, p13], r: r_volume_ohm, at: volume, taper_mid: volume_taper_mid}
+
+  - title: aux output
+    parts:
+      RAUXV: {pot: ["0", p9, p13], r: r_aux_volume_ohm, at: aux_volume, taper_mid: volume_taper_mid}
+      C23: {C: [p9, a1], c: c23_f}
+      R41: {R: [a1, b15], r: r41_ohm}
+      QTR15: {bjt: [c15, b15, e15], model: TR15}
+      R42: {R: [v15, c15], r: r42_ohm}
+      R43: {R: [e15, "0"], r: r43_ohm}
+      C24: {C: [c15, b15], c: c24_f}
+      QTR16: {bjt: [c16, c15, e16], model: TR16}
+      R45: {R: [v15, c16], r: r45_ohm}
+      C25: {C: [c16, c15], c: c25_f}
+      R44: {R: [e15, c16], r: r44_ohm}
+      R46: {R: [e16, j16], r: r46_ohm}
+      R48: {R: [j16, "0"], r: r48_ohm}
+      C27: {C: [e16, "0"], c: c27_f}
+      R47: {R: [b15, j16], r: r47_ohm}
+      C26: {C: [c16, p11], c: c26_f}
+      RAUXT: {pot: ["0", out, p11], r: r_aux_trim_ohm, at: aux_trim}
+      RAUXL: {R: [out, "0"], r: r_aux_load_ohm, tolerance: none}
+
+  - title: power amplifier
+    parts:
+      C8: {C: [p15, b7], c: c8_f}
+      C9: {C: [b7, "0"], c: c9_f}
+      R27: {R: [b7, "0"], r: r27_ohm}
+      R28: {R: [v15, et], r: r28_ohm}
+      QTR7: {bjt: [c7, b7, et], model: TR7}
+      QTR8: {bjt: ["0", b8, et], model: TR8}
+      R29: {R: [c7, vneg], r: r29_ohm}
+      R31: {R: [o, b8], r: r31_ohm}
+      R30: {R: [b8, f8], r: r30_ohm}
+      C10: {C: [f8, "0"], c: c10_f}
+      QTR14: {bjt: [c14, c7, vneg], model: TR14}
+      C11: {C: [c14, c7], c: c11_f}
+      R35: {R: [c14, tb], r: r35_ohm}
+      R34: {R: [tb, b10], r: r34_ohm}
+      QTR9: {bjt: [b10, tb, c14], model: TR9}
+      R33: {R: [bs, b10], r: r33_ohm}
+      R32: {R: [vpos, bs], r: r32_ohm}
+      C12: {C: [bs, o], c: c12_f}
+      QTR10: {bjt: [c10, b10, o], model: TR10}
+      C13: {C: [b10, c10], c: c13_f}
+      R36: {R: [vpos, c10], r: r36_ohm}
+      QTR11: {bjt: [o11, c10, vpos], model: TR11}
+      R37: {R: [o11, o], r: r37_ohm}
+      QTR12: {bjt: [c12n, c14, o], model: TR12}
+      C14: {C: [c14, c12n], c: c14_f}
+      R39: {R: [c12n, vneg], r: r39_ohm}
+      QTR13: {bjt: [o13, c12n, vneg], model: TR13}
+      R38: {R: [o13, o], r: r38_ohm}
+      R40: {R: [o, zb], r: r40_ohm}
+      C15: {C: [zb, "0"], c: c15_f}
+      RSPK1: {R: [o, "0"], r: r_speaker_ohm, tolerance: none}
+      RSPK2: {R: [o, "0"], r: r_speaker_ohm, tolerance: none}
+      RSPKV: {R: [o, spk], r: {value: 1.0e-3, source: "numerical: the speaker terminal's probe node"}, tolerance: none}
+      RSPKN: {R: [spk, "0"], r: {value: 1.0e+9, source: "numerical: a DC path for the probe node"}, tolerance: none}
+
+  - title: power supply
+    parts:
+      VMA: {mains: [sa, "0"], v_rms: pt_half_rms_v, phase_deg: 90.0}
+      RSA: {R: [sa, sa2], r: pt_r_half_ohm}
+      LSA: {L: [sa2, x1], l: pt_leakage_h}
+      CSA: {C: [x1, "0"], c: pt_c_f}
+      VMB: {mains: [sb, "0"], v_rms: pt_half_rms_v, phase_deg: 270.0}
+      RSB: {R: [sb, sb2], r: pt_r_half_ohm}
+      LSB: {L: [sb2, x2], l: pt_leakage_h}
+      CSB: {C: [x2, "0"], c: pt_c_f}
+      BRG: {bridge: [x1, x2, vpos, vneg], model: DSI}
+      C29: {C: [vpos, "0"], c: c29_f}
+      C28: {C: ["0", vneg], c: c28_f}
+      V15: {V: [v15, "0"], v: v15_v}
+      # the HV winding: the secondary's extension past X2 (in phase with it), half-wave
+      VMH: {mains: [sh, "0"], v_rms: pt_hv_rms_v, phase_deg: 270.0}
+      RSH: {R: [sh, sh2], r: pt_r_hv_ohm}
+      LSH: {L: [sh2, x3], l: pt_leakage_h}
+      CSH: {C: [x3, "0"], c: pt_c_f}
+      DD6: {device: [x3, hk], model: DSI}
+      CHK: {C: [hk, "0"], c: pt_c_f}
+      R49: {R: [hk, h30], r: r49_ohm}
+      C30: {C: [h30, "0"], c: c30_f, v0: hv30_v0}
+      R50: {R: [h30, "0"], r: r50_ohm}
+      R51: {R: [h30, h31], r: r51_ohm}
+      C31: {C: [h31, "0"], c: c31_f, v0: hv31_v0}
+      R52: {R: [h31, "0"], r: r52_ohm}
+      R56: {R: [h31, hv150], r: r56_ohm}
+      C34: {C: [hv150, "0"], c: c34_f, v0: hv31_v0}

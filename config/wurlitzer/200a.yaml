@@ -1,0 +1,88 @@
+# A Wurlitzer 200A's reeds, action and pickup (docs/WURLITZER_PLAN.md, WZ1; varimu/wurlitzer/
+# spec.py builds a key from these). Sources: data/schematics/wurlitzer_200a/README.md.
+# "manual" = Wurlitzer, Electronic Pianos Service Manual, Models 200 ... 214V (P-1-2000-742),
+# its own page numbers; "VV case study" = Vintage Vibe, "Case Study: Wurlitzer Electric Piano
+# Reeds", web: https://vintagevibe.com/blogs/news/wurlitzer-electric-piano-reeds-case-study;
+# "VV tuning" = Vintage Vibe, "Installing & Tuning Wurlitzer Reeds", web:
+# https://cdn.shopify.com/s/files/1/0666/2821/files/Installing_and_Tuning_Reeds.pdf;
+# "Pie-finger" = the 200A recorded direct (real instrument samples/, docs/WURLITZER_PLAN.md
+# "Reference: the Pie-finger set"). Values marked "fit:" are set by the fit named (spec.py).
+
+keyboard:
+  keys: {value: 64, source: "manual p.1: 64 notes, A-13 thru C-76 (the 88's numbering: A1-C7)"}
+  first_key_88: {value: 13, source: "manual p.1 (A-13: key 1 of the 64 is the 88's 13th, A1)"}
+
+tuning:
+  a4_hz: {value: 440.0, source: "provisional: model knowledge (concert pitch; VV tuning: reeds within -2 to +3 cents of it; the Pie-finger unit sits ~+5 cents, at ~441)"}
+
+reed:
+  youngs_pa: {value: 2.07e+11, source: "provisional: model knowledge (hardened carbon spring steel; manual p.2: 'Swedish Sandvik steel reeds', grade unpublished)"}
+  density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (steel)"}
+  # The blanks: reeds 1-14, 15-20, 21-42, 43-50, 51-64 (VV case study, the 200A's table).
+  blank_last_reed: {value: [14, 20, 42, 50, 64], source: "VV case study (200A and 200B): Lower 1-14, Upper Lower 15-20, Middle 21-42, Upper Middle 43-50, Treble 51-64"}
+  blank_thickness_m: {value: [0.508e-3, 0.508e-3, 0.838e-3, 0.838e-3, 0.838e-3], source: "VV case study (200A): .020, .020, .032-.034 (the middle, .033 in), .032-.034, .032-.034 in; the page's prose says .026 in for the 200A's tongue, inconsistent with its table: the table taken"}
+  blank_width_m: {value: [3.937e-3, 3.277e-3, 3.048e-3, 2.794e-3, 2.464e-3], source: "VV case study (200A): .155, .129, .120, .110, .097 in"}
+  # The lead at the tip: a pyramid (VV tuning); its mass sets the pitch with the free length,
+  # and the second bending mode's ratio to the first. Neither length nor mass is published.
+  # fit: its mass ratio to the reed's tongue (mass / (rho b t L)) per key, log-linear in the key
+  # between these two ends; the free length is then solved for the note.
+  tip_mass_ratio_bass: {value: 0.6, source: "provisional: model knowledge (bass reeds carry a large lead blob: VV case study, the lower reeds 'flat stamped metal with appropriate lead applied to end'); WZ1's study compares the second mode it implies with the Pie-finger attacks"}
+  tip_mass_ratio_treble: {value: 0.1, source: "provisional: model knowledge (treble reeds are ground and carry little lead: VV case study, reeds 43 and up ground)"}
+  tip_length_m: {value: 3.0e-3, source: "provisional: model knowledge (the lead's pyramid along the reed, capped at 20% of the free length)"}
+  tip_height_m: {value: 1.5e-3, source: "provisional: model knowledge (the pyramid's height, for its rotary inertia)"}
+  max_tip_fraction: {value: 0.2, source: "provisional: model knowledge"}
+  # fit: the reed's own loss (the clamp under the screw and dished washer, the lead, the air)
+  # as stiffness-proportional damping, set so the fundamental decays at q_target (anchors).
+
+hammer:
+  mass_kg: {value: 1.0e-3, source: "provisional: model knowledge (manual p.2: 'Three ply maple covered with mothproofed felt'; a small hammer's effective mass at the reed); 2026-11-20: 2.5 g swung a bass reed 8 mm at the slot at 2.5 m/s (into the shield at 8 mm) and put the bass ~5 dB louder than the treble, where the Pie-finger set has them within ~3 dB"}
+  # Felt: a power-law contact with Hunt-Crossley loss, F = K d^p (1 + alpha d'), Pfeifle DAFx-17
+  # eq. (1) (Stulov's hysteretic felt, his ref [14]); piano-felt exponents are 2-3.5.
+  stiffness: {value: 4.0e+9, source: "provisional: model knowledge (K in N / m^p); 2026-11-20: 4e8 held the felt on the reed 2-4 ms (longer than a treble reed's period); 4e9 gives 0.8-1.9 ms, piano-like"}
+  exponent: {value: 2.5, source: "provisional: model knowledge (piano hammer felt, Stulov 1995: p ~2.2-3.5)"}
+  hysteresis_s_m: {value: 0.5, source: "provisional: model knowledge (Hunt-Crossley damping)"}
+  strike_fraction: {value: 0.45, source: "provisional: model knowledge (the striking point, factory set (manual p.16), between the reed screw and the pickup: a fraction of the free length from the root)"}
+  blow_distance_m: {value: 0.02738, source: "manual p.17: hammer blow distance 1 5/64 in, tip of the hammer to the under surface of the reed"}
+  letoff_m: {value: 3.175e-3, source: "manual p.17: the hammer lets off 1/8 in from the reed"}
+
+velocity:
+  # A hammer speed per strike for WZ1's study: three levels standing for Pie-finger's low / mid
+  # / high (hand struck, not calibrated); WZ3 fits a velocity law.
+  speeds_m_s: {value: [0.6, 1.5, 3.5], source: "provisional: model knowledge (soft to hard piano-action hammer speeds, ~0.5-4 m/s)"}
+
+pickup:
+  # The comb plate: each reed's tip in a slot of the plate, the reed grounded (VV tuning: the
+  # reed's head 'is also an electrical ground'), the plate polarized (manual pp.4-5; the 200A's
+  # schematic: +150 V through R2 1 MEG). Pfeifle DAFx-17 3.2: 'the charged plate has cutouts at
+  # the position of the reed', the reeds 'vibrate freely between the symmetric cutouts'.
+  plate_thickness_m: {value: 0.8e-3, source: "provisional: model knowledge (sheet metal, ~1/32 in)"}
+  side_gap_m: {value: 0.35e-3, source: "provisional: model knowledge (VV tuning: the reed centred in the slot with a feeler gauge; a few thousandths of an inch each side)"}
+  overlap_m: {value: 6.0e-3, source: "provisional: model knowledge (the slot's prongs alongside the reed's outer end)"}
+  overlap_tip_clearance_m: {value: 0.5e-3, source: "provisional: model knowledge (the prongs' far end short of the reed's tip)"}
+  reed_pitch_m: {value: 12.0e-3, source: "provisional: model knowledge (64 reeds on two bars ~0.77 m long)"}
+  shield_distance_m: {value: 8.0e-3, source: "provisional: model knowledge (the grounded reed bar below, the shield over the reed bars above: manual p.8 'the shield to the reed bars')"}
+  # Voicing: the reed's rest above the plate's mid-plane. At 0 the capacitance is at its
+  # maximum and the output doubles in frequency (VV tuning: 'When a reed at rest is positioned
+  # inside the pickup, a very strong undesirable harmonic will be generated'); bending the
+  # pickup up or down (manual p.43: 1/32-1/16 in) moves it.
+  voicing_m: {value: 0.6e-3, source: "provisional: model knowledge; fit to the Pie-finger bark against velocity in WZ3"}
+
+plate:
+  # The plate's node as WZ1's load (WZ2 replaces it with the 200A's circuit).
+  polarizing_v: {value: 150.0, source: "the 200A's schematic (manual's last page): +150 V to the preamp, through R2 1 MEG to the pickup; the 200's text (manual p.4) 160-170 V; Pfeifle measured 130 V on his"}
+  feed_ohm: {value: 1.0e+6, source: "the 200A's schematic: R2 1 MEG from +150 V (its far end held by C34 .33 uF)"}
+  fixed_f: {value: 3.0e-10, source: "provisional: model knowledge (the 200A schematic's C2 220 pF at TR-1's base through C1 .022 uF, plus ~80 pF of plate to the reed bar and shield and its lead; the other reeds' standing capacitance is added by spec.py)"}
+
+anchors:
+  # The fundamental's Q the reed's loss is fitted to: a cubic in log f through these (least
+  # squares on log Q), held at the ends outside them.
+  q_pie_finger:  # [Hz, Q]: Q = pi f 8.686 / |dB/s|, the fundamental's band-passed decay from 0.2 s over up to 40 dB, the median over the three velocities of the frequency and of the slope
+    value: [[65.6, 810], [69.5, 972], [73.5, 724], [78.0, 1075], [82.9, 1001], [87.5, 865], [92.7, 901], [98.0, 801], [104.2, 839], [110.1, 607], [116.9, 585], [123.8, 693], [262.5, 915], [278.0, 924], [294.0, 610], [312.0, 923], [330.5, 957], [350.9, 821], [370.8, 1119], [393.5, 753], [416.2, 589], [440.8, 620], [467.2, 683], [495.2, 885], [1049.5, 1317], [1111.5, 1293], [1179.1, 1526], [1250.4, 1405], [1321.7, 967], [1404.0, 1467], [1485.4, 1417], [1571.0, 851], [1667.3, 1559], [1765.8, 1407], [1872.8, 1291], [1981.4, 1424]]
+    source: "measured (2026-11-20) on the Pie-finger set's long notes (docs/WURLITZER_PLAN.md 'Reference: the Pie-finger set'; scripts/wurlitzer_key_study.py --measure rewrites them)"
+
+numerics:
+  element_m: {value: 1.0e-3, source: "numerical: the longest beam element"}
+  f_max_hz: {value: 40000.0, source: "numerical: the highest mode kept"}
+  field_cell_m: {value: 0.025e-3, source: "numerical: the field solve's fine cells (the reed's thickness a whole number of them)"}
+  swing_m: {value: 6.0e-3, source: "numerical: the map covers the reed within +-this of the plate's mid-plane (a bass reed struck hard swings ~4 mm at the slot)"}
+  full_scale_v: {value: 0.5, source: "numerical: the study's WAVs' 0 dBFS, 0.5 V peak at the plate"}

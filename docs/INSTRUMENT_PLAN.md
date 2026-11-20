@@ -207,7 +207,8 @@ the soundboard).
    it plays in real time through the amp and speaker. RHODES_PLAN.md splits it into
    RH1-RH6.
 3. **I3: the Wurlitzer.** The electrostatic pickup as a circuit element; the 200A after the
-   BJT model, or a tube model first.
+   BJT model, or a tube model first. Planned since 2026-11-20 (the 200A, its speakers and its
+   AUX output; the BJT model exists): [WURLITZER_PLAN.md](WURLITZER_PLAN.md).
 4. **I4: one piano note.** Hysteretic hammer, three coupled strings, a bridge and a
    soundboard patch. Done when: inharmonicity, double decay and phantom partials match
    published measurements for that note.

@@ -126,3 +126,6 @@ data/schematics/ge_rp1560/*
 
 # Computer audio captured by crates/audio-recorder (may be anyone's music): never committed
 recordings/
+# The Wurlitzer 200A's sources (cited by data/schematics/wurlitzer_200a/README.md: URLs and sha256)
+data/schematics/wurlitzer_200a/*
+!data/schematics/wurlitzer_200a/README.md
