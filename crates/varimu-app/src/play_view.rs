@@ -127,6 +127,7 @@ const DRAWING: Device = Device {
     live_speaker_v: None,
     newton: None,
     method: None,
+    live_circuit: None,
 };
 
 /// A finished render: where it was saved and what it was.
