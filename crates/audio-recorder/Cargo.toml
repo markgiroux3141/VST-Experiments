@@ -1,0 +1,16 @@
+[package]
+name = "audio-recorder"
+version = "0.1.0"
+description = "Records what the computer plays (WASAPI loopback of an output device) into a WAV, Start / Stop"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+cpal = "0.18.2"
+eframe = "0.35.0"
+hound = "3.5.1"
+rtrb = "0.4.1"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_SystemInformation"] }

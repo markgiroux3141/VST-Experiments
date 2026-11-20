@@ -123,3 +123,6 @@ data/schematics/westrex_3d/*
 # GE RP1560 schematic (Beitman 1963) and Sonotone sources (cited by data/schematics/ge_rp1560/README.md)
 data/schematics/ge_rp1560/*
 !data/schematics/ge_rp1560/README.md
+
+# Computer audio captured by crates/audio-recorder (may be anyone's music): never committed
+recordings/
