@@ -295,3 +295,50 @@ panel's **⟲ loop** toggle (track and master inserts) renders instead of playin
   a tape's run) differs from the print, which stays the reference.
 - Tests: `loop_render::tests` (the excerpt, the gains at playback, a stereo loop through the
   stereo 670).
+
+## Status (2026-11-16): F4 built, with fader and pan automation
+
+The session is a mixing console now: sends to FX returns, a pan law and stereo pans
+(STEREO_PLAN.md ST6), and automation. All in `varimu_app::session` (the arithmetic) and
+`session_view.rs` (the strips); old sessions mix bit for bit.
+
+- **FX returns** (`Track::bus`; "+ FX return" under the tracks and in the Mixer): a track with
+  no clips whose lane is the **mono sum of the sends to it** (`Session::refresh_buses`, summed
+  again only when what feeds it changes: a signature per return; the view calls it each frame,
+  loading and undo do). Its inserts print that sum like any lane (a reverb added to a return is
+  fully wet), its fader and pan bring it back. Without inserts it plays its sum dry; with a chain
+  and no print yet, nothing. While its sends change it plays its **last print** (stale, shown),
+  not silence.
+- **Sends** (`Track::sends`: the return's id, a level, PRE / POST; new ones post-fader at
+  -10 dB): the Mixer strip's SENDS (level, PRE / POST, right-click the name to remove, "+ send"
+  to a return or a new one), and the arrangement strip's right-click "Send to". A stereo track
+  sends its mid. Post-fader follows the fader and its ride (so a fader move re-prints the
+  return; PRE doesn't).
+- **Mute and solo:** a muted track's sends drop out of the sum (its reverb goes with it); solo
+  doesn't change any sum (no re-print on a solo). A return is solo-safe: it plays while a soloed
+  track sends to it (`Session::audible`, now the one rule for the mix, the mixdown, the export,
+  the master's input and bounces).
+- **Print order:** a return prints once the tracks feeding it are current (`key_tracks` /
+  `keys_ready` include its feeds, as a key route's track); a key route can't loop through a
+  return (`would_cycle`).
+- **Automation** (`Track::auto`: `Automation { ride, pan }`, timeline positions; post-insert):
+  the **fader ride** is dB on top of the fader (the fader stays the base: VCA-style rides), the
+  **pan** lane the pan (a stereo track's POSITION). Edited two ways: **VOL / PAN** on a strip
+  shows that lane over the track's lane (click: a point added or removed, drag: moved), and
+  **W** (write) records moves of the fader or pan while the transport plays (touch: written into
+  the automation as it plays, so it is heard at once; let go and the control returns, the move
+  stays, gliding back to what was there over 50 ms, `Automation::write`). The mix applies it
+  sample by sample (`MixClip::strip`, a `Strip`); insert / delete time move its points.
+- **Done-when:** two tracks sent to one return with the plate printed and playing, its 8 s tail
+  past the last take
+  (`session_view::tests::two_tracks_sent_to_a_plate_return_print_it_once_and_its_tail_plays_on`:
+  a real print, ~4 s); a send level change makes only the return stale
+  (`session::tests::two_tracks_send_to_a_return_whose_print_plays_past_the_last_take`, also
+  PRE / POST, mute, solo-safe, save / load). Automation:
+  `a_fader_ride_and_pan_automation_play_after_the_inserts`,
+  `a_written_move_replaces_what_was_there_and_glides_back`.
+- **Open:** the user's first try. Automation of send levels; a return's input in stereo (a
+  send's pan); returns feeding returns (refused now: a return has no sends); per-send prints
+  (a muted track's reverb removed without a re-print, as a room's `passes: separate`); the
+  touch's 30 fps resolution (a point per frame).
+

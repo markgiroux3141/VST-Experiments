@@ -1366,6 +1366,16 @@ plays (▶ always there; ● starts the instrument and records once it plays). *
 optional stems that sum to it, once every audible track is ready (`export_problems`);
 ⤓ Export final… sets the inserts to production and renders MIDI takes at production first.
 The Room view renders each source track as the mix plays it (its print, not the raw take).
+**F4 built (2026-11-16; SESSION_FX_PLAN.md "Status (2026-11-16)"), with ST6 and automation:**
+FX returns (`Track::bus`, "+ FX return": no clips, the lane is the mono sum of the sends to it,
+`Session::refresh_buses`; its inserts print the sum, a reverb on it fully wet; it plays its last
+print while its sends change), sends (`Track::sends`, PRE / POST, the Mixer's SENDS, a strip's
+right-click "Send to"; a muted track's sends drop out, a return is solo-safe: `Session::audible`),
+the pan law (`Session::pan_law_db`, 0 / -3 / -4.5 / -6; new sessions -3, old ones 0 and bit for
+bit: all 52 in `sessions/`, `every_saved_session_mixes_as_before_the_pan_law`), a stereo track's
+two pans as POSITION / SPREAD (`Track::pans`; STEREO_PLAN.md ST6's status), and post-insert
+automation (`Track::auto`: a fader ride in dB on the fader and the pan; VOL / PAN draw a lane over
+the track, W writes fader / pan moves while playing, touch).
 
 **The sampler** (2026-11-02, the user's ask): the user's sample library sorted into the repo's
 git-ignored `samples/` by `scripts/import_samples.py` (drums first: `samples/drums/<category>/`,

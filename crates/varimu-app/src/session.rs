@@ -28,10 +28,20 @@
 //! ([`Session::process_clip`], [`Session::consolidate`], [`Session::bounce_audible`]), never
 //! over the old one. The signal work is `crate::edit`'s.
 //!
-//! **The mix** is a console's: each track's lane times its fader and balance
-//! (center unity, a side down toward silence), mute and solo, summed; the device playing
-//! live goes through the armed track's fader. Arithmetic, not a device (RECORDING_PLAN.md,
-//! "Physical honesty").
+//! **The mix** is a console's: each track's lane times its fader and pan, mute and solo,
+//! summed; the device playing live goes through the armed track's fader. Arithmetic, not a
+//! device (RECORDING_PLAN.md, "Physical honesty"). The pan follows the session's pan law
+//! ([`pan_gains`]: 0 dB is the balance sessions had before, centre unity, a side down toward
+//! silence; new sessions -3 dB); a stereo track has two pans ([`Track::pans`], POSITION and
+//! SPREAD), one saved before them a balance (docs/STEREO_PLAN.md ST6). After the inserts a
+//! track's [`Automation`] rides its fader (dB on top of it) and moves its pan, sample by
+//! sample ([`Strip`]).
+//!
+//! **FX returns** (docs/SESSION_FX_PLAN.md F4): a return ([`Track::bus`]) has no clips; its
+//! lane is the mono sum of the tracks' [`Send`]s to it (pre or post fader;
+//! [`Session::refresh_buses`]), printed through its inserts like any lane, back into the mix
+//! through its own fader. A muted track's sends drop out; a return plays while a soloed track
+//! sends to it ([`Session::audible`]).
 //!
 //! **On disk** (a folder the user owns, never the repo): `session.json` (rate, transport,
 //! tracks, where each take sits now) and `takes/<id>/` with `take.json` (where it was
@@ -113,6 +123,363 @@ pub fn balance(volume_db: f64, pan: f64) -> (f32, f32) {
     )
 }
 
+/// The pan laws a session can have (dB at the centre): 0 is the balance law sessions had
+/// before ST6, -3 constant power, -4.5 a large console's compromise, -6 constant voltage.
+pub const PAN_LAWS_DB: [f64; 4] = [0.0, -3.0, -4.5, -6.0];
+
+/// A new session's pan law as the app makes one (docs/STEREO_PLAN.md ST6, decision 10:
+/// -3 dB; a session saved before it opens at 0 dB, so it plays as it did, and
+/// [`Session::new`] starts at 0 dB for code that builds sessions itself).
+pub const NEW_SESSION_PAN_LAW_DB: f64 = -3.0;
+
+/// A pan pot's gains (left, right) for a mono source at `pan` (-1 left .. 1 right) under a
+/// pan law (docs/STEREO_PLAN.md ST6): `law_db` is what each side plays a centred source at.
+/// 0 dB is the balance the session always had (centre unity on both sides, a side turned
+/// down past it), so sessions from before the law play bit for bit; otherwise cos / sin of
+/// the pot's angle raised to law / -3.01: -3 dB constant power, -6 dB constant voltage (a
+/// mono sum holds its level through a sweep), unity at the hard sides in every law.
+pub fn pan_gains(pan: f64, law_db: f64) -> (f64, f64) {
+    let p = pan.clamp(-1.0, 1.0);
+    if law_db == 0.0 {
+        return ((1.0 - p).min(1.0), (1.0 + p).min(1.0));
+    }
+    // The hard sides exactly (cos 90 degrees isn't 0 in floating point).
+    if p <= -1.0 {
+        return (1.0, 0.0);
+    }
+    if p >= 1.0 {
+        return (0.0, 1.0);
+    }
+    let e = law_db / (20.0 * std::f64::consts::FRAC_1_SQRT_2.log10());
+    let th = (p + 1.0) * std::f64::consts::FRAC_PI_4;
+    (th.cos().max(0.0).powf(e), th.sin().max(0.0).powf(e))
+}
+
+/// A stereo track's two pans as POSITION and SPREAD (docs/STEREO_PLAN.md ST6, decision 9):
+/// the centre between them and half the distance (1: hard left and right; negative: the
+/// sides swapped).
+pub fn position_spread(pans: (f64, f64)) -> (f64, f64) {
+    ((pans.0 + pans.1) / 2.0, (pans.1 - pans.0) / 2.0)
+}
+
+/// The two pans from POSITION and SPREAD, each kept on the pot.
+pub fn pans_from(position: f64, spread: f64) -> (f64, f64) {
+    (
+        (position - spread).clamp(-1.0, 1.0),
+        (position + spread).clamp(-1.0, 1.0),
+    )
+}
+
+/// A channel strip as the mix applies it after the inserts: the fader (dB), the pan (a mono
+/// lane) or balance (a stereo lane without pans), a stereo lane's two pans, the session's
+/// pan law, and the track's automation placed on the timeline (its fader ride in dB on top
+/// of the fader; its pan: a mono lane's pan, a balance, or a stereo lane's POSITION).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Strip {
+    pub volume_db: f64,
+    pub pan: f64,
+    pub pans: Option<(f64, f64)>,
+    pub law_db: f64,
+    pub stereo: bool,
+    pub ride: Option<Envelope>,
+    pub pan_env: Option<Envelope>,
+}
+
+impl Strip {
+    /// Its pan when nothing automates it: a stereo lane's POSITION, else the pan.
+    pub fn static_pan(&self) -> f64 {
+        match (self.stereo, self.pans) {
+            (true, Some(p)) => position_spread(p).0,
+            _ => self.pan,
+        }
+    }
+
+    pub fn is_automated(&self) -> bool {
+        self.ride.is_some() || self.pan_env.is_some()
+    }
+
+    /// Its gains as a matrix [left from left, left from right, right from left, right from
+    /// right] with a ride of `ride_db` and the pan at `pan` (a stereo lane's pans moved
+    /// together so their centre is there).
+    pub fn matrix_with(&self, ride_db: f64, pan: f64) -> [f32; 4] {
+        let g = 10f64.powf((self.volume_db + ride_db) / 20.0);
+        let side = |l: f64, r: f64| [(g * l) as f32, 0.0, 0.0, (g * r) as f32];
+        match (self.stereo, self.pans) {
+            (false, _) => {
+                let (l, r) = pan_gains(pan, self.law_db);
+                side(l, r)
+            }
+            (true, None) => {
+                let (l, r) = pan_gains(pan, 0.0);
+                side(l, r)
+            }
+            (true, Some((a, b))) => {
+                let d = pan - (a + b) / 2.0;
+                let (al, ar) = pan_gains((a + d).clamp(-1.0, 1.0), self.law_db);
+                let (bl, br) = pan_gains((b + d).clamp(-1.0, 1.0), self.law_db);
+                [
+                    (g * al) as f32,
+                    (g * bl) as f32,
+                    (g * ar) as f32,
+                    (g * br) as f32,
+                ]
+            }
+        }
+    }
+
+    /// Its matrix at timeline position `p` (its automation read there).
+    pub fn matrix_at(&self, p: i64) -> [f32; 4] {
+        let ride = self
+            .ride
+            .as_ref()
+            .map_or(0.0, |e| envelope_db(Some(e), p) as f64);
+        let pan = self
+            .pan_env
+            .as_ref()
+            .map_or_else(|| self.static_pan(), |e| envelope_db(Some(e), p) as f64);
+        self.matrix_with(ride, pan)
+    }
+
+    /// Its gains as a (left, right) pair when it is one (no automation, nothing crossing
+    /// from one side to the other): exactly the pair the mix used before ST6 for a session
+    /// at the 0 dB law, a mono lane's pan or a stereo lane's balance, and a stereo lane's
+    /// pans at hard left and right (they play it as it is).
+    pub fn fixed_pair(&self) -> Option<(f32, f32)> {
+        if self.is_automated() {
+            return None;
+        }
+        match (self.stereo, self.pans) {
+            (false, _) => {
+                let g = 10f64.powf(self.volume_db / 20.0);
+                let (l, r) = pan_gains(self.pan, self.law_db);
+                Some(((g * l) as f32, (g * r) as f32))
+            }
+            (true, None) => Some(balance(self.volume_db, self.pan)),
+            (true, Some((a, b))) if a == -1.0 && b == 1.0 => {
+                let g = 10f64.powf(self.volume_db / 20.0) as f32;
+                Some((g, g))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A track's automation (post-insert, on the timeline): its fader's ride (dB on top of the
+/// fader) and its pan, each (timeline position, value) in rising positions, linear between
+/// points and flat past the ends; empty: none.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Automation {
+    pub ride: Vec<(i64, f64)>,
+    pub pan: Vec<(i64, f64)>,
+}
+
+/// An automation lane of a track.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AutoLane {
+    #[default]
+    Ride,
+    Pan,
+}
+
+/// How far a written automation move glides back to what was there after it (s).
+pub const AUTO_GLIDE_S: f64 = 0.05;
+
+/// A ride's range (dB).
+pub const RIDE_MIN_DB: f64 = -48.0;
+pub const RIDE_MAX_DB: f64 = 12.0;
+
+impl Automation {
+    pub fn is_empty(&self) -> bool {
+        self.ride.is_empty() && self.pan.is_empty()
+    }
+
+    pub fn lane(&self, l: AutoLane) -> &Vec<(i64, f64)> {
+        match l {
+            AutoLane::Ride => &self.ride,
+            AutoLane::Pan => &self.pan,
+        }
+    }
+
+    pub fn lane_mut(&mut self, l: AutoLane) -> &mut Vec<(i64, f64)> {
+        match l {
+            AutoLane::Ride => &mut self.ride,
+            AutoLane::Pan => &mut self.pan,
+        }
+    }
+
+    /// A lane's value at `p` (`default` without points).
+    pub fn value(&self, l: AutoLane, p: i64, default: f64) -> f64 {
+        points_at(self.lane(l), p).unwrap_or(default)
+    }
+
+    /// A point set on a lane at `p` (one there replaced), its value kept in the lane's range.
+    pub fn set_point(&mut self, l: AutoLane, p: i64, v: f64) {
+        let v = clamp_auto(l, v);
+        let lane = self.lane_mut(l);
+        lane.retain(|q| q.0 != p);
+        let k = lane.partition_point(|q| q.0 < p);
+        lane.insert(k, (p, v));
+    }
+
+    /// A move written on a lane (touch: `points` recorded while playing, rising positions):
+    /// what was there from its first point to `glide` samples past its last is replaced by
+    /// it, with the old curve kept up to just before it and taken up again after the glide
+    /// (`default`: the value with no points, the fader's or the pan's).
+    pub fn write(&mut self, l: AutoLane, points: &[(i64, f64)], glide: i64, default: f64) {
+        let (Some(&(a, _)), Some(&(b, _))) = (points.first(), points.last()) else {
+            return;
+        };
+        let end = b + glide.max(1);
+        let before = self.value(l, a - 1, default);
+        let after = self.value(l, end, default);
+        let lane = self.lane_mut(l);
+        let had = !lane.is_empty();
+        lane.retain(|q| q.0 < a || q.0 > end);
+        let mut add: Vec<(i64, f64)> = Vec::new();
+        if had || before != points[0].1 {
+            add.push((a - 1, before));
+        }
+        add.extend(points.iter().map(|&(p, v)| (p, clamp_auto(l, v))));
+        add.push((end, after));
+        for (p, v) in add {
+            lane.retain(|q| q.0 != p);
+            let k = lane.partition_point(|q| q.0 < p);
+            lane.insert(k, (p, v));
+        }
+    }
+
+    /// Time inserted at `at` (`len` samples): the points from `at` on move later.
+    pub fn insert_time(&mut self, at: i64, len: i64) {
+        for lane in [&mut self.ride, &mut self.pan] {
+            for q in lane.iter_mut().filter(|q| q.0 >= at) {
+                q.0 += len;
+            }
+        }
+    }
+
+    /// The time `[a, b)` deleted: its points removed, the later ones moved earlier.
+    pub fn delete_time(&mut self, a: i64, b: i64) {
+        for lane in [&mut self.ride, &mut self.pan] {
+            lane.retain(|q| q.0 < a || q.0 >= b);
+            for q in lane.iter_mut().filter(|q| q.0 >= b) {
+                q.0 -= b - a;
+            }
+        }
+    }
+
+    fn to_json(&self) -> Value {
+        let mut v = json!({});
+        if !self.ride.is_empty() {
+            v["ride"] = json!(self.ride);
+        }
+        if !self.pan.is_empty() {
+            v["pan"] = json!(self.pan);
+        }
+        v
+    }
+
+    fn from_json(v: &Value) -> Automation {
+        let lane = |x: &Value| -> Vec<(i64, f64)> {
+            x.as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|p| Some((p[0].as_i64()?, p[1].as_f64()?)))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        Automation {
+            ride: lane(&v["ride"]),
+            pan: lane(&v["pan"]),
+        }
+    }
+
+    /// What it is, short (for signatures: its points hashed).
+    fn signature(&self) -> String {
+        if self.is_empty() {
+            return String::new();
+        }
+        format!("auto[{}|{}]", points_sig(&self.ride), points_sig(&self.pan))
+    }
+}
+
+fn clamp_auto(l: AutoLane, v: f64) -> f64 {
+    match l {
+        AutoLane::Ride => v.clamp(RIDE_MIN_DB, RIDE_MAX_DB),
+        AutoLane::Pan => v.clamp(-1.0, 1.0),
+    }
+}
+
+/// Points' value at `p`: linear between them, flat past the ends (None: no points).
+fn points_at(points: &[(i64, f64)], p: i64) -> Option<f64> {
+    let first = points.first()?;
+    if p <= first.0 {
+        return Some(first.1);
+    }
+    let k = points.partition_point(|q| q.0 <= p);
+    if k >= points.len() {
+        return Some(points[points.len() - 1].1);
+    }
+    let ((a, da), (b, db)) = (points[k - 1], points[k]);
+    Some(da + (db - da) * ((p - a) as f64 / (b - a).max(1) as f64))
+}
+
+/// Points as an [`Envelope`] (None: no points).
+fn points_envelope(points: &[(i64, f64)]) -> Option<Envelope> {
+    (!points.is_empty()).then(|| Arc::new(points.iter().map(|&(p, v)| (p, v as f32)).collect()))
+}
+
+/// Points hashed (their count and a hash: signatures are compared in memory only).
+fn points_sig(points: &[(i64, f64)]) -> String {
+    use std::hash::{Hash, Hasher};
+    if points.is_empty() {
+        return String::new();
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for (p, v) in points {
+        p.hash(&mut h);
+        v.to_bits().hash(&mut h);
+    }
+    format!("{}:{:x}", points.len(), h.finish())
+}
+
+/// A track's send to an FX return (docs/SESSION_FX_PLAN.md F4): the return's track id, the
+/// level (dB) and where it taps the strip: before the fader (pre) or after it and its ride
+/// (post). Mono: a stereo track sends its mid.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Send {
+    pub bus: String,
+    pub level_db: f64,
+    pub pre: bool,
+}
+
+impl Send {
+    fn to_json(&self) -> Value {
+        json!({ "bus": self.bus, "db": self.level_db, "pre": self.pre })
+    }
+
+    fn from_json(v: &Value) -> Option<Send> {
+        Some(Send {
+            bus: v["bus"].as_str()?.to_string(),
+            level_db: v["db"].as_f64().unwrap_or(0.0),
+            pre: v["pre"].as_bool().unwrap_or(false),
+        })
+    }
+}
+
+/// A new send's level (dB).
+pub const NEW_SEND_DB: f64 = -10.0;
+
+/// An FX return's input as summed from its sends ([`Session::refresh_buses`]): what it was
+/// made from and, while anything sounds, where it starts and its (mono) samples.
+#[derive(Debug, Clone)]
+pub struct BusIn {
+    pub signature: String,
+    pub input: Option<(i64, Arc<Vec<f32>>)>,
+    /// The input's outline (for its lane).
+    pub overview: Option<Arc<Overview>>,
+}
+
 /// The shape of a fade (docs/SESSION_EDITING_PLAN.md SE8): a straight line in amplitude
 /// (a tape splice is one: correlated sound crossfades to unity) or equal power (sine /
 /// cosine: unrelated sounds crossfade at a constant level).
@@ -186,6 +553,10 @@ pub struct MixClip {
     /// Its clip's gain envelope (timeline positions).
     pub env: Option<Envelope>,
     pub track: usize,
+    /// Its track's strip where the gains aren't a fixed pair (stereo pans, automation:
+    /// docs/STEREO_PLAN.md ST6): then `gain` is the clip's own (the same both sides) and the
+    /// strip is applied after it, sample by sample.
+    pub strip: Option<Arc<Strip>>,
 }
 
 /// A clip on no track's meter.
@@ -207,11 +578,25 @@ impl MixClip {
             curve_out: FadeCurve::Linear,
             env: None,
             track: NO_TRACK,
+            strip: None,
         }
     }
 
     pub fn end(&self) -> i64 {
         self.start + self.len as i64
+    }
+
+    /// It through a track's strip: the pair folded into its gain where the strip is one
+    /// (the pair times the clip's gain, as the mix always did), else the strip kept.
+    pub fn through(mut self, strip: &Strip) -> MixClip {
+        match strip.fixed_pair() {
+            Some((l, r)) => {
+                self.gain = (l * self.gain.0, r * self.gain.1);
+                self.strip = None;
+            }
+            None => self.strip = Some(Arc::new(strip.clone())),
+        }
+        self
     }
 
     /// Its fades' gain at its sample `i` (0..len): the ramps in their shapes.
@@ -239,6 +624,12 @@ impl MixClip {
         }
         let avail = self.audio.len();
         let mut m = [0.0f32; 4];
+        // A strip without automation: its matrix once.
+        let fixed = self
+            .strip
+            .as_ref()
+            .filter(|s| !s.is_automated())
+            .map(|s| s.matrix_with(0.0, s.static_pan()));
         for p in a..b {
             let i = (p - self.start) as usize;
             let Some(&v) = self
@@ -266,7 +657,14 @@ impl MixClip {
                 }
                 None => (v, w),
             };
-            let (l, r) = (self.gain.0 * v, self.gain.1 * w);
+            let (l, r) = match &self.strip {
+                None => (self.gain.0 * v, self.gain.1 * w),
+                Some(s) => {
+                    let x = fixed.unwrap_or_else(|| s.matrix_at(p));
+                    let (v, w) = (self.gain.0 * v, self.gain.1 * w);
+                    (x[0] * v + x[1] * w, x[2] * v + x[3] * w)
+                }
+            };
             let o = &mut out[(p - at) as usize];
             o[0] += l;
             o[1] += r;
@@ -1255,11 +1653,29 @@ pub struct Track {
     /// The lane: clips in the order they were laid (later on top).
     pub clips: Vec<Clip>,
     pub volume_db: f64,
+    /// A mono lane's pan; a stereo lane's balance while it has no `pans`.
     pub pan: f64,
+    /// A stereo lane's two pan pots (its left channel's, its right's: docs/STEREO_PLAN.md
+    /// ST6). None (a track saved before them): the stereo lane plays through `pan` as a
+    /// balance, as it did. New tracks start at hard left and right.
+    pub pans: Option<(f64, f64)>,
     pub mute: bool,
     pub solo: bool,
     /// Every take shown, stacked under the lane (a view setting, saved).
     pub show_takes: bool,
+    /// Its automation (fader ride, pan), post-insert.
+    pub auto: Automation,
+    /// Fader and pan moves while the transport plays are written to the automation (touch).
+    pub auto_write: bool,
+    /// The automation lane drawn over its lane for editing (a view setting, saved).
+    pub auto_view: Option<AutoLane>,
+    /// An FX return (docs/SESSION_FX_PLAN.md F4): no clips; its lane is the sum of the
+    /// sends to it ([`Session::refresh_buses`]), printed through its inserts like any lane.
+    pub bus: bool,
+    /// Its sends to FX returns.
+    pub sends: Vec<Send>,
+    /// An FX return's input as last summed (not saved: [`Session::refresh_buses`]).
+    pub bus_in: Option<BusIn>,
     /// Its inserts, in signal order.
     pub inserts: Vec<Slot>,
     /// The chain's latest print (not saved: found again in the cache).
@@ -1303,9 +1719,16 @@ impl Track {
             clips: Vec::new(),
             volume_db: 0.0,
             pan: 0.0,
+            pans: Some((-1.0, 1.0)),
             mute: false,
             solo: false,
             show_takes: false,
+            auto: Automation::default(),
+            auto_write: false,
+            auto_view: None,
+            bus: false,
+            sends: Vec::new(),
+            bus_in: None,
             inserts: Vec::new(),
             printed: None,
             drafts: false,
@@ -1352,6 +1775,48 @@ impl Track {
 
     pub fn gains(&self) -> (f32, f32) {
         balance(self.volume_db, self.pan)
+    }
+
+    /// A new FX return named `name`.
+    pub fn new_bus(name: &str) -> Track {
+        Track {
+            bus: true,
+            ..Track::new(name)
+        }
+    }
+
+    /// Its strip under pan law `law_db`, for what plays in stereo or not.
+    pub fn strip(&self, law_db: f64, stereo: bool) -> Strip {
+        Strip {
+            volume_db: self.volume_db,
+            pan: self.pan,
+            pans: self.pans,
+            law_db,
+            stereo,
+            ride: points_envelope(&self.auto.ride),
+            pan_env: points_envelope(&self.auto.pan),
+        }
+    }
+
+    /// The live device's gains through its strip (the live device as a mono source: its
+    /// fader and pan under the law; no automation).
+    pub fn live_gains(&self, law_db: f64) -> (f32, f32) {
+        let s = Strip {
+            ride: None,
+            pan_env: None,
+            ..self.strip(law_db, false)
+        };
+        s.fixed_pair().unwrap_or((1.0, 1.0))
+    }
+
+    /// Its send to FX return `bus` (by its id), if it has one.
+    pub fn send_to(&self, bus: &str) -> Option<&Send> {
+        self.sends.iter().find(|s| s.bus == bus)
+    }
+
+    /// An FX return's input (none: not a return, or nothing sounds into it).
+    fn bus_input(&self) -> Option<&(i64, Arc<Vec<f32>>)> {
+        self.bus_in.as_ref().and_then(|b| b.input.as_ref())
     }
 
     /// What the lane plays: each unmuted clip less what later clips cover (their cores,
@@ -1451,6 +1916,12 @@ impl Track {
     /// What the lane is made of: its clips and what their takes play (for prints: a
     /// change re-prints; and to find a print of the same lane).
     pub fn lane_signature(&self) -> String {
+        if self.bus {
+            return match &self.bus_in {
+                Some(b) if b.input.is_some() => format!("bus {}", b.signature),
+                _ => String::new(),
+            };
+        }
         let mut s = String::new();
         for c in self.clips.iter().filter(|c| !c.muted) {
             let Some(k) = self.take_of(c) else { continue };
@@ -1512,7 +1983,7 @@ impl Track {
     /// Whether its lane is stereo: a clip of a stereo sound plays in it (its mono clips then
     /// play on both sides; docs/STEREO_PLAN.md ST2); a tape track is mono.
     pub fn is_stereo(&self) -> bool {
-        if self.tape_playing().is_some() {
+        if self.tape_playing().is_some() || self.bus {
             return false;
         }
         self.clips
@@ -1533,6 +2004,9 @@ impl Track {
     /// The lane's clips summed, as [`Track::lane_lr`] but never its tape (what the deck
     /// records).
     pub fn clips_lr(&self) -> Option<Placed> {
+        if self.bus {
+            return self.bus_input().map(|(s, a)| (*s, a.clone(), None));
+        }
         let pieces = self.pieces();
         let start = pieces.iter().map(|p| p.start).min()?;
         let end = pieces.iter().map(|p| p.start + p.len as i64).max()?;
@@ -1589,15 +2063,20 @@ impl Track {
                     curve_out: p.curve_out,
                     env: p.env.clone(),
                     track,
+                    strip: None,
                 })
             })
             .collect()
     }
 
-    /// Where its lane starts and ends (none: no clip sounds); its tape track's, when it plays.
+    /// Where its lane starts and ends (none: no clip sounds); its tape track's, when it plays;
+    /// an FX return's input's.
     pub fn lane_span(&self) -> Option<(i64, i64)> {
         if let Some(t) = self.tape_playing() {
             return Some((t.start, t.start + t.audio.len() as i64));
+        }
+        if self.bus {
+            return self.bus_input().map(|(s, a)| (*s, *s + a.len() as i64));
         }
         let pieces = self.pieces();
         Some((
@@ -1623,6 +2102,11 @@ impl Track {
     /// while there's a chain to print.
     fn print_playing(&self, rate: u32) -> Option<&Printed> {
         self.chain_signature(rate)?;
+        // An FX return plays its last print while its sends change (stale, shown), not
+        // silence: a reverb of the old balance is what a re-print will be near.
+        if self.bus {
+            return self.printed.as_ref();
+        }
         let lane = self.source_signature();
         self.printed.as_ref().filter(|p| p.lane == lane)
     }
@@ -1641,24 +2125,39 @@ impl Track {
         self.lane_lr().map(|l| (l, false))
     }
 
-    /// What the mix plays of it, as track `index`: its print through its strip, else its
-    /// tape track, else each piece of its lane (its stretch, offset, the clip's gain and
-    /// fades; SE5).
-    pub fn mix_clips(&self, rate: u32, index: usize) -> Vec<MixClip> {
+    /// What the mix plays of it, as track `index` under pan law `law_db`: its print through
+    /// its strip, else its tape track, else each piece of its lane (its stretch, offset, the
+    /// clip's gain and fades; SE5). An FX return without a print plays its input dry while
+    /// it has no chain, nothing while its chain waits for its first print.
+    pub fn mix_clips(&self, rate: u32, index: usize, law_db: f64) -> Vec<MixClip> {
+        let one = |start: i64, audio: &Arc<Vec<f32>>, right: Option<Arc<Vec<f32>>>| {
+            let strip = self.strip(law_db, right.is_some());
+            vec![
+                MixClip {
+                    track: index,
+                    right,
+                    ..MixClip::whole(start, audio.clone(), (1.0, 1.0))
+                }
+                .through(&strip),
+            ]
+        };
         if let Some(p) = self.print_playing(rate) {
-            return vec![MixClip {
-                track: index,
-                right: p.right.clone(),
-                ..MixClip::whole(p.start, p.audio.clone(), self.gains())
-            }];
+            return one(p.start, &p.audio, p.right.clone());
         }
         if let Some(t) = self.tape_playing() {
-            return vec![MixClip {
-                track: index,
-                ..MixClip::whole(t.start, t.audio.clone(), self.gains())
-            }];
+            return one(t.start, &t.audio, None);
         }
-        self.piece_clips(&self.pieces(), self.gains(), index)
+        if self.bus {
+            return match self.bus_input() {
+                Some((s, a)) if self.chain_signature(rate).is_none() => one(*s, a, None),
+                _ => Vec::new(),
+            };
+        }
+        let strip = self.strip(law_db, self.is_stereo());
+        self.piece_clips(&self.pieces(), (1.0, 1.0), index)
+            .into_iter()
+            .map(|c| c.through(&strip))
+            .collect()
     }
 
     /// Whether the print playing is the chain as it is now.
@@ -2099,6 +2598,8 @@ pub struct Session {
     pub markers: Vec<Marker>,
     /// The master fader (dB, on the stereo sum: SE4).
     pub master_db: f64,
+    /// The console's pan law (dB at the centre: [`PAN_LAWS_DB`]; docs/STEREO_PLAN.md ST6).
+    pub pan_law_db: f64,
     /// The master's inserts, in signal order: on the tracks' stereo sum, before the master
     /// fader. Each prints dual-mono (a tape machine's right side its own grain).
     pub master_inserts: Vec<Slot>,
@@ -2127,6 +2628,7 @@ impl Session {
             place_heard: true,
             markers: Vec::new(),
             master_db: 0.0,
+            pan_law_db: 0.0,
             master_inserts: Vec::new(),
             master_printed: None,
             deck: None,
@@ -2134,6 +2636,151 @@ impl Session {
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
+    }
+
+    /// Which tracks the mix plays: solo wins over mute; an FX return also plays while a
+    /// soloed track sends to it (solo-safe: a soloed vocal is heard with its reverb).
+    pub fn audible(&self) -> Vec<bool> {
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        self.tracks
+            .iter()
+            .map(|t| {
+                if !any_solo {
+                    !t.mute
+                } else {
+                    t.solo
+                        || (t.bus
+                            && self
+                                .tracks
+                                .iter()
+                                .any(|s| s.solo && !s.mute && s.send_to(&t.id).is_some()))
+                }
+            })
+            .collect()
+    }
+
+    /// The tracks sending to FX return `b` (each once): those not muted, not returns.
+    pub fn feeds(&self, b: usize) -> Vec<usize> {
+        let Some(bus) = self.tracks.get(b).filter(|t| t.bus) else {
+            return Vec::new();
+        };
+        self.tracks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| !t.bus && !t.mute && t.send_to(&bus.id).is_some())
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// What FX return `b`'s input is made from: per feeding track its id, what it plays
+    /// (its print or its lane, where), the send and, post-fader, the fader and its ride.
+    fn bus_signature(&self, b: usize) -> String {
+        let id = &self.tracks[b].id;
+        let mut s = format!("{}|", self.rate);
+        for i in self.feeds(b) {
+            let t = &self.tracks[i];
+            let Some(send) = t.send_to(id) else { continue };
+            let Some(span) = t.lane_span() else { continue };
+            let plays = match t.print_playing(self.rate) {
+                Some(p) => format!("print {}@{}", p.signature, p.start),
+                None => format!("lane {}@{}", t.source_signature(), span.0),
+            };
+            s.push_str(&format!("{}:{plays}:{}:", t.id, send.level_db));
+            if send.pre {
+                s.push_str("pre;");
+            } else {
+                s.push_str(&format!(
+                    "post {} {};",
+                    t.volume_db,
+                    points_sig(&t.auto.ride)
+                ));
+            }
+        }
+        s
+    }
+
+    /// FX return `b`'s input summed: each feeding track's sound (a stereo one's mid) times
+    /// its send level and, post-fader, its fader and ride. None when nothing sounds.
+    fn bus_sum(&self, b: usize) -> Option<(i64, Vec<f32>)> {
+        let id = &self.tracks[b].id;
+        type Feed = (
+            i64,
+            Arc<Vec<f32>>,
+            Option<Arc<Vec<f32>>>,
+            f32,
+            Option<Envelope>,
+        );
+        let mut feeds: Vec<Feed> = Vec::new();
+        for i in self.feeds(b) {
+            let t = &self.tracks[i];
+            let Some(send) = t.send_to(id) else { continue };
+            let Some(((start, l, r), _)) = t.playing_lr(self.rate) else {
+                continue;
+            };
+            let mut g = 10f64.powf(send.level_db / 20.0);
+            let mut ride = None;
+            if !send.pre {
+                g *= 10f64.powf(t.volume_db / 20.0);
+                ride = points_envelope(&t.auto.ride);
+            }
+            feeds.push((start, l, r, g as f32, ride));
+        }
+        let start = feeds.iter().map(|f| f.0).min()?;
+        let end = feeds.iter().map(|f| f.0 + f.1.len() as i64).max()?;
+        let mut out = vec![0f32; (end - start).max(0) as usize];
+        for (s, l, r, g, ride) in &feeds {
+            let off = (s - start) as usize;
+            for (j, &v) in l.iter().enumerate() {
+                let v = match r.as_ref().and_then(|r| r.get(j)) {
+                    Some(&w) => 0.5 * (v + w),
+                    None => v,
+                };
+                let gj = match ride {
+                    Some(e) => g * 10f32.powf(envelope_db(Some(e), s + j as i64) / 20.0),
+                    None => *g,
+                };
+                out[off + j] += gj * v;
+            }
+        }
+        Some((start, out))
+    }
+
+    /// Every FX return's input summed again where what it is made from changed (cheap
+    /// otherwise: a signature per return). Call it after an edit; the Session view does each
+    /// frame, and loading and undo do.
+    pub fn refresh_buses(&mut self) {
+        for b in 0..self.tracks.len() {
+            if !self.tracks[b].bus {
+                self.tracks[b].bus_in = None;
+                continue;
+            }
+            let sig = self.bus_signature(b);
+            if self.tracks[b]
+                .bus_in
+                .as_ref()
+                .is_some_and(|x| x.signature == sig)
+            {
+                continue;
+            }
+            let input = self.bus_sum(b).map(|(s, a)| (s, Arc::new(a)));
+            let overview = input
+                .as_ref()
+                .map(|(_, a)| Arc::new(Overview::of(a, OVERVIEW_BIN)));
+            self.tracks[b].bus_in = Some(BusIn {
+                signature: sig,
+                input,
+                overview,
+            });
+        }
+    }
+
+    /// A new FX return (named after how many there are), at the end of the tracks. Returns
+    /// its index.
+    pub fn add_bus(&mut self) -> usize {
+        let n = self.tracks.iter().filter(|t| t.bus).count() + 1;
+        self.tracks.push(Track::new_bus(&format!("FX {n}")));
+        self.refresh_buses();
+        self.tracks.len() - 1
     }
 
     /// The mix: each audible track's active take (solo wins over mute), the live device
@@ -2158,22 +2805,24 @@ impl Session {
 
     /// The tracks' mix (no master print).
     fn tracks_mix(&self) -> Mix {
-        let any_solo = self.tracks.iter().any(|t| t.solo);
-        let audible = |t: &Track| if any_solo { t.solo } else { !t.mute };
+        let audible = self.audible();
         let clips = self
             .tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| audible(t))
-            .flat_map(|(i, t)| t.mix_clips(self.rate, i))
+            .filter(|(i, _)| audible[*i])
+            .flat_map(|(i, t)| t.mix_clips(self.rate, i, self.pan_law_db))
             .collect();
         let live = self
             .armed
-            .and_then(|i| self.tracks.get(i))
-            .map_or(
-                (1.0, 1.0),
-                |t| if audible(t) { t.gains() } else { (0.0, 0.0) },
-            );
+            .and_then(|i| self.tracks.get(i).map(|t| (i, t)))
+            .map_or((1.0, 1.0), |(i, t)| {
+                if audible[i] {
+                    t.live_gains(self.pan_law_db)
+                } else {
+                    (0.0, 0.0)
+                }
+            });
         Mix {
             clips,
             live,
@@ -2191,13 +2840,16 @@ impl Session {
     /// device (through its strip), so it leaves the tracks.
     pub fn mix_audition(&self, t: usize) -> Mix {
         let mut m = self.tracks_mix();
-        let any_solo = self.tracks.iter().any(|x| x.solo);
         let Some(track) = self.tracks.get(t) else {
             return m;
         };
-        let audible = if any_solo { track.solo } else { !track.mute };
+        let audible = self.audible()[t];
         m.clips.retain(|c| c.track != t);
-        m.live = if audible { track.gains() } else { (0.0, 0.0) };
+        m.live = if audible {
+            track.live_gains(self.pan_law_db)
+        } else {
+            (0.0, 0.0)
+        };
         m.live_track = Some(t);
         m
     }
@@ -2207,10 +2859,10 @@ impl Session {
     /// `fin` (a final): every insert at production and every event take on its production
     /// render (not playing drafts). Only audible tracks count.
     pub fn export_problems(&self, fin: bool) -> Vec<String> {
-        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let audible = self.audible();
         let mut out = Vec::new();
         for (i, t) in self.tracks.iter().enumerate() {
-            if (any_solo && !t.solo) || (!any_solo && t.mute) {
+            if !audible[i] {
                 continue;
             }
             if t.lane_span().is_none() {
@@ -2281,13 +2933,13 @@ impl Session {
 
     /// The tracks' mixdown (no master print): what the master's inserts print.
     fn tracks_mixdown(&self) -> Mixdown {
-        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let audible = self.audible();
         let tracks: Vec<(String, Vec<MixClip>)> = self
             .tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
-            .map(|(i, t)| (t.name.clone(), t.mix_clips(self.rate, i)))
+            .filter(|(i, _)| audible[*i])
+            .map(|(i, t)| (t.name.clone(), t.mix_clips(self.rate, i, self.pan_law_db)))
             .filter(|(_, c)| !c.is_empty())
             .collect();
         let clips = || tracks.iter().flat_map(|(_, c)| c.iter());
@@ -2305,12 +2957,12 @@ impl Session {
     /// What an export was made from, for its JSON beside the audio: per audible track its
     /// take, what plays (the print, a render at a quality, the take) and the strip.
     pub fn export_record(&self) -> Value {
-        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let audible = self.audible();
         let tracks: Vec<Value> = self
             .tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+            .filter(|(i, _)| audible[*i])
             .filter_map(|(i, t)| {
                 t.lane_span()?;
                 let printed = t.playing(self.rate).is_some_and(|p| p.2);
@@ -2326,7 +2978,7 @@ impl Session {
                         Some(v)
                     })
                     .collect();
-                Some(json!({
+                let mut v = json!({
                     "id": t.id,
                     "name": t.name,
                     "clips": clips,
@@ -2334,7 +2986,28 @@ impl Session {
                     "inserts": t.inserts.iter().filter(|s| !s.bypass).map(Slot::to_json).collect::<Vec<_>>(),
                     "volume_db": t.volume_db,
                     "pan": t.pan,
-                }))
+                });
+                if t.is_stereo()
+                    && let Some(p) = t.pans
+                {
+                    v["pans"] = json!([p.0, p.1]);
+                }
+                if !t.auto.is_empty() {
+                    v["auto"] = t.auto.to_json();
+                }
+                if t.bus {
+                    v["bus"] = json!(true);
+                    v["fed_by"] = json!(
+                        self.feeds(i)
+                            .iter()
+                            .map(|&j| self.tracks[j].id.clone())
+                            .collect::<Vec<_>>()
+                    );
+                }
+                if !t.sends.is_empty() {
+                    v["sends"] = json!(t.sends.iter().map(Send::to_json).collect::<Vec<_>>());
+                }
+                Some(v)
             })
             .collect();
         json!({
@@ -2349,6 +3022,7 @@ impl Session {
                 "inserts": self.master_inserts.iter().filter(|s| !s.bypass).map(Slot::to_json).collect::<Vec<_>>(),
                 "print": self.master_print_playing().map(|p| p.signature.clone()),
                 "master_db": self.master_db,
+                "pan_law_db": self.pan_law_db,
             },
         })
     }
@@ -2356,17 +3030,24 @@ impl Session {
     /// What the tracks' sum (the master's input) is made from: each audible track's id,
     /// what it plays (its print or its lane) and its strip, and the rate.
     pub fn master_mix_signature(&self) -> String {
-        let any_solo = self.tracks.iter().any(|t| t.solo);
-        let mut s = format!("{}|", self.rate);
-        for t in &self.tracks {
-            if (any_solo && !t.solo) || (!any_solo && t.mute) || t.lane_span().is_none() {
+        let audible = self.audible();
+        let mut s = format!("{}|{}|", self.rate, self.pan_law_db);
+        for (i, t) in self.tracks.iter().enumerate() {
+            if !audible[i] || t.lane_span().is_none() {
                 continue;
             }
             let plays = match t.print_playing(self.rate) {
                 Some(p) => format!("print {}@{}", p.signature, p.start),
                 None => format!("lane {}@{}", t.source_signature(), t.lane_span().unwrap().0),
             };
-            s.push_str(&format!("{}:{plays}:{}:{};", t.id, t.volume_db, t.pan));
+            s.push_str(&format!(
+                "{}:{plays}:{}:{}:{:?}:{};",
+                t.id,
+                t.volume_db,
+                t.pan,
+                t.pans,
+                t.auto.signature()
+            ));
         }
         s
     }
@@ -2596,6 +3277,7 @@ impl Session {
             for c in t.clips.iter_mut().filter(|c| c.position >= at) {
                 c.position += len;
             }
+            t.auto.insert_time(at, len);
         }
         for m in self.markers.iter_mut().filter(|m| m.position >= at) {
             m.position += len;
@@ -2614,6 +3296,7 @@ impl Session {
             for c in t.clips.iter_mut().filter(|c| c.position >= b) {
                 c.position -= b - a;
             }
+            t.auto.delete_time(a, b);
         }
         self.markers.retain(|m| m.position < a || m.position >= b);
         for m in self.markers.iter_mut().filter(|m| m.position >= b) {
@@ -2645,32 +3328,33 @@ impl Session {
         }
     }
 
-    /// The tracks keying track `t`'s chain (its keyed inserts not bypassed), not `t`.
+    /// The tracks keying track `t`'s chain (its keyed inserts not bypassed) and, an FX
+    /// return, the tracks sending to it: what must print before it does. Not `t`.
     pub fn key_tracks(&self, t: usize) -> Vec<usize> {
         let Some(track) = self.tracks.get(t) else {
             return Vec::new();
         };
-        track
+        let mut v: Vec<usize> = track
             .inserts
             .iter()
             .filter(|s| !s.bypass && key_control(s).is_some())
             .filter_map(|s| s.key.as_ref().and_then(|r| self.track_index(&r.track)))
             .filter(|&i| i != t)
-            .collect()
+            .collect();
+        for i in self.feeds(t) {
+            if !v.contains(&i) {
+                v.push(i);
+            }
+        }
+        v
     }
 
     /// Whether every track keying track `t`'s chain plays what it will (its print
     /// current): only then does `t` print, so it prints once per change of a key.
     pub fn keys_ready(&self, t: usize) -> bool {
-        let Some(track) = self.tracks.get(t) else {
-            return true;
-        };
-        track
-            .inserts
-            .iter()
-            .filter(|s| !s.bypass && key_control(s).is_some())
-            .filter_map(|s| s.key.as_ref().and_then(|r| self.track_index(&r.track)))
-            .all(|i| i == t || self.print_current(i))
+        self.key_tracks(t)
+            .into_iter()
+            .all(|i| self.print_current(i))
     }
 
     /// Insert `slot`'s sidechain on track `t`: its key track's playing audio from the
@@ -2747,6 +3431,8 @@ impl Session {
                     stack.push(j);
                 }
             }
+            // An FX return hears the tracks sending to it.
+            stack.extend(self.feeds(i));
         }
         false
     }
@@ -3157,12 +3843,12 @@ impl Session {
         if out.iter().all(|f| f[0] == 0.0 && f[1] == 0.0) {
             return Err("it's silent there".into());
         }
-        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let audible = self.audible();
         let sources: Vec<usize> = self
             .tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+            .filter(|(i, _)| audible[*i])
             .filter(|(_, t)| t.lane_span().is_some())
             .map(|(i, _)| i)
             .collect();
@@ -3220,7 +3906,7 @@ impl Session {
             .tracks
             .iter()
             .map(|t| {
-                json!({
+                let mut v = json!({
                     "id": t.id,
                     "name": t.name,
                     "volume_db": t.volume_db,
@@ -3251,7 +3937,30 @@ impl Session {
                     "drafts": t.drafts,
                     "monitor": t.monitor.name(),
                     "record": if t.midi { "midi" } else { "audio" },
-                })
+                });
+                // ST6 and F4's fields only where set (older files read the same).
+                if let Some(p) = t.pans {
+                    v["pans"] = json!([p.0, p.1]);
+                }
+                if !t.auto.is_empty() {
+                    v["auto"] = t.auto.to_json();
+                }
+                if t.auto_write {
+                    v["auto_write"] = json!(true);
+                }
+                if let Some(l) = t.auto_view {
+                    v["auto_view"] = json!(match l {
+                        AutoLane::Ride => "ride",
+                        AutoLane::Pan => "pan",
+                    });
+                }
+                if t.bus {
+                    v["bus"] = json!(true);
+                }
+                if !t.sends.is_empty() {
+                    v["sends"] = json!(t.sends.iter().map(Send::to_json).collect::<Vec<_>>());
+                }
+                v
             })
             .collect();
         let mut v = json!({
@@ -3262,6 +3971,7 @@ impl Session {
             "armed": self.armed,
             "place_new": if self.place_heard { "heard" } else { "click" },
             "master_db": self.master_db,
+            "pan_law_db": self.pan_law_db,
             "master_inserts": self.master_inserts.iter().map(Slot::to_json).collect::<Vec<_>>(),
             "markers": self
                 .markers
@@ -3295,6 +4005,22 @@ impl Session {
                 .map_or_else(|| format!("track{}", i + 1), str::to_string);
             track.volume_db = t["volume_db"].as_f64().unwrap_or(0.0);
             track.pan = t["pan"].as_f64().unwrap_or(0.0);
+            // A track saved before ST6 has no pans: its stereo lane stays a balance.
+            track.pans = t["pans"]
+                .as_array()
+                .and_then(|a| Some((a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
+            track.auto = Automation::from_json(&t["auto"]);
+            track.auto_write = t["auto_write"].as_bool().unwrap_or(false);
+            track.auto_view = match t["auto_view"].as_str() {
+                Some("ride") => Some(AutoLane::Ride),
+                Some("pan") => Some(AutoLane::Pan),
+                _ => None,
+            };
+            track.bus = t["bus"].as_bool().unwrap_or(false);
+            track.sends = t["sends"]
+                .as_array()
+                .map(|a| a.iter().filter_map(Send::from_json).collect())
+                .unwrap_or_default();
             track.mute = t["mute"].as_bool().unwrap_or(false);
             track.solo = t["solo"].as_bool().unwrap_or(false);
             track.show_takes = t["show_takes"].as_bool().unwrap_or(false);
@@ -3364,6 +4090,8 @@ impl Session {
         self.place_heard = v["place_new"].as_str() != Some("click");
         self.transport = transport_from(&v["transport"], rate);
         self.master_db = v["master_db"].as_f64().unwrap_or(0.0);
+        // A session saved before the pan law plays at 0 dB, as it did.
+        self.pan_law_db = v["pan_law_db"].as_f64().unwrap_or(0.0);
         let mut master = Vec::new();
         for s in v["master_inserts"].as_array().cloned().unwrap_or_default() {
             master.push(Slot::from_json(&s)?);
@@ -3388,22 +4116,34 @@ impl Session {
             d => Some(Deck::from_json(d)?),
         };
         // Prints carry over to the restored tracks: the one made from the same chain on the
-        // same lane, else any print of that lane (stale until it is printed again).
-        let prints: Vec<Printed> = self
+        // same lane, else any print of that lane (stale until it is printed again); an FX
+        // return's, else its own last print. The returns' inputs are summed once the tracks
+        // feeding them have theirs.
+        let prints: Vec<(String, Printed)> = self
             .tracks
             .iter()
-            .filter_map(|t| t.printed.clone())
+            .filter_map(|t| Some((t.id.clone(), t.printed.clone()?)))
             .collect();
         self.tracks = tracks;
         self.attach_tape();
-        for i in 0..self.tracks.len() {
-            let sig = self.chain_signature(i);
-            let t = &mut self.tracks[i];
-            let lane = t.source_signature();
-            let same = prints.iter().find(|p| Some(&p.signature) == sig.as_ref());
-            t.printed = same
-                .or_else(|| prints.iter().find(|p| p.lane == lane))
-                .cloned();
+        for pass in [false, true] {
+            if pass {
+                self.refresh_buses();
+            }
+            for i in 0..self.tracks.len() {
+                if self.tracks[i].bus != pass {
+                    continue;
+                }
+                let sig = self.chain_signature(i);
+                let t = &mut self.tracks[i];
+                let lane = t.source_signature();
+                let same = prints.iter().find(|p| Some(&p.1.signature) == sig.as_ref());
+                let own = || prints.iter().find(|p| t.bus && p.0 == t.id);
+                t.printed = same
+                    .or_else(|| prints.iter().find(|p| p.1.lane == lane))
+                    .or_else(own)
+                    .map(|p| p.1.clone());
+            }
         }
         Ok(())
     }
@@ -3440,6 +4180,7 @@ impl Session {
             place_heard: true,
             markers: Vec::new(),
             master_db: 0.0,
+            pan_law_db: 0.0,
             master_inserts: Vec::new(),
             master_printed: None,
             deck: None,
@@ -4218,6 +4959,49 @@ mod tests {
         println!("{checked} sessions checked");
     }
 
+    /// Every saved session (VARIMU_SESSIONS) mixes as it did before ST6 and F4 (no pans, the
+    /// 0 dB law, no automation or returns): each audible track's pieces through its balance.
+    #[test]
+    #[ignore = "needs VARIMU_SESSIONS: a folder of sessions saved before ST6"]
+    fn every_saved_session_mixes_as_before_the_pan_law() {
+        let root = std::env::var("VARIMU_SESSIONS").expect("VARIMU_SESSIONS");
+        let mut checked = 0;
+        for e in std::fs::read_dir(&root).expect("a folder").flatten() {
+            let dir = e.path();
+            if !dir.join("session.json").is_file() {
+                continue;
+            }
+            let s = match Session::load(&dir) {
+                Ok(s) => s,
+                Err(err) => {
+                    println!("{}: doesn't load ({err})", dir.display());
+                    continue;
+                }
+            };
+            assert_eq!(s.pan_law_db, 0.0, "{}", dir.display());
+            let any_solo = s.tracks.iter().any(|t| t.solo);
+            let old = Mix {
+                clips: s
+                    .tracks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+                    .flat_map(|(i, t)| t.piece_clips(&t.pieces(), t.gains(), i))
+                    .collect(),
+                ..Mix::default()
+            };
+            let start = old.clips.iter().map(|c| c.start).min().unwrap_or(0).min(0);
+            let end = old.clips.iter().map(MixClip::end).max().unwrap_or(0);
+            let n = (end - start).max(0) as usize;
+            let mut want = vec![[0.0f32; 2]; n];
+            old.add(start, &mut want);
+            assert_eq!(render_mix(&s, start, n), want, "{}", dir.display());
+            checked += 1;
+        }
+        println!("{checked} sessions mix as before");
+        assert!(checked > 0);
+    }
+
     #[test]
     fn a_clip_normalizes_by_its_gain() {
         let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
@@ -4554,7 +5338,12 @@ mod tests {
         };
         let out = mix(&t);
         assert_eq!(out[150], [l[50], r[50]]);
+        // A new track's two pans start hard left and right: the knob of a mono track's pan
+        // doesn't move it; a track saved before them (no pans) has the balance.
+        assert_eq!(t.tracks[0].pans, Some((-1.0, 1.0)));
         t.tracks[0].pan = 0.5;
+        assert_eq!(mix(&t)[150], [l[50], r[50]]);
+        t.tracks[0].pans = None;
         let out = mix(&t);
         assert_eq!(out[150], [0.5 * l[50], r[50]]);
         // The lane's right channel; a mono clip on it plays on both sides.
@@ -5278,5 +6067,260 @@ mod tests {
         assert_eq!(o.range(0.0, 1000.0), Some((-0.6, 0.8)));
         assert_eq!(o.range_ch(0, 0.0, 1000.0), Some((0.0, 0.8)));
         assert_eq!(o.range_ch(1, 0.0, 1000.0), Some((-0.6, 0.0)));
+    }
+
+    #[test]
+    fn the_pan_laws_dip_the_centre_and_keep_the_sides() {
+        // 0 dB is the balance the session always had, bit for bit.
+        for p in [-1.0, -0.4, 0.0, 0.3, 1.0] {
+            let (l, r) = pan_gains(p, 0.0);
+            assert_eq!(balance(0.0, p), (l as f32, r as f32));
+        }
+        for law in PAN_LAWS_DB {
+            assert_eq!(pan_gains(-1.0, law), (1.0, 0.0), "{law}");
+            assert_eq!(pan_gains(1.0, law), (0.0, 1.0), "{law}");
+            let (l, r) = pan_gains(0.0, law);
+            assert!((20.0 * l.log10() - law.min(0.0)).abs() < 0.02, "{law}: {l}");
+            assert_eq!(l, r);
+        }
+        // -3 dB: constant power through a sweep; -6 dB: constant voltage (a mono sum).
+        for k in 0..=20 {
+            let p = -1.0 + k as f64 / 10.0;
+            let (l, r) = pan_gains(p, -3.0);
+            // (-3.0 dB, not -3.01: within a hundredth of constant power.)
+            assert!((l * l + r * r - 1.0).abs() < 0.01, "{p}: {}", l * l + r * r);
+            let (l, r) = pan_gains(p, -6.0);
+            assert!((l + r - 1.0).abs() < 0.02, "{p}: {}", l + r);
+        }
+        // POSITION and SPREAD are the two pans turned another way.
+        for pans in [(-1.0, 1.0), (-0.4, 0.6), (0.2, -0.3), (0.5, 0.5)] {
+            let (pos, spread) = position_spread(pans);
+            let back = pans_from(pos, spread);
+            assert!((back.0 - pans.0).abs() < 1e-12 && (back.1 - pans.1).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn a_stereo_tracks_two_pans_place_it_and_the_law_follows_the_session() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        let (l, r) = (vec![0.5f32; 100], vec![0.25f32; 100]);
+        let mut k = plain_take("t1", 0, l.clone());
+        k.right = Some(Arc::new(r.clone()));
+        s.tracks[0].takes.push(k);
+        s.tracks[0].set_active(0);
+        // Hard left and right: as it is (the fixed pair, no matrix).
+        assert_eq!(render_mix(&s, 0, 10)[5], [0.5, 0.25]);
+        assert!(s.mix().clips[0].strip.is_none());
+        // Both at the centre: the mid on both sides, at the law's level.
+        s.pan_law_db = -3.0;
+        s.tracks[0].pans = Some((0.0, 0.0));
+        let g = 10f32.powf(-3.0 / 20.0);
+        let f = render_mix(&s, 0, 10)[5];
+        for side in f {
+            assert!((side - g * 0.75).abs() < 1e-6, "{f:?}");
+        }
+        // POSITION hard right, SPREAD 0: everything on the right, at unity.
+        s.tracks[0].pans = Some(pans_from(1.0, 0.0));
+        let f = render_mix(&s, 0, 10)[5];
+        assert!(f[0].abs() < 1e-7 && (f[1] - 0.75).abs() < 1e-6, "{f:?}");
+        // A mono track pans under the law.
+        let mut m = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        m.tracks[0].takes.push(plain_take("t1", 0, vec![1.0; 10]));
+        m.tracks[0].set_active(0);
+        assert_eq!(render_mix(&m, 0, 10)[5], [1.0, 1.0]);
+        m.pan_law_db = -6.0;
+        let f = render_mix(&m, 0, 10)[5];
+        let h = 10f32.powf(-6.0 / 20.0);
+        assert!((f[0] - h).abs() < 1e-6 && (f[1] - h).abs() < 1e-6, "{f:?}");
+        // Saved and loaded; a session saved before the law opens at 0 dB.
+        let dir = std::env::temp_dir().join(format!("varimu_pans_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut t = Session::new(dir.clone(), 1000, TransportSettings::default());
+        t.pan_law_db = -4.5;
+        t.tracks[0].pans = Some((-0.3, 0.7));
+        t.save().expect("saved");
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!((u.pan_law_db, u.tracks[0].pans), (-4.5, Some((-0.3, 0.7))));
+        let mut v = t.state();
+        v.as_object_mut().unwrap().remove("pan_law_db");
+        v["tracks"][0].as_object_mut().unwrap().remove("pans");
+        let mut w = Session::load(&dir).expect("loads");
+        w.restore(&v).expect("restored");
+        assert_eq!((w.pan_law_db, w.tracks[0].pans), (0.0, None));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_fader_ride_and_pan_automation_play_after_the_inserts() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0].takes.push(plain_take("t1", 0, vec![1.0; 1000]));
+        s.tracks[0].set_active(0);
+        // A ride from 0 dB at 100 to -20 dB at 300; the pan hard left from 500.
+        s.tracks[0].auto.ride = vec![(100, 0.0), (300, -20.0)];
+        s.tracks[0].auto.pan = vec![(499, 0.0), (500, -1.0)];
+        let out = render_mix(&s, 0, 1000);
+        assert_eq!(out[50], [1.0, 1.0]);
+        let mid = 10f32.powf(-10.0 / 20.0);
+        assert!((out[200][0] - mid).abs() < 1e-5, "{:?}", out[200]);
+        let low = 10f32.powf(-20.0 / 20.0);
+        assert!((out[400][0] - low).abs() < 1e-5);
+        assert!((out[600][0] - low).abs() < 1e-5 && out[600][1].abs() < 1e-7);
+        // The mixdown and its stems follow it; the master's input too.
+        let md = s.mixdown();
+        assert!((md.mix()[200][0] - mid).abs() < 1e-5);
+        let (_, l, _) = s.master_input().expect("a sum");
+        assert!((l[400] - low).abs() < 1e-5);
+        // A change of the automation changes what the master prints from.
+        let before = s.master_mix_signature();
+        s.tracks[0].auto.ride[1].1 = -19.0;
+        assert_ne!(before, s.master_mix_signature());
+        // Time inserted and deleted moves the points with the clips.
+        s.insert_time(0, 50);
+        assert_eq!(s.tracks[0].auto.ride[0].0, 150);
+        s.delete_time(0, 50);
+        assert_eq!(s.tracks[0].auto.ride[0].0, 100);
+    }
+
+    #[test]
+    fn a_written_move_replaces_what_was_there_and_glides_back() {
+        let mut a = Automation::default();
+        // Into an empty ride: from 0 dB to the move and back to 0 dB after the glide.
+        a.write(AutoLane::Ride, &[(100, -3.0), (200, -6.0)], 10, 0.0);
+        assert_eq!(a.value(AutoLane::Ride, 50, 0.0), 0.0);
+        assert_eq!(a.value(AutoLane::Ride, 99, 0.0), 0.0);
+        assert_eq!(a.value(AutoLane::Ride, 150, 0.0), -4.5);
+        assert_eq!(a.value(AutoLane::Ride, 210, 0.0), 0.0);
+        assert_eq!(a.value(AutoLane::Ride, 500, 0.0), 0.0);
+        // A second move over part of it: the first kept outside it.
+        a.write(AutoLane::Ride, &[(140, 2.0), (160, 2.0)], 10, 0.0);
+        assert!((a.value(AutoLane::Ride, 120, 0.0) - -3.6).abs() < 1e-9);
+        assert_eq!(a.value(AutoLane::Ride, 150, 0.0), 2.0);
+        assert!(a.value(AutoLane::Ride, 190, 0.0) < -5.0);
+        // Values stay on the lane's range; points stay rising.
+        a.write(AutoLane::Pan, &[(10, -3.0), (20, 0.5)], 5, 0.25);
+        assert_eq!(a.value(AutoLane::Pan, 10, 0.0), -1.0);
+        assert_eq!(a.value(AutoLane::Pan, 100, 0.0), 0.25);
+        for lane in [&a.ride, &a.pan] {
+            assert!(lane.windows(2).all(|w| w[0].0 < w[1].0), "{lane:?}");
+        }
+        // Saved with the track.
+        assert_eq!(Automation::from_json(&a.to_json()), a);
+        assert_eq!(Automation::from_json(&Value::Null), Automation::default());
+    }
+
+    #[test]
+    fn two_tracks_send_to_a_return_whose_print_plays_past_the_last_take() {
+        let dir = std::env::temp_dir().join(format!("varimu_sends_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        s.tracks.push(Track::new("B"));
+        let rec = |start: i64, v: f32| Recorded {
+            start,
+            latency: 0,
+            samples: vec![v; 100],
+            right: None,
+            performance: None,
+        };
+        s.add_take(0, rec(0, 0.4), "x").expect("saved");
+        s.add_take(1, rec(50, 0.2), "x").expect("saved");
+        let b = s.add_bus();
+        let id = s.tracks[b].id.clone();
+        assert!(s.tracks[b].bus && s.tracks[b].lane_span().is_none());
+        // Sends: A post-fader at -6 dB with its fader at -6 dB, B pre-fader at 0 dB.
+        s.tracks[0].sends.push(Send {
+            bus: id.clone(),
+            level_db: -6.0,
+            pre: false,
+        });
+        s.tracks[0].volume_db = -6.0;
+        s.tracks[1].sends.push(Send {
+            bus: id.clone(),
+            level_db: 0.0,
+            pre: true,
+        });
+        s.tracks[1].volume_db = -20.0;
+        s.refresh_buses();
+        assert_eq!(s.feeds(b), vec![0, 1]);
+        let (start, input) = s.tracks[b].bus_input().cloned().expect("an input");
+        let g = 10f32.powf(-12.0 / 20.0);
+        assert_eq!((start, input.len()), (0, 150));
+        assert!((input[10] - 0.4 * g).abs() < 1e-6);
+        assert!((input[75] - (0.4 * g + 0.2)).abs() < 1e-6);
+        assert!((input[120] - 0.2).abs() < 1e-6);
+        // Without inserts the return plays its input dry, through its fader.
+        s.tracks[b].volume_db = -6.0;
+        let mixed = render_mix(&s, 0, 200);
+        let dry = 0.4 * 10f32.powf(-6.0 / 20.0);
+        let ret = 0.4 * g * 10f32.powf(-6.0 / 20.0);
+        assert!((mixed[10][0] - (dry + ret)).abs() < 1e-6, "{:?}", mixed[10]);
+        // A reverb on it: nothing plays until its first print; the export waits.
+        let mut plate = Slot::new("plate_reverb");
+        plate.wet = 1.0;
+        s.tracks[b].inserts.push(plate);
+        let sig = s.chain_signature(b).expect("a chain on the return");
+        assert!(s.tracks[b].mix_clips(1000, b, 0.0).is_empty());
+        assert_eq!(s.export_problems(false).len(), 1);
+        // It prints only once the tracks feeding it are current (they are: no inserts).
+        assert!(s.keys_ready(b));
+        assert_eq!(s.key_tracks(b), vec![0, 1]);
+        // Printed, with a tail long past the last take: the mix and the export play it.
+        s.tracks[b].printed = Some(Printed {
+            signature: sig.clone(),
+            lane: s.tracks[b].source_signature(),
+            start: 0,
+            audio: Arc::new(vec![0.1; 5000]),
+            right: Some(Arc::new(vec![0.05; 5000])),
+            overview: Arc::new(Overview::default()),
+            stages: Vec::new(),
+            stages_right: Vec::new(),
+        });
+        assert!(s.print_current(b));
+        let out = render_mix(&s, 0, 5000);
+        let rg = 10f32.powf(-6.0 / 20.0);
+        assert!((out[4000][0] - 0.1 * rg).abs() < 1e-6 && (out[4000][1] - 0.05 * rg).abs() < 1e-6);
+        let md = s.mixdown();
+        assert_eq!(md.start + md.len as i64, 5000);
+        // A send level change makes only the return stale (the tracks' chains don't move);
+        // it plays its last print meanwhile.
+        let a_sig = s.chain_signature(0);
+        s.tracks[1].sends[0].level_db = -3.0;
+        s.refresh_buses();
+        assert!(!s.print_current(b) && s.chain_signature(0) == a_sig);
+        assert!(s.tracks[b].print_playing(1000).is_some());
+        assert_eq!(s.export_problems(false).len(), 1);
+        // A pre-fader send doesn't follow the fader; a post-fader one does.
+        s.tracks[b].printed.as_mut().unwrap().signature = s.chain_signature(b).unwrap();
+        s.tracks[1].volume_db = 0.0;
+        s.refresh_buses();
+        assert!(s.print_current(b));
+        s.tracks[0].volume_db = 0.0;
+        s.refresh_buses();
+        assert!(!s.print_current(b));
+        // A muted track's sends drop out; solo keeps the return of a soloed track.
+        s.tracks[0].mute = true;
+        assert_eq!(s.feeds(b), vec![1]);
+        s.tracks[0].mute = false;
+        s.tracks[1].solo = true;
+        assert_eq!(s.audible(), vec![false, true, true]);
+        s.tracks[1].sends.clear();
+        assert_eq!(s.audible(), vec![false, true, false]);
+        s.tracks[1].solo = false;
+        // A key route can't loop through a return.
+        assert!(s.would_cycle(0, b));
+        // Saved and loaded: the return, the sends, its print found again by its id.
+        s.tracks[1].sends.push(Send {
+            bus: id.clone(),
+            level_db: -9.0,
+            pre: true,
+        });
+        s.save().expect("saved");
+        let u = Session::load(&dir).expect("loads");
+        assert!(u.tracks[b].bus && !u.tracks[0].bus);
+        assert_eq!(u.tracks[1].sends, s.tracks[1].sends);
+        assert!(u.tracks[b].bus_input().is_some());
+        let state = s.state();
+        s.restore(&state).expect("restored");
+        assert!(s.tracks[b].printed.is_some());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

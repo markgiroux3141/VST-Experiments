@@ -587,3 +587,30 @@ Play (mono into both), where it drops out.
 6. The full pytest and `slice_report.py --verify` are owed: varimu/sim, varimu/circuit and the
    engine changed (every render's cache key moved; the one-channel 670's IR is unchanged, its
    goldens and fixtures identical).
+
+## Status (2026-11-16): ST6 built (decisions 8-10 as proposed)
+
+- **The pan law** (decision 10, option b): `Session::pan_law_db`, one of 0 / -3 / -4.5 / -6 dB
+  (the Mixer's master strip). A session the app makes starts at -3 dB
+  (`NEW_SESSION_PAN_LAW_DB`, `session_view::fresh_session`); a session saved before it opens
+  at 0 dB, and `Session::new` starts at 0 dB for code that builds sessions itself.
+  `session::pan_gains`: 0 dB is the old balance exactly; otherwise cos / sin of the pot's angle
+  raised to law / -3.01 (exactly the law's dB at the centre, unity at the hard sides; -3 dB is
+  within 1% of constant power).
+- **Two pans on a stereo track** (decisions 8-9): `Track::pans` (the left channel's pan, the
+  right's). New tracks start at hard left and right, which plays exactly as before; the Mixer
+  strip turns them as **POSITION and SPREAD** (`position_spread`, `pans_from`), its hover
+  shows the two pans; the arrangement strip's pan value is the POSITION. A track saved before
+  (no `pans`) keeps its balance, with a "pans" button to give it two.
+- **The mix:** a strip that is a plain pair (no automation, nothing crossing sides: a mono pan,
+  a balance, pans at hard left / right) is folded into the clip's gain as it always was; any
+  other is a `Strip` matrix applied per sample (`MixClip::strip`).
+- **Done-when:** both pans at the centre play the mid on both sides at the law's level, hard left
+  / right play it as it was, POSITION / SPREAD drive the same two pans
+  (`a_stereo_tracks_two_pans_place_it_and_the_law_follows_the_session`,
+  `the_pan_laws_dip_the_centre_and_keep_the_sides`); every saved session mixes bit for bit (52
+  of 52 in `sessions/`: `every_saved_session_mixes_as_before_the_pan_law`, and the 24 version 1
+  ones in `every_session_opens_to_the_same_mix`, both ignored, `VARIMU_SESSIONS`); the stems
+  still sum to the mix (the mixdown's stems are the strips' clips).
+- Pan automation (SESSION_FX_PLAN.md's F4 status) moves a stereo track's POSITION.
+

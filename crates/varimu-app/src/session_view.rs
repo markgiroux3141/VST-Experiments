@@ -143,8 +143,9 @@ use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, NOT_PRINTED, Slot, find_device};
 use varimu_app::room::HUM_FIELDS;
 use varimu_app::session::{
-    Clip, Marker, Mix, MixClip, Monitor, NO_TRACK, OVERVIEW_BIN, Overview, Placed, Printed,
-    Session, Take, Track, default_fade, new_clip_id, take_dir,
+    AUTO_GLIDE_S, AutoLane, Clip, Marker, Mix, MixClip, Monitor, NEW_SEND_DB, NO_TRACK,
+    OVERVIEW_BIN, Overview, PAN_LAWS_DB, Placed, Printed, RIDE_MAX_DB, RIDE_MIN_DB, Send, Session,
+    Take, Track, default_fade, new_clip_id, pans_from, position_spread, take_dir,
 };
 use varimu_app::settings::{Quality, Settings};
 use varimu_app::take_render::{self, NOT_RENDERED};
@@ -437,6 +438,24 @@ enum RulerDrag {
     New(i64),
 }
 
+/// An automation move being written (touch): the track and lane, the control's value when
+/// the drag began (it returns there after: the move lives in the automation), the lane's
+/// value there then, and the points recorded so far (playhead, value).
+#[derive(Debug, Clone)]
+struct AutoTouch {
+    track: usize,
+    lane: AutoLane,
+    base: f64,
+    /// The control's value as last held.
+    base_now: f64,
+    start: f64,
+    /// The automation when the move began (each frame's write starts from it).
+    orig: varimu_app::session::Automation,
+    /// The lane's value with no points.
+    default: f64,
+    points: Vec<(i64, f64)>,
+}
+
 pub struct SessionView {
     session: Session,
     ruler_drag: Option<RulerDrag>,
@@ -448,6 +467,12 @@ pub struct SessionView {
     time_edit: Option<bool>,
     /// The tracks' height (px; Ctrl+wheel over the strips), the keys overlay shown.
     track_h: f32,
+    /// Where the transport is heard while it runs (automation writes land there).
+    heard_now: Option<i64>,
+    /// An automation move being written (a fader or pan dragged while playing with W on).
+    auto_touch: Option<AutoTouch>,
+    /// An automation point being dragged in a lane: (track, lane, point).
+    auto_drag: Option<(usize, AutoLane, usize)>,
     /// What a stereo track's audition plays (ST3), and the last mid made for one.
     hear: Hear,
     mid_cache: std::cell::RefCell<Option<(String, Arc<Vec<f32>>)>>,
@@ -702,11 +727,14 @@ fn new_session_dir(repo: &Path) -> PathBuf {
 /// (tempo, meter, click, locators), no tracks; its room starts as the default room (it has
 /// no `rooms/scene.json`).
 fn fresh_session(repo: &Path) -> Session {
-    Session::new(
+    let mut s = Session::new(
         new_session_dir(repo),
         DEFAULT_RATE,
         TransportSettings::default(),
-    )
+    );
+    // ST6, decision 10: a session the app makes pans at -3 dB.
+    s.pan_law_db = varimu_app::session::NEW_SESSION_PAN_LAW_DB;
+    s
 }
 
 /// A folder name from what the user typed: no path separators or characters Windows
@@ -776,6 +804,9 @@ impl SessionView {
             relocate: false,
             time_edit: None,
             track_h: TRACK_H,
+            heard_now: None,
+            auto_touch: None,
+            auto_drag: None,
             hear: Hear::Left,
             mid_cache: std::cell::RefCell::new(None),
             master_input: std::cell::RefCell::new(None),
@@ -953,6 +984,14 @@ impl SessionView {
 
     fn show(&mut self, ui: &mut egui::Ui, play: &mut PlayView, mixer: bool) {
         play.tick(ui.ctx());
+        // The FX returns' inputs summed again where their sends changed (F4).
+        self.session.refresh_buses();
+        // Where the transport is heard while it runs: automation writes land there.
+        self.heard_now = play
+            .player()
+            .map(|p| p.status().transport)
+            .filter(|s| s.running)
+            .map(|s| s.heard);
         // The meters: the player's readings since the last frame (none: they fall).
         let readings = play.player().map(|p| p.take_meters());
         self.meters
@@ -1309,12 +1348,6 @@ impl SessionView {
                             ..
                         } if modifiers.command => c.1 = true,
                         egui::Event::Key {
-                            key: egui::Key::V,
-                            pressed: true,
-                            modifiers,
-                            ..
-                        } if modifiers.command => c.2 = true,
-                        egui::Event::Key {
                             key: egui::Key::D,
                             pressed: true,
                             modifiers,
@@ -1368,6 +1401,16 @@ impl SessionView {
     fn play(&mut self, play: &mut PlayView, record: bool) {
         if record && self.audition.is_some() {
             self.error = Some("close the insert's panel to record (it plays live)".into());
+            return;
+        }
+        if record
+            && self
+                .session
+                .armed
+                .and_then(|i| self.session.tracks.get(i))
+                .is_some_and(|t| t.bus)
+        {
+            self.error = Some("an FX return records nothing: arm an audio track to record".into());
             return;
         }
         // Recording needs the live device (the Play view's choice); playing doesn't: with
@@ -1472,6 +1515,219 @@ impl SessionView {
         let n = self.session.tracks.len() + 1;
         self.session.tracks.push(Track::new(&format!("Track {n}")));
         self.session.armed = Some(n - 1);
+        self.save();
+    }
+
+    /// Whether what track `t` plays is stereo (its lane, or a print a stereo insert made
+    /// stereo): its strip pans two channels then.
+    fn plays_stereo(&self, t: usize) -> bool {
+        self.session.tracks.get(t).is_some_and(|x| {
+            x.playing_lr(self.session.rate)
+                .is_some_and(|((_, _, r), _)| r.is_some())
+        })
+    }
+
+    /// The control an automation lane follows on track `t`: the fader (dB), or the pan (a
+    /// stereo track with pans: its POSITION).
+    fn control(&self, t: usize, lane: AutoLane) -> f64 {
+        let x = &self.session.tracks[t];
+        match lane {
+            AutoLane::Ride => x.volume_db,
+            AutoLane::Pan => match x.pans.filter(|_| self.plays_stereo(t)) {
+                Some(p) => position_spread(p).0,
+                None => x.pan,
+            },
+        }
+    }
+
+    fn set_control(&mut self, t: usize, lane: AutoLane, v: f64) {
+        let stereo = self.plays_stereo(t);
+        let x = &mut self.session.tracks[t];
+        match lane {
+            AutoLane::Ride => x.volume_db = v,
+            AutoLane::Pan => match x.pans.filter(|_| stereo) {
+                Some(p) => x.pans = Some(pans_from(v, position_spread(p).1)),
+                None => x.pan = v,
+            },
+        }
+    }
+
+    /// What an automation lane reads with no points: no ride, or the pan as it is set.
+    fn auto_default(&self, t: usize, lane: AutoLane) -> f64 {
+        match lane {
+            AutoLane::Ride => 0.0,
+            AutoLane::Pan => self.control(t, AutoLane::Pan),
+        }
+    }
+
+    /// The value a strip control shows while an automation move is being written on it.
+    fn touch_value(&self, t: usize, lane: AutoLane) -> Option<f64> {
+        self.auto_touch
+            .as_ref()
+            .filter(|a| a.track == t && a.lane == lane)
+            .map(|a| a.base_now)
+    }
+
+    /// A strip control on track `t` that automation lane `lane` follows, after it was drawn:
+    /// `before` its value then, `v` its value now, `dragging` whether it is held. With W on
+    /// and the transport running, a held control writes its move into the automation as it
+    /// plays (heard at once) and returns to `before` when let go; otherwise `v` is the
+    /// control's new value. Returns whether the session changed.
+    fn touched(&mut self, t: usize, lane: AutoLane, dragging: bool, before: f64, v: f64) -> bool {
+        let active = self
+            .auto_touch
+            .as_ref()
+            .is_some_and(|a| a.track == t && a.lane == lane);
+        let write = self.session.tracks.get(t).is_some_and(|x| x.auto_write);
+        match (active, dragging, self.heard_now) {
+            (false, true, Some(h)) if write => {
+                let default = self.auto_default(t, lane);
+                let x = &self.session.tracks[t];
+                let start = x.auto.value(lane, h, default);
+                self.auto_touch = Some(AutoTouch {
+                    track: t,
+                    lane,
+                    base: before,
+                    base_now: v,
+                    start,
+                    orig: x.auto.clone(),
+                    default,
+                    points: Vec::new(),
+                });
+                self.record_touch(h, v);
+                false
+            }
+            (true, true, Some(h)) => {
+                self.record_touch(h, v);
+                false
+            }
+            // Let go, or the transport stopped: the move stays in the automation.
+            (true, _, _) => {
+                self.auto_touch = None;
+                true
+            }
+            _ => {
+                if v != before {
+                    self.set_control(t, lane, v);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// The held control at `v` with the playhead at `h`: a point recorded and the move so
+    /// far written over the automation as it was when the touch began.
+    fn record_touch(&mut self, h: i64, v: f64) {
+        let rate = self.session.rate;
+        let Some(a) = self.auto_touch.as_mut() else {
+            return;
+        };
+        let glide = (AUTO_GLIDE_S * rate as f64).round() as i64;
+        // The playhead went back (a loop): what was written stays, a new move begins.
+        if a.points.last().is_some_and(|q| h < q.0) {
+            a.orig = self.session.tracks[a.track].auto.clone();
+            a.start = a.orig.value(a.lane, h, a.default);
+            a.base = a.base_now;
+            a.points.clear();
+        }
+        a.base_now = v;
+        let value = match a.lane {
+            AutoLane::Ride => a.start + (v - a.base),
+            AutoLane::Pan => v,
+        };
+        match a.points.last_mut() {
+            Some(q) if q.0 == h => q.1 = value,
+            _ => a.points.push((h, value)),
+        }
+        let mut auto = a.orig.clone();
+        auto.write(a.lane, &a.points, glide, a.default);
+        if let Some(x) = self.session.tracks.get_mut(a.track) {
+            x.auto = auto;
+        }
+    }
+
+    /// An automation lane drawn over track `i`'s lane `lane`: a click adds a point (or takes
+    /// one away), a drag moves one (a new one where nothing was). Returns (whether the lane
+    /// took the press, whether the session changed).
+    #[allow(clippy::too_many_arguments)]
+    fn auto_input(
+        &mut self,
+        resp: &egui::Response,
+        lane: Rect,
+        view: &View,
+        i: usize,
+        al: AutoLane,
+        origin: Option<Pos2>,
+        pointer: Option<Pos2>,
+    ) -> (bool, bool) {
+        let mut used = false;
+        let mut changed = false;
+        let near = |pts: &[(i64, f64)], p: Pos2| {
+            pts.iter().position(|&(q, v)| {
+                (view.x(q) - p.x).abs() < 6.0 && (auto_y(lane, al, v) - p.y).abs() < 6.0
+            })
+        };
+        if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos().filter(|p| lane.contains(*p))
+        {
+            used = true;
+            let a = &mut self.session.tracks[i].auto;
+            match near(a.lane(al), p) {
+                Some(k) => {
+                    a.lane_mut(al).remove(k);
+                }
+                None => a.set_point(al, view.position(p.x), auto_value(lane, al, p.y)),
+            }
+            changed = true;
+        } else if resp.drag_started()
+            && let Some(p) = origin.filter(|p| lane.contains(*p))
+        {
+            used = true;
+            let a = &mut self.session.tracks[i].auto;
+            let k = near(a.lane(al), p).unwrap_or_else(|| {
+                let at = view.position(p.x);
+                a.set_point(al, at, auto_value(lane, al, p.y));
+                a.lane(al).iter().position(|q| q.0 == at).unwrap_or(0)
+            });
+            self.auto_drag = Some((i, al, k));
+        }
+        if resp.dragged()
+            && let Some((ti, l, k)) = self.auto_drag
+            && ti == i
+            && l == al
+            && let Some(p) = pointer
+        {
+            used = true;
+            let pts = self.session.tracks[i].auto.lane_mut(al);
+            if k < pts.len() {
+                let lo = if k == 0 { i64::MIN } else { pts[k - 1].0 + 1 };
+                let hi = pts.get(k + 1).map_or(i64::MAX, |q| q.0 - 1);
+                let at = view.position(p.x).clamp(lo, hi.max(lo));
+                pts[k] = (at, auto_value(lane, al, p.y));
+            }
+        }
+        if resp.drag_stopped() && self.auto_drag.is_some_and(|d| d.0 == i) {
+            self.auto_drag = None;
+            used = true;
+            changed = true;
+        }
+        (used, changed)
+    }
+
+    /// A new FX return (F4) at the end of the tracks; with `from`, that track sends to it.
+    fn add_bus(&mut self, from: Option<usize>) {
+        let b = self.session.add_bus();
+        let id = self.session.tracks[b].id.clone();
+        if let Some(t) = from.and_then(|t| self.session.tracks.get_mut(t)) {
+            t.sends.push(Send {
+                bus: id,
+                level_db: NEW_SEND_DB,
+                pre: false,
+            });
+        }
+        self.session.refresh_buses();
         self.save();
     }
 
@@ -1714,7 +1970,12 @@ impl SessionView {
         if self.recording.is_some() || t >= self.session.tracks.len() {
             return;
         }
-        self.session.tracks.remove(t);
+        let gone = self.session.tracks.remove(t);
+        if gone.bus {
+            for x in &mut self.session.tracks {
+                x.sends.retain(|s| s.bus != gone.id);
+            }
+        }
         let n = self.session.tracks.len();
         self.session.armed = match self.session.armed {
             _ if n == 0 => None,
@@ -3325,6 +3586,14 @@ impl SessionView {
                     if self.session.tracks.is_empty() {
                         ui.label(RichText::new("no tracks yet").color(theme::MUTED));
                     }
+                    if ui
+                        .button("+ FX return")
+                        .on_hover_text("A return track for sends (a reverb on it, fully wet)")
+                        .clicked()
+                    {
+                        self.add_bus(None);
+                        changed = true;
+                    }
                 });
             });
         // The master: its fader on the stereo sum (export follows it) and its meter.
@@ -3343,6 +3612,32 @@ impl SessionView {
         );
         mui.add_space(8.0);
         mui.label(RichText::new("MASTER").strong().color(theme::INK));
+        let mut law = self.session.pan_law_db;
+        let name = |l: f64| {
+            if l == 0.0 {
+                "pan law 0 dB (balance)".to_string()
+            } else {
+                format!("pan law {l} dB")
+            }
+        };
+        egui::ComboBox::from_id_salt("pan_law")
+            .width(STRIP - 20.0)
+            .selected_text(RichText::new(name(law)).small())
+            .show_ui(&mut mui, |ui| {
+                for l in PAN_LAWS_DB {
+                    ui.selectable_value(&mut law, l, name(l));
+                }
+            })
+            .response
+            .on_hover_text(
+                "The level a centred mono track plays at on each side: -3 dB holds its power \
+                 through a sweep, -6 dB its level in a mono sum, -4.5 dB between; 0 dB is the \
+                 balance law sessions had before (it opens them unchanged)",
+            );
+        if law != self.session.pan_law_db {
+            self.session.pan_law_db = law;
+            changed = true;
+        }
         let clipped = self.meters.master.clipped;
         let clip = egui::Button::new(RichText::new("CLIP").small().color(if clipped {
             Color32::WHITE
@@ -3675,65 +3970,335 @@ impl SessionView {
         if print {
             self.request_print(i);
         }
-        // Sends: their row is reserved until F4 builds them.
-        s.label(RichText::new("SENDS —").small().color(theme::FAINT))
-            .on_hover_text("Sends come with docs/SESSION_FX_PLAN.md F4");
-        let t = &mut self.session.tracks[i];
-        let stereo = t.is_stereo();
-        changed |=
-            crate::mixer::pan_knob(&mut s, &mut t.pan, 30.0, egui::Id::new(("mixer_pan", i)));
-        // A stereo track's knob is a balance (each side turned down past the centre).
-        let label = crate::mixer::pan_label(t.pan);
-        s.label(
-            RichText::new(if stereo {
-                format!("BAL {label}")
-            } else {
-                label
-            })
-            .small()
-            .color(theme::MUTED),
-        )
-        .on_hover_text(if stereo {
-            "A stereo track: the knob is a balance (the other side turns down)"
-        } else {
-            "Pan"
-        });
+        changed |= self.sends_ui(&mut s, i);
+        changed |= self.pan_ui(&mut s, i);
+        changed |= self.auto_row(&mut s, i);
         let used = s.min_rect().height();
         let h = (height - used - 60.0).max(60.0);
         let meter = self.meters.tracks.get(i).cloned().unwrap_or_default();
-        let t = &mut self.session.tracks[i];
+        let before = self.session.tracks[i].volume_db;
+        let mut v = self.touch_value(i, AutoLane::Ride).unwrap_or(before);
+        let fid = egui::Id::new(("mixer_fader", i));
         s.horizontal(|ui| {
             ui.add_space(10.0);
-            changed |= crate::mixer::fader(
-                ui,
-                &mut t.volume_db,
-                egui::vec2(26.0, h),
-                true,
-                egui::Id::new(("mixer_fader", i)),
-            );
+            crate::mixer::fader(ui, &mut v, egui::vec2(26.0, h), true, fid);
             ui.add_space(4.0);
             let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, h), Sense::hover());
             crate::mixer::draw_meter(&ui.painter_at(r), r, &meter);
         });
-        changed |= s
+        let dv = s
             .add(
-                egui::DragValue::new(&mut t.volume_db)
+                egui::DragValue::new(&mut v)
                     .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
                     .speed(0.2)
                     .max_decimals(1)
                     .suffix(" dB"),
             )
-            .on_hover_text("Fader (click to type)")
-            .changed();
+            .on_hover_text("Fader (click to type)");
+        let dragging = s.ctx().is_being_dragged(fid) || dv.dragged();
+        changed |= self.touched(i, AutoLane::Ride, dragging, before, v);
+        let t = &self.session.tracks[i];
+        // The fader's ride where the transport is, while it has one.
+        let at = self.heard_now.unwrap_or(self.session.transport.cursor);
+        let ride = if t.auto.ride.is_empty() {
+            String::new()
+        } else {
+            format!(" · ride {:+.1}", t.auto.value(AutoLane::Ride, at, 0.0))
+        };
         s.label(
-            RichText::new(format!("pk {:.1}", meter.hold_db[0].max(meter.hold_db[1])))
-                .small()
-                .color(if meter.clipped {
-                    theme::FAULT
-                } else {
-                    theme::MUTED
-                }),
+            RichText::new(format!(
+                "pk {:.1}{ride}",
+                meter.hold_db[0].max(meter.hold_db[1])
+            ))
+            .small()
+            .color(if meter.clipped {
+                theme::FAULT
+            } else {
+                theme::MUTED
+            }),
         );
+        changed
+    }
+
+    /// A strip's sends (F4): per FX return it sends to, its level, PRE / POST and (right
+    /// click on the name) remove; "+ send" to a return or a new one. An FX return's strip
+    /// says what feeds it instead. Returns whether they changed.
+    fn sends_ui(&mut self, s: &mut egui::Ui, i: usize) -> bool {
+        let mut changed = false;
+        if self.session.tracks[i].bus {
+            let from: Vec<String> = self
+                .session
+                .feeds(i)
+                .iter()
+                .map(|&j| self.session.tracks[j].name.clone())
+                .collect();
+            s.label(RichText::new("FX RETURN").small().color(theme::ACCENT))
+                .on_hover_text(
+                    "Its input is the sum of the sends to it; its inserts (a reverb: fully wet) \
+                     print that sum, and its fader and pan bring it back into the mix",
+                );
+            s.label(
+                RichText::new(if from.is_empty() {
+                    "no sends yet".to_string()
+                } else {
+                    format!("from {}", from.join(", "))
+                })
+                .small()
+                .color(theme::MUTED),
+            );
+            return false;
+        }
+        s.label(RichText::new("SENDS").small().color(theme::FAINT))
+            .on_hover_text(
+                "Mono sends to FX returns (a stereo track sends its mid): a level each, before \
+                 or after the fader",
+            );
+        let buses: Vec<(String, String)> = self
+            .session
+            .tracks
+            .iter()
+            .filter(|x| x.bus)
+            .map(|x| (x.id.clone(), x.name.clone()))
+            .collect();
+        let mut remove = None;
+        let mut add: Option<String> = None;
+        let mut new_bus = false;
+        let t = &mut self.session.tracks[i];
+        for (k, send) in t.sends.iter_mut().enumerate() {
+            let Some((_, name)) = buses.iter().find(|b| b.0 == send.bus) else {
+                continue;
+            };
+            s.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                let short: String = name.chars().take(6).collect();
+                let r = ui
+                    .add(
+                        egui::Label::new(RichText::new(short).small().color(theme::INK))
+                            .sense(Sense::click()),
+                    )
+                    .on_hover_text(format!("→ {name} (right-click: remove)"));
+                r.context_menu(|ui| {
+                    if ui.button("Remove the send").clicked() {
+                        remove = Some(k);
+                        ui.close();
+                    }
+                });
+                changed |= ui
+                    .add(
+                        egui::DragValue::new(&mut send.level_db)
+                            .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
+                            .speed(0.2)
+                            .max_decimals(1),
+                    )
+                    .on_hover_text("Send level (dB)")
+                    .changed();
+                let b = egui::Button::new(
+                    RichText::new(if send.pre { "PRE" } else { "POST" })
+                        .small()
+                        .color(if send.pre { theme::WARN } else { theme::MUTED }),
+                )
+                .min_size(egui::vec2(0.0, 16.0));
+                if ui
+                    .add(b)
+                    .on_hover_text(
+                        "Where the send taps the strip: after the fader and its ride (POST, a \
+                         console's reverb send), or before (PRE: a fader move doesn't change \
+                         the return, so it needn't be printed again)",
+                    )
+                    .clicked()
+                {
+                    send.pre = !send.pre;
+                    changed = true;
+                }
+            });
+        }
+        let t = &self.session.tracks[i];
+        s.menu_button(RichText::new("+ send").small(), |ui| {
+            for (id, name) in &buses {
+                if t.send_to(id).is_none() && ui.button(format!("→ {name}")).clicked() {
+                    add = Some(id.clone());
+                    ui.close();
+                }
+            }
+            if ui.button("→ a new FX return").clicked() {
+                new_bus = true;
+                ui.close();
+            }
+        });
+        let t = &mut self.session.tracks[i];
+        if let Some(k) = remove {
+            t.sends.remove(k);
+            changed = true;
+        }
+        if let Some(bus) = add {
+            t.sends.push(Send {
+                bus,
+                level_db: NEW_SEND_DB,
+                pre: false,
+            });
+            changed = true;
+        }
+        if new_bus {
+            self.add_bus(Some(i));
+            changed = true;
+        }
+        changed
+    }
+
+    /// A strip's pan: a mono track's pan pot (under the session's pan law), a stereo
+    /// track's two pans as POSITION and SPREAD (ST6), or an older stereo track's balance
+    /// (with a button to give it two pans). Returns whether it changed.
+    fn pan_ui(&mut self, s: &mut egui::Ui, i: usize) -> bool {
+        let stereo = self.plays_stereo(i);
+        let law = self.session.pan_law_db;
+        let pid = egui::Id::new(("mixer_pan", i));
+        let held = |s: &egui::Ui| s.ctx().is_being_dragged(pid);
+        let mut changed = false;
+        match (stereo, self.session.tracks[i].pans) {
+            (true, Some(p)) => {
+                let (pos0, spread0) = position_spread(p);
+                let mut pos = self.touch_value(i, AutoLane::Pan).unwrap_or(pos0);
+                let mut spread = spread0;
+                let sid = egui::Id::new(("mixer_spread", i));
+                s.horizontal(|ui| {
+                    ui.add_space(10.0);
+                    crate::mixer::pan_knob(ui, &mut pos, 28.0, pid);
+                    crate::mixer::pan_knob(ui, &mut spread, 28.0, sid);
+                });
+                s.label(
+                    RichText::new(format!(
+                        "POS {} · SPR {:.0}",
+                        crate::mixer::pan_label(pos),
+                        spread * 100.0
+                    ))
+                    .small()
+                    .color(theme::MUTED),
+                )
+                .on_hover_text(format!(
+                    "A stereo track's two pan pots, turned as POSITION (the centre between them) \
+                     and SPREAD (100: hard left and right, 0: both at the position, below 0 the \
+                     sides swapped); now L {} and R {}",
+                    crate::mixer::pan_label(p.0),
+                    crate::mixer::pan_label(p.1)
+                ));
+                if spread != spread0 {
+                    self.session.tracks[i].pans = Some(pans_from(pos0, spread));
+                    changed = true;
+                }
+                changed |= self.touched(i, AutoLane::Pan, held(s), pos0, pos);
+            }
+            (true, None) => {
+                let mut bal = self
+                    .touch_value(i, AutoLane::Pan)
+                    .unwrap_or(self.session.tracks[i].pan);
+                let before = self.session.tracks[i].pan;
+                crate::mixer::pan_knob(s, &mut bal, 30.0, pid);
+                s.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("BAL {}", crate::mixer::pan_label(bal)))
+                            .small()
+                            .color(theme::MUTED),
+                    )
+                    .on_hover_text("A stereo track saved before two pans: the knob is a balance (the other side turns down)");
+                    if ui
+                        .small_button("pans")
+                        .on_hover_text("Give it two pan pots (POSITION and SPREAD), starting hard left and right")
+                        .clicked()
+                    {
+                        self.session.tracks[i].pans = Some((-1.0, 1.0));
+                        self.session.tracks[i].pan = 0.0;
+                        changed = true;
+                    }
+                });
+                if !changed {
+                    changed |= self.touched(i, AutoLane::Pan, held(s), before, bal);
+                }
+            }
+            (false, _) => {
+                let before = self.session.tracks[i].pan;
+                let mut pan = self.touch_value(i, AutoLane::Pan).unwrap_or(before);
+                crate::mixer::pan_knob(s, &mut pan, 30.0, pid);
+                s.label(
+                    RichText::new(crate::mixer::pan_label(pan))
+                        .small()
+                        .color(theme::MUTED),
+                )
+                .on_hover_text(format!(
+                    "Pan (the session's pan law: {law} dB at the centre)"
+                ));
+                changed |= self.touched(i, AutoLane::Pan, held(s), before, pan);
+            }
+        }
+        changed
+    }
+
+    /// A track's automation controls: W (write moves while playing), VOL / PAN (show and
+    /// edit that lane over the track's lane; a dot: it has points) and a menu to clear them.
+    fn auto_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
+        let mut changed = false;
+        let t = &mut self.session.tracks[i];
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            let b = egui::Button::new(RichText::new("W").small().color(if t.auto_write {
+                Color32::WHITE
+            } else {
+                theme::MUTED
+            }))
+            .fill(if t.auto_write { REC } else { theme::CHROME2 })
+            .min_size(egui::vec2(20.0, 16.0));
+            if ui
+                .add(b)
+                .on_hover_text(
+                    "Write automation: while the transport plays, moving this track's fader or \
+                     pan writes the move into its automation (touch: let go and the control \
+                     returns, the move stays)",
+                )
+                .clicked()
+            {
+                t.auto_write = !t.auto_write;
+                changed = true;
+            }
+            for (lane, text, tip) in [
+                (
+                    AutoLane::Ride,
+                    "VOL",
+                    "The fader's ride: dB on top of the fader, after the inserts",
+                ),
+                (AutoLane::Pan, "PAN", "The pan (a stereo track's POSITION)"),
+            ] {
+                let on = t.auto_view == Some(lane);
+                let n = t.auto.lane(lane).len();
+                let label = if n > 0 {
+                    format!("{text}•")
+                } else {
+                    text.to_string()
+                };
+                if ui
+                    .selectable_label(on, RichText::new(label).small())
+                    .on_hover_text(format!(
+                        "{tip}: show and edit it over the track's lane ({n} points)"
+                    ))
+                    .clicked()
+                {
+                    t.auto_view = if on { None } else { Some(lane) };
+                    changed = true;
+                }
+            }
+            if !t.auto.is_empty() {
+                ui.menu_button(RichText::new("⋯").small(), |ui| {
+                    if ui.button("Clear the fader ride").clicked() {
+                        t.auto.ride.clear();
+                        changed = true;
+                        ui.close();
+                    }
+                    if ui.button("Clear the pan automation").clicked() {
+                        t.auto.pan.clear();
+                        changed = true;
+                        ui.close();
+                    }
+                });
+            }
+        });
         changed
     }
 
@@ -3785,6 +4350,9 @@ impl SessionView {
             return;
         };
         let mut slot = Slot::new(device);
+        if track.bus {
+            slot.wet = 1.0;
+        }
         if track.inserts.iter().all(|s| s.bypass)
             && let Some((_, lane)) = track.lane()
         {
@@ -5172,6 +5740,18 @@ impl SessionView {
                     if ui.button("+ Track").clicked() {
                         self.add_track();
                     }
+                    if ui
+                        .button("+ FX return")
+                        .on_hover_text(
+                            "A return track: tracks send to it (a level each, pre or post \
+                             fader), its inserts (a reverb) print the sum, its fader and pan \
+                             bring it back into the mix",
+                        )
+                        .clicked()
+                    {
+                        self.add_bus(None);
+                        changed = true;
+                    }
                     if let Some(imp) = &self.import {
                         ui.add_enabled(false, egui::Button::new("Import…"));
                         ui.label(
@@ -5339,8 +5919,19 @@ impl SessionView {
         // SE8: the Blade, Erase and Envelope tools act on the clip under a press (on empty
         // lane space every tool does what the pointer does).
         let mut tool_used = false;
+        // An automation lane shown over the lane takes its presses (its points).
+        let auto_on = self.session.tracks[i].auto_view;
+        if let Some(al) = auto_on
+            && self.recording.is_none()
+        {
+            let pointer = ui.ctx().pointer_interact_pos();
+            let (used, ch) = self.auto_input(&lane_resp, lane, view, i, al, origin, pointer);
+            tool_used |= used;
+            changed |= ch;
+        }
         if (lane_resp.clicked() || lane_resp.drag_started())
             && self.recording.is_none()
+            && auto_on.is_none()
             && let Some(p) = origin
                 .or(lane_resp.interact_pointer_pos())
                 .filter(|p| lane.contains(*p))
@@ -5788,8 +6379,42 @@ impl SessionView {
         });
         let mut delete_track = false;
         let mut move_track: Option<usize> = None;
+        let mut send_menu: Option<Option<String>> = None;
         let n_tracks = self.session.tracks.len();
+        let buses: Vec<(String, String)> = self
+            .session
+            .tracks
+            .iter()
+            .filter(|x| x.bus)
+            .map(|x| (x.id.clone(), x.name.clone()))
+            .collect();
+        let is_bus = self.session.tracks[i].bus;
         strip_resp.context_menu(|ui| {
+            if !is_bus {
+                ui.menu_button("Send to", |ui| {
+                    let t = &self.session.tracks[i];
+                    for (id, name) in &buses {
+                        let on = t.send_to(id).is_some();
+                        if ui
+                            .button(format!("{} {name}", if on { "✓" } else { "→" }))
+                            .on_hover_text(if on {
+                                "Remove the send (its level is in the Mixer's strip)"
+                            } else {
+                                "A post-fader send at -10 dB (the Mixer's strip sets it)"
+                            })
+                            .clicked()
+                        {
+                            send_menu = Some(Some(id.clone()));
+                            ui.close();
+                        }
+                    }
+                    if ui.button("→ a new FX return").clicked() {
+                        send_menu = Some(None);
+                        ui.close();
+                    }
+                });
+                ui.separator();
+            }
             if ui
                 .add_enabled(i > 0, egui::Button::new("Move up"))
                 .clicked()
@@ -5813,6 +6438,27 @@ impl SessionView {
                 ui.close();
             }
         });
+        match send_menu {
+            Some(Some(bus)) => {
+                let t = &mut self.session.tracks[i];
+                match t.sends.iter().position(|s| s.bus == bus) {
+                    Some(k) => {
+                        t.sends.remove(k);
+                    }
+                    None => t.sends.push(Send {
+                        bus,
+                        level_db: NEW_SEND_DB,
+                        pre: false,
+                    }),
+                }
+                changed = true;
+            }
+            Some(None) => {
+                self.add_bus(Some(i));
+                changed = true;
+            }
+            None => {}
+        }
         if let Some(to) = move_track {
             self.move_track(i, to);
             changed = true;
@@ -5949,6 +6595,51 @@ impl SessionView {
             if self.selected == Some((i, c)) {
                 lp.rect_stroke(r, 3.0, Stroke::new(2.0, theme::INK), StrokeKind::Inside);
             }
+        }
+        if track.bus {
+            let has_chain = self.session.chain_signature(i).is_some();
+            match (&track.printed, &track.bus_in) {
+                (Some(p), _) if has_chain => {
+                    let label = if self.session.print_current(i) {
+                        "FX return · printed"
+                    } else {
+                        "FX return · its last print (the sends changed: Print)"
+                    };
+                    draw_clip(
+                        &lp,
+                        lane,
+                        view,
+                        p.start,
+                        p.audio.len(),
+                        &p.overview,
+                        colour,
+                        label,
+                    );
+                }
+                (_, Some(b)) => {
+                    if let (Some((start, a)), Some(ov)) = (&b.input, &b.overview) {
+                        let label = if has_chain {
+                            "the sends' sum (not printed yet: Print)"
+                        } else {
+                            "the sends' sum, dry (no inserts)"
+                        };
+                        draw_clip(&lp, lane, view, *start, a.len(), ov, theme::FAINT, label);
+                    } else {
+                        lp.text(
+                            lane.left_center() + egui::vec2(10.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            "FX return: no sends yet (a track's strip in the Mixer: + send)",
+                            egui::FontId::proportional(11.0),
+                            theme::MUTED,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(al) = track.auto_view {
+            let default = self.auto_default(i, al);
+            draw_automation(&lp, lane, view, al, track.auto.lane(al), default);
         }
         if armed && let Some(r) = &self.recording {
             // A MIDI take draws its notes as they're played, an audio take its waveform.
@@ -6130,31 +6821,42 @@ impl SessionView {
             changed = true;
         }
         let meter = self.meters.tracks.get(i).cloned().unwrap_or_default();
+        // The fader and the pan (a stereo track with pans: its POSITION), each writing its
+        // automation when held while playing with W on.
+        let vol0 = self.session.tracks[i].volume_db;
+        let mut vol = self.touch_value(i, AutoLane::Ride).unwrap_or(vol0);
+        let pan0 = self.control(i, AutoLane::Pan);
+        let mut pan = self.touch_value(i, AutoLane::Pan).unwrap_or(pan0);
+        let pan_tip = match (self.plays_stereo(i), self.session.tracks[i].pans) {
+            (true, Some(_)) => {
+                "Position: the centre of the stereo track's two pans (the Mixer has its spread)"
+            }
+            (true, None) => {
+                "Balance (a stereo track saved before two pans: the Mixer gives it pans)"
+            }
+            _ => "Pan",
+        };
+        let fid = egui::Id::new(("strip_fader", i));
+        let (mut vol_drag, mut pan_drag) = (false, false);
         let t = &mut self.session.tracks[i];
         child.horizontal(|ui| {
             // The fader as a slider with the track's meter behind it (SE4).
             let (r, _) = ui.allocate_exact_size(egui::vec2(70.0, 18.0), Sense::hover());
             crate::mixer::draw_meter_h(&ui.painter_at(r), r.shrink(1.0), &meter);
             let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(r));
-            changed |= crate::mixer::fader(
-                &mut fui,
-                &mut t.volume_db,
-                r.size(),
-                false,
-                egui::Id::new(("strip_fader", i)),
-            );
-            changed |= ui
+            crate::mixer::fader(&mut fui, &mut vol, r.size(), false, fid);
+            let dv = ui
                 .add(
-                    egui::DragValue::new(&mut t.volume_db)
+                    egui::DragValue::new(&mut vol)
                         .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
                         .speed(0.2)
                         .max_decimals(1),
                 )
-                .on_hover_text("Fader (dB)")
-                .changed();
-            changed |= ui
+                .on_hover_text("Fader (dB)");
+            vol_drag = ui.ctx().is_being_dragged(fid) || dv.dragged();
+            let pv = ui
                 .add(
-                    egui::DragValue::new(&mut t.pan)
+                    egui::DragValue::new(&mut pan)
                         .range(-1.0..=1.0)
                         .speed(0.01)
                         .custom_formatter(|v, _| match v {
@@ -6163,8 +6865,8 @@ impl SessionView {
                             v => format!("R{:.0}", v * 100.0),
                         }),
                 )
-                .on_hover_text("Balance")
-                .changed();
+                .on_hover_text(pan_tip);
+            pan_drag = pv.dragged();
             let n = t.takes.len();
             if n > 0 {
                 let a = t.active.unwrap_or(0);
@@ -6199,10 +6901,15 @@ impl SessionView {
                 }
             }
         });
-        // What a take from the keyboard records, and what it's heard through while armed.
+        changed |= self.touched(i, AutoLane::Ride, vol_drag, vol0, vol);
+        changed |= self.touched(i, AutoLane::Pan, pan_drag, pan0, pan);
+        // What a take from the keyboard records, and what it's heard through while armed (an
+        // FX return records nothing).
         let proxy_available = self.proxy_available;
         let t = &mut self.session.tracks[i];
-        child.horizontal(|ui| {
+        let bus = t.bus;
+        if !bus {
+            child.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
             let seg = |ui: &mut egui::Ui, on: bool, text: &str, tip: &str| {
                 ui.selectable_label(on, RichText::new(text).small())
@@ -6237,13 +6944,31 @@ impl SessionView {
                 "A proxy only stands in for MIDI takes: an audio take records what the device plays"
             });
         });
-        if let Some(k) = self.session.tracks[i].active_take() {
-            child.label(
-                RichText::new(take_line(k, self.session.rate))
-                    .small()
-                    .color(theme::FAINT),
-            );
         }
+        // Automation (W, VOL, PAN), then the active take's line, or what feeds a return.
+        let line = if bus {
+            let from: Vec<String> = self
+                .session
+                .feeds(i)
+                .iter()
+                .map(|&j| self.session.tracks[j].name.clone())
+                .collect();
+            Some(if from.is_empty() {
+                "FX return · no sends yet".to_string()
+            } else {
+                format!("FX return · from {}", from.join(", "))
+            })
+        } else {
+            self.session.tracks[i]
+                .active_take()
+                .map(|k| take_line(k, self.session.rate))
+        };
+        child.horizontal(|ui| {
+            changed |= self.auto_row(ui, i);
+            if let Some(l) = line {
+                ui.label(RichText::new(l).small().color(theme::FAINT));
+            }
+        });
         changed |= self.inserts_row(&mut child, i);
         // Every take, stacked under the track: the ones in the lane marked; a click puts a
         // take in the lane whole, a drag across one promotes that stretch into the lane on
@@ -7230,7 +7955,7 @@ impl SessionView {
         match action {
             Some("cut") => self.copy_selection(true),
             Some("copy") => self.copy_selection(false),
-            Some("paste") => self.paste_clipboard(),
+            Some("paste") => self.paste(),
             Some("dup") => self.duplicate_selection(),
             Some("delete") => self.delete_selection(),
             Some("split") => {
@@ -9195,6 +9920,98 @@ fn draw_envelope(painter: &egui::Painter, r: Rect, view: &View, clip: &Clip, han
     }
 }
 
+/// The ride range an automation lane draws (dB, bottom to top); a ride beyond it is drawn
+/// at its edge.
+const AUTO_VIEW_MIN_DB: f64 = -24.0;
+
+/// An automation value's height in lane `r`: a ride from its range's bottom to +12 dB at
+/// the top, a pan from right (bottom) to left (top).
+fn auto_y(r: Rect, al: AutoLane, v: f64) -> f32 {
+    let u = match al {
+        AutoLane::Ride => (v - AUTO_VIEW_MIN_DB) / (RIDE_MAX_DB - AUTO_VIEW_MIN_DB),
+        AutoLane::Pan => (1.0 - v) / 2.0,
+    }
+    .clamp(0.0, 1.0) as f32;
+    r.bottom() - 4.0 - u * (r.height() - 8.0)
+}
+
+/// The value at height `y` in lane `r` (ride: a tenth of a dB; pan: a hundredth).
+fn auto_value(r: Rect, al: AutoLane, y: f32) -> f64 {
+    let u = ((r.bottom() - 4.0 - y) / (r.height() - 8.0)).clamp(0.0, 1.0) as f64;
+    match al {
+        AutoLane::Ride => {
+            let db = AUTO_VIEW_MIN_DB + u * (RIDE_MAX_DB - AUTO_VIEW_MIN_DB);
+            ((db * 10.0).round() / 10.0).clamp(RIDE_MIN_DB, RIDE_MAX_DB)
+        }
+        AutoLane::Pan => (((1.0 - 2.0 * u) * 100.0).round() / 100.0).clamp(-1.0, 1.0),
+    }
+}
+
+/// An automation lane over lane `r`: its line (flat past its ends; with no points a dashed
+/// line at `default`), its points, and its 0 dB / centre line faintly.
+fn draw_automation(
+    painter: &egui::Painter,
+    r: Rect,
+    view: &View,
+    al: AutoLane,
+    points: &[(i64, f64)],
+    default: f64,
+) {
+    let col = match al {
+        AutoLane::Ride => theme::WARN,
+        AutoLane::Pan => theme::ACCENT,
+    };
+    painter.rect_filled(r, 0.0, theme::BG.gamma_multiply(0.55));
+    let zero = auto_y(r, al, 0.0);
+    painter.line_segment(
+        [Pos2::new(r.left(), zero), Pos2::new(r.right(), zero)],
+        Stroke::new(1.0, theme::DOT),
+    );
+    painter.text(
+        Pos2::new(r.left() + 4.0, r.top() + 2.0),
+        egui::Align2::LEFT_TOP,
+        match al {
+            AutoLane::Ride => {
+                "automation · fader ride (dB on the fader) · click: add / remove, drag: move"
+            }
+            AutoLane::Pan => {
+                "automation · pan (top left, bottom right) · click: add / remove, drag: move"
+            }
+        },
+        egui::FontId::proportional(10.0),
+        theme::MUTED,
+    );
+    if points.is_empty() {
+        let y = auto_y(r, al, default);
+        let mut x = r.left();
+        while x < r.right() {
+            painter.line_segment(
+                [Pos2::new(x, y), Pos2::new((x + 6.0).min(r.right()), y)],
+                Stroke::new(1.0, col.gamma_multiply(0.6)),
+            );
+            x += 10.0;
+        }
+        return;
+    }
+    let mut line = vec![Pos2::new(r.left(), auto_y(r, al, points[0].1))];
+    line.extend(
+        points
+            .iter()
+            .map(|&(p, v)| Pos2::new(view.x(p), auto_y(r, al, v))),
+    );
+    line.push(Pos2::new(
+        r.right(),
+        auto_y(r, al, points[points.len() - 1].1),
+    ));
+    painter.add(egui::Shape::line(line, Stroke::new(1.5, col)));
+    for &(p, v) in points {
+        let x = view.x(p);
+        if x >= r.left() - 4.0 && x <= r.right() + 4.0 {
+            painter.circle_filled(Pos2::new(x, auto_y(r, al, v)), 3.0, col);
+        }
+    }
+}
+
 /// A clip: a rounded box from `start` for `len` samples, its waveform from `ov`.
 #[allow(clippy::too_many_arguments)]
 fn draw_clip(
@@ -9580,6 +10397,66 @@ mod tests {
         assert_ne!(p.audio, *r);
         assert_eq!(v.session.mix().clips.len(), 1);
         assert!(v.session.export_problems(false).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn two_tracks_sent_to_a_plate_return_print_it_once_and_its_tail_plays_on() {
+        let (mut v, dir) = scratch("sends");
+        let ctx = egui::Context::default();
+        for (t, f) in [0.05f32, 0.11].into_iter().enumerate() {
+            if t > 0 {
+                v.session.tracks.push(Track::new("2"));
+            }
+            let tone: Vec<f32> = (0..12_000).map(|i| (i as f32 * f).sin() * 0.3).collect();
+            v.session
+                .add_rendered_take(t, tone, None, 0, json!({"device": "test"}))
+                .unwrap();
+        }
+        // A return with a send from track 1, then one from track 2; the plate on it, all wet.
+        v.add_bus(Some(0));
+        let b = v.session.tracks.len() - 1;
+        let id = v.session.tracks[b].id.clone();
+        v.session.tracks[1].sends.push(Send {
+            bus: id,
+            level_db: -6.0,
+            pre: false,
+        });
+        v.session.refresh_buses();
+        assert_eq!(v.session.feeds(b), vec![0, 1]);
+        v.add_insert(b, "plate_reverb");
+        assert_eq!(v.session.tracks[b].inserts[0].wet, 1.0);
+        assert!(!v.session.print_current(b));
+        // Asked: printed (the tracks feeding it have nothing to print).
+        v.request_print(b);
+        for _ in 0..600 {
+            v.poll_prints(&ctx, false);
+            if v.session.print_current(b) {
+                break;
+            }
+            wait(&v.jobs);
+        }
+        assert!(v.session.print_current(b), "{:?}", v.print_errors);
+        // The mix plays the return's print past the last take (the plate's tail).
+        let takes_end = 12_000;
+        let mix = v.session.mix();
+        let ret = mix
+            .clips
+            .iter()
+            .find(|c| c.track == b)
+            .expect("the return plays");
+        assert!(ret.end() > takes_end + 48_000, "{}", ret.end());
+        let mut out = vec![[0.0f32; 2]; 4800];
+        mix.add(takes_end + 24_000, &mut out);
+        assert!(out.iter().any(|f| f[0].abs() > 1e-5), "the tail is heard");
+        assert!(v.session.export_problems(false).is_empty());
+        // A send level change: only the return goes stale, and plays its last print.
+        let a = v.session.chain_signature(0);
+        v.session.tracks[1].sends[0].level_db = -12.0;
+        v.session.refresh_buses();
+        assert!(!v.session.print_current(b));
+        assert_eq!(v.session.chain_signature(0), a);
+        assert!(v.session.mix().clips.iter().any(|c| c.track == b));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
