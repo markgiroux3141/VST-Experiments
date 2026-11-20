@@ -4,7 +4,7 @@ notes, its output the sound pressure 1 m in front of the parchment cone's cabine
 
     uv run --extra fast --extra listen python scripts/victorian_render.py --midi FILE
         [--seconds S] [--tail 4] [--quality draft|draft-1x|production]
-        [--set cutoff=0.3 ...] [--velocity-scale 1.0] [--out NAME]
+        [--set cutoff=0.3 ...] [--velocity-scale 1.0] [--lead-in S] [--out NAME]
 
 Every channel of the file plays the one voice (one reed per key, C1-C6): a key is pressed
 when its first part strikes it and lifted when its last part lets go (a count per key), so
@@ -76,6 +76,12 @@ def main() -> None:
     ap.add_argument("--quality", default="draft", choices=["draft", "draft-1x", "production"])
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     ap.add_argument("--velocity-scale", type=float, default=1.0)
+    ap.add_argument(
+        "--lead-in",
+        type=float,
+        default=0.0,
+        help="seconds of silence before the first note (a note at 0 s loses its attack)",
+    )
     ap.add_argument("--out", help="the WAV's name")
     args = ap.parse_args()
 
@@ -89,7 +95,9 @@ def main() -> None:
         for _, k, n, _ in notes:
             (down.add if k == "on" else down.discard)(n)
         notes += [(args.seconds, "off", n, 0) for n in sorted(down)]
-    duration = max(e.t_s for e in events) + args.tail
+    if args.lead_in:  # every note later: the voice at rest before the first strike
+        notes = [(t + args.lead_in, k, n, v) for t, k, n, v in notes]
+    duration = max(e.t_s for e in events) + args.lead_in + args.tail
     name = args.out or args.midi.stem.replace(" ", "_")
 
     spec = load_circuit(circuit_path(CIRCUIT))
@@ -136,6 +144,7 @@ def main() -> None:
         "quality": args.quality,
         "set": over,
         "velocity_scale": args.velocity_scale,
+        "lead_in_s": args.lead_in,
         "key_presses": len(notes) // 2,
         **counts,
         "duration_s": duration,
