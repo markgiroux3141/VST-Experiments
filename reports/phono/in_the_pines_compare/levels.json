@@ -1,0 +1,59 @@
+{
+  "target_lufs": -23.0,
+  "takes": {
+    "0_dry": {
+      "source": "reports/phono/record_player/audio/in_the_pines_dry.wav",
+      "lufs_before": -16.6,
+      "peak_after_dbfs": -6.6,
+      "channels": 2
+    },
+    "1_wax_cylinder_smooth": {
+      "source": "reports/phono/cylinder/audio/in_the_pines_side_smooth.wav",
+      "lufs_before": -26.1,
+      "peak_after_dbfs": 3.0,
+      "channels": 1
+    },
+    "1_wax_cylinder_played": {
+      "source": "reports/phono/cylinder/audio/in_the_pines_side_played.wav",
+      "lufs_before": -27.0,
+      "peak_after_dbfs": 3.9,
+      "channels": 1
+    },
+    "2_acoustic78_victor_smooth": {
+      "source": "reports/phono/gramophone/audio/in_the_pines_side_acoustic78_exhibition_smooth.wav",
+      "lufs_before": -21.0,
+      "peak_after_dbfs": -2.1,
+      "channels": 1
+    },
+    "2_acoustic78_victor_played": {
+      "source": "reports/phono/gramophone/audio/in_the_pines_side_acoustic78_exhibition_played.wav",
+      "lufs_before": -21.3,
+      "peak_after_dbfs": -1.8,
+      "channels": 1
+    },
+    "3_electric78_orthophonic_smooth": {
+      "source": "reports/phono/gramophone/audio/in_the_pines_side_electric78_orthophonic_smooth.wav",
+      "lufs_before": -20.0,
+      "peak_after_dbfs": -3.4,
+      "channels": 1
+    },
+    "3_electric78_orthophonic_played": {
+      "source": "reports/phono/gramophone/audio/in_the_pines_side_electric78_orthophonic_played.wav",
+      "lufs_before": -20.0,
+      "peak_after_dbfs": -3.3,
+      "channels": 1
+    },
+    "4_lp_ge_portable_smooth": {
+      "source": "reports/phono/record_player/audio/in_the_pines_smooth.wav",
+      "lufs_before": -16.9,
+      "peak_after_dbfs": -4.8,
+      "channels": 2
+    },
+    "4_lp_ge_portable_played": {
+      "source": "reports/phono/record_player/audio/in_the_pines_played.wav",
+      "lufs_before": -16.9,
+      "peak_after_dbfs": -2.7,
+      "channels": 2
+    }
+  }
+}

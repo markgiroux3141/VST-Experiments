@@ -1,0 +1,25 @@
+device: "RCA 35EH5 beam power tube"
+curve: >-
+  plate: "Average characteristics", Ef 35 V, grid-No. 2 volts 115: plate current against plate
+  volts for grid-No. 1 volts 0 to -6 (solid Ib curves); screen: the dashed Ic2 curves at 150 V
+  (Ec1 0, -2, -4).
+publisher: RCA Electron Tube Division, Harrison, N.J.
+documents:
+  rca:
+    title: "RCA 35EH5 data sheet, DATA 2 (8-60)"
+    scan_source: "web: https://frank.pocnet.net/sheets/049/3/35EH5.pdf"
+    sha256: 72cfa697eea64118de13baf20b91b0809b6c6b75bd7dfc229e2b04c7ad1c381c
+    bytes: 177866
+    page: "PDF page 3 (DATA 2)"
+local_copy: "data/schematics/ge_rp1560/rca_35eh5.pdf (git-ignored)"
+digitized_with: >-
+  a 200 dpi render rotated upright; the grid detected (12 px per minor division: 2 V, 2 mA; 0 V
+  at x 40.5, 0 mA at y 606, the 80 mA rule at y 126); each solid curve read by eye at 20, 40, 60
+  (50 / 80 for Ec1 0), 100 and 150 V.
+digitized_by: Claude Code
+digitized_on: 2026-11-18
+estimated_error: "about +-1.5 mA (by eye; +-3 mA on the steep knees below 30 V)"
+notes: >-
+  The sheet's typical class-A1 point (DATA 1): 110 V plate, 115 V screen, 62 ohm cathode
+  resistor, 32 mA plate, 7.2 mA screen at zero signal, rp 14 k, gm 12,000 umho; the read curves
+  give ~37 mA at -2.4 V, 110 V (average characteristics against a typical point).

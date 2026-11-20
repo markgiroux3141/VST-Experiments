@@ -30,6 +30,7 @@ pub mod nickel;
 pub mod noise;
 pub mod novachord;
 pub mod partition;
+pub mod phono;
 pub mod plate;
 pub mod reeds;
 pub mod reset_events;

@@ -1953,6 +1953,115 @@ def build_el84() -> dict[str, Any]:
     }
 
 
+def build_35eh5() -> dict[str, Any]:
+    """The GE RP1560's output tubes: a Koren pentode fit to RCA's average plate
+    characteristics at 115 V screen (Ec1 0 to -6) and the screen-current curves at 150 V
+    (data/datasheets/rca_35eh5.provenance.yaml), weighted as the 6V6GT's, with RCA's typical
+    class-A1 point in the fit as one more plate and screen point."""
+    pub = _published()["35EH5"]
+    pl = load_csv("rca_35eh5_plate.csv")  # vg2, vg1, va, ia
+    sc = load_csv("rca_35eh5_screen.csv")  # va, vg1, vg2, ig2
+    a = pub["class_a1"]
+    point = [[a["vg1_v"], a["vg2_v"], a["vp_v"], a["ip_a"]]]
+    plate = np.r_[np.c_[pl[:, 1], pl[:, 0], pl[:, 2], pl[:, 3]], point]
+    plate_sigma = np.r_[
+        effective_sigma(pl[:, 2], pl[:, 3], pl[:, 1], 12.0, **V6_PLATE_SIGMA),
+        [0.02 * a["ip_a"] + 0.3e-3],
+    ]
+    screen = np.r_[np.c_[sc[:, 1], sc[:, 2], sc[:, 3]], [[a["vg1_v"], a["vg2_v"], a["ig2_a"]]]]
+    screen_sigma = np.r_[np.hypot(0.1 * sc[:, 3], 0.5e-3), [0.05 * a["ig2_a"]]]
+    m, rp, rs = fit_koren_pentode(plate, screen, plate_sigma, screen_sigma)
+    vg1, vg2, va, dv = a["vg1_v"], a["vg2_v"], a["vp_v"], 1e-3
+    caps = pub["capacitances_f"]
+    return {
+        "name": "35EH5",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares (effective variance) on RCA's 35EH5 average "
+        "plate characteristics (Vg2 115 V) and screen-current curves, digitized by eye: "
+        "data/datasheets/rca_35eh5.provenance.yaml, and its typical class-A1 point (DATA 1)",
+        "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (direct interelectrode capacitances, approx.)",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate 2% + 0.3 mA with slope x 1 V of Va (the 6V6GT's); screen 10% / 0.5 mA "
+            "(read off dashed curves); the class-A1 point 2% + 0.3 mA, 5%",
+            "class_a1_model": {
+                "ip_a": float(m.ip(vg1, vg2, va)),
+                "gm_s": float((m.ip(vg1 + dv, vg2, va) - m.ip(vg1 - dv, vg2, va)) / (2 * dv)),
+                "rp_ohm": float(2 * dv / (m.ip(vg1, vg2, va + dv) - m.ip(vg1, vg2, va - dv))),
+                "ig2_a": float(m.ig2(vg1, vg2)),
+            },
+        },
+    }
+
+
+def _half_wave_dc(perv: float, hw: dict, load_a: float, smooth_v: float = 0.1) -> float:
+    """The DC at a half-wave rectifier's capacitor input (the sheet's circuit: a sine source
+    through the plate-supply impedance, the diode, the capacitor and a DC load), settled."""
+    d = VacuumDiode("rect", perv, smooth_v)
+    w = 2 * np.pi * hw["mains_hz"]
+    amp = hw["ac_v_rms"] * np.sqrt(2)
+    r, c = hw["plate_supply_ohm"], hw["filter_c_f"]
+    h = 1.0 / (hw["mains_hz"] * 400)
+    vc, acc, n_avg = amp * 0.9, 0.0, 0
+    cycles = 40
+    for k in range(int(cycles * 400)):
+        vs = amp * np.sin(w * k * h)
+        # The diode's current through r: i = d.i(vs - vc - i r), by Newton from the last.
+        i = 0.0
+        for _ in range(30):
+            vd = vs - vc - i * r
+            f = i - float(d.i(vd))
+            g = 1 + r * (float(d.i(vd + 1e-6)) - float(d.i(vd))) / 1e-6
+            step = f / g
+            i -= step
+            if abs(step) < 1e-9:
+                break
+        vc += (i - load_a) / c * h
+        if k >= (cycles - 10) * 400:
+            acc += vc
+            n_avg += 1
+    return acc / n_avg
+
+
+def build_35w4() -> dict[str, Any]:
+    """The GE RP1560's rectifier: a Child-law vacuum diode whose perveance makes RCA's
+    typical half-wave circuit (117 V, 15 ohm, 40 uF) give its printed DC outputs (135 V at
+    50 mA, 120 V at 100 mA): the sheet has regulation curves, not a plate curve."""
+    from scipy.optimize import minimize_scalar
+
+    pub = _published()["35W4"]
+    hw = pub["half_wave"]
+    pts = hw["points"]
+
+    def err(logp):
+        return sum((_half_wave_dc(np.exp(logp), hw, q["load_a"]) - q["dc_v"]) ** 2 for q in pts)
+
+    best = minimize_scalar(err, bounds=(np.log(1e-4), np.log(1e-1)), method="bounded",
+                           options={"xatol": 1e-3})  # fmt: skip
+    perv = float(np.exp(best.x))
+    got = [_half_wave_dc(perv, hw, q["load_a"]) for q in pts]
+    return {
+        "name": "35W4",
+        "kind": "vacuum_diode",
+        "perveance": perv,
+        "smooth_v": 0.1,
+        "source": "fit: Child-law perveance for RCA's typical half-wave operation (117 V rms, "
+        f"15 ohm, 40 uF: 135 V at 50 mA, 120 V at 100 mA) ({pub['source']})",
+        "fit_report": {
+            "dc_v_at_50ma": float(got[0]),
+            "dc_v_at_100ma": float(got[1]),
+        },
+    }
+
+
 def build_5y3gt() -> dict[str, Any]:
     """The 5E3's rectifier: a Child-law vacuum diode fit to GE's plate curve (per section)."""
     v, i = load_csv("ge_5y3gt_plate.csv").T
@@ -4413,6 +4522,8 @@ BUILDERS = {
     "6V6GT": build_6v6gt,
     "EL34": build_el34,
     "EL84": build_el84,
+    "35EH5": build_35eh5,
+    "35W4": build_35w4,
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
     "G12M": build_g12m,

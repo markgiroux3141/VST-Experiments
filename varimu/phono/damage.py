@@ -40,9 +40,10 @@ def _power_law(rng: np.random.Generator, n: int, lo: float, hi: float, exponent:
     return (lo**a + u * (hi**a - lo**a)) ** (1.0 / a)
 
 
-def dust(g: Groove, d: dict, seed: int) -> int:
-    """Lays dust in the groove (in place). Returns the number of grains."""
-    rng = _rng(seed, "dust")
+def dust(g: Groove, d: dict, seed: int, kind: str = "dust") -> int:
+    """Lays dust in the groove (in place). Returns the number of grains. `kind` names the
+    draw (a disc's two walls draw apart)."""
+    rng = _rng(seed, kind)
     n = rng.poisson(d["dust_per_m"] * g.length_m)
     if n == 0:
         return 0

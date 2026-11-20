@@ -116,3 +116,10 @@ data/schematics/hammond_novachord/*.png
 data/schematics/crown_pzm/*.pdf
 # Shure 1959 catalog (cited by data/schematics/shure_green_bullet/README.md)
 data/schematics/shure_green_bullet/*.pdf
+data/schematics/victor_orthophonic/*.pdf
+# Westrex 3D, NAB, RIAA, Bauer 1963, Wireless World 1964 (cited by data/schematics/westrex_3d/README.md)
+data/schematics/westrex_3d/*
+!data/schematics/westrex_3d/README.md
+# GE RP1560 schematic (Beitman 1963) and Sonotone sources (cited by data/schematics/ge_rp1560/README.md)
+data/schematics/ge_rp1560/*
+!data/schematics/ge_rp1560/README.md

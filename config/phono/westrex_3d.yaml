@@ -1,0 +1,58 @@
+# A 1960s stereo LP: cut on a Westrex 3D on a lathe with variable pitch, pressed in vinyl
+# (docs/PHONO_PLAN.md, "The 1960s record player"; sources data/schematics/westrex_3d/README.md).
+# SI units. Every value has a source; "fitted" values were written by scripts/fit_westrex_3d.py.
+cutter:
+  coil_mass_kg: {value: 4.0e-4, source: "NS64 p.180: 40-55 W dissipated 'in a mass of 0.4 g' (the drive coil and its form; the feedback coil is wound on the same form, DF58 p.1688)"}
+  drive_coil_ohm: {value: 11.2, source: "provisional: NS64 p.178 the 3D's drive coil has twice the 3C's impedance; DF58 p.1691 the 3A's coil 5.6 ohm, taken as the 3C's"}
+  drive_coil_h: {value: 0.000388927, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (a corner R / 2 pi L near 1.5 kHz, Fig. 6's -12 dB per octave above the resonance)"}
+  bl_t_m: {value: 3.18091, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (electrical damping Bl^2 / R for Fig. 6's Q ~ 3)"}
+  suspension_n_m: {value: 21234.1, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (Fig. 6's resonance at ~1 kHz on ~0.5 g)"}
+  mech_resistance_ns_m: {value: 0.05, source: "provisional: DF58 p.1689 the damper 'has little or no effect below 10 kc' (the damping is the feedback's)"}
+  torque_tube_n_m: {value: 679717, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (the torque tube and stylus mode, Fig. 6's peak at ~14.5 kHz)"}
+  torque_tube_ns_m: {value: 0.111194, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (that mode's Q ~ 5)"}
+  tip_mass_kg: {value: 0.000102468, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (the 3D's one-piece sapphire, 0.43 in long, NS64 p.179, and the tube's end)"}
+  lacquer_resistance_ns_m: {value: 0.182807, source: "fitted: NS64 Fig. 6 by scripts/fit_westrex_3d.py (open loop 0.89 dB rms); was provisional: model knowledge (the lacquer's load on the modulating tip; Bauer 1963 gives only the cutting drag, 40 g at 0.004 cm)"}
+  cross_stiffness_n_m: {value: 700.0, source: "provisional: DF58 p.1688 the links' sideways compliance, sized for ~30 dB of separation below the resonance, where the suspension rules (NAB 1964 asks at least 26 dB, 100 Hz - 7.5 kHz)"}
+  feedback_db: {value: 28.0, source: "NS64 p.181: 28 dB of feedback for the 3D"}
+  low_pole_hz: {value: 10.0, source: "provisional: model knowledge (the RA-1574-D's output transformer and coupling inside the loop)"}
+  high_pole_hz: {value: 30000.0, source: "provisional: model knowledge (the RA-1574-D's leakage and Miller poles inside the loop)"}
+card:
+  band_low_hz: {value: 50.0, source: "NS64 p.183: the constant-velocity card +-1 dB 50 Hz - 12 kHz"}
+  band_high_hz: {value: 12000.0, source: "NS64 p.183"}
+  tolerance_db: {value: 1.0, source: "NS64 p.183"}
+level:
+  reference_cm_s: {value: 5.0, source: "NAB Disc Standard 1964 §3.15: stereo reference level 5.0 cm/s peak per channel in its own plane at 1 kHz"}
+  vu_window_s: {value: 0.3, source: "the VU meter's integration (ASA C16.5, 300 ms), model knowledge"}
+  vu_percentile: {value: 99.0, source: "provisional: the engineer sets the loud passages to 0 VU (model knowledge)"}
+  peak_limit_cm_s: {value: 21.0, source: "NAB 1964 footnote 7: program peaks of ~21 cm/s, 'approximately the maximum velocity which can be traced ... at the inner radius'"}
+lathe:
+  rpm: {value: 33.3333333, source: "NAB 1964: 33-1/3 rpm"}
+  outer_radius_m: {value: 0.1461, source: "RIAA E1: the outermost groove at most 11.5 in across (radius 146.05 mm)"}
+  inner_radius_m: {value: 0.0603, source: "RIAA E1: the innermost groove at least 4.75 in across"}
+  wall_angle_deg: {value: 45.0, source: "NAB 1964 §2.55: 90 degrees included"}
+  depth_m: {value: 3.2e-5, source: "provisional: Braschoss 1966 (Gotham catalogue) average width 2 mil, so a mean depth ~1.25 mil for a 90 degree V with a 0.25 mil bottom radius"}
+  land_m: {value: 1.27e-5, source: "Braschoss 1966 (Gotham catalogue): land ('spacing') 0.5 mil"}
+  pitch_min_m: {value: 5.35e-5, source: "Neumann AM 32b at 33-1/3: up to 475 lines per inch (Gotham 1966)"}
+  pitch_max_m: {value: 2.82e-4, source: "Neumann AM 32b at 33-1/3: down to 90 lines per inch (Gotham 1966)"}
+  cutter_angle_deg: {value: 23.0, source: "DF58 p.1689, NS64 p.185: the Westrex's 23 degree vertical angle"}
+  springback: {value: 0.42, source: "Bauer 1963: tan C = tan B - c a, c a = 0.42 (lacquer and stylus springback)"}
+  wow_rms: {value: 3.5e-4, source: "Gotham 1966: the Neumann AM 32b's wow and flutter < 0.035% rms (none found for the Scully; NAB asks at most 0.04%)"}
+vinyl:
+  youngs_pa: {value: 2.94e9, source: "Barlow, Wireless World April 1964: E = 300 kg/mm^2"}
+  poisson: {value: 0.35, source: "Barlow 1964"}
+  dynamic_factor: {value: 1.055, source: "Barlow 1964: the dynamic modulus 4.5-6.5% above the static"}
+surface:
+  noise_db: {value: 50.0, source: "NAB Disc Standard 1964: high-frequency noise at least 50 dB below 5 cm/s, 500 Hz - 15 kHz unweighted (a pressing at the standard's limit: a pop pressing of the period)"}
+  corr_m: {value: 1.0e-6, source: "provisional: model knowledge (the compound's grain: VC/VA copolymer with 1.5% carbon black, pspatialaudio citing Hayes on Record 1992; correlated below the sampling, so white along the groove)"}
+  reproducer_tip_m: {value: 1.78e-5, source: "the 0.7 mil stereo tip (NAB 1964 §2.55: 0.5-0.7 mil playback) the noise is measured with"}
+  dust_per_m: {value: 0.6, source: "provisional: model knowledge (a played LP's ticks, one every few seconds at 0.2-0.5 m/s)"}
+  dust_min_m: {value: 2.0e-6, source: "provisional: model knowledge (fine household dust, held by the vinyl's static charge)"}
+  dust_max_m: {value: 2.5e-5, source: "provisional: model knowledge (larger grains are pushed aside by a 5 g stylus)"}
+  dust_exponent: {value: 2.5, source: "provisional: model knowledge (as the cylinder's and the 78's)"}
+  dust_embed: {value: 0.2, source: "provisional: model knowledge (vinyl is hard: E 2.9 GPa)"}
+  nonfill_per_m: {value: 0.05, source: "provisional: model knowledge (non-fill, the pressing's cold spots: pits in the wall, pspatialaudio 'manufacture_records' qualitatively)"}
+  nonfill_depth_m: {value: 1.5e-6, source: "provisional: model knowledge"}
+  nonfill_length_m: {value: 3.0e-5, source: "provisional: model knowledge"}
+numerics:
+  fs_hz: {value: 192000.0, source: "numerical: the cut's and the play's rate (convergence measured in tests/test_record_player.py)"}
+  lead_in_s: {value: 0.3, source: "numerical: unmodulated groove before the program (trimmed)"}

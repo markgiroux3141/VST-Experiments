@@ -32,6 +32,7 @@ from scipy.signal import fftconvolve, resample_poly
 
 from varimu.phono import groove as gv
 from varimu.phono import horn
+from varimu.phono import player as pl
 from varimu.phono import transport as tr
 from varimu.phono.network import GROUND, Network, Stepper, System
 
@@ -164,12 +165,12 @@ def record(
 ) -> Recording:
     """Cuts the program x (any scale) into a groove. The loud passages (the
     `cut_level_percentile` of the cutter's excursion) cut `drive` times the format's
-    maximum amplitude; rarer peaks go past it, as on hot acoustic records. With a surface_seed, the cut surface gets the wax's
-    roughness (config `surface`; groove.roughness), else it is ideally smooth. With a
-    motion_seed, the recording machine's drive (config `recorder_motor`; transport.py)
-    turns the mandrel, loaded by the cut's drag, which deepens with the program: the
-    groove is written along the arc length that actually passed. Else the mandrel turns at
-    exactly `rpm_recorded`."""
+    maximum amplitude; rarer peaks go past it, as on hot acoustic records. With a
+    surface_seed, the cut surface gets the wax's roughness (config `surface`;
+    groove.roughness), else it is ideally smooth. With a motion_seed, the recording
+    machine's drive (config `recorder_motor`; transport.py) turns the mandrel, loaded by
+    the cut's drag, which deepens with the program: the groove is written along the arc
+    length that actually passed. Else the mandrel turns at exactly `rpm_recorded`."""
     fs = spec["numerics"]["fs_hz"]
     up = resample_poly(np.asarray(x, dtype=float), int(fs), int(fs_in_hz))
     lead = int(round(spec["numerics"]["lead_in_s"] * fs))
@@ -345,11 +346,14 @@ def play(
     rpm: float | None = None,
     progress: bool = False,
     motion_seed: int | None = None,
+    engine: str = "rust",
 ) -> Playback:
     """Plays the groove to its end. With a motion_seed, the playing machine's drive
     (config `player_motor`) turns the mandrel, loaded by the stylus' friction, and the
     cylinder's runout lifts the surface under the stylus (the floating weight's job) and
-    modulates the groove's speed; else the mandrel turns at exactly `rpm`."""
+    modulates the groove's speed; else the mandrel turns at exactly `rpm`. `engine`: "rust"
+    (circuitsim's modal player, the default) or "python" (the dense reference; player.py).
+    `progress` is accepted for old callers and ignored."""
     rep, num = spec["reproducer"], spec["numerics"]
     fs = num["fs_hz"]
     h = 1.0 / fs
@@ -364,7 +368,15 @@ def play(
         m = spec["player_motor"]
         load = rep["stylus_friction"] * rep["downforce_n"] * radius + m["feed_friction_n_m"]
         motion = tr.simulate(
-            m, rpm, radius, 1.05 * groove.length_m / v + 0.2, fs, load, motion_seed, "player"
+            m,
+            rpm,
+            radius,
+            1.05 * groove.length_m / v + 0.2,
+            fs,
+            load,
+            motion_seed,
+            "player",
+            engine=engine,
         )
     n = int(np.searchsorted(motion.s_m, end))
     s = motion.s_m[:n]
@@ -372,87 +384,27 @@ def play(
 
     sys = reproducer_network(spec)
     st = Stepper(sys, h)
-    p = st.p
-    qg0, qg1 = st.input_cols("gravity")
-    qc0, qc1 = st.input_cols("contact")
     cz = sys.pick("z_tip")
     cu = mouth_flow_row(spec, sys)
-    kff = float(cz @ qc1)  # tip rise per newton at the step's end (> 0)
-    big_k = contact_k(spec)
-    alpha = rep["contact_damping_s_m"]
     # The bar's pivot on the weight passes (1 - 1/n) of the contact's force to the weight
-    # and 1/n to the diaphragm (the body): the contact carries `downforce` at rest.
+    # and 1/n to the diaphragm (the body): the contact carries `downforce` at rest. The
+    # weight is lowered onto the groove over 10 ms.
     load = rep["downforce_n"] * (1.0 - 1.0 / rep["lever_ratio"])
     ramp = int(0.01 * fs)
-
-    def gravity(i: int) -> float:
-        if i >= ramp:
-            return -load
-        return -load * 0.5 * (1 - np.cos(np.pi * i / ramp))
-
-    x = np.zeros(len(sys.names))
-    iz = sys.index("z_tip")
-    x[iz] = surf[0]
-    force = np.zeros(n)
-    tip = np.zeros(n)
-    flow = np.zeros(n)
-    tip[0] = surf[0]
-    f0 = 0.0
-    d0 = 0.0
-    held = (qg0 + qg1) * -load  # gravity once the ramp is over
-    for i in range(1, n):
-        if i <= ramp:
-            xp = p @ x + qg0 * gravity(i - 1) + qg1 * gravity(i) + qc0 * f0
-        else:
-            xp = p @ x + held + qc0 * f0
-        a = surf[i] - xp[iz]  # indentation if the force were 0
-        f1 = 0.0
-        if a > 0.0:
-            f1 = _solve_contact(a, kff, big_k, alpha, d0, h)
-            x = xp + qc1 * f1
-        else:
-            x = xp
-        d0 = max(a - kff * f1, 0.0)
-        force[i] = f1
-        tip[i] = x[iz]
-        flow[i] = cu @ x
-        f0 = f1
-        if progress and i % int(fs) == 0:
-            print(f"  played {i / fs:.0f} s", flush=True)
+    i = np.arange(n)
+    grav = np.where(i >= ramp, -load, -load * 0.5 * (1 - np.cos(np.pi * i / ramp)))
+    x0 = np.zeros(len(sys.names))
+    x0[sys.index("z_tip")] = surf[0]
+    tip_contact = pl.Contact("contact", cz, contact_k(spec), rep["contact_damping_s_m"], surf)
+    r = pl.run(st, x0, {"gravity": grav}, [tip_contact], np.array([cz, cu]), n, engine)
+    force, tip, flow = r.forces[0], r.outputs[0], r.outputs[1]
     dudt = np.empty(n)
     dudt[0] = 0.0
     dudt[1:] = np.diff(flow) / h
     return Playback(pressure_gain(spec) * dudt, force, tip, surf, fs, motion)
 
 
-def _solve_contact(
-    a: float, kff: float, big_k: float, alpha: float, d_prev: float, h: float
-) -> float:
-    """The force f >= 0 at the step's end with f = K d^1.5 (1 + alpha (d - d_prev) / h),
-    d = a - kff f (Hunt-Crossley, its rate by the step's difference). The residual is
-    increasing in f on [0, a / kff]: bisection safeguarding Newton."""
-    lo, hi = 0.0, a / kff
-    f = min(big_k * a**1.5, hi)
-    for _ in range(60):
-        d = a - kff * f
-        rate = 1.0 + alpha * (d - d_prev) / h
-        law = big_k * d**1.5 * rate
-        if law < 0.0:  # separating faster than the wax recovers: no force
-            law = 0.0
-        r = f - law
-        if r > 0:
-            hi = f
-        else:
-            lo = f
-        if abs(r) <= 1e-12 * max(1.0, f):
-            return f
-        dlaw = -kff * big_k * (1.5 * d**0.5 * rate + d**1.5 * alpha / h) if law > 0 else 0.0
-        step = r / (1.0 - dlaw)
-        fn = f - step
-        f = fn if lo < fn < hi else 0.5 * (lo + hi)
-        if hi - lo <= 1e-15 * max(1.0, hi):
-            return f
-    return f
+_solve_contact = pl.solve_one  # the reference's single-contact solve (player.py)
 
 
 def to_output_rate(x: np.ndarray, fs_sim: float, fs_out: float) -> np.ndarray:

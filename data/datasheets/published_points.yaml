@@ -1741,3 +1741,34 @@
       slot_sections: 8                   # numerics: the ladder's sections, each a BEM band (the slot's length over 8: 9 mm, a tenth of the wavelength at 3.8 kHz, where the far slots no longer reach the diaphragm)
   published:
     sensitivity_v_per_pa: 1.5e-3         # ev: 1.5 mV/Pa at 1 kHz
+
+"35EH5":
+  # The GE RP1560's output tubes (data/schematics/ge_rp1560/README.md).
+  source: "RCA 35EH5 data sheet (8-60), DATA 1; local copy data/schematics/ge_rp1560/rca_35eh5.pdf (web: https://frank.pocnet.net/sheets/049/3/35EH5.pdf)"
+  class_a1:           # typical operation: 110 V plate, 115 V screen, 62 ohm cathode resistor
+    vp_v: 110
+    vg2_v: 115
+    vg1_v: -2.43      # the cathode resistor's drop: 62 ohm x (32 + 7.2) mA
+    ip_a: 32.0e-3
+    ig2_a: 7.2e-3
+    gm_s: 12.0e-3
+    rp_ohm: 14.0e+3
+  capacitances_f:     # direct interelectrode, approx.
+    input: 17.0e-12
+    output: 9.0e-12
+    ag1: 0.65e-12
+  heater: {v: 35.0, a: 0.15}
+  pins: "1 k and g3, 2 g1, 3 h, 4 h, 5 g1, 6 g2, 7 p (7CV)"
+
+"35W4":
+  # The GE RP1560's rectifier (data/schematics/ge_rp1560/README.md).
+  source: "RCA 35W4 data sheet (9-1-50), typical operation, half-wave capacitor input; local copy data/schematics/ge_rp1560/35w4.pdf (web: https://frank.pocnet.net/sheets/049/3/35W4.pdf)"
+  half_wave:
+    ac_v_rms: 117
+    mains_hz: 60       # US line (the sheet's 117 V)
+    filter_c_f: 40.0e-6
+    plate_supply_ohm: 15
+    points:            # DC output at the filter's input against DC load
+      - {load_a: 0.050, dc_v: 135}
+      - {load_a: 0.100, dc_v: 120}
+  heater: {v: 35.0, a: 0.15}

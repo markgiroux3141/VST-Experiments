@@ -1,0 +1,436 @@
+{
+  "responses": {
+    "chain_peak_hz": 1415.7661018478905,
+    "chain_within_10db_hz": [
+      233.78096530127996,
+      1800.041389708297
+    ],
+    "recorder_diaphragm_f0_hz": 407.3555823393478,
+    "soundbox_diaphragm_f0_hz": 1490.7653655153226,
+    "needle_f0_hz": 7960.960619406933,
+    "acoustic78_exhibition": {
+      "chain_peak_hz": 1800.041389708297,
+      "chain_within_10db_hz": [
+        270.0124170552485,
+        2207.6479871225924
+      ],
+      "needle_f0_hz": 12118.35116509722
+    },
+    "electric78_orthophonic": {
+      "chain_peak_hz": 245.28294045131375,
+      "chain_within_10db_hz": [
+        125.21391520540705,
+        4703.773680659711
+      ],
+      "needle_f0_hz": 12118.35116509722
+    },
+    "acoustic78_orthophonic": {
+      "chain_peak_hz": 355.8921144332436,
+      "chain_within_10db_hz": [
+        228.2338463689034,
+        749.2390566487805
+      ],
+      "needle_f0_hz": 12118.35116509722
+    }
+  },
+  "takes": {
+    "vocal_longwayhome_smooth": {
+      "incident_spl_db_rms": 112.96026092438423,
+      "spl_1m_db_rms": 83.08546691023069,
+      "spl_1m_db_peak": 102.59095328564146,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408243256196463
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        0.0
+      ],
+      "wow_cents_rms": 9.351163508067193e-09,
+      "wow_cents_peak_to_peak": 1.2989698502672727e-05,
+      "damage": {},
+      "wall_s_per_audio_s": 1.0228506803512574
+    },
+    "vocal_longwayhome_played": {
+      "incident_spl_db_rms": 112.96026092438423,
+      "spl_1m_db_rms": 83.03261830238314,
+      "spl_1m_db_peak": 102.47443691749785,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        16.867518093345634
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 40,
+        "dust_right": 40,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.1470504760742188
+    },
+    "vocal_longwayhome_worn": {
+      "incident_spl_db_rms": 112.96026092438423,
+      "spl_1m_db_rms": 82.52272470692661,
+      "spl_1m_db_peak": 101.91818472189867,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        45.78856970213327,
+        46.53918629734449
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 246,
+        "dust_right": 269,
+        "scratches": 2
+      },
+      "wall_s_per_audio_s": 1.236499834060669
+    },
+    "vocal_longwayhome_inner": {
+      "incident_spl_db_rms": 112.96026092438423,
+      "spl_1m_db_rms": 82.01066555404574,
+      "spl_1m_db_peak": 101.31794788767183,
+      "mistracking_fraction": 7.71247477160913e-05,
+      "radius_m": [
+        0.068,
+        0.06458403665044998
+      ],
+      "needle_flat_half_um": [
+        37.89072948743638,
+        38.518176804269324
+      ],
+      "wow_cents_rms": 6.051461791095615,
+      "wow_cents_peak_to_peak": 39.548214631697405,
+      "damage": {
+        "dust_left": 23,
+        "dust_right": 23,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.4199004411697387
+    },
+    "mix_longwayhome_smooth": {
+      "incident_spl_db_rms": 107.55745397792829,
+      "spl_1m_db_rms": 76.87617675176878,
+      "spl_1m_db_peak": 94.4153459947504,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408243256196463
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        0.0
+      ],
+      "wow_cents_rms": 9.351163508067193e-09,
+      "wow_cents_peak_to_peak": 1.2989698502672727e-05,
+      "damage": {},
+      "wall_s_per_audio_s": 1.000099539756775
+    },
+    "mix_longwayhome_played": {
+      "incident_spl_db_rms": 107.55745397792829,
+      "spl_1m_db_rms": 76.85797307424083,
+      "spl_1m_db_peak": 94.44648005896391,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        16.867518093345634
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 40,
+        "dust_right": 40,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.116500163078308
+    },
+    "mix_longwayhome_worn": {
+      "incident_spl_db_rms": 107.55745397792829,
+      "spl_1m_db_rms": 76.4478514954532,
+      "spl_1m_db_peak": 93.82082419233424,
+      "mistracking_fraction": 6.889331947179026e-05,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        45.78856970213327,
+        46.53918629734449
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 246,
+        "dust_right": 269,
+        "scratches": 2
+      },
+      "wall_s_per_audio_s": 1.218799924850464
+    },
+    "mix_longwayhome_inner": {
+      "incident_spl_db_rms": 107.55745397792829,
+      "spl_1m_db_rms": 75.90971077960869,
+      "spl_1m_db_peak": 92.96958687141176,
+      "mistracking_fraction": 0.001300177334808431,
+      "radius_m": [
+        0.068,
+        0.06458403665044998
+      ],
+      "needle_flat_half_um": [
+        37.89072948743638,
+        38.518176804269324
+      ],
+      "wow_cents_rms": 6.051461791095615,
+      "wow_cents_peak_to_peak": 39.548214631697405,
+      "damage": {
+        "dust_left": 23,
+        "dust_right": 23,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.4715499401092529
+    },
+    "in_the_pines_smooth": {
+      "incident_spl_db_rms": 105.11605292539548,
+      "spl_1m_db_rms": 77.54390735665834,
+      "spl_1m_db_peak": 94.45672899453811,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408243256196463
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        0.0
+      ],
+      "wow_cents_rms": 9.351163508067193e-09,
+      "wow_cents_peak_to_peak": 1.2989698502672727e-05,
+      "damage": {},
+      "wall_s_per_audio_s": 1.0170997619628905
+    },
+    "in_the_pines_played": {
+      "incident_spl_db_rms": 105.11605292539548,
+      "spl_1m_db_rms": 77.48469475432532,
+      "spl_1m_db_peak": 94.24582079794973,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        16.867518093345634
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 40,
+        "dust_right": 40,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.1606972455978393
+    },
+    "in_the_pines_worn": {
+      "incident_spl_db_rms": 105.11605292539548,
+      "spl_1m_db_rms": 77.06598413836386,
+      "spl_1m_db_peak": 93.7884250020606,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11408403735886523
+      ],
+      "needle_flat_half_um": [
+        45.78856970213327,
+        46.53918629734449
+      ],
+      "wow_cents_rms": 5.695647163143754,
+      "wow_cents_peak_to_peak": 36.392606209371706,
+      "damage": {
+        "dust_left": 246,
+        "dust_right": 269,
+        "scratches": 2
+      },
+      "wall_s_per_audio_s": 1.2292497634887696
+    },
+    "in_the_pines_inner": {
+      "incident_spl_db_rms": 105.11605292539548,
+      "spl_1m_db_rms": 76.50501843328475,
+      "spl_1m_db_peak": 93.68013008719068,
+      "mistracking_fraction": 0.0014408778880742733,
+      "radius_m": [
+        0.068,
+        0.06458403665044998
+      ],
+      "needle_flat_half_um": [
+        37.89072948743638,
+        38.518176804269324
+      ],
+      "wow_cents_rms": 6.051461791095615,
+      "wow_cents_peak_to_peak": 39.548214631697405,
+      "damage": {
+        "dust_left": 23,
+        "dust_right": 23,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.4186495542526245
+    },
+    "pines_test_acoustic78_exhibition_played": {
+      "incident_spl_db_rms": 103.28759047936849,
+      "spl_1m_db_rms": 68.52015908411246,
+      "spl_1m_db_peak": 82.62476760386184,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11606271258879292
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        12.675338046866901
+      ],
+      "wow_cents_rms": 6.34485381702195,
+      "wow_cents_peak_to_peak": 37.09937187062748,
+      "damage": {
+        "dust_left": 17,
+        "dust_right": 17,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.067500352859497
+    },
+    "pines_test_electric78_orthophonic_played": {
+      "incident_spl_db_rms": null,
+      "spl_1m_db_rms": 77.14606669788235,
+      "spl_1m_db_peak": 96.26470011748266,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11606271258879292
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        12.675338046866901
+      ],
+      "wow_cents_rms": 6.34485381702195,
+      "wow_cents_peak_to_peak": 37.09937187062748,
+      "damage": {
+        "dust_left": 17,
+        "dust_right": 17,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.4453744292259216
+    },
+    "pines_test_acoustic78_orthophonic_played": {
+      "incident_spl_db_rms": 103.28759047936849,
+      "spl_1m_db_rms": 80.70490602291466,
+      "spl_1m_db_peak": 97.54087235850827,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.11606271258879292
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        12.675338046866901
+      ],
+      "wow_cents_rms": 6.34485381702195,
+      "wow_cents_peak_to_peak": 37.09937187062748,
+      "damage": {
+        "dust_left": 17,
+        "dust_right": 17,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.4638674855232239
+    },
+    "in_the_pines_side_acoustic78_exhibition_smooth": {
+      "incident_spl_db_rms": 101.9463919293186,
+      "spl_1m_db_rms": 66.07264175901287,
+      "spl_1m_db_peak": 88.53297994981595,
+      "mistracking_fraction": 0.0017248032598283756,
+      "radius_m": [
+        0.1175,
+        0.08492955984642998
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        0.0
+      ],
+      "wow_cents_rms": 3.917622680983955e-09,
+      "wow_cents_peak_to_peak": 1.7022958640401064e-05,
+      "damage": {},
+      "wall_s_per_audio_s": 0.9556201814916397
+    },
+    "in_the_pines_side_acoustic78_exhibition_played": {
+      "incident_spl_db_rms": 101.9463919293186,
+      "spl_1m_db_rms": 65.79167512545595,
+      "spl_1m_db_peak": 88.25396453893318,
+      "mistracking_fraction": 0.004913515671840964,
+      "radius_m": [
+        0.1175,
+        0.08494809281156886
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        34.19327623320226
+      ],
+      "wow_cents_rms": 6.283351429988052,
+      "wow_cents_peak_to_peak": 47.53014462290733,
+      "damage": {
+        "dust_left": 327,
+        "dust_right": 354,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.0926603456262542
+    },
+    "in_the_pines_side_electric78_orthophonic_smooth": {
+      "incident_spl_db_rms": null,
+      "spl_1m_db_rms": 80.74310902281582,
+      "spl_1m_db_peak": 100.37898270595129,
+      "mistracking_fraction": 0.0,
+      "radius_m": [
+        0.1175,
+        0.08492955984642998
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        0.0
+      ],
+      "wow_cents_rms": 3.917622680983955e-09,
+      "wow_cents_peak_to_peak": 1.7022958640401064e-05,
+      "damage": {},
+      "wall_s_per_audio_s": 1.5051149396376742
+    },
+    "in_the_pines_side_electric78_orthophonic_played": {
+      "incident_spl_db_rms": null,
+      "spl_1m_db_rms": 80.48803497742084,
+      "spl_1m_db_peak": 100.13990593506463,
+      "mistracking_fraction": 0.0009904228918777257,
+      "radius_m": [
+        0.1175,
+        0.08494809281156886
+      ],
+      "needle_flat_half_um": [
+        0.0,
+        34.19327623320226
+      ],
+      "wow_cents_rms": 6.283351429988052,
+      "wow_cents_peak_to_peak": 47.53014462290733,
+      "damage": {
+        "dust_left": 327,
+        "dust_right": 354,
+        "scratches": 0
+      },
+      "wall_s_per_audio_s": 1.6583471384471522
+    }
+  }
+}

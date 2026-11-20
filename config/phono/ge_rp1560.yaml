@@ -1,0 +1,59 @@
+# The General Electric RP1560 stereo portable's mechanics: its V-M changer, the arm and the
+# Sonotone 16T-S ceramic stereo cartridge (docs/PHONO_PLAN.md, "The 1960s record player";
+# sources data/schematics/ge_rp1560/README.md). The amplifier is config/circuits/ge_rp1560.yaml.
+# SI units; every value has a source.
+changer:
+  fs_hz: {value: 2000.0, source: "numerical: the drive's RK4 rate"}
+  mains_hz: {value: 60.0, source: "the schematic: 105-120 V 60 Hz AC"}
+  mains_v: {value: 117.0, source: "the US nominal line (the schematic's voltages are read at 120 V)"}
+  rated_v: {value: 117.0, source: "provisional: model knowledge (the motor rated at the US nominal)"}
+  poles: {value: 4.0, source: "provisional: model knowledge (record-changer shaded-pole motors are 4-pole: 1800 rpm synchronous at 60 Hz)"}
+  stall_torque_n_m: {value: 0.03, source: "provisional: model knowledge (a changer's small shaded-pole motor; the schematic marks it 33 ohm)"}
+  rated_load_n_m: {value: 0.008, source: "provisional: model knowledge (the platter's bearing and a 6 g stylus' drag at the pulley step's sizing)"}
+  motor_inertia_kg_m2: {value: 2.0e-5, source: "provisional: model knowledge (a ~60 g rotor)"}
+  motor_friction_nm_s: {value: 1.0e-5, source: "provisional: model knowledge"}
+  idler_radius_m: {value: 0.019, source: "provisional: model knowledge (a ~1.5 in rubber-tyred idler)"}
+  idler_inertia_kg_m2: {value: 3.0e-6, source: "provisional: model knowledge"}
+  idler_friction_nm_s: {value: 1.0e-6, source: "provisional: model knowledge"}
+  rim_radius_m: {value: 0.115, source: "provisional: model knowledge (the inside of a ~9.5 in steel platter's rim)"}
+  platter_inertia_kg_m2: {value: 6.0e-3, source: "provisional: model knowledge (a ~0.9 kg pressed-steel platter with a 12 in LP)"}
+  platter_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge"}
+  contact_stiffness_n_m: {value: 1.5e4, source: "provisional: model knowledge (a rubber tyre's tangential stiffness at the nip)"}
+  contact_damping_ns_m: {value: 4.0, source: "provisional: model knowledge (the rubber's loss)"}
+  torque_ripple: {value: 0.3, source: "provisional: model knowledge (a single-phase shaded-pole motor's torque pulsation at twice the mains)"}
+  pulley_ecc_m: {value: 2.0e-6, source: "provisional: model knowledge (a turned steel step)"}
+  idler_ecc_m: {value: 1.2e-5, source: "provisional: model knowledge (a moulded rubber tyre's runout)"}
+  rim_ecc_m: {value: 2.0e-5, source: "provisional: model knowledge (a pressed-steel rim)"}
+  idler_flat_m: {value: 6.0e-6, source: "provisional: model knowledge (the set the tyre takes standing pressed against the pulley; a condition)"}
+  idler_flat_rad: {value: 0.25, source: "provisional: model knowledge (the nip's width over the idler's radius)"}
+  rumble_m: {value: 5.0e-8, source: "provisional: NAB 1964 asks a turntable's rumble at least 35 dB below 1 cm/s at 100 Hz (2.8e-7 m there): a changer near half of it, vertical, at the motor's 120 Hz"}
+disc:
+  eccentric_m: {value: 1.0e-4, source: "provisional: RIAA E1 allows 0.016 in TIR runout (0.2 mm eccentricity); a typical pressing half of it"}
+  warp_m: {value: 2.0e-4, source: "provisional: NAB 1964 allows 1/16 in TIR warp; a mild warp"}
+arm:
+  length_m: {value: 0.21, source: "provisional: model knowledge (a 1960s changer's ~8 in arm, pivot to stylus)"}
+  pivot_to_spindle_m: {value: 0.195, source: "provisional: model knowledge (a changer's small overhang)"}
+  offset_deg: {value: 20.0, source: "provisional: model knowledge (an offset head, minimizing the error mid-record)"}
+  downforce_n: {value: 0.0589, source: "Sonotone 16T: 5-7 g in changers (Russell's list); 6 g"}
+  lateral_mass_kg: {value: 0.025, source: "provisional: model knowledge (a changer's heavy arm: its effective mass at the stylus)"}
+  vertical_mass_kg: {value: 0.025, source: "provisional: model knowledge (as the lateral)"}
+  bearing_ns_m: {value: 0.3, source: "provisional: model knowledge (the pivots' friction as viscous loss at the stylus)"}
+  friction: {value: 0.25, source: "provisional: model knowledge (a sapphire's friction on vinyl, for the skating force)"}
+  vertical_angle_deg: {value: 20.0, source: "provisional: model knowledge (a ceramic changer cartridge's vertical tracking angle, steeper than the RIAA's 1961 15 degrees)"}
+cartridge:
+  tip_radius_m: {value: 1.78e-5, source: "V-M catalogue: the 16T's LP tip 0.7 mil"}
+  tip_youngs_pa: {value: 3.45e11, source: "provisional: model knowledge (sapphire)"}
+  tip_poisson: {value: 0.29, source: "provisional: model knowledge (sapphire)"}
+  tip_mass_kg: {value: 3.0e-6, source: "provisional: DF58 p.1692 the period's stereo reproducer (the Westrex 10A) 3.0 mg dynamic mass"}
+  compliance_m_n: {value: 2.4e-3, source: "Sonotone 16TAF (Russell's list): 2.4e-6 cm/dyne"}
+  link_share: {value: 0.6, source: "provisional: model knowledge (the butyl link's share of the compliance, the rest the bars')"}
+  link_q: {value: 1.0, source: "provisional: model knowledge (butyl rubber in silicone compound; the link a standard linear solid relaxing at the arm resonance, its Maxwell spring k_link / link_q)"}
+  yoke_mass_kg: {value: 1.0e-6, source: "provisional: model knowledge (the resolver and the bars' moving share), sized with bar_q so the response holds to Sonotone's 12 kHz (20 Hz - 12 kHz) and falls above (Electronics World 1961: the 9T 3 dB down between 11 and 15 kHz)"}
+  bar_q: {value: 1.0, source: "provisional: model knowledge (PZT bars clamped between high-durometer rubber pads in silicone damping compound, Russell)"}
+  element_c_f: {value: 7.0e-10, source: "provisional: model knowledge (a stereo ceramic element's capacitance; Sonotone's 35T 850 pF)"}
+  output_v: {value: 0.65, source: "Sonotone 16TAF (Russell's list) and V-M's catalogue: 0.65 V; taken at 1 kHz, 5 cm/s peak in the channel's plane (the velocity isn't stated: provisional)"}
+  load_ohm: {value: 2.0e6, source: "Sonotone 16TAF: 2 M load; the RP1560's 2 M volume controls"}
+  resolver_error_deg: {value: 3.2, source: "Sonotone 16TAF (Russell's list): 25 dB separation, as each bar's axis 3.2 degrees off its wall's normal (the network's crosstalk is ~sin of it)"}
+  contact_damping_s_m: {value: 0.5, source: "provisional: model knowledge (Hunt-Crossley damping of vinyl under a sapphire)"}
+numerics:
+  fs_hz: {value: 192000.0, source: "numerical: the play's rate (as the cut's)"}

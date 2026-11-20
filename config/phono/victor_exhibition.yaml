@@ -1,0 +1,171 @@
+# A 10 in shellac 78 recorded acoustically (c. 1910-1924) and played on a Victor
+# gramophone with the Exhibition sound-box, a steel needle, a tapered tone arm and a
+# flower horn (docs/PHONO_PLAN.md G2; varimu/phono/gramophone.py). Everything acoustic and
+# mechanical: no electricity.
+#
+# Sources found so far are thin (collectors' and restorers' pages); most values are
+# provisional, each with its reasoning, to be bounded or replaced. Maxfield and Harrison
+# (1926), the plan's anchor for the later Orthophonic, sits behind a bot check
+# (charm-os.kdl.kcl.ac.uk): not used yet.
+
+air:
+  density_kg_m3: {value: 1.204, source: "provisional: model knowledge (dry air at 20 C, 1 atm)"}
+  sound_speed_m_s: {value: 343.0, source: "provisional: model knowledge (dry air at 20 C)"}
+
+record:
+  rpm_recorded: {value: 78.0, source: "web: rfwilmut.net/notes/repro78/repro.html (nominal 78; pre-1921 records 68-84 rpm)"}
+  pitch_m: {value: 2.54e-4, source: "provisional: model knowledge (coarse groove ~100 lines per inch; Edison Diamond Discs 150 tpi per gracyk.com)"}
+  outer_radius_m: {value: 0.1175, source: "provisional: model knowledge (a 10 in disc's first modulated groove ~4-5/8 in from the spindle)"}
+  inner_radius_m: {value: 0.06, source: "provisional: model knowledge (the last groove before the label's run-out, ~2-3/8 in)"}
+  wall_angle_deg: {value: 45.0, source: "provisional: model knowledge (a ~90 degree included V; Audio-Technica's SP groove 0.0070 in wide, 0.0029 in deep gives ~100 degrees with a rounded bottom: web: https://online.flippingbook.com/view/420781538/63/)"}
+  max_amplitude_m: {value: 3.0e-5, source: "provisional: a 254 um pitch less a ~178 um groove (Audio-Technica's 0.0070 in) leaves ~76 um of land: lateral swings past ~+-40 um cut into the next groove; the loud passages cut to 30 um"}
+  cut_level_percentile: {value: 99.0, source: "provisional: as the cylinder's (edison_standard.yaml): the engineer placed performers so the loud passages cut to the limit, the rarest peaks past it"}
+  shellac_youngs_pa: {value: 4.0e9, source: "provisional: model knowledge (shellac compounds with mineral filler, ~3-6 GPa; to source)"}
+  shellac_poisson: {value: 0.35, source: "provisional: model knowledge (filled resins ~0.35)"}
+  contact_damping_s_m: {value: 1.0, source: "provisional: Hunt-Crossley alpha for a hard filled resin, a fifth of brown wax's (edison_standard.yaml 5.0)"}
+
+surface:
+  sigma_m: {value: 2.0e-7, source: "provisional: an effective roughness per wall (the filler's grain, read along one line as the cylinder's: edison_standard.yaml), set for surface noise ~28 dB under the music's rms (model knowledge of acoustic 78 transfers: the roar); 0.08 um gave 36 dB (2026-11-18)"}
+  corr_m: {value: 1.5e-5, source: "provisional: model knowledge (the abrasive filler's grains, ~10-20 um)"}
+
+damage:
+  dust_per_m: {value: 4.0, source: "provisional: model knowledge (grains in the groove; a few a second at 0.5-0.95 m/s)"}
+  dust_min_m: {value: 2.0e-6, source: "provisional: model knowledge (fine household dust)"}
+  dust_max_m: {value: 2.0e-5, source: "provisional: model knowledge (larger grains are pushed aside by a 130 gf needle)"}
+  dust_exponent: {value: 2.5, source: "provisional: model knowledge (as the cylinder's)"}
+  dust_embed: {value: 0.3, source: "provisional: model knowledge (shellac is hard: a grain barely pressed in, against brown wax's 0.7)"}
+  scratches: {value: 0.0, source: "provisional: a condition (scratches across the record)"}
+  scratch_width_m: {value: 4.0e-5, source: "provisional: model knowledge (a hairline scratch across the grooves)"}
+  scratch_depth_m: {value: 3.0e-6, source: "provisional: model knowledge"}
+  scratch_burr_m: {value: 1.5e-6, source: "provisional: model knowledge (the material thrown up at the scratch's edges)"}
+
+# The recording side: the cylinder's studio horn and diaphragm (edison_standard.yaml's
+# recorder, its sources there) driving a lateral cutter through a stylus bar.
+recorder:
+  horn_length_m: {value: 0.4064, source: "web: pspatialaudio.com/cylinders.htm, Edison's studio recording horn (as edison_standard.yaml)"}
+  horn_mouth_radius_m: {value: 0.0762, source: "web: pspatialaudio.com/cylinders.htm, a 6 in mouth"}
+  horn_throat_radius_m: {value: 0.0079375, source: "web: pspatialaudio.com/cylinders.htm, a 5/8 in end"}
+  coupling_length_m: {value: 0.03, source: "provisional: model knowledge (as edison_standard.yaml)"}
+  cavity_height_m: {value: 5.0e-4, source: "provisional: model knowledge (as edison_standard.yaml)"}
+  diaphragm_radius_m: {value: 0.025, source: "provisional: a studio recorder's ~2 in diaphragm (as edison_standard.yaml)"}
+  diaphragm_thickness_m: {value: 1.0e-4, source: "provisional: model knowledge (thin glass, as edison_standard.yaml)"}
+  diaphragm_youngs_pa: {value: 7.0e10, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_density_kg_m3: {value: 2500.0, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_poisson: {value: 0.22, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_q: {value: 5.0, source: "provisional: model knowledge (a diaphragm clamped in rubber gaskets)"}
+  lever_ratio: {value: 1.0, source: "provisional: model knowledge (the cutter's lateral travel per diaphragm travel; bounded 0.5-2)"}
+  cutter_mass_kg: {value: 5.0e-5, source: "provisional: model knowledge (a sapphire cutter, its shank and the bar's lower arm, at the cutter)"}
+  wax_cutting_resistance_ns_m: {value: 0.2, source: "provisional: a cutter swept sideways through the wax works against its specific cutting energy (~5 MPa) over the groove's depth (~75 um) and the cutter's contact length (~0.2 mm) at ~0.9 m/s: u d l / v ~ 0.1-0.2 N s/m"}
+  blocked_pressure_factor: {value: 1.0, source: "provisional: as edison_standard.yaml"}
+
+# The recording lathe: weight-driven (falling weight through a governor), so its torque
+# doesn't droop or stick like a mainspring's. transport.py's model, the 'belt' standing for
+# the worm drive's mesh and shaft, the 'mandrel' for the turntable with the wax blank.
+recorder_motor:
+  fs_hz: {value: 8000.0, source: "numerical: the transport's RK4 rate"}
+  mandrel_inertia_kg_m2: {value: 0.03, source: "provisional: model knowledge (a heavy recording turntable and the wax blank)"}
+  mandrel_friction_nm_s: {value: 1.0e-3, source: "provisional: model knowledge (its bearing)"}
+  feed_friction_n_m: {value: 0.02, source: "provisional: model knowledge (the carriage's feed screw and the cutter's drag, at the turntable)"}
+  motor_inertia_kg_m2: {value: 3.0e-4, source: "provisional: model knowledge (the drive shaft and the governor geared up)"}
+  motor_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge"}
+  spring_torque_n_m: {value: 0.03, source: "provisional: the falling weight's torque at the drive shaft, ~3x the running load (the shaft's friction, the drag and the turntable's bearing ~0.011 N m)"}
+  spring_droop_per_s: {value: 0.0, source: "provisional: a weight's torque is constant"}
+  spring_irregularity: {value: 0.005, source: "provisional: model knowledge (the weight's cord and pulleys: far steadier than a mainspring)"}
+  spring_irregularity_s: {value: 0.1, source: "provisional: model knowledge"}
+  motor_pulley_radius_m: {value: 0.005, source: "provisional: the worm drive as an effective pulley pair: the turntable at a tenth of the shaft's speed"}
+  mandrel_pulley_radius_m: {value: 0.05, source: "provisional: as above"}
+  motor_pulley_eccentricity_m: {value: 2.0e-6, source: "provisional: model knowledge (a precision worm)"}
+  mandrel_pulley_eccentricity_m: {value: 1.0e-5, source: "provisional: model knowledge (the wheel's runout)"}
+  belt_stiffness_n_m: {value: 2.0e5, source: "provisional: the mesh, shaft and spindle's compliance at the wheel's radius: a ~45 Hz torsional resonance with the turntable"}
+  belt_damping_ns_m: {value: 300.0, source: "provisional: model knowledge (oil in the mesh: that resonance damped ~0.2)"}
+  governor_ratio: {value: 4.0, source: "provisional: model knowledge (the governor at ~3000 rpm)"}
+  governor_f_hz: {value: 25.0, source: "provisional: model knowledge (as edison_standard.yaml)"}
+  governor_zeta: {value: 0.4, source: "provisional: model knowledge (a well-kept studio governor)"}
+  brake_gain_n_m: {value: 0.2, source: "provisional: the pad's torque per unit of the collar's travel, at the drive shaft"}
+  felt_irregularity: {value: 0.02, source: "provisional: model knowledge (a well-kept felt)"}
+  runout_eccentric_m: {value: 0.0, source: "numerical: a disc's runout is the `disc` block's (gramophone.py)"}
+  runout_oval_m: {value: 0.0, source: "numerical: as above"}
+
+# The playing machine: a Victor spring motor, governor and worm drive (no drawings found:
+# every value provisional, chosen for a governor that regulates like the cylinder
+# machine's, with the imperfections of a used machine).
+player_motor:
+  fs_hz: {value: 8000.0, source: "numerical: the transport's RK4 rate"}
+  mandrel_inertia_kg_m2: {value: 0.015, source: "provisional: model knowledge (a 12 in cast-iron turntable with its felt and the record)"}
+  mandrel_friction_nm_s: {value: 1.0e-3, source: "provisional: model knowledge (its spindle bearing)"}
+  feed_friction_n_m: {value: 0.004, source: "provisional: model knowledge (the arm dragged across by the groove, at the turntable)"}
+  motor_inertia_kg_m2: {value: 3.0e-4, source: "provisional: model knowledge (barrel, gears, the governor geared up, at the drive shaft)"}
+  motor_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge"}
+  spring_torque_n_m: {value: 0.03, source: "provisional: the mainspring at the drive shaft, ~2x the running load (the needle's drag ~0.3 x 1.27 N at ~0.09 m, a tenth at the shaft, the bearings ~0.014 N m)"}
+  spring_droop_per_s: {value: 5.0e-4, source: "provisional: model knowledge (a double spring falling ~10% over two sides)"}
+  spring_irregularity: {value: 0.06, source: "provisional: model knowledge (as edison_standard.yaml: coils sticking in old grease)"}
+  spring_irregularity_s: {value: 0.1, source: "provisional: model knowledge"}
+  motor_pulley_radius_m: {value: 0.005, source: "provisional: the worm drive as an effective pulley pair (as recorder_motor)"}
+  mandrel_pulley_radius_m: {value: 0.05, source: "provisional: as above"}
+  motor_pulley_eccentricity_m: {value: 1.0e-5, source: "provisional: model knowledge (a worn worm's runout: flutter at the shaft's ~13 Hz)"}
+  mandrel_pulley_eccentricity_m: {value: 3.0e-5, source: "provisional: model knowledge (a worn worm wheel)"}
+  belt_stiffness_n_m: {value: 2.0e5, source: "provisional: as recorder_motor (a ~58 Hz torsional resonance with this turntable)"}
+  belt_damping_ns_m: {value: 150.0, source: "provisional: model knowledge (dried grease in the mesh)"}
+  governor_ratio: {value: 4.0, source: "provisional: model knowledge"}
+  governor_f_hz: {value: 25.0, source: "provisional: model knowledge (as edison_standard.yaml)"}
+  governor_zeta: {value: 0.2, source: "provisional: model knowledge (a used governor, steadier than the cylinder machine's 0.15)"}
+  brake_gain_n_m: {value: 0.2, source: "provisional: as recorder_motor"}
+  felt_irregularity: {value: 0.05, source: "provisional: model knowledge (a glazed felt, as edison_standard.yaml)"}
+  runout_eccentric_m: {value: 0.0, source: "numerical: a disc's runout is the `disc` block's"}
+  runout_oval_m: {value: 0.0, source: "numerical: as above"}
+
+disc:
+  eccentric_m: {value: 1.5e-4, source: "provisional: model knowledge (an off-centre pressing's hole: 78s are commonly 0.1-0.3 mm off; wow once a turn, 1.3 Hz)"}
+  warp_m: {value: 2.0e-4, source: "provisional: model knowledge (a mildly dished shellac disc: the heavy arm rides it at 1.3 Hz)"}
+
+soundbox:
+  needle_free_length_m: {value: 9.0e-3, source: "provisional: model knowledge (a ~16 mm steel needle, ~7 mm in the chuck)"}
+  needle_diameter_m: {value: 1.37e-3, source: "web: Maxfield and Harrison 1926 (data/schematics/victor_orthophonic/), p. 26: the needle-point compliance their design needs is 'easily realized with commercial types of needle': their half-shunt (c / 2)(2920 / 4500) = 7.07e-6 m/N, a stiffness 1.41e5 N/m, is a 1.37 mm mean diameter over this free length (3 E I / L^3); was 0.9 mm (model knowledge), 5x softer"}
+  needle_youngs_pa: {value: 2.0e11, source: "provisional: model knowledge (steel)"}
+  needle_density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (steel)"}
+  needle_poisson: {value: 0.29, source: "provisional: model knowledge (steel)"}
+  needle_q: {value: 30.0, source: "provisional: model knowledge (a steel cantilever clamped by a screw: lightly damped)"}
+  tip_radius_m: {value: 4.0e-5, source: "provisional: a new steel needle's point ~1.5 mil, inside the 2.5-3 mil of later 78 styli (web: rfwilmut.net/notes/repro78/repro.html)"}
+  flat_after_side_m: {value: 4.0e-5, source: "provisional: model knowledge (a needle worn to a ~3 mil chisel by a 3-minute side; the flat's growth a^3 ~ s is disc.py's Archard on a cone)"}
+  side_s: {value: 180.0, source: "provisional: model knowledge (a 10 in side ~3 minutes)"}
+  chuck_mass_kg: {value: 0.0003365, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.0003 (provisional: model knowledge (the needle's clamped part, the chuck and screw, the bar's lower arm, at the chuck))"}
+  pivot_stiffness_n_m: {value: 1953, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 2000 (provisional: model knowledge (the stylus bar's tension springs and knife edges, at the chuck))"}
+  pivot_resistance_ns_m: {value: 0.5237, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.3 (provisional: model knowledge (rubber at the knife edges))"}
+  lever_ratio: {value: 1.5, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.9 (provisional: model knowledge (the diaphragm's travel per chuck travel: the bar ~22 mm from pivot to the diaphragm's centre, the chuck ~25 mm below the pivot; bounded 0.6-1.5))"}
+  link_mass_kg: {value: 0.0001068, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.0001 (provisional: model knowledge (the bar's upper arm and its fixing at the diaphragm))"}
+  diaphragm_radius_m: {value: 0.0195, source: "web: cylinder.de/glass-diaphragms.html (Victor Exhibition replacement diaphragms 43.2 mm, 1.7 in); its free radius in the gaskets taken as 19.5 mm"}
+  diaphragm_thickness_m: {value: 0.0001948, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.00015 (provisional: model knowledge (Victor mica; to source))"}
+  diaphragm_youngs_pa: {value: 1.72e11, source: "provisional: model knowledge (muscovite mica, in-plane)"}
+  diaphragm_density_kg_m3: {value: 2830.0, source: "provisional: model knowledge (muscovite mica)"}
+  diaphragm_poisson: {value: 0.25, source: "provisional: model knowledge (muscovite mica)"}
+  diaphragm_q: {value: 2.879, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 6 (provisional: model knowledge (mica floating between soft rubber gaskets: gracyk.com/reproducer.shtml))"}
+  cavity_height_m: {value: 0.0003, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.001 (provisional: model knowledge (the air in front of the diaphragm))"}
+  neck_length_m: {value: 0.05, source: "provisional: model knowledge (the sound-box's neck and the arm's elbow)"}
+  neck_radius_m: {value: 0.011, source: "provisional: model knowledge (a ~7/8 in neck)"}
+
+arm:
+  length_m: {value: 0.23, source: "provisional: model knowledge (pivot to needle, a Victor tapered arm)"}
+  pivot_to_spindle_m: {value: 0.247, source: "provisional: placed so the needle tracks the groove's radius at r ~ 90 mm, +6 / -9 degrees at the side's ends"}
+  offset_deg: {value: 0.0, source: "provisional: model knowledge (no offset head)"}
+  tube_length_m: {value: 0.28, source: "provisional: model knowledge (the tapered arm's bore)"}
+  tube_radius_out_m: {value: 0.0205, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.019 (provisional: model knowledge (the arm's bore at the horn's throat))"}
+  downforce_n: {value: 1.27, source: "provisional: model knowledge (an acoustic sound-box and arm on the needle, ~130 gf)"}
+  vertical_mass_kg: {value: 0.13, source: "provisional: model knowledge (the sound-box and the arm's share, at the needle)"}
+  vertical_resistance_ns_m: {value: 2.0, source: "provisional: model knowledge (the arm's swivel)"}
+  stylus_friction: {value: 0.3, source: "provisional: model knowledge (steel on shellac)"}
+
+horn:
+  length_m: {value: 0.4071, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.6 (provisional: model knowledge (a Victor flower horn, ~24 in))"}
+  mouth_radius_m: {value: 0.35, source: "fitted: Maxfield and Harrison 1926 Fig. 20 curve B by scripts/fit_gramophone.py (4.9 dB rms over the curve's shape); was 0.28 (provisional: model knowledge (a ~22 in bell))"}
+
+player:
+  rpm: {value: 78.0, source: "provisional: the governor set to the recording's speed (a control)"}
+
+listening:
+  distance_m: {value: 1.0, source: "provisional: a listening position 1 m from the horn's mouth, on axis (a control)"}
+
+numerics:
+  duct_loss_hz: {value: 300.0, source: "numerical: the ducts' wall losses (horn.py's viscous and thermal boundary layers, Kirchhoff) evaluated at this frequency, where a duct's resonances below the horn's cut-off sit; their sqrt(f) growth above it is left out"}
+  fs_hz: {value: 192000.0, source: "numerical: the simulation rate (as edison_standard.yaml)"}
+  dx_max_m: {value: 0.008, source: "numerical: the ducts' longest section (the ladder's cut-off c / (pi dx) ~ 13.6 kHz)"}
+  lead_in_s: {value: 0.3, source: "numerical: unmodulated groove before the program while the sound-box settles (trimmed)"}

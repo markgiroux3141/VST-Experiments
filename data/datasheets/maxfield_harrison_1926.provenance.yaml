@@ -1,0 +1,38 @@
+device: "Victor Orthophonic (curve A) and 'one of the best commercial machines previously on the market' (curve B)"
+curve: >-
+  response frequency characteristic of two phonographs (Fig. 20), level in transmission units
+  (dB; the printed scale's .10 per major division is 10 TU: the text's P1 / P2 'about 250 times'
+  in power, 24 dB, spans 0.24 of it). Relative levels on one scale; the measurement's record and
+  microphone are not stated on the page (presumably a constant-velocity frequency record played
+  and picked up acoustically).
+publisher: Bell Telephone Laboratories (Reprint B-204)
+documents:
+  bstj:
+    title: >-
+      J. P. Maxfield and H. C. Harrison, "Methods of High Quality Recording and Reproducing of
+      Music and Speech Based on Telephone Research", Bell System Technical Journal 5, 493-523
+      (July 1926); abridged J. AIEE 45, 243-253 (March 1926)
+    date: "August 1926 (the reprint)"
+    scan_source: "web: https://charm-os.kdl.kcl.ac.uk/history/p20_4_1_3.html (fetched by the user, 2026-11-18)"
+    sha256: 23015a66376ccce7e1f153f9c145263488619069290bc9a99f73be38526318f7
+    bytes: 11048204
+    page: "printed p. 31, PDF p. 33"
+local_copy: "data/schematics/victor_orthophonic/maxfield_harrison.pdf (git-ignored)"
+digitized_with: >-
+  read by eye off a 400 dpi render of the figure (1856 px wide) and two 900 dpi crops. Frequency:
+  log axis, 373 px per decade from the 100, 1000 and 2000 Hz rules (4000 and 5000 within 4 px);
+  level: 105.5 px per 10 TU from the .0 and .50 rules. Each point read at a turning point or a
+  rule crossing of its curve; where the dashed (B) and solid (A) curves cross near 550-650 Hz the
+  V at ~620 Hz is read as A's.
+digitized_by: Claude Code
+digitized_on: 2026-11-18
+estimated_error: "about +-1.5 dB in level, +-5% in frequency (by eye)"
+notes: >-
+  Curve B starts at ~238 Hz (the vertical dashed line marked 'B'): nothing is plotted below,
+  read as its cut-off. Both curves fall off above ~4 kHz (A at its 5000 Hz filter design, below
+  it in the plot). Design figures from the same paper (text, pp. 25-30): upper cut-off f_c 5000
+  Hz, diaphragm effective mass 0.186 g, effective plunger area 13 cm^2, mid-series impedance
+  z0 = pi f_c m3 = 2920 mechanical ohms (cgs), the record side matched to ~4500 mechanical ohms
+  through the needle arm, G = 41 ohms / cm^2, horn throat A2 = G A1^2 / (pi f_c m3), aluminium
+  alloy diaphragm 0.0017 in thick, concentrically corrugated, driven at six points by a spider,
+  a logarithmic horn cut off at ~115 Hz.

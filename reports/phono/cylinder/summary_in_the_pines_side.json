@@ -1,0 +1,39 @@
+{
+  "responses": {
+    "chain_peak_hz": 722.7311296142036,
+    "chain_within_10db_hz": [
+      680.6189171595703,
+      2909.8088103873797
+    ],
+    "recorder_diaphragm_f0_hz": 407.3555823393478,
+    "reproducer_diaphragm_f0_hz": 1572.982393998478
+  },
+  "takes": {
+    "in_the_pines_side_smooth": {
+      "incident_spl_db_rms": 89.83382382155929,
+      "spl_1m_db_rms": 63.628724997691144,
+      "spl_1m_db_peak": 91.32733213421581,
+      "mistracking_fraction": 0.0012186705480635362,
+      "uncut_fraction": 0.00033585954676137325,
+      "wow_cents_rms": 0.0,
+      "wow_cents_peak_to_peak": 0.0,
+      "damage": {},
+      "wall_s_per_audio_s": 0.3730909110572333
+    },
+    "in_the_pines_side_played": {
+      "incident_spl_db_rms": 89.83382382155929,
+      "spl_1m_db_rms": 63.82273023185397,
+      "spl_1m_db_peak": 91.8163834366286,
+      "mistracking_fraction": 0.0012989924101940893,
+      "uncut_fraction": 0.00033585954676137325,
+      "wow_cents_rms": 13.898138078001718,
+      "wow_cents_peak_to_peak": 55.017846236061445,
+      "damage": {
+        "dust": 485,
+        "mould_pits": 0,
+        "cracks": 0
+      },
+      "wall_s_per_audio_s": 0.4053917678941777
+    }
+  }
+}

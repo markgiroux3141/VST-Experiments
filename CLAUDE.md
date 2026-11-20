@@ -867,10 +867,25 @@ IR element types only), Webster ladders (`horn.py`), each machine's spring motor
 governor, belt and the cylinder's runout as the wow (`transport.py`), dust, mould and cracks
 as seeded geometry (`damage.py`), earlier plays by Archard's law (`wear.py`). The user's
 verdict after comparing with real transfers: the `played` take is the reference; their In
-the Pines rendered whole with it (~9x slower than real time). Next, not decided: the
-circuitsim port (G1's Rust half), the gramophone (G2), the surface across the tip's patch
-(G6). Pin BLAS to one thread (`OPENBLAS_NUM_THREADS=1`) when another job saturates the
-cores: its small solves ran ~100x slower.
+the Pines rendered whole with it (~9x slower than real time). Pin BLAS to one thread
+(`OPENBLAS_NUM_THREADS=1`) when another job saturates the cores: its small solves ran ~100x
+slower. **G1's Rust half and the gramophone (2026-11-18; PHONO_PLAN.md "Status
+(2026-11-18)"):** the players' loop is circuitsim's `phono.rs` (`phono_play`: the network's
+trapezoidal step diagonalized once in Python, `varimu/phono/player.py`'s `modal`, N coupled
+Hertz contacts; `phono_drive`: the transport's RK4), -195 dB from the Python reference
+(`engine="python"`; `tests/test_phono_rust.py`), the cylinder's take 0.49x real time (was
+~7x). The gramophone: `varimu/phono/disc.py` (the spiral, two walls dilated each along its
+normal, tracking error, a steel needle ground flat as a^3 ~ s, scratches) and
+`gramophone.py` (an acoustic 78 cut laterally, played on a Victor Exhibition sound-box, tone
+arm and flower horn; `config/phono/victor_exhibition.yaml`), `tests/test_gramophone.py`,
+`scripts/gramophone_study.py` -> `reports/phono/gramophone/` (~1-1.4x real time). Then the
+same day, from Maxfield and Harrison 1926 (`data/schematics/victor_orthophonic/`, the user's
+copy; Fig. 20 digitized in `data/datasheets/maxfield_harrison_1926_fig20.csv`): the Victor
+fitted to its curve B (`scripts/fit_gramophone.py`, 4.9 dB rms, guarded against duct
+resonances), the Orthophonic built from the paper's design (`victor_orthophonic.yaml`, 4.1 dB
+from curve A unfitted) with the Western Electric electrical recorder; the gramophones' output
+is the mouth's radiated power as a pressure at 1 m, their ducts have wall losses (the
+cylinder unchanged). **The 1960s record player** (2026-11-18, the user's picks: a portable ceramic, stereo 45/45, a real 60s lathe; PHONO_PLAN.md "The 1960s record player", LP1-LP6 built; sources `data/schematics/{westrex_3d,ge_rp1560}/README.md`): a Westrex 3D cutter (`varimu/phono/lathe.py`, fitted to Nelson & Stafford 1964 Fig. 6 by `scripts/fit_westrex_3d.py`, 28 dB feedback, the card fitted to RIAA +-0.4 dB) cuts a stereo LP (`lp.py`: VU level, variable pitch `microgroove.py`, the vinyl's surface at NAB's -50 dB) played on a GE RP1560 portable (`portable.py`: the V-M changer's rim drive `rimdrive.py`, the Sonotone 16T's PZT network, 0.65 V, 25 dB) into `config/circuits/ge_rp1560.yaml` (35EH5@1, 35W4@1; AC/DC, idles within 14%); `scripts/record_player_study.py` -> reports/phono/record_player/; `tests/test_record_player.py`. Open: the user listens; the wings' speakers (the P8R stands in), the V-M's values (provisional).
 
 Mics, preamps and rooms ([docs/MIC_ROOM_PLAN.md](docs/MIC_ROOM_PLAN.md), 2026-11-01; nothing
 built; the user picks it up deliberately): source -> room -> capsule -> mic electronics ->

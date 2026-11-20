@@ -1,0 +1,189 @@
+# General Electric RP1560 stereo portable (1961), the amplifier, as a circuit file: a 12AX7 (one
+# section per channel), two single-ended 35EH5s on a shared cathode resistor, a 35W4 half-wave
+# rectifier straight off the line (AC/DC, no power transformer: B- is the line's return), each
+# channel's output transformer and 6 in speaker in its swing-out steel wing. Built by
+# varimu/circuit/builder.py; the record and the cartridge's mechanics are
+# varimu/phono/portable.py (docs/PHONO_PLAN.md, "The 1960s record player").
+#
+# Sources (data/schematics/ge_rp1560/README.md has their provenance):
+#   "sch: ..."         printed on the Beitman 1963 sheet (RP1560 / RP1561 / RP1570), p. 57
+#   "web: <url> ..."   a datasheet's figure
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; replaced when the part's data turn up
+#
+# The inputs `in` / `in_r` are the Sonotone 16T's elements' open-circuit EMFs (left, right), each
+# through its element's capacitance into its VOLUME control. Not modeled: the heater string (the
+# 12AX7's heater sits at its B- end: 0-12 V AC to B-), the changer's motor across the line (its
+# drop on the line's impedance), the pilot tap, C1 (0.047 uF from the elements' common lead to
+# B-: 67 times the elements' capacitance, -0.1 dB) and C12 (the chassis' 0.033 uF to B-). The
+# outputs `out` / `out_r` are the sound pressure 1 m in front of each wing on axis (pascals as
+# volts); `spk_a` / `spk_b` the speakers' terminals.
+
+title: "GE RP1560 stereo portable"
+input: in
+audio_inputs: {in_r: in_r}
+probes: [out, out_r, spk_a, spk_b, b120, b105, p_a, p_b, g_a, g_b, pp_a, pp_b, gp_a, gp_b, kp, k_a, k_b]
+full_scale:
+  input_volts_peak: {value: 4.0, source: "derived: the elements' EMF peaks: 0.92 V peak at the 5 cm/s reference (Sonotone's 0.65 V rms), program peaks ~+10 dB over it (NAB 1964 footnote 7: ~21 cm/s), rounded up"}
+  output_pascals_peak: {value: 10.0, source: "provisional: model knowledge (1.2 W per channel into a 6 in speaker at 1 m peaks a few pascals; headroom)"}
+
+controls:
+  volume: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "sch: VOLUME R19A / R19B 2 M dual"}
+  balance: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: BALANCE R20A / R20B 2 M dual, its sections in opposite senses"}
+  tone: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "sch: TONE R21A / R21B 500 K, 0 at BASS (full treble cut), 1 at TREBLE"}
+  mains_v_rms: {value: 117.0, min: 105.0, max: 120.0, unit: V, source: "sch: 105-120 V 60 Hz AC; the US nominal 117 V"}
+  mains_hz: {value: 60.0, min: 60.0, max: 60.0, unit: Hz, source: "sch: 60 Hz"}
+
+values:
+  # --- The cartridge's elements ------------------------------------------------------------
+  element_c_f: {value: 7.0e-10, source: "provisional: model knowledge (as config/phono/ge_rp1560.yaml's element_c_f: a stereo ceramic element's capacitance; Sonotone's 35T 850 pF)"}
+  # --- Input controls (sch) ------------------------------------------------------------------
+  volume_pot_ohm: {value: 2.0e+6, source: "sch: VOLUME 2 M"}
+  balance_pot_ohm: {value: 2.0e+6, source: "sch: BALANCE 2 M"}
+  audio_taper_mid: {value: 0.1, source: "provisional: model knowledge (the sheet prints no taper; a volume control's audio taper, ~10% of the track at half rotation; the balance and tone controls linear)"}
+  r_grid_stop_ohm: {value: 220.0e+3, source: "sch: R1 / R2 220 K from each balance wiper to its 12AX7 grid"}
+  # --- V1: 12AX7 (sch) -----------------------------------------------------------------------
+  r_cathode1_ohm: {value: 390.0, source: "sch: R3 / R4 390 ohm, unbypassed"}
+  r_bleed_ohm: {value: 39.0e+3, source: "sch: R5 / R6 39 K from each cathode to +105 V"}
+  r_plate1_ohm: {value: 220.0e+3, source: "sch: R7 / R8 220 K to +105 V"}
+  # --- Coupling and tone (sch) ---------------------------------------------------------------
+  c_couple_f: {value: 0.02e-6, source: "sch: C4 / C5 .02"}
+  c_tone_f: {value: 0.0039e-6, source: "sch: C6 / C7 .0039"}
+  tone_pot_ohm: {value: 500.0e+3, source: "sch: TONE R21A / R21B 500 K as a rheostat, its wiper on B-, its TREBLE end open"}
+  r_series_ohm: {value: 390.0e+3, source: "sch: R9 / R10 390 K"}
+  c_series_f: {value: 100.0e-12, source: "sch: C8 / C9 100 (pF) across it"}
+  c_step_f: {value: 0.0033e-6, source: "sch: C10 / C11 .0033"}
+  r_step_ohm: {value: 150.0e+3, source: "sch: R11 / R12 150 K"}
+  r_grid2_ohm: {value: 470.0e+3, source: "sch: R13 / R14 470 K grid leaks"}
+  # --- 35EH5s (sch) --------------------------------------------------------------------------
+  r_cathode2_ohm: {value: 33.0, source: "sch: R15 33 ohm 1 W, both cathodes"}
+  c_cathode2_f: {value: 30.0e-6, source: "sch: C13A 30 uF 25 V across it"}
+  # --- Output transformers (no data printed) -------------------------------------------------
+  ot_r_pri_ohm: {value: 250.0, source: "provisional: model knowledge (a small single-ended output transformer's primary)"}
+  ot_r_sec_ohm: {value: 0.35, source: "provisional: model knowledge"}
+  ot_sec_ratio: {value: 0.0365, source: "derived: 3000 ohm (RCA 35EH5 typical load, web: https://frank.pocnet.net/sheets/049/3/35EH5.pdf) to the stand-in speaker's 4 ohm: sqrt(4 / 3000)"}
+  ot_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"}
+  ot_core_area_m2: {value: 2.0e-4, source: "provisional: model knowledge (a 1.2 W single-ended OT: ~0.5 in tongue, ~0.6 in stack)"}
+  ot_core_path_m: {value: 0.08, source: "provisional: model knowledge (~6 x the tongue width)"}
+  ot_turns: {value: 1500, source: "provisional: model knowledge (~3 H on the gapped core)"}
+  ot_gap_m: {value: 2.0e-4, source: "provisional: model knowledge (holds the 35EH5's ~37 mA DC to ~0.35 T in the core)"}
+  ot_leakage_h: {value: 0.03, source: "provisional: model knowledge (a small single-ended OT's leakage, ~1% of its primary)"}
+  ot_c_pri_f: {value: 150.0e-12, source: "provisional: model knowledge (self-capacitance of a small primary)"}
+  # --- The speakers and the wings ------------------------------------------------------------
+  speaker_model: {value: P8R@1, source: "provisional: config/components/p8r/1.yaml (a Jensen 8 in, 4 ohm) stands in for the wings' unknown 6 in PM speakers (radiomuseum: 2 x 6 in): no data found"}
+  listen_distance_m: {value: 1.0, source: "provisional: model knowledge (1 m on axis, as the amps')"}
+  wing_width_m: {value: 0.25, source: "provisional: model knowledge (a swing-out wing's baffle for one 6 in speaker)"}
+  wing_height_m: {value: 0.25, source: "provisional: model knowledge"}
+  wing_depth_m: {value: 0.10, source: "provisional: model knowledge"}
+  wing_box_m3: {value: 0.0055, source: "derived: the wing's inside, 0.25 x 0.25 x 0.10 m less its steel and the speaker; closed (sch removal notes: the wing's back held by six screws)"}
+  wing_offset_m: {value: 0.0, source: "provisional: model knowledge (the speaker centred)"}
+  # --- Power supply (sch) --------------------------------------------------------------------
+  r_line_ohm: {value: 15.0, source: "web: https://frank.pocnet.net/sheets/049/3/35W4.pdf (RCA: minimum total effective plate-supply impedance 15 ohm, the line and any surge resistor; the sheet draws none, so the line meets the minimum)"}
+  rectifier_tube: {value: 35W4@1, source: "sch: V4 35W4 half-wave rectifier, its plate on the switched line; config/components/35w4/1.yaml"}
+  c_b120_f: {value: 200.0e-6, source: "sch: C13B 200 uF 150 WV at the 35W4's cathode (+120 V)"}
+  r_filter_ohm: {value: 1500.0, source: "sch: R16 1500 ohm 1 W"}
+  c_b105_f: {value: 100.0e-6, source: "sch: C13C 100 uF 150 WV at +105 V"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the B+ nodes (no bleeder; not physical)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 117.0, source: "sch: the voltages are read at 120 V line; the US nominal 117 V"}
+
+devices:
+  V1A: {device: 12AX7@1}
+  V1B: {device: 12AX7@1}
+  V2: {device: 35EH5@1}
+  V3: {device: 35EH5@1}
+  V4: {device: rectifier_tube}
+
+sections:
+  - title: power supply
+    parts:
+      VLINE: {mains: [line, "0"], v_rms: mains_v_rms, phase_deg: 90.0}
+      RLINE: {R: [line, lr], r: r_line_ohm}
+      XV4: {device: [lr, b120], model: V4}
+      CB120: {C: [b120, "0"], c: c_b120_f}
+      R16: {R: [b120, b105], r: r_filter_ohm}
+      CB105: {C: [b105, "0"], c: c_b105_f}
+      RLEAK: {R: [b120, "0"], r: numerical_leak_ohm}
+
+  - title: left channel
+    parts:
+      # The element: its EMF (`in`) through its capacitance into VOLUME R19B's hot end.
+      CEA: {C: [in, h_a], c: element_c_f}
+      RVOLA: {pot: ["0", w_a, h_a], r: volume_pot_ohm, at: volume, taper_mid: audio_taper_mid}
+      RBALA: {pot: ["0", bw_a, w_a], r: balance_pot_ohm, at: balance}
+      RGA: {R: [bw_a, g_a], r: r_grid_stop_ohm}
+      XV1B: {device: [p_a, g_a, k_a], model: V1B}
+      RKA: {R: [k_a, "0"], r: r_cathode1_ohm}
+      RBLA: {R: [k_a, b105], r: r_bleed_ohm}
+      RPA: {R: [b105, p_a], r: r_plate1_ohm}
+      CCA: {C: [p_a, x_a], c: c_couple_f}
+      CTA: {C: [x_a, t_a], c: c_tone_f}
+      RTA: {rheostat: [t_a, "0"], r: tone_pot_ohm, at: tone}
+      RSA: {R: [x_a, gp_a], r: r_series_ohm}
+      CSA: {C: [x_a, gp_a], c: c_series_f}
+      CPA: {C: [gp_a, m_a], c: c_step_f}
+      RMA: {R: [m_a, "0"], r: r_step_ohm}
+      RG2A: {R: [gp_a, "0"], r: r_grid2_ohm}
+      XV3: {device: [pp_a, b105, gp_a, kp], model: V3}
+      T3:
+        transformer:
+          p: {nodes: [b120, pp_a], r: ot_r_pri_ohm, c: ot_c_pri_f}
+          s: {nodes: ["0", spk_a], ratio: ot_sec_ratio, r: ot_r_sec_ohm}
+        core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
+        turns: ot_turns
+        leakage_h: ot_leakage_h
+      SPKA:
+        speaker: [spk_a, "0", out]
+        component: speaker_model
+        distance_m: listen_distance_m
+        width_m: wing_width_m
+        height_m: wing_height_m
+        depth_m: wing_depth_m
+        offset_x_m: wing_offset_m
+        offset_y_m: wing_offset_m
+        box_m3: wing_box_m3
+
+  - title: right channel
+    parts:
+      CEB: {C: [in_r, h_b], c: element_c_f}
+      RVOLB: {pot: ["0", w_b, h_b], r: volume_pot_ohm, at: volume, taper_mid: audio_taper_mid}
+      RBALB: {pot: ["0", bw_b, w_b], r: balance_pot_ohm, at: balance, reverse: 1}
+      RGB: {R: [bw_b, g_b], r: r_grid_stop_ohm}
+      XV1A: {device: [p_b, g_b, k_b], model: V1A}
+      RKB: {R: [k_b, "0"], r: r_cathode1_ohm}
+      RBLB: {R: [k_b, b105], r: r_bleed_ohm}
+      RPB: {R: [b105, p_b], r: r_plate1_ohm}
+      CCB: {C: [p_b, x_b], c: c_couple_f}
+      CTB: {C: [x_b, t_b], c: c_tone_f}
+      RTB: {rheostat: [t_b, "0"], r: tone_pot_ohm, at: tone}
+      RSB: {R: [x_b, gp_b], r: r_series_ohm}
+      CSB: {C: [x_b, gp_b], c: c_series_f}
+      CPB: {C: [gp_b, m_b], c: c_step_f}
+      RMB: {R: [m_b, "0"], r: r_step_ohm}
+      RG2B: {R: [gp_b, "0"], r: r_grid2_ohm}
+      XV2: {device: [pp_b, b105, gp_b, kp], model: V2}
+      T4:
+        transformer:
+          p: {nodes: [b120, pp_b], r: ot_r_pri_ohm, c: ot_c_pri_f}
+          s: {nodes: ["0", spk_b], ratio: ot_sec_ratio, r: ot_r_sec_ohm}
+        core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
+        turns: ot_turns
+        leakage_h: ot_leakage_h
+      SPKB:
+        speaker: [spk_b, "0", out_r]
+        component: speaker_model
+        distance_m: listen_distance_m
+        width_m: wing_width_m
+        height_m: wing_height_m
+        depth_m: wing_depth_m
+        offset_x_m: wing_offset_m
+        offset_y_m: wing_offset_m
+        box_m3: wing_box_m3
+
+  - title: output cathodes
+    parts:
+      R15: {R: [kp, "0"], r: r_cathode2_ohm}
+      C13A: {C: [kp, "0"], c: c_cathode2_f}

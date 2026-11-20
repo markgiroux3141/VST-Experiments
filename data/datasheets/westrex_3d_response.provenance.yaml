@@ -1,0 +1,29 @@
+device: "Westrex 3D StereoDisk cutter (and the 3C, not digitized)"
+curve: >-
+  open_loop: Fig. 6, "Resonance characteristics without feedback for 3C and 3D cutters", 0 dB = 7
+  cm/s (relative velocity at constant drive); closed_loop: Fig. 7, "Response characteristics, with
+  feedback, for 3C and 3D cutters", 3D with 28 dB of feedback, 0 dB = 3.5 cm/s. The 3D's curve
+  (solid) where the two part.
+publisher: Journal of the Audio Engineering Society
+documents:
+  ns64:
+    title: >-
+      C. S. Nelson and J. W. Stafford, "The Westrex 3D StereoDisk System", JAES 12(3), 178-185
+      (July 1964)
+    scan_source: "web: https://www.collinsaudio.com/Westrex%203D.pdf"
+    sha256: 765b69d4790281643d31fc4adae88d3dba469944b50f9a04f8c24b1383c6fce6
+    bytes: 3609879
+    page: "printed p. 181, PDF p. 4"
+local_copy: "data/schematics/westrex_3d/nelson_stafford_1964.pdf (git-ignored)"
+digitized_with: >-
+  a 300 dpi render of each figure; the axes calibrated from the detected rules (Fig. 6: 317.5 px
+  per decade, 10.66 px per dB; Fig. 7: 326 px per decade, 10.9 px per dB); points from the curve's
+  pixels per column where one curve runs, read by eye where the 3C's and 3D's part (above ~1.5 kHz)
+  and at the extremes.
+digitized_by: Claude Code
+digitized_on: 2026-11-18
+estimated_error: "about +-1 dB in level (+-2 dB above 8 kHz, where the curves tangle), +-3% in frequency"
+notes: >-
+  Fig. 6's 3D curve: resonance at ~1 kHz, ~12 dB/octave above it, a mode near 14.5 kHz (-12 dB).
+  Fig. 7: the RA-1574-D's constant-velocity card is not in it (the text: the card corrects each
+  cutter to +-1 dB, 50 Hz-12 kHz).

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 GROUND = "0"
+SPARSE_ABOVE = 120  # states: `System.response` solves sparse beyond this
 
 
 @dataclass
@@ -40,7 +41,7 @@ class Network:
     _xf: list[tuple[str, str, str, str, float, str]] = field(default_factory=list)
     _vccs: list[tuple[str, str, float]] = field(default_factory=list)
     _vsrc: list[tuple[str, str, str]] = field(default_factory=list)
-    _isrc: list[tuple[str, str]] = field(default_factory=list)
+    _isrc: list[tuple[str, str, float]] = field(default_factory=list)
     _integ: list[tuple[str, str]] = field(default_factory=list)
 
     def node(self, name: str) -> str:
@@ -80,9 +81,11 @@ class Network:
     def voltage_source(self, a: str, b: str, name: str) -> None:
         self._vsrc.append((self.node(a), self.node(b), name))
 
-    def current_source(self, node: str, name: str) -> None:
-        """Injects the input `name` into `node` (a force in the mobility analogy)."""
-        self._isrc.append((self.node(node), name))
+    def current_source(self, node: str, name: str, gain: float = 1.0) -> None:
+        """Injects `gain` times the input `name` into `node` (a force in the mobility
+        analogy). One input may feed several nodes: a wall's normal force on a tip moving
+        in two axes enters each axis by its direction cosine."""
+        self._isrc.append((self.node(node), name, float(gain)))
 
     def integrator(self, node: str, name: str) -> None:
         """A state equal to the integral of v(node): a displacement."""
@@ -150,8 +153,8 @@ class Network:
                     g_m[idx[node], k] += sgn
                     g_m[k, idx[node]] += sgn
             b_m[k, ipos[name]] = 1.0
-        for node, name in self._isrc:
-            b_m[idx[node], ipos[name]] += 1.0
+        for node, name, gain in self._isrc:
+            b_m[idx[node], ipos[name]] += gain
         for node, name in self._integ:
             k = pos[name]
             e_m[k, k] = 1.0
@@ -195,6 +198,15 @@ class System:
         f_hz = np.asarray(f_hz, dtype=float)
         out = np.zeros((len(f_hz), len(self.names)), dtype=complex)
         live = np.flatnonzero(f_hz != 0.0)  # DC is singular with integrators: left 0
+        if len(self.names) > SPARSE_ABOVE:
+            # Ladders (horns, filters) are sparse: one sparse LU per frequency.
+            from scipy.sparse import csc_matrix
+            from scipy.sparse.linalg import spsolve
+
+            e_s, g_s = csc_matrix(self.e), csc_matrix(self.g)
+            for i in live:
+                out[i] = spsolve((2j * np.pi * f_hz[i]) * e_s + g_s, col.astype(complex))
+            return out
         chunk = max(1, 2_000_000 // max(1, len(self.names) ** 2))
         for lo in range(0, len(live), chunk):
             idx = live[lo : lo + chunk]

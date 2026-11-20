@@ -739,6 +739,53 @@ fn tape_moving_along_x<'py>(
     Ok(out.into_pyarray(py).into_any())
 }
 
+/// A groove player (`phono.rs`'s `play`; docs/PHONO_PLAN.md G1): `model` a
+/// `phono::Player` (JSON, `varimu/phono/fast.py`), `u` its inputs per step (one array per
+/// input, flattened row-major), `surfaces` each contact's surface per step (likewise),
+/// `steps` steps at step `h`. Returns (forces, outputs), flattened row-major. Releases the GIL.
+#[pyfunction]
+fn phono_play<'py>(
+    py: Python<'py>,
+    model: &str,
+    u: PyReadonlyArray1<'py, f64>,
+    surfaces: PyReadonlyArray1<'py, f64>,
+    steps: usize,
+    h: f64,
+) -> PyResult<Bound<'py, PyAny>> {
+    let p: crate::phono::Player =
+        serde_json::from_str(model).map_err(|e| invalid(format!("phono_play: {e}")))?;
+    p.check().map_err(invalid)?;
+    let u = u.as_array().to_vec();
+    let s = surfaces.as_array().to_vec();
+    if u.len() != p.inputs.len() * steps || s.len() != p.contacts.len() * steps {
+        return Err(invalid("phono_play: inputs / surfaces don't match steps"));
+    }
+    let out = py.detach(|| crate::phono::play(&p, &u, &s, steps, h));
+    Ok((out.forces.into_pyarray(py), out.outputs.into_pyarray(py))
+        .into_pyobject(py)?
+        .into_any())
+}
+
+/// A machine's drive (`phono.rs`'s `drive`; `varimu/phono/transport.py`): `model` a
+/// `phono::Drive` (JSON), the mainspring's irregularity and the load torque per step.
+/// Returns (omega, theta) at each step's start. Releases the GIL.
+#[pyfunction]
+fn phono_drive<'py>(
+    py: Python<'py>,
+    model: &str,
+    spring: PyReadonlyArray1<'py, f64>,
+    load: PyReadonlyArray1<'py, f64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let d: crate::phono::Drive =
+        serde_json::from_str(model).map_err(|e| invalid(format!("phono_drive: {e}")))?;
+    let sp = spring.as_array().to_vec();
+    let ld = load.as_array().to_vec();
+    let (w, th) = py.detach(|| crate::phono::drive(&d, &sp, &ld));
+    Ok((w.into_pyarray(py), th.into_pyarray(py))
+        .into_pyobject(py)?
+        .into_any())
+}
+
 #[pymodule]
 fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", crate::VERSION)?;
@@ -755,6 +802,8 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tape_gpu, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;
+    m.add_function(wrap_pyfunction!(phono_play, m)?)?;
+    m.add_function(wrap_pyfunction!(phono_drive, m)?)?;
     m.add_class::<PyStream>()?;
     Ok(())
 }

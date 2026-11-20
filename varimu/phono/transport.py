@@ -35,6 +35,7 @@ geometry; derived in `surface_speed`'s docstring): the runout both lifts the sur
 
 from __future__ import annotations
 
+import json
 import math
 import zlib
 from dataclasses import dataclass
@@ -97,10 +98,13 @@ def simulate(
     load_torque_n_m,
     seed: int,
     name: str,
+    engine: str = "rust",
 ) -> Motion:
     """The machine `m` (a config block) run for `seconds` at its target `rpm` under the
     mandrel's load torque (a constant, or an array sampled at m's `fs_hz`, the transport
-    rate, held per step). The result is resampled to fs_hz (the audio simulation's)."""
+    rate, held per step). The result is resampled to fs_hz (the audio simulation's).
+    `engine`: "rust" (circuitsim's `phono_drive`, the default) or "python" (the reference
+    loop below); the seeded draws are made here either way."""
     ft = m["fs_hz"]
     h = 1.0 / ft
     n = int(math.ceil(seconds * ft)) + 2
@@ -166,21 +170,26 @@ def simulate(
 
     # u0 so the belt carries f0 with the pulleys at their initial radii.
     st = (0.0, wp0, 0.0, wd0, f0 / kb, 1.0, 0.0)
-    out_w = np.empty(n)
-    out_th = np.empty(n)
-    for i in range(n):
-        out_w[i], out_th[i] = st[3], st[2]
-        k1 = deriv(i, st, 0.0)
-        s2 = tuple(a + 0.5 * h * b for a, b in zip(st, k1, strict=True))
-        k2 = deriv(i, s2, 0.5)
-        s3 = tuple(a + 0.5 * h * b for a, b in zip(st, k2, strict=True))
-        k3 = deriv(i, s3, 0.5)
-        s4 = tuple(a + h * b for a, b in zip(st, k3, strict=True))
-        k4 = deriv(i, s4, 1.0)
-        st = tuple(
-            a + h / 6 * (b1 + 2 * b2 + 2 * b3 + b4)
-            for a, b1, b2, b3, b4 in zip(st, k1, k2, k3, k4, strict=True)
-        )
+    if engine == "rust":
+        out_w, out_th = _drive_rust(m, h, (pe1, pe2), amps, phs, y_set, w_gov0, st, spring, load)
+    elif engine == "python":
+        out_w = np.empty(n)
+        out_th = np.empty(n)
+        for i in range(n):
+            out_w[i], out_th[i] = st[3], st[2]
+            k1 = deriv(i, st, 0.0)
+            s2 = tuple(a + 0.5 * h * b for a, b in zip(st, k1, strict=True))
+            k2 = deriv(i, s2, 0.5)
+            s3 = tuple(a + 0.5 * h * b for a, b in zip(st, k2, strict=True))
+            k3 = deriv(i, s3, 0.5)
+            s4 = tuple(a + h * b for a, b in zip(st, k3, strict=True))
+            k4 = deriv(i, s4, 1.0)
+            st = tuple(
+                a + h / 6 * (b1 + 2 * b2 + 2 * b3 + b4)
+                for a, b1, b2, b3, b4 in zip(st, k1, k2, k3, k4, strict=True)
+            )
+    else:
+        raise ValueError(f"engine {engine!r}: 'rust' or 'python'")
 
     tt = np.arange(n) * h
     na = int(round(seconds * fs_hz))
@@ -191,6 +200,45 @@ def simulate(
     v = surface_speed(omega, ro, radius_m)
     s = np.concatenate([[0.0], np.cumsum(0.5 * (v[1:] + v[:-1]) / fs_hz)])
     return Motion(fs_hz, omega, theta, ro, v, s)
+
+
+def _drive_rust(m, h, phases, amps, phs, y_set, w_gov0, st, spring, load):
+    """The RK4 loop in circuitsim (phono.rs's `drive`), the same arithmetic."""
+    from varimu.sim import fast
+
+    fast.check_build()
+    import circuitsim
+
+    model = {
+        "h": h,
+        "r1": m["motor_pulley_radius_m"],
+        "r2": m["mandrel_pulley_radius_m"],
+        "e1": m["motor_pulley_eccentricity_m"],
+        "e2": m["mandrel_pulley_eccentricity_m"],
+        "pe1": float(phases[0]),
+        "pe2": float(phases[1]),
+        "jp": m["motor_inertia_kg_m2"],
+        "jd": m["mandrel_inertia_kg_m2"],
+        "bp": m["motor_friction_nm_s"],
+        "bd": m["mandrel_friction_nm_s"],
+        "kb": m["belt_stiffness_n_m"],
+        "cb": m["belt_damping_ns_m"],
+        "g_ratio": m["governor_ratio"],
+        "wg": 2 * np.pi * m["governor_f_hz"],
+        "zeta": m["governor_zeta"],
+        "k_brake": m["brake_gain_n_m"],
+        "t_spring0": m["spring_torque_n_m"],
+        "droop": m["spring_droop_per_s"],
+        "y_set": float(y_set),
+        "w_gov0": float(w_gov0),
+        "felt_amps": [float(a) for a in amps],
+        "felt_phases": [float(p) for p in phs],
+        "state0": [float(v) for v in st],
+    }
+    w, th = circuitsim.phono_drive(
+        json.dumps(model), np.ascontiguousarray(spring), np.ascontiguousarray(load)
+    )
+    return np.asarray(w), np.asarray(th)
 
 
 def _fit(x: np.ndarray, n: int) -> np.ndarray:
