@@ -9,6 +9,7 @@ ev_re20_polar.csv (provenance: ev_re20.provenance.yaml).
 The sheet's graph is relative (a 5 dB grid, no absolute level): dB are re the 0 deg
 switch-off curve at 1 kHz.
 """
+
 from __future__ import annotations
 
 import sys
@@ -28,7 +29,14 @@ def bezier_points(items, n=24):
         elif it[0] == "c":
             p0, p1, p2, p3 = (np.array([q.x, q.y]) for q in it[1:5])
             for t in np.linspace(0, 1, n):
-                pts.append(tuple((1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t**2 * p2 + t**3 * p3))
+                pts.append(
+                    tuple(
+                        (1 - t) ** 3 * p0
+                        + 3 * (1 - t) ** 2 * t * p1
+                        + 3 * (1 - t) * t**2 * p2
+                        + t**3 * p3
+                    )
+                )
     return np.array(pts)
 
 
@@ -40,7 +48,13 @@ def main(pdf: str) -> None:
     fs = np.array([50, 100, 200, 500, 1000, 2000, 5000, 10000.0])
     a, b = np.polyfit(np.log10(fs), xs, 1)
     # level axis: horizontal rules read from drawing 6 (frame + 5 dB grid)
-    hs = sorted({round(it[1].y, 1) for it in dr[6]["items"] if it[0] == "l" and abs(it[1].y - it[2].y) < 0.2})
+    hs = sorted(
+        {
+            round(it[1].y, 1)
+            for it in dr[6]["items"]
+            if it[0] == "l" and abs(it[1].y - it[2].y) < 0.2
+        }
+    )
     print("horizontal rules y:", hs, " per 5 dB:", np.diff(hs))
     ypdb = float(np.median(np.diff(hs))) / 5.0
     curves = {"0_off": 82, "0_tilt": 83, "180_off": 84, "180_tilt": 85}
@@ -59,9 +73,13 @@ def main(pdf: str) -> None:
         f, y = f[o], y[o]
         for g in grid:
             if f[0] <= g <= f[-1]:
-                rows.append((name, round(g, 1), round(-(float(np.interp(g, f, y)) - yref) / ypdb, 2)))
+                rows.append(
+                    (name, round(g, 1), round(-(float(np.interp(g, f, y)) - yref) / ypdb, 2))
+                )
     out = ROOT / "data" / "datasheets" / "ev_re20_response.csv"
-    out.write_text("trace,freq_hz,db_re_0deg_1khz\n" + "\n".join(f"{n},{f},{d}" for n, f, d in rows) + "\n")
+    out.write_text(
+        "trace,freq_hz,db_re_0deg_1khz\n" + "\n".join(f"{n},{f},{d}" for n, f, d in rows) + "\n"
+    )
     print("wrote", out, len(rows))
     # polar: centre = bbox of drawing 119 (outer ring), 0 deg up, 5 dB per ring division
     ring = dr[119]["rect"]
@@ -78,7 +96,9 @@ def main(pdf: str) -> None:
         r = np.hypot(dx, dy)
         ang = np.degrees(np.arctan2(dx, dy))  # 0 up, +right
         near0 = np.abs(ang) < 6
-        r0 = float(np.mean(r[near0])) if near0.any() else r0_above  # the dashed trace's 0 deg part is not in the file
+        r0 = (
+            float(np.mean(r[near0])) if near0.any() else r0_above
+        )  # the dashed trace's 0 deg part is not in the file
         r0_above = r0
         o = np.argsort(ang)
         grid_a = np.arange(-180, 181, 15.0)

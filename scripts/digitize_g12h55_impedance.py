@@ -4,8 +4,10 @@ impedance curve from the PDF's vector path, for the G12M's voice coil
 
     uv run --no-project --with pymupdf python scripts/digitize_g12h55_impedance.py         data/schematics/marshall_1987/voicecoil_2015-02_g12h55_testbench.pdf         data/datasheets/voicecoil_g12h55_impedance.csv
 """
+
 import sys
 import pymupdf as fitz
+
 pdf = sys.argv[1]
 d = fitz.open(pdf)
 p = d[1]
@@ -26,12 +28,25 @@ items.sort(key=lambda t: -t[2])
 for c, w, n, r, _ in items[:8]:
     print(c, w, n, [round(v, 1) for v in (r.x0, r.y0, r.x1, r.y1)])
 # vertical / horizontal grid lines: short paths of one line each
-vs = sorted({round(it[4][0].x, 2) for it in items if it[2] == 1 and len(it[4]) == 2 and abs(it[4][0].x - it[4][1].x) < 0.01})
-hs = sorted({round(it[4][0].y, 2) for it in items if it[2] == 1 and len(it[4]) == 2 and abs(it[4][0].y - it[4][1].y) < 0.01})
+vs = sorted(
+    {
+        round(it[4][0].x, 2)
+        for it in items
+        if it[2] == 1 and len(it[4]) == 2 and abs(it[4][0].x - it[4][1].x) < 0.01
+    }
+)
+hs = sorted(
+    {
+        round(it[4][0].y, 2)
+        for it in items
+        if it[2] == 1 and len(it[4]) == 2 and abs(it[4][0].y - it[4][1].y) < 0.01
+    }
+)
 print("vertical", len(vs), vs[:5], vs[-5:])
 print("horizontal", len(hs), hs[:5], hs[-5:])
 
 import math
+
 X0, X1, Y0, Y1 = 321.2, 510.8, 560.6, 455.6  # frame: 10 Hz .. 20 kHz, 10 .. 300 ohm
 curve = items[0][4]
 rows = []

@@ -100,7 +100,11 @@ def main() -> None:
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--band", type=float, nargs=2, default=BAND_HZ)
     args = ap.parse_args()
-    fs.MIC = {"key": KEY, "response": ("sennheiser_md421_response.csv", "sennheiser"), "polar": None}
+    fs.MIC = {
+        "key": KEY,
+        "response": ("sennheiser_md421_response.csv", "sennheiser"),
+        "polar": None,
+    }
     fs.CAP_ON = False
     entry = yaml.safe_load(fs.PUBLISHED.read_text(encoding="utf-8"))[KEY]
     g0 = _plain(entry["geometry"])

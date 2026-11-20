@@ -58,7 +58,7 @@ PATCHES = [
         ' per channel", notes: "the jack the guitar is plugged into: 1 bright input 1, 2 bright'
         " input 2, 3 normal input 1, 4 normal input 2",
         'input_jack: {value: 1, choices: [1, 2, 3, 4, 5], unit: position, source: "sch: two'
-        f" inputs per channel; 5: {PROV} (jumpering the channels, a common tweed practice)\","
+        f' inputs per channel; 5: {PROV} (jumpering the channels, a common tweed practice)",'
         ' notes: "the jack the guitar is plugged into: 1 bright input 1, 2 bright input 2, 3'
         " normal input 1, 4 normal input 2, 5 jumpered (the guitar in bright input 1, a patch"
         " cable from bright input 2 to normal input 1: both volumes blend)",
@@ -85,7 +85,7 @@ PATCHES = [
         f' {PROV} (2 a 12AX7 in its socket, the common swap for more gain)", notes: "1 12AY7,'
         ' 2 12AX7"}\n'
         '  r_cathode6_ohm: {value: 250, min: 150, max: 820, unit: ohm, source: "sch: 250-5W'
-        f' from the 6V6 cathodes to ground; the range: {PROV} (a bias mod: lower hotter,'
+        f" from the 6V6 cathodes to ground; the range: {PROV} (a bias mod: lower hotter,"
         ' higher colder)", notes: "BIAS"}\n'
         "  c_reservoir_f: {value: 16.0e-6, choices: [4.0e-6, 8.0e-6, 16.0e-6, 32.0e-6, 47.0e-6,"
         ' 100.0e-6], unit: F, source: "sch: 16-450 (the stock first filter); the steps:'
@@ -97,8 +97,8 @@ PATCHES = [
         "values:\n",
         "values:\n"
         "  # --- The mods (scripts/make_fender_5e3_mods.py) ---------------------------------------\n"
-        f'  jumper_cable_ohm: {{value: 0.1, source: "{PROV} (a short patch cable\'s conductor'
-        ' and its plugs\' contacts)"}\n'
+        f"  jumper_cable_ohm: {{value: 0.1, source: \"{PROV} (a short patch cable's conductor"
+        " and its plugs' contacts)\"}\n"
         f'  jumper_cable_c_f: {{value: 60.0e-12, source: "{PROV} (a ~0.5 m patch cable at'
         ' ~100 pF/m)"}\n',
     ),
@@ -140,8 +140,8 @@ PATCHES = [
         '          CJUMP: {C: [j2b, "0"], c: jumper_cable_c_f, tolerance: none, in: [5]}\n',
     ),
     (
-        "          RJ1N_GND: {R: [j1n, \"0\"], r: jack_contact_ohm, tolerance: none, in: [1, 2, 4]}\n",
-        "          RJ1N_GND: {R: [j1n, \"0\"], r: jack_contact_ohm, tolerance: none, in: [1, 2, 4]}\n",
+        '          RJ1N_GND: {R: [j1n, "0"], r: jack_contact_ohm, tolerance: none, in: [1, 2, 4]}\n',
+        '          RJ1N_GND: {R: [j1n, "0"], r: jack_contact_ohm, tolerance: none, in: [1, 2, 4]}\n',
     ),
     (
         "          RJ2N_J1: {R: [j2n, j1n], r: jack_contact_ohm, tolerance: none, in: [1, 2, 3]}\n",

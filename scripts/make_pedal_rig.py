@@ -132,9 +132,7 @@ def compose(pedal_name: str, amp_name: str) -> str:
         }
         sections.append({"title": f"{tag} {s['title']}", "parts": parts})
     cable = {
-        f"CRIG_{tag.upper()}": _untoleranced(
-            {"C": ["jack", GROUND], "c": keys["cable_c_f"]}, amp
-        ),
+        f"CRIG_{tag.upper()}": _untoleranced({"C": ["jack", GROUND], "c": keys["cable_c_f"]}, amp),
     }
     sections.append({"title": f"{tag} cable", "parts": cable})
     for s in amp["sections"]:

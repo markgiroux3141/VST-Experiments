@@ -8,6 +8,7 @@ sennheiser_md421.provenance.yaml).
 
     uv run --with pymupdf python scripts/digitize_md421.py PDF
 """
+
 from __future__ import annotations
 
 import sys
@@ -28,7 +29,14 @@ def points(items, n=16):
         elif it[0] == "c":
             p0, p1, p2, p3 = (np.array([q.x, q.y]) for q in it[1:5])
             for t in np.linspace(0, 1, n):
-                pts.append(tuple((1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t**2 * p2 + t**3 * p3))
+                pts.append(
+                    tuple(
+                        (1 - t) ** 3 * p0
+                        + 3 * (1 - t) ** 2 * t * p1
+                        + 3 * (1 - t) * t**2 * p2
+                        + t**3 * p3
+                    )
+                )
     return np.array(pts)
 
 
@@ -40,6 +48,7 @@ def main(pdf: str) -> None:
     a, b = np.polyfit(np.log10(fs), xs, 1)
     # level: rules every 16.5 pt = 10 dB, -40 dBV at y 667.65, -90 at 750.0
     y40, y90 = 667.65, 750.0
+
     def dbv(y):
         return -40.0 - (y - y40) / (y90 - y40) * 50.0
 
@@ -51,9 +60,11 @@ def main(pdf: str) -> None:
         f = 10 ** ((p[:, 0] - b) / a)
         o = np.argsort(f)
         traces[i] = (f[o], dbv(p[o, 1]))
+
     def at50(i):
         f, d = traces[i]
         return float(np.interp(50.0, f, d))
+
     order = sorted(traces, key=lambda i: -at50(i))  # highest first: M, then rolling off more
     grid = 10 ** np.arange(np.log10(40), np.log10(20000) + 1e-9, np.log10(2) / 3)
     rows = []
@@ -61,9 +72,17 @@ def main(pdf: str) -> None:
         f, d = traces[i]
         for g in grid:
             if f[0] <= g <= f[-1]:
-                rows.append(("M" if rank == 0 else f"dip{rank}", round(g, 1), round(float(np.interp(g, f, d)), 2)))
+                rows.append(
+                    (
+                        "M" if rank == 0 else f"dip{rank}",
+                        round(g, 1),
+                        round(float(np.interp(g, f, d)), 2),
+                    )
+                )
     out = ROOT / "data" / "datasheets" / "sennheiser_md421_response.csv"
-    out.write_text(NL.join(["trace,freq_hz,dbv_per_pa"] + [f"{n},{f},{d}" for n, f, d in rows]) + NL)
+    out.write_text(
+        NL.join(["trace,freq_hz,dbv_per_pa"] + [f"{n},{f},{d}" for n, f, d in rows]) + NL
+    )
     print("response rows", len(rows))
     # polar
     rings_r = (12.8, 26.7, 40.6, 54.7, 68.5, 82.1)  # 25 .. 0 dB

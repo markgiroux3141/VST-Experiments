@@ -64,9 +64,9 @@ PATCHES = [
         '  harp_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate'
         " (96 kHz at draft-2x, 192 kHz at production): below 20 kHz within -72 to -110 dB of"
         ' 8x the rate (docs/RHODES_PLAN.md, RH3)"}\n'
-        '  harp_contact_rate_hz: {value: 384000.0, source: "numerical: the hammer\'s contact'
+        "  harp_contact_rate_hz: {value: 384000.0, source: \"numerical: the hammer's contact"
         " stepped at 384 kHz (RH1's rate; 768 kHz changes nothing measurable, RH3)\"}\n"
-        '  r_input_unused_ohm: {value: 1.0e+6, source: "numerical: the circuit\'s audio input,'
+        "  r_input_unused_ohm: {value: 1.0e+6, source: \"numerical: the circuit's audio input,"
         ' unused (the harp is the source), terminated"}\n'
         '  stage_bass_c_f: {value: 0.047e-6, source: "web: https://ep-forum.com/smf/index.php?topic=9793.0'
         " (Fender's printed Stage schematic as quoted there: 50K bass boost pot, .047 uF, 10K"
@@ -91,7 +91,7 @@ PATCHES = [
         "      # wiper drives the cable and the 5E3's jack. The audio input is unused.\n"
         "      HARP: {harp: [hl], component: harp_model, rate_hz: harp_rate_hz,"
         " contact_rate_hz: harp_contact_rate_hz}\n"
-        "      RIN_UNUSED: {R: [in, \"0\"], r: r_input_unused_ohm, tolerance: none}\n"
+        '      RIN_UNUSED: {R: [in, "0"], r: r_input_unused_ohm, tolerance: none}\n'
         "      CBASS: {C: [hl, vt], c: stage_bass_c_f, tolerance: none}\n"
         "      RBASS: {rheostat: [hl, vt], r: stage_bass_pot_ohm, at: stage_bass, reverse: 1,"
         " taper_mid: audio_taper_mid, tolerance: none}\n"
