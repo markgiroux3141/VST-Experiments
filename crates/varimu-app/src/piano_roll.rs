@@ -155,6 +155,8 @@ pub struct Roll {
     gesture: Option<Gesture>,
     /// The note being heard (a click's preview), let go when the press ends.
     sounding: Option<u8>,
+    /// Ctrl+V as the OS sees it (egui drops it when the system clipboard has no text).
+    paste_key: crate::os_clipboard::PasteKey,
     /// The view: the timeline's left edge (s), px per s, the top key and a key's height.
     view_s: f64,
     px_per_s: f64,
@@ -205,6 +207,7 @@ impl Roll {
             selected: BTreeSet::new(),
             gesture: None,
             sounding: None,
+            paste_key: Default::default(),
             view_s: place.position as f64 / place.rate as f64 - 0.25,
             px_per_s: 120.0,
             top_key: 84.0,
@@ -1007,7 +1010,8 @@ impl Roll {
             out.push(Out::Preview(n, 0, false));
             self.sounding = None;
         }
-        // Keys over the roll.
+        // Keys over the roll (Ctrl+V read every frame, so its edge stays current).
+        let paste_key = self.paste_key.pressed(ui.ctx());
         if ui.rect_contains_pointer(rect) && !ui.ctx().egui_wants_keyboard_input() {
             let (del, up, down, q, all) = ui.input(|i| {
                 (
@@ -1024,18 +1028,17 @@ impl Roll {
                     !command && i.key_pressed(egui::Key::ArrowRight),
                     command && i.key_pressed(egui::Key::C),
                     command && i.key_pressed(egui::Key::X),
-                    command && i.key_pressed(egui::Key::V),
+                    paste_key,
                     command && i.key_pressed(egui::Key::D),
                 )
             });
-            // egui turns Ctrl+C / X / V into clipboard events.
-            let (copy, cut, paste) = ui.input(|i| {
-                let mut c = (copy, cut, paste);
+            // egui turns Ctrl+C / X into clipboard events (Ctrl+V: `paste_key`).
+            let (copy, cut) = ui.input(|i| {
+                let mut c = (copy, cut);
                 for e in &i.events {
                     match e {
                         egui::Event::Copy => c.0 = true,
                         egui::Event::Cut => c.1 = true,
-                        egui::Event::Paste(_) => c.2 = true,
                         _ => {}
                     }
                 }

@@ -48,10 +48,16 @@
 //! Consolidate the selection). Shift+drag copies a clip, ← / → nudge.
 //!
 //! **The cursor** (docs/SESSION_EDITING_PLAN.md SE2) is where play starts and a take
-//! records: a click on the ruler or on empty lane space puts it there (snapped; Alt: the
-//! snap inverted), a click on a marker's flag jumps to it. Moving it while playing plays on
-//! from it. Stop puts the playhead back at the cursor, or with "return" off leaves the
-//! cursor where play stopped. Moving the cursor isn't an undo step.
+//! records: a click on the ruler or a lane (on a clip too, which it also selects) puts it
+//! there (snapped; Alt: the snap inverted), a click on a marker's flag jumps to it. Moving
+//! it while playing plays on from it. Play starts at the cursor itself; the count-in and
+//! pre-roll lead into a take only. Stop puts the playhead back at the cursor, or with
+//! "return" off leaves the cursor where play stopped. Moving the cursor isn't an undo step.
+//!
+//! **Paste** (Ctrl+V) lays the copied clips at the cursor on the selected (else the armed)
+//! track; audio files copied in Explorer since the last copy here come in there instead, as
+//! a drop does. Ctrl+V is read from the OS (`os_clipboard`): egui drops it when the system
+//! clipboard has no text.
 //!
 //! **Snap** (the transport's second row): Bar, Beat, 1/8, 1/8T, 1/16, 1/32 or Off, for
 //! every gesture on the timeline (moving takes, the cursor, the locators on beats or bars);
@@ -520,6 +526,11 @@ pub struct SessionView {
     /// track), the range being dragged (its track and start), the roll's area last frame
     /// (keys over it are the roll's).
     clipboard: Vec<varimu_app::session::Copied>,
+    /// Ctrl+V as the OS sees it (egui drops it when the system clipboard has no text), and
+    /// the system clipboard's sequence number when the clipboard above was last filled:
+    /// a change since means something was copied elsewhere (files from Explorer paste).
+    paste_key: crate::os_clipboard::PasteKey,
+    copied_seq: Option<u32>,
     range_sel: Option<(i64, i64, usize, usize)>,
     range_drag: Option<(usize, i64)>,
     roll_rect: Option<Rect>,
@@ -835,6 +846,8 @@ impl SessionView {
             menu_clip: None,
             comp: None,
             clipboard: Vec::new(),
+            paste_key: Default::default(),
+            copied_seq: None,
             range_sel: None,
             range_drag: None,
             roll_rect: None,
@@ -1034,7 +1047,8 @@ impl SessionView {
                 play.apply_monitor();
             }
             if let Some(p) = play.player() {
-                p.set_transport(&self.session.transport);
+                let plain = p.status().transport.running && !p.take_armed();
+                p.set_transport(&self.transport_for(!plain));
                 let mix = match &self.audition {
                     Some(a) if a.track == MASTER => self.session.mix_master_audition(),
                     Some(a) => self.session.mix_audition(a.track),
@@ -1326,15 +1340,16 @@ impl SessionView {
                 self.nudge(nudge.0, nudge.1);
             }
         }
-        // The clipboard (SE6): Ctrl+C / X / V / D on the selected range or clip.
+        // The clipboard (SE6): Ctrl+C / X / V / D on the selected range or clip. Ctrl+V
+        // comes from the OS (`os_clipboard`), read every frame so its edge stays current.
+        let paste_key = self.paste_key.pressed(ui.ctx());
         if !over_roll && self.recording.is_none() {
-            let (copy, cut, paste, dup) = ui.input(|i| {
+            let (copy, cut, _, dup) = ui.input(|i| {
                 let mut c = (false, false, false, false);
                 for e in &i.events {
                     match e {
                         egui::Event::Copy => c.0 = true,
                         egui::Event::Cut => c.1 = true,
-                        egui::Event::Paste(_) => c.2 = true,
                         egui::Event::Key {
                             key: egui::Key::C,
                             pressed: true,
@@ -1361,8 +1376,8 @@ impl SessionView {
             if copy || cut {
                 self.copy_selection(cut);
             }
-            if paste {
-                self.paste_clipboard();
+            if paste_key {
+                self.paste();
             }
             if dup {
                 self.duplicate_selection();
@@ -1432,6 +1447,7 @@ impl SessionView {
             } else if self.start_mix(play)
                 && let Some(p) = play.player()
             {
+                p.set_transport(&self.transport_for(false));
                 p.transport_run(true);
             }
             return;
@@ -1467,9 +1483,21 @@ impl SessionView {
             p.begin_event_take(&id);
         } else {
             p.arm_take(record);
+            p.set_transport(&self.transport_for(record));
             p.transport_run(true);
         }
         self.error = None;
+    }
+
+    /// The transport as the player runs it: a take counts in and pre-rolls as set, a plain
+    /// play starts at the cursor itself (the count-in and pre-roll lead into a take).
+    fn transport_for(&self, record: bool) -> TransportSettings {
+        let mut t = self.session.transport.clone();
+        if !record {
+            t.count_in_bars = 0;
+            t.pre_roll_bars = 0;
+        }
+        t
     }
 
     /// Stop: the playhead back at the cursor, or (return off) the cursor where play
@@ -2503,7 +2531,7 @@ impl SessionView {
                         self.close_insert_panels();
                         return;
                     }
-                    p.set_transport(&self.session.transport);
+                    p.set_transport(&self.transport_for(!running));
                     if running {
                         p.transport_run(true);
                     }
@@ -6042,9 +6070,9 @@ impl SessionView {
                 let snap = self.session.transport.snap.inverted(alt);
                 self.range_drag = Some((i, grid.snap(view.position(p.x), snap)));
             }
-            // A click on empty lane space puts the cursor there (snapped; Alt: inverted).
+            // A click on a lane (on a clip too, which it also selects) puts the cursor
+            // there (snapped; Alt: inverted).
             if lane_resp.clicked()
-                && hit.is_none()
                 && let Some(p) = lane_resp.interact_pointer_pos()
                 && lane.contains(p)
             {
@@ -7130,6 +7158,7 @@ impl SessionView {
             return;
         }
         self.clipboard = items;
+        self.copied_seq = Some(crate::os_clipboard::sequence());
         if cut {
             self.delete_selection();
         }
@@ -7151,6 +7180,27 @@ impl SessionView {
             self.clip_action(t, c, "delete");
             self.save();
         }
+    }
+
+    /// Paste (Ctrl+V): audio files copied in Explorer since the last copy here come in at
+    /// the cursor on the selected (else the armed) track, as a drop there does; otherwise
+    /// the clipboard's clips.
+    fn paste(&mut self) {
+        let files = audio_files_in(crate::os_clipboard::files());
+        let elsewhere = self.copied_seq != Some(crate::os_clipboard::sequence());
+        if files.is_empty() || !(self.clipboard.is_empty() || elsewhere) {
+            self.paste_clipboard();
+            return;
+        }
+        let t = self.selected.map(|s| s.0).or(self.session.armed);
+        let dest = match t.and_then(|t| self.session.tracks.get(t)) {
+            Some(track) => ImportDest::Onto {
+                track: track.id.clone(),
+                position: self.session.transport.cursor,
+            },
+            None => ImportDest::NewTracks,
+        };
+        self.import_files(files, dest);
     }
 
     /// The clipboard laid at the cursor on the armed track (a range keeps its tracks'
@@ -8168,23 +8218,7 @@ impl SessionView {
         if dropped.is_empty() || !(area.contains(p) || on_lane.is_some()) {
             return;
         }
-        let audio_file = |f: &std::path::Path| {
-            f.extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
-        };
-        let mut files = Vec::new();
-        for f in dropped {
-            if f.is_dir() {
-                let mut inside: Vec<PathBuf> = std::fs::read_dir(&f)
-                    .map(|d| d.filter_map(|e| Some(e.ok()?.path())).collect())
-                    .unwrap_or_default();
-                inside.sort();
-                files.extend(inside.into_iter().filter(|f| audio_file(f)));
-            } else if audio_file(&f) {
-                files.push(f);
-            }
-        }
+        let files = audio_files_in(dropped);
         if files.is_empty() {
             self.error = Some(format!(
                 "nothing to import: drop audio files ({})",
@@ -9398,7 +9432,7 @@ fn keys_overlay(ui: &mut egui::Ui) {
                 ),
                 (
                     "Ctrl+C / X / V / D",
-                    "copy, cut, paste at the cursor, duplicate",
+                    "copy, cut, paste at the cursor (files copied in Explorer too), duplicate",
                 ),
                 ("Ctrl+R", "render / print what's selected"),
                 ("/", "loop on / off"),
@@ -9447,7 +9481,8 @@ fn keys_overlay(ui: &mut egui::Ui) {
                     "clip: right-click",
                     "split, fades, crossfade, reverse, varispeed, slice, ...",
                 ),
-                ("empty lane: click / drag", "cursor / select a range"),
+                ("lane: click", "cursor there (a clip: selected too)"),
+                ("empty lane: drag", "select a range"),
                 (
                     "take row: click / drag",
                     "the take whole / comp a stretch in",
@@ -9619,6 +9654,29 @@ fn knob_ui(
         }
         None => false,
     }
+}
+
+/// The audio files among `paths` (dropped or pasted), a folder's audio files in name
+/// order in its place.
+fn audio_files_in(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let audio_file = |f: &Path| {
+        f.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
+    };
+    let mut files = Vec::new();
+    for f in paths {
+        if f.is_dir() {
+            let mut inside: Vec<PathBuf> = std::fs::read_dir(&f)
+                .map(|d| d.filter_map(|e| Some(e.ok()?.path())).collect())
+                .unwrap_or_default();
+            inside.sort();
+            files.extend(inside.into_iter().filter(|f| audio_file(f)));
+        } else if audio_file(&f) {
+            files.push(f);
+        }
+    }
+    files
 }
 
 /// Where the cursor is while files are dragged in from another program, in this window's

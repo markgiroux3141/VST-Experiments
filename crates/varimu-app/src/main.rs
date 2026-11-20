@@ -15,6 +15,7 @@
 mod components_view;
 mod editor_view;
 mod mixer;
+mod os_clipboard;
 mod piano_roll;
 mod play_view;
 mod room_view;
