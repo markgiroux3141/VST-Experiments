@@ -1,0 +1,70 @@
+fitting the voicing and the layers' speeds ...
+  voicing 0.600 mm speeds [0.5 1.2 2.5] -> rms 23.08 dB
+  voicing 0.630 mm speeds [0.5 1.2 2.5] -> rms 23.68 dB
+  voicing 0.600 mm speeds [0.483 1.2   2.5  ] -> rms 23.39 dB
+  voicing 0.600 mm speeds [0.5   1.211 2.5  ] -> rms 23.09 dB
+  voicing 0.600 mm speeds [0.5   1.2   2.617] -> rms 22.90 dB
+  voicing 0.638 mm speeds [0.99  1.269 3.378] -> rms 18.61 dB
+  voicing 0.670 mm speeds [0.99  1.269 3.378] -> rms 17.17 dB
+  voicing 0.638 mm speeds [0.989 1.269 3.378] -> rms 18.61 dB
+  voicing 0.638 mm speeds [0.99  1.284 3.378] -> rms 18.55 dB
+  voicing 0.638 mm speeds [0.99  1.269 3.59 ] -> rms 18.56 dB
+  voicing 0.652 mm speeds [1.191 1.252 3.874] -> rms 16.90 dB
+  voicing 0.685 mm speeds [1.191 1.252 3.874] -> rms 16.75 dB
+  voicing 0.652 mm speeds [1.202 1.252 3.874] -> rms 16.87 dB
+  voicing 0.652 mm speeds [1.191 1.266 3.874] -> rms 16.84 dB
+  voicing 0.652 mm speeds [1.191 1.252 4.145] -> rms 16.92 dB
+  voicing 0.670 mm speeds [1.441 1.488 3.91 ] -> rms 15.69 dB
+  voicing 0.703 mm speeds [1.441 1.488 3.91 ] -> rms 16.58 dB
+  voicing 0.670 mm speeds [1.468 1.488 3.91 ] -> rms 15.55 dB
+  voicing 0.670 mm speeds [1.441 1.518 3.91 ] -> rms 15.59 dB
+  voicing 0.670 mm speeds [1.441 1.488 4.185] -> rms 15.71 dB
+  voicing 0.650 mm speeds [1.587 1.59  3.817] -> rms 15.34 dB
+  voicing 0.683 mm speeds [1.587 1.59  3.817] -> rms 15.16 dB
+  voicing 0.650 mm speeds [1.625 1.59  3.817] -> rms 15.26 dB
+  voicing 0.650 mm speeds [1.587 1.627 3.817] -> rms 15.17 dB
+  voicing 0.650 mm speeds [1.587 1.59  4.082] -> rms 15.35 dB
+  voicing 0.661 mm speeds [1.828 1.927 3.88 ] -> rms 13.86 dB
+  voicing 0.694 mm speeds [1.828 1.927 3.88 ] -> rms 14.15 dB
+  voicing 0.661 mm speeds [1.884 1.927 3.88 ] -> rms 13.86 dB
+  voicing 0.661 mm speeds [1.828 1.991 3.88 ] -> rms 13.75 dB
+  voicing 0.661 mm speeds [1.828 1.927 4.152] -> rms 13.88 dB
+  voicing 0.666 mm speeds [1.87  2.285 3.911] -> rms 13.39 dB
+  voicing 0.700 mm speeds [1.87  2.285 3.911] -> rms 13.77 dB
+  voicing 0.666 mm speeds [1.93  2.285 3.911] -> rms 13.39 dB
+  voicing 0.666 mm speeds [1.87  2.381 3.911] -> rms 13.32 dB
+  voicing 0.666 mm speeds [1.87  2.285 4.187] -> rms 13.41 dB
+  voicing 0.666 mm speeds [1.906 2.573 3.909] -> rms 13.24 dB
+  voicing 0.699 mm speeds [1.906 2.573 3.909] -> rms 13.62 dB
+  voicing 0.666 mm speeds [1.969 2.573 3.909] -> rms 13.24 dB
+  voicing 0.666 mm speeds [1.906 2.697 3.909] -> rms 13.23 dB
+  voicing 0.666 mm speeds [1.906 2.573 4.184] -> rms 13.26 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.697 mm speeds [1.924 2.669 3.895] -> rms 13.52 dB
+  voicing 0.663 mm speeds [1.988 2.669 3.895] -> rms 13.25 dB
+  voicing 0.663 mm speeds [1.924 2.804 3.895] -> rms 13.25 dB
+  voicing 0.663 mm speeds [1.924 2.669 4.169] -> rms 13.26 dB
+  voicing 0.664 mm speeds [1.935 2.688 3.896] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.928 2.673 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.925 2.67  3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.67  3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+  voicing 0.663 mm speeds [1.924 2.669 3.895] -> rms 13.24 dB
+key 4: L 60.5 mm, mode 2 8.72 x f0
+key 10: L 52.4 mm, mode 2 8.34 x f0
+key 15: L 46.5 mm, mode 2 8.07 x f0
+key 28: L 43.2 mm, mode 2 7.48 x f0
+key 34: L 37.2 mm, mode 2 7.28 x f0
+key 39: L 32.7 mm, mode 2 7.14 x f0
+key 52: L 23.4 mm, mode 2 6.85 x f0
+key 58: L 20.0 mm, mode 2 6.74 x f0
+key 63: L 17.5 mm, mode 2 6.66 x f0
+
+real	9m47.312s
+user	0m0.000s
+sys	0m0.030s
