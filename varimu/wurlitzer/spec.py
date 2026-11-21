@@ -12,8 +12,14 @@
   f, held at the ends);
 - the pickup's section for its blank and the field map (`pickup.field_map`);
 - the slot along the reed's outer end, the hammer's strike point;
+- per register (WZ3, `by_register`: given at `registers.anchor_keys`, linear in the key
+  between them): the voicing, the hammer's mass, the damper's decay (none from
+  `damper.undamped_from_key` up);
 - the plate's constant capacitance: `plate.fixed_f` plus every reed's standing capacitance
-  at its voicing (the 64 reeds share the plate).
+  at its voicing (the 64 reeds share the plate; WZ1's load, the circuit's is WZ2's).
+
+`hammer_speed(velocity)` is the velocity law: MIDI velocity to the hammer's speed, through
+the Pie-finger layers' fitted speeds at their assumed velocities.
 """
 
 from __future__ import annotations
@@ -76,6 +82,38 @@ def blank(n: int, cfg: dict[str, Any]) -> int:
     raise ValueError(f"key {n}: past the last blank")
 
 
+def by_register(
+    n: float, values: list[float], cfg: dict[str, Any], anchors: str = "anchor_keys"
+) -> float:
+    """A per-register value at key n: linear in the key between the anchors
+    (`registers.<anchors>`), held outside."""
+    return float(np.interp(n, cfg["registers"][anchors], values))
+
+
+def hammer_mass_kg(n: float, cfg: dict[str, Any]) -> float:
+    """The hammer's mass at key n: on `registers.hammer_anchor_keys` (a construction value,
+    smooth across the keyboard) when given, else on the voicing's anchors."""
+    reg = cfg["registers"]
+    anchors = "hammer_anchor_keys" if "hammer_anchor_keys" in reg else "anchor_keys"
+    return by_register(n, cfg["hammer"]["mass_kg"], cfg, anchors)
+
+
+def velocity_law(cfg: dict[str, Any]) -> tuple[float, float]:
+    """(ff_speed_m_s, range_db): the law's speed at 127 and its span over 1-127, least
+    squares in log speed through the layers."""
+    v = cfg["velocity"]
+    x = (127.0 - np.asarray(v["layer_velocities"], dtype=float)) / 126.0
+    y = 20 * np.log10(np.asarray(v["layer_speeds_m_s"], dtype=float))
+    slope, icpt = np.polyfit(x, y, 1)
+    return float(10 ** (icpt / 20)), float(-slope)
+
+
+def hammer_speed(velocity: float, name: str = "200a") -> float:
+    """The hammer's speed (m/s) for a MIDI velocity (1-127)."""
+    ff, rng = velocity_law(load(name))
+    return float(ff * 10 ** (-rng / 20 * (127.0 - velocity) / 126.0))
+
+
 def tip_mass_ratio(n: int, cfg: dict[str, Any]) -> float:
     r = cfg["reed"]
     keys = cfg["keyboard"]["keys"]
@@ -111,6 +149,8 @@ class Key:
     slot_lo_m: float  # the slot's prongs alongside the reed from here ...
     slot_hi_m: float  # ... to here (from the root)
     voicing_m: float
+    damper_x_m: float
+    damper_decay_db_s: float | None  # the damped fundamental's decay; None: no damper
     polarizing_v: float
     feed_ohm: float
     plate_f: float  # the plate's constant capacitance (every reed at rest, the fixed part)
@@ -154,11 +194,21 @@ def _reed(n: int, name: str) -> rd.Reed:
     return rd.tune(base, f, tip_mass_ratio(n, cfg), r["tip_length_m"], r["max_tip_fraction"])
 
 
-def _slot(reed: rd.Reed, cfg: dict[str, Any]) -> tuple[float, float]:
-    p = cfg["pickup"]
-    hi = reed.length_m - p["overlap_tip_clearance_m"]
-    lo = max(hi - p["overlap_m"], 0.3 * reed.length_m)
-    return lo, hi
+def slot_m(reed: rd.Reed, overlap_m: float, cfg: dict[str, Any]) -> tuple[float, float]:
+    """The slot's prongs alongside the reed (from its root): `overlap_m` long, ending
+    `overlap_tip_clearance_m` short of the tip, no nearer the root than 0.3 of its length."""
+    hi = reed.length_m - cfg["pickup"]["overlap_tip_clearance_m"]
+    return max(hi - overlap_m, 0.3 * reed.length_m), hi
+
+
+def overlap_m(n: int, cfg: dict[str, Any]) -> float:
+    """The slot's length along key n's reed (per register: a list on the anchors)."""
+    v = cfg["pickup"]["overlap_m"]
+    return by_register(n, v, cfg) if isinstance(v, list) else float(v)
+
+
+def _slot(n: int, reed: rd.Reed, cfg: dict[str, Any]) -> tuple[float, float]:
+    return slot_m(reed, overlap_m(n, cfg), cfg)
 
 
 @functools.cache
@@ -166,12 +216,24 @@ def _field(sec: pk.Section) -> pk.FieldMap:
     return pk.field_map(sec)
 
 
-def standing_f(n: int, name: str = "200a") -> float:
+def voicing_m(n: int, name: str = "200a") -> float:
+    cfg = load(name)
+    return by_register(n, cfg["pickup"]["voicing_m"], cfg)
+
+
+def standing_f(n: int, name: str = "200a", voicing: float | None = None) -> float:
     """Key n's reed at rest: its share of the plate's capacitance (F)."""
     cfg = load(name)
     reed = _reed(n, name)
-    lo, hi = _slot(reed, cfg)
-    return float(_field(section_for(n, cfg))(np.array([cfg["pickup"]["voicing_m"]]))[0] * (hi - lo))
+    lo, hi = _slot(n, reed, cfg)
+    h0 = voicing_m(n, name) if voicing is None else voicing
+    return float(_field(section_for(n, cfg))(np.array([h0]))[0] * (hi - lo))
+
+
+@functools.cache
+def reeds_f(name: str = "200a") -> float:
+    """All 64 reeds' standing capacitance to the plate (the circuit's `c_reeds_f`)."""
+    return sum(standing_f(n, name) for n in range(1, load(name)["keyboard"]["keys"] + 1))
 
 
 @functools.cache
@@ -187,19 +249,25 @@ def key(n: int, name: str = "200a", with_plate: bool = True) -> Key:
     if not 1 <= n <= cfg["keyboard"]["keys"]:
         raise ValueError(f"key {n}: 1-{cfg['keyboard']['keys']}")
     reed = _reed(n, name)
-    lo, hi = _slot(reed, cfg)
+    lo, hi = _slot(n, reed, cfg)
     h = cfg["hammer"]
     pl = cfg["plate"]
     strike_x = h["strike_fraction"] * reed.length_m
+    d = cfg["damper"]
+    mass = hammer_mass_kg(n, cfg)
     return Key(
         n=n,
         f_hz=note_hz(n, cfg),
         reed=reed,
-        hammer=Hammer(h["mass_kg"], h["stiffness"], h["exponent"], h["hysteresis_s_m"], strike_x),
+        hammer=Hammer(mass, h["stiffness"], h["exponent"], h["hysteresis_s_m"], strike_x),
         section=section_for(n, cfg),
         slot_lo_m=lo,
         slot_hi_m=hi,
-        voicing_m=cfg["pickup"]["voicing_m"],
+        voicing_m=voicing_m(n, name),
+        damper_x_m=d["x_fraction"] * reed.length_m,
+        damper_decay_db_s=None
+        if n >= d["undamped_from_key"]
+        else by_register(n, d["decay_db_s"], cfg),
         polarizing_v=pl["polarizing_v"],
         feed_ohm=pl["feed_ohm"],
         plate_f=plate_f(name) if with_plate else pl["fixed_f"] + standing_f(n, name),

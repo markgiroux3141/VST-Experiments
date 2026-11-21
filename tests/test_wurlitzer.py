@@ -113,13 +113,24 @@ def test_a_reed_at_rest_in_the_plates_plane_doubles_its_frequency():
     assert h1 > 3 * h2
 
 
+def _bark(y: np.ndarray, fs: float, f0: float) -> float:
+    """Harmonics 2-5's amplitude (rss) re the fundamental's."""
+    seg = y[int(0.1 * fs) :] * np.hanning(y.size - int(0.1 * fs))
+    s = np.abs(np.fft.rfft(seg, 1 << 20))
+    fr = np.fft.rfftfreq(1 << 20, 1 / fs)
+
+    def pk_(f):
+        lo, hi = np.searchsorted(fr, [f * 0.98, f * 1.02])
+        return s[lo:hi].max()
+
+    return float(np.sqrt(sum(pk_(h * f0) ** 2 for h in range(2, 6))) / pk_(f0))
+
+
 def test_the_bark_grows_with_the_strike():
     k = sp.key(4)
     soft = ky.strike(k, 0.3, duration_s=0.5, fs_hz=48000.0, oversample=8)
     hard = ky.strike(k, 2.0, duration_s=0.5, fs_hz=48000.0, oversample=8)
-    r_soft = np.divide(*_h(soft.plate_v, 48000.0, k.f_hz)[::-1])
-    r_hard = np.divide(*_h(hard.plate_v, 48000.0, k.f_hz)[::-1])
-    assert r_hard > 3 * r_soft
+    assert _bark(hard.plate_v, 48000.0, k.f_hz) > 3 * _bark(soft.plate_v, 48000.0, k.f_hz)
     assert hard.strikes == 1 and 0.2e-3 < hard.contact_s < 3e-3
 
 

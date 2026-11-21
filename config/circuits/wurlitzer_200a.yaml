@@ -59,7 +59,7 @@ input: in
 probes: [out, spk, pk, pa, b1, c2, x, po, p13, p15, c34, o, v15, vpos, vneg, hv150, vw]
 
 full_scale:
-  input_volts_peak: {value: 2.0, source: "provisional: model knowledge (the reeds' equivalent voltage V0 dC / C_reeds: a hard bass strike, WZ1's ~0.3 pF swing at 150 V over ~31 pF of reeds, is ~1.5 V)"}
+  input_volts_peak: {value: 5.0, source: "measured (2026-11-20, WZ3: scripts/wurlitzer_render.py --demo): the reeds' input V0 dC / C_reeds peaks at 4.35 V on A1 and A2 struck together at velocity 127 (WZ2's 2.0 V was WZ1's single key at 31 pF)"}
   output_volts_peak: {value: 1.0, source: "the drawing: the AUX output's 'maximum output signal level approx. .4 V AC' (0.57 V peak), with headroom"}
 
 controls:
@@ -77,7 +77,7 @@ values:
   r1_ohm: {value: 22.0e+3, source: "the drawing: R1 22K, the pickup to pa"}
   r2_ohm: {value: 1.0e+6, source: "the drawing: R2 1 MEG, +150 V to pa"}
   c1_f: {value: 0.022e-6, source: "the drawing: C1 .022, pa to TR-1's base"}
-  c_reeds_f: {value: 31.0e-12, source: "derived: WZ1's field maps (varimu/wurlitzer/spec.py standing_f), the 64 reeds' standing capacitance to the plate at the voicing (~0.45-0.50 pF each); its geometry provisional"}
+  c_reeds_f: {value: 54.9e-12, source: "derived (2026-11-20, WZ3): the field maps (varimu/wurlitzer/spec.py reeds_f), the 64 reeds' standing capacitance to the plate at each register's fitted voicing and slot (config/wurlitzer/200a.yaml; 31 pF at WZ1's one voicing and 6 mm slot); its geometry provisional"}
   c_plate_stray_f: {value: 50.0e-12, source: "provisional: model knowledge (the comb plate to the grounded reed bar and the shield over the reed bars, and its lead to the preamp board mounted between the reed bars)"}
   r_in_ohm: {value: 1.0e+9, source: "numerical: a DC path for the test input's node"}
   # --- the reed bar preamp (the drawing)

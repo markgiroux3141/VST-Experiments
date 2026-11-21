@@ -14,6 +14,8 @@ import pytest
 
 pytest.importorskip("circuitsim")
 
+from varimu.wurlitzer import circuit  # noqa: E402
+
 _spec = importlib.util.spec_from_file_location(
     "wurlitzer_amp_study", Path(__file__).parents[1] / "scripts" / "wurlitzer_amp_study.py"
 )
@@ -61,9 +63,14 @@ def test_vibrato_off_is_unmodulated():
 
 
 def test_power_amplifier_clips_near_20_watts():
+    # the drive as WZ2 set it, at 31 pF of reeds: the same current into the plate whatever
+    # CREEDS is (`in` pushes C_reeds d(in)/dt)
+    scale = 31.0e-12 / circuit.c_reeds_f()
+
     def at(a: float) -> tuple[float, float]:
         n = int(0.3 * FS)
-        v = study.render({"volume": 1.0}, a * np.sin(2 * np.pi * 1000 * np.arange(n) / FS))
+        x = scale * a * np.sin(2 * np.pi * 1000 * np.arange(n) / FS)
+        v = study.render({"volume": 1.0}, x)
         seg = v["spk"][n // 2 :]
         return float(np.mean(seg**2) / 8.0), study.thd(seg, 1000.0)
 

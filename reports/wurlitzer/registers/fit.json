@@ -1,0 +1,45 @@
+{
+ "note": "the run the config's values come from (2026-11-20): scripts/wurlitzer_register_fit.py --fit, stopped by hand after 19 iterations gaining < 0.05 dB each; its best evaluation from the log (fit_overlap_log.txt). Earlier runs: fit_3anchors.json (voicing and hammer at the octaves' centres), fit_6anchors.json (both at the octaves' ends, no slot).",
+ "voicing_m": [
+  0.0012900000000000001,
+  0.00114,
+  0.00094,
+  0.00083,
+  0.00107,
+  0.00084
+ ],
+ "overlap_m": [
+  0.0228,
+  0.0224,
+  0.006,
+  0.0211,
+  0.0024,
+  0.0018000000000000002
+ ],
+ "hammer_mass_kg": [
+  0.00085,
+  0.001,
+  0.00059
+ ],
+ "layer_speeds_m_s": [
+  2.37,
+  3.12,
+  4.47
+ ],
+ "anchor_keys": [
+  4,
+  15,
+  28,
+  39,
+  52,
+  63
+ ],
+ "hammer_anchor_keys": [
+  9.5,
+  33.5,
+  57.5
+ ],
+ "rms_db": 5.97,
+ "elapsed_s": 1872,
+ "check": "reports/wurlitzer/registers/summary.json (all 36 recorded keys through the circuit)"
+}

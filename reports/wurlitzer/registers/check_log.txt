@@ -1,0 +1,6 @@
+check (the keyboard through the circuit):
+  keyboard: 108 notes, 185 s in 34 s; circuit ...
+  circuit (production): 1137 s (6.1x real time)
+  octave 2: {'harmonics_rms_db': 9.422559110906395, 'harmonics_mean_db': -1.4921085742108642, 'layer_levels_rms_db': 2.7069781893107367, 'register_level_mean_db': 1.3917612737254952, 'decay_rms_db_s': None, 'damper_ratio_median': 0.9913900609791642}
+  octave 4: {'harmonics_rms_db': 8.615105712062809, 'harmonics_mean_db': -0.19897215645793717, 'layer_levels_rms_db': 0.9983885719687305, 'register_level_mean_db': -2.3684757858670005e-15, 'decay_rms_db_s': 5.445947267856407, 'damper_ratio_median': 0.8797252391607346}
+  octave 6: {'harmonics_rms_db': 9.259412779598394, 'harmonics_mean_db': 1.6555166935653356, 'layer_levels_rms_db': 1.275410792316249, 'register_level_mean_db': -3.5856435941128777, 'decay_rms_db_s': 6.477420368239748, 'damper_ratio_median': 0.9809153189030959}

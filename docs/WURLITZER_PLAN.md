@@ -11,7 +11,7 @@ Sources: [data/schematics/wurlitzer_200a/README.md](../data/schematics/wurlitzer
 Vibe's reed blanks and tuning guide, Pfeifle's DAFx-17 model). Values below without a source there
 are marked provisional.
 
-## Status (2026-11-20): WZ1 and WZ2 built (branch `wurlitzer`, uncommitted)
+## Status (2026-11-20): WZ1 and WZ2 built (branch `wurlitzer`, commit 186856a)
 
 **WZ1, one reed offline in Python** (`varimu/wurlitzer/`, outside the render cache key;
 `config/wurlitzer/200a.yaml`; `tests/test_wurlitzer.py`, 16 tests;
@@ -66,15 +66,115 @@ equal bit for bit, `crates/varimu-circuit/tests/agreement.rs`):
 - **power:** 18 W at 0.14% THD, 23 W at 6.7% into 8 ohm (clipping ~20 W); the output stage idles
   at 3.8 mA, nearly class B: 2.5% THD at 10 mW (crossover; R58 "opt" only lowers the bias).
   AUX at 1 V of reed-equivalent input: 0.40 V rms, the drawing's "approx. .4 V AC" maximum.
+  (These reed-equivalent volts are at WZ2's CREEDS of 31 pF; WZ3's 54.9 pF passes 1.77x the
+  current for the same volts: `tests/test_wurlitzer_200a.py` scales its drive to keep it.)
 
 **Open (WZ2):** TR-1's printed voltages; TR-8's collector (read as ground); whether the AUX
 output follows VOLUME (read: it doesn't); the transistors' JEDEC types (stand-ins); LG-1's type
 (VTL5C2 stands in: the envelope's shape); the low-level crossover distortion (real or the
 stand-ins' Vbe).
 
-**Next:** WZ3, all 64 keys through this circuit: drive `in` with V0 dC(t) / C_reeds from the
-Python reeds, fit the voicing per register and the velocity span against the Pie-finger set's
-harmonics, levels across octaves and decays; then WZ4 (the medium in Rust).
+## Status (2026-11-20, second session): WZ3 built (branch `wurlitzer`, uncommitted)
+
+**The keyboard** (`varimu/wurlitzer/keyboard.py`; `tests/test_wurlitzer_keyboard.py`, 9 tests):
+every key a voice over the events, as the Rhodes' harp: between events the reed moves in closed
+form (the system's eigenvectors, decaying rotations); a note-on throws the hammer at the reed
+wherever it is (`key.contact`: a ringing reed is met where it swings, the hammer starting at the
+lowest the strike point can reach); the damper's felt is on whenever the key is up and the pedal
+isn't down; a voice sleeps under 1 nm. All 64 reeds share the plate, so their capacitance changes
+sum (`Render.dc_f`). MIDI notes 33-96 are the keys; the velocity law (`spec.hammer_speed`: the
+Rhodes' form through the Pie-finger layers' fitted speeds at velocities 40 / 80 / 115,
+provisional) gives 1.7-4.8 m/s, a 9.2 dB span. The keyboard runs ~0.2x real time on single notes,
+~1.1x on the demo's chords (Python).
+
+**The damper** (`key.System(damped=True)`): a dashpot at 0.6 of the free length (provisional),
+its value per key solved so the fundamental decays as the Pie-finger short notes do after the
+key's release (`scripts/wurlitzer_register_fit.py --measure` -> `reports/wurlitzer/registers/
+damper.json`): -267 / -997 / -518 dB/s, the median per octave 2 / 4 / 6 (quartiles -331 / -227,
+-1264 / -423, -882 / -376). **G#6-B6 ring on at every velocity** (0.8-1.5 s), so keys 60-64 have
+no damper (C7 unrecorded, taken as G#6-B6; whether the 200A's action has none there is still to
+check, WZ0). The keyboard's dampers land within 12% of the recording (model / real median 0.99,
+0.88, 0.98 per octave).
+
+**Into the circuit** (`varimu/wurlitzer/circuit.py`): `in` = -V0 dC / c_reeds_f (the reeds'
+current through CREEDS, V0 the drawing's 150 V); `transfer()` measures the small-signal response
+from `in` to the AUX jack (a 240-tone multisine, cached in `cache/wurlitzer/`). **The AUX path is
+linear for this:** on real strikes the circuit's harmonics match the input filtered by that
+response within 0.1 dB down to -78 dB re the note (its own distortion appears at ~-98 dB), and
+draft-1x agrees with production to -53 dB. So the fit runs on the transfer (seconds per
+evaluation) and the full circuit checks the result.
+
+**The fit** (`scripts/wurlitzer_register_fit.py --fit`; the config's `registers` block): least
+squares (soft L1, 6 dB) on six keys per recorded octave x three layers: harmonics 2-5 re the
+fundamental (where the recording holds them above -60 dB), each layer's fundamental re the middle
+layer's, each key's re octave 4. Three parametrizations were tried (their records in
+`reports/wurlitzer/registers/`):
+- voicing and hammer mass at the octaves' centres (`fit_3anchors.json`): 9.3 dB rms, the levels
+  across octaves 6.2 dB rms off. The recording's treble sits 10-26 dB under octave 4 at every key
+  and its bass rises ~8 dB across octave 2; the reed's own physics drops the model 13 dB across
+  octave 6, which a line through three centres can't undo;
+- both at the octaves' ends (`fit_6anchors.json`): 8.2 dB, but the levels 9.7 dB off and the
+  hammer jumping 2.6x within an octave (C6 2.1 g, B6 0.8 g): absorbing single keys' scatter, and
+  the bass voiced at 2.8 mm with 9 mm swings, far past the field map's 6 mm edge, where the map is
+  held flat (a kink that makes odd harmonics);
+- **adopted:** the voicing (a 200A is voiced reed by reed) and **the slot's overlap along the
+  reed** at the octaves' ends, the hammer at the octaves' centres (a construction value, smooth),
+  three layer speeds, a penalty for leaving the map: **5.97 dB rms** (stopped by hand after 19
+  iterations gaining < 0.05 dB each). Voicing 1.29 / 1.14 / 0.94 / 0.83 / 1.07 / 0.84 mm at keys
+  4 / 15 / 28 / 39 / 52 / 63; overlap 22.8 / 22.4 / 6.0 (held) / 21.1 / 2.4 / 1.8 mm; hammer 0.85 /
+  1.00 (held) / 0.59 g; layer speeds 2.37 / 3.12 / 4.47 m/s. The reeds' standing capacitance is
+  then 54.9 pF (the circuit's `c_reeds_f`, was 31).
+
+**The overlap is a stand-in, not geometry.** A longer slot raises a register's level without
+changing its capacitance per metre, so it separated level from bark; but the fit uses it for bark
+too (a longer slot averages in the reed's root-ward part, which swings less), and the values
+(1.8 mm in the treble, 23 mm on a 60 mm bass reed, 6 against 21 mm within octave 4) aren't a
+plausible comb plate. What they say: the treble couples to the plate ~10 dB less, the bass ~6 dB
+more, than octave 4's geometry gives. The real cause (the slot's depth, the side gap, the reed
+bar's stagger setting where each tip sits, a weaker treble hammer stroke) needs the pickup's real
+geometry per register (WZ0) or a second recording; until then the levels are right and the
+mechanism is labelled.
+
+**The check** (`scripts/wurlitzer_register_fit.py --check` -> `reports/wurlitzer/registers/
+{README.md, summary.json, audio/}`): all 36 recorded keys x 3 layers by MIDI velocity through the
+keyboard and the full circuit at production (6.1x real time):
+
+| Octave | H2-H5 rms (mean) | layer levels rms | level re octave 4, model - real | decay rms (0.2-1.15 s) | damper, model / real |
+|---|---|---|---|---|---|
+| 2 | 9.4 dB (-1.5) | 2.7 dB | +1.4 dB | 3.0 dB/s | 0.99 |
+| 4 | 8.6 dB (-0.2) | 1.0 dB | 0 (reference) | 3.8 dB/s | 0.88 |
+| 6 | 9.3 dB (+1.7) | 1.3 dB | -3.6 dB | 6.0 dB/s | 0.98 |
+
+(WZ1's single voicing: 13.2 dB on the harmonics of 9 keys at the bare plate.) The harmonics' rms
+is mostly per-key scatter (a basement piano: neighbours differ by 10-20 dB in one harmonic), with
+no bias over 2 dB. **The bass blooms**, as the recording's does: a reed swinging deep into the
+pickup's nonlinearity sends its fundamental's energy into the bark and gets it back as it decays,
+so over 0.2-1.15 s the fundamental rises at hard strikes (C2 high: model +2.1, recording +5.2
+dB/s; F#2 high +2.5 / +9.8), weaker in the model. (Over the whole long note the recording's bass
+decays -2 to -3 dB/s: the reed's own Q, which the model takes from it.) Pitch: every reed at
+equal temperament (A = 440; the Pie-finger unit sits ~+5 cents: the wear dial's). Absolute level:
+the demo's loudest 300 ms (A1 and A2 together at velocity 127) reach 0.64 V rms at the AUX jack,
+~4 dB over the drawing's "approx .4 V AC" maximum; the recording's own gain is unknown.
+`audio/ab_octave{2,4,6}.wav` play three keys' mid notes per octave, the recording then the model,
+each at -23 LUFS.
+
+**The render** (`scripts/wurlitzer_render.py (--midi F | --demo) [--quality production|draft-1x]
+[--set ...]` -> `reports/wurlitzer/renders/<name>_{aux,speakers,reeds}.wav`): the AUX jack (0 dBFS
+= 1 V), the speaker terminals (two 16 ohm resistors until WZ5, 0 dBFS = 20 V) and the reeds' input
+(0 dBFS = 4 V). The demo (18 s: Am7-D9-G9-Cmaj7 comping soft to hard with the pedal, a run, A1 +
+A2 at 127): keyboard 20 s, circuit 141 s at production (7.7x), draft-1x ~0.7x.
+
+**The done-when holds:** pitch and decay across the keyboard are plausible (above) and a MIDI
+file renders, both outputs.
+
+**Open (WZ3):** the overlap's real cause (above); the velocity law's layer velocities
+(40 / 80 / 115, provisional: the set's three hand-struck levels) and so its 9.2 dB span; the bass's
+bloom weaker than the recording's; the field map's 6 mm range against bass swings (the shield at
+8 mm, both provisional); octaves 1, 3, 5 interpolated (unrecorded); the damper's place on the reed
+(0.6, provisional); the user listens (`audio/ab_octave*.wav`, `renders/demo_aux.wav`).
+
+**Next:** WZ4, the reeds as a keyed medium in circuitsim (the compiled component, the part in
+both builders, the app's `wurlitzer_200a` with OUTPUT); WZ5 the speakers.
 
 ## Reference: the Pie-finger set (2026-11-20)
 

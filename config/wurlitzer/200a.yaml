@@ -12,6 +12,18 @@ keyboard:
   keys: {value: 64, source: "manual p.1: 64 notes, A-13 thru C-76 (the 88's numbering: A1-C7)"}
   first_key_88: {value: 13, source: "manual p.1 (A-13: key 1 of the 64 is the 88's 13th, A1)"}
 
+registers:
+  # WZ3's per-register values (voicing, hammer mass, the damper) are given at these keys, the
+  # ends of the Pie-finger set's octaves 2, 4 and 6, and interpolated linearly in the key
+  # between them, held outside (spec.by_register). The octaves' centres alone (2026-11-20,
+  # reports/wurlitzer/registers/fit_3anchors.json) couldn't follow the recording's levels:
+  # the reed's physics drops the model 13 dB across octave 6 where the recording is flat-ish.
+  anchor_keys: {value: [4, 15, 28, 39, 52, 63], source: "the Pie-finger set's octaves 2, 4, 6 (C2-B2 = keys 4-15, C4-B4 = 28-39, C6-B6 = 52-63): their first and last keys; octaves 1, 3, 5 interpolated (unrecorded)"}
+  # The hammer's mass is a construction value, smooth across the keyboard: on the octaves'
+  # centres. Free at every anchor (fit_6anchors.json) it jumped 2.6x within an octave (C6 2.1 g,
+  # B6 0.8 g), absorbing single keys' scatter.
+  hammer_anchor_keys: {value: [9.5, 33.5, 57.5], source: "the Pie-finger set's octaves 2, 4, 6: their centres"}
+
 tuning:
   a4_hz: {value: 440.0, source: "provisional: model knowledge (concert pitch; VV tuning: reeds within -2 to +3 cents of it; the Pie-finger unit sits ~+5 cents, at ~441)"}
 
@@ -35,7 +47,8 @@ reed:
   # as stiffness-proportional damping, set so the fundamental decays at q_target (anchors).
 
 hammer:
-  mass_kg: {value: 1.0e-3, source: "provisional: model knowledge (manual p.2: 'Three ply maple covered with mothproofed felt'; a small hammer's effective mass at the reed); 2026-11-20: 2.5 g swung a bass reed 8 mm at the slot at 2.5 m/s (into the shield at 8 mm) and put the bass ~5 dB louder than the treble, where the Pie-finger set has them within ~3 dB"}
+  # per register (registers.hammer_anchor_keys)
+  mass_kg: {value: [0.85e-3, 1.0e-3, 0.59e-3], source: "fit (2026-11-20, scripts/wurlitzer_register_fit.py --fit, log reports/wurlitzer/registers/fit_overlap_log.txt, its best evaluation: 5.97 dB rms over harmonics 2-5, the layers' and the registers' levels on 18 keys x 3 layers of the Pie-finger set through the AUX path; stopped after 19 iterations gaining < 0.05 dB each); octave 4's 1 g provisional: model knowledge (a small felt-covered maple hammer's effective mass at the reed, manual p.2), the recording's absolute level unknown"}
   # Felt: a power-law contact with Hunt-Crossley loss, F = K d^p (1 + alpha d'), Pfeifle DAFx-17
   # eq. (1) (Stulov's hysteretic felt, his ref [14]); piano-felt exponents are 2-3.5.
   stiffness: {value: 4.0e+9, source: "provisional: model knowledge (K in N / m^p); 2026-11-20: 4e8 held the felt on the reed 2-4 ms (longer than a treble reed's period); 4e9 gives 0.8-1.9 ms, piano-like"}
@@ -46,9 +59,12 @@ hammer:
   letoff_m: {value: 3.175e-3, source: "manual p.17: the hammer lets off 1/8 in from the reed"}
 
 velocity:
-  # A hammer speed per strike for WZ1's study: three levels standing for Pie-finger's low / mid
-  # / high (hand struck, not calibrated); WZ3 fits a velocity law.
-  speeds_m_s: {value: [0.6, 1.5, 3.5], source: "provisional: model knowledge (soft to hard piano-action hammer speeds, ~0.5-4 m/s)"}
+  # The hammer's speed per Pie-finger layer (low / mid / high, hand struck, not calibrated), and
+  # the MIDI velocity each layer is taken to be; the law through them (spec.hammer_speed):
+  # speed = ff_speed 10^(-range_db / 20 (127 - vel) / 126), the Rhodes' form (varimu/rhodes/
+  # harp.py), least squares in log speed through the three layers.
+  layer_speeds_m_s: {value: [2.37, 3.12, 4.47], source: "fit (2026-11-20, scripts/wurlitzer_register_fit.py --fit, log reports/wurlitzer/registers/fit_overlap_log.txt, its best evaluation: 5.97 dB rms over harmonics 2-5, the layers' and the registers' levels on 18 keys x 3 layers of the Pie-finger set through the AUX path; stopped after 19 iterations gaining < 0.05 dB each)"}
+  layer_velocities: {value: [40, 80, 115], source: "provisional: model knowledge (the set's 'low / mid / high' struck by hand: a soft, a medium and a firm touch on a 0-127 keyboard; the app's Touch curve maps a player's keyboard onto it)"}
 
 pickup:
   # The comb plate: each reed's tip in a slot of the plate, the reed grounded (VV tuning: the
@@ -57,7 +73,9 @@ pickup:
   # the position of the reed', the reeds 'vibrate freely between the symmetric cutouts'.
   plate_thickness_m: {value: 0.8e-3, source: "provisional: model knowledge (sheet metal, ~1/32 in)"}
   side_gap_m: {value: 0.35e-3, source: "provisional: model knowledge (VV tuning: the reed centred in the slot with a feeler gauge; a few thousandths of an inch each side)"}
-  overlap_m: {value: 6.0e-3, source: "provisional: model knowledge (the slot's prongs alongside the reed's outer end)"}
+  # per register (registers.anchor_keys): the slot's length along the reed sets a register's
+  # level and leaves its bark (the capacitance per metre is the same along the slot)
+  overlap_m: {value: [22.8e-3, 22.4e-3, 6.0e-3, 21.1e-3, 2.4e-3, 1.8e-3], source: "fit (2026-11-20, scripts/wurlitzer_register_fit.py --fit, log reports/wurlitzer/registers/fit_overlap_log.txt, its best evaluation: 5.97 dB rms over harmonics 2-5, the layers' and the registers' levels on 18 keys x 3 layers of the Pie-finger set through the AUX path; stopped after 19 iterations gaining < 0.05 dB each); C4's 6 mm provisional: model knowledge (the slot's prongs alongside the reed's outer end). A stand-in for each register's coupling to the plate, not a measured slot: the spread (1.8-23 mm, 3.5x within octave 4) is the fit's, the pickup's real geometry per register is unsourced (WURLITZER_PLAN.md WZ3 status)"}
   overlap_tip_clearance_m: {value: 0.5e-3, source: "provisional: model knowledge (the prongs' far end short of the reed's tip)"}
   reed_pitch_m: {value: 12.0e-3, source: "provisional: model knowledge (64 reeds on two bars ~0.77 m long)"}
   shield_distance_m: {value: 8.0e-3, source: "provisional: model knowledge (the grounded reed bar below, the shield over the reed bars above: manual p.8 'the shield to the reed bars')"}
@@ -65,7 +83,16 @@ pickup:
   # maximum and the output doubles in frequency (VV tuning: 'When a reed at rest is positioned
   # inside the pickup, a very strong undesirable harmonic will be generated'); bending the
   # pickup up or down (manual p.43: 1/32-1/16 in) moves it.
-  voicing_m: {value: 0.6e-3, source: "provisional: model knowledge; fit to the Pie-finger bark against velocity in WZ3"}
+  # per register (registers.anchor_keys)
+  voicing_m: {value: [1.29e-3, 1.14e-3, 0.94e-3, 0.83e-3, 1.07e-3, 0.84e-3], source: "fit (2026-11-20, scripts/wurlitzer_register_fit.py --fit, log reports/wurlitzer/registers/fit_overlap_log.txt, its best evaluation: 5.97 dB rms over harmonics 2-5, the layers' and the registers' levels on 18 keys x 3 layers of the Pie-finger set through the AUX path; stopped after 19 iterations gaining < 0.05 dB each)"}
+
+damper:
+  # The damper's felt on the reed while the key is up (the pedal lifts the rail): a dashpot at
+  # x_fraction of the free length, its value per key solved so the damped fundamental decays at
+  # decay_db_s (key.System, damped).
+  x_fraction: {value: 0.6, source: "provisional: model knowledge (the felt on the reed between the hammer's strike point and the pickup's slot; its place sets only how the damper shares its loss among the higher modes)"}
+  decay_db_s: {value: [-267.0, -267.0, -997.0, -997.0, -518.0, -518.0], source: "measured (2026-11-20, scripts/wurlitzer_register_fit.py --measure -> reports/wurlitzer/registers/damper.json): the Pie-finger short notes' fundamental after the key's release, the median per octave (2, 4, 6, given at both of each octave's anchors; 36, 36, 23 notes; quartiles -331 / -227, -1264 / -423, -882 / -376 dB/s)"}
+  undamped_from_key: {value: 60, source: "measured (2026-11-20, the same): the Pie-finger short notes of G#6-B6 (keys 60-63) ring on at every velocity (0.8-1.5 s), G6 (59) is damped; C7 (64) isn't recorded and is taken as undamped too; whether the 200A's action has no dampers there (as a piano's top) is unchecked (WURLITZER_PLAN.md WZ0)"}
 
 plate:
   # The plate's node as WZ1's load (WZ2 replaces it with the 200A's circuit).

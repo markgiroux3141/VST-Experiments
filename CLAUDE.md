@@ -761,6 +761,18 @@ step), `config/wurlitzer/200a.yaml`, `tests/test_wurlitzer.py`, `scripts/wurlitz
 **WZ2:** `config/circuits/wurlitzer_200a.yaml` (traced from Tropical Fish's sharp scan; the reeds as the
 input `in` through CREEDS; `out` the AUX jack, `spk` a resistive load until WZ5), `tests/test_wurlitzer_200a.py`,
 `scripts/wurlitzer_amp_study.py`: the vibrato 5.52 Hz unfitted (real 5.73), R17 fitted to its 6.2 dB.
+**WZ3 (same day, second session; the plan's "Status (2026-11-20, second session)"):** the keyboard
+`varimu/wurlitzer/keyboard.py` (every reed a voice over note / pedal events, the Rhodes' harp
+pattern; dampers from the Pie-finger short notes, none from G#6 up), `varimu/wurlitzer/circuit.py`
+(the reeds into `in`; the AUX path's measured transfer, linear to -78 dB, which the fit runs on),
+the per-register fit and its check through the circuit `scripts/wurlitzer_register_fit.py
+[--measure] [--fit] [--check [--reuse-audio]]` -> `reports/wurlitzer/registers/` (voicing and the
+slot's overlap at the recorded octaves' ends, the hammer per octave, three layer speeds; on 36
+keys x 3 layers: harmonics ~9 dB rms per key, levels across octaves within 1.4 / 3.6 dB, dampers
+within 12%; the overlap is a labelled stand-in for each register's coupling, not geometry),
+`scripts/wurlitzer_render.py (--midi F | --demo)` -> `reports/wurlitzer/renders/` (AUX, speaker
+terminals, reeds' input); `tests/test_wurlitzer_keyboard.py`; CREEDS now 54.9 pF. Next: WZ4 (the
+medium in circuitsim).
 
 Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01; picked up
 2026-11-04 for one track keying another's 670, the kick ducking the bass; branch `sidechain`):
