@@ -1300,18 +1300,20 @@ impl SessionView {
             self.session.transport.loop_on = !self.session.transport.loop_on;
             self.save();
         }
-        if zoom_out {
-            self.zoom(0.5, Some(self.lanes_w * 0.5));
-        }
-        if zoom_in {
-            self.zoom(2.0, Some(self.lanes_w * 0.5));
-        }
-        // Delete removes the selected range or clip (its take stays in the pool), S splits it
-        // (none selected: the armed track's clip under the cursor) at the cursor.
         let over_roll = self
             .roll_rect
             .zip(ui.input(|i| i.pointer.hover_pos()))
             .is_some_and(|(r, p)| r.contains(p));
+        // G / H zoom the arrangement, or the piano roll with the pointer over it (it zooms
+        // itself).
+        if zoom_out && !over_roll {
+            self.zoom(0.5, Some(self.lanes_w * 0.5));
+        }
+        if zoom_in && !over_roll {
+            self.zoom(2.0, Some(self.lanes_w * 0.5));
+        }
+        // Delete removes the selected range or clip (its take stays in the pool), S splits it
+        // (none selected: the armed track's clip under the cursor) at the cursor.
         if delete && self.roll.is_none() && self.recording.is_none() {
             self.delete_selection();
         }
@@ -1477,8 +1479,9 @@ impl SessionView {
             .armed
             .and_then(|i| self.session.tracks.get(i))
             .is_none_or(|t| t.midi);
-        if record && midi && play.plays_keys() {
-            // The device restarts fresh, then the transport and the take (PREPARING).
+        if record && midi && play.records_events() {
+            // The device restarts fresh, then the transport and the take (PREPARING); the
+            // sampler starts its take at once.
             let (_, id) = play.device_label_id();
             p.begin_event_take(&id);
         } else {
@@ -8790,12 +8793,20 @@ impl SessionView {
         let limit = if live { 1 } else { MAX_PRINT_JOBS };
         let mut rendering = self.take_jobs.iter().filter(|j| j.wanted).count();
         let mut start = Vec::new();
-        // Lookups: every revision's renders found in the cache (never rendered here).
+        // Lookups: every revision's renders found in the cache (never rendered here, but
+        // the sampler's: its render is its files played back, made in a moment, so an edit
+        // is heard at once).
         for t in &self.session.tracks {
             for k in &t.takes {
                 let Some(e) = &k.events else { continue };
-                for q in [Quality::Production, e.perf.quality] {
-                    let key = (k.id.clone(), e.rev, q, false);
+                let sampler = e.perf.device == varimu_app::sampler::DEVICE_ID;
+                let qualities = if e.perf.quality == Quality::Production {
+                    &[Quality::Production][..]
+                } else {
+                    &[Quality::Production, e.perf.quality][..]
+                };
+                for &q in qualities {
+                    let key = (k.id.clone(), e.rev, q, sampler);
                     if k.has_render(q) || self.tried.contains(&key) {
                         continue;
                     }
@@ -8916,6 +8927,13 @@ impl SessionView {
     /// What the roll's previews of `device`'s take play through (decision 8): the device
     /// itself when Play plays it from keys, else its proxy, else the test oscillator.
     fn preview_via(&mut self, play: &PlayView, device: &str) -> &'static str {
+        if device == varimu_app::sampler::DEVICE_ID {
+            return if play.plays_sampler() {
+                "through the sampler: the take's own sounds, at the preview level"
+            } else {
+                "through the test oscillator: play the sampler in Play to hear its sounds"
+            };
+        }
         if play.player().is_some()
             && !play.adopted()
             && play.plays_keys()
@@ -8933,6 +8951,12 @@ impl SessionView {
     /// (the preview voice rides on whatever player plays: the session's tracks-only one
     /// when nothing else does). Heard only, never recorded.
     fn preview_note(&mut self, play: &PlayView, perf: &Performance, note: u8, vel: u8, on: bool) {
+        if perf.device == varimu_app::sampler::DEVICE_ID && play.plays_sampler() {
+            if on {
+                self.preview_sampler_note(play, perf, note, vel);
+            }
+            return;
+        }
         if play.player().is_some()
             && !play.adopted()
             && play.plays_keys()
@@ -8946,6 +8970,47 @@ impl SessionView {
             p.set_preview_voice(tables, perf.values.clone(), perf.playing);
             p.preview_key(note, vel, on);
         }
+    }
+
+    /// A note of a sampler take previewed: the file its slot held when the take started
+    /// (the kit may have moved on since), on the sampler's preview voice at the key's
+    /// velocity (as the kit plays it) and the preview level. Heard, never recorded.
+    fn preview_sampler_note(&mut self, play: &PlayView, perf: &Performance, note: u8, vel: u8) {
+        use varimu_app::sampler::{Sample, slot_of};
+        use varimu_circuit::yaml::Value;
+        let slot = slot_of(note);
+        let name = format!("slot_{}", slot + 1);
+        let Some(Value::Str(path)) = perf.values.iter().find(|(k, _)| *k == name).map(|(_, v)| v)
+        else {
+            return;
+        };
+        let sampler = play.sampler();
+        let sample = match sampler
+            .slot(slot)
+            .filter(|s| s.path.display().to_string() == *path)
+        {
+            Some(s) => s,
+            None => match Sample::load(std::path::Path::new(path)) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    self.error = Some(e);
+                    return;
+                }
+            },
+        };
+        let velocity = !matches!(
+            perf.values
+                .iter()
+                .find(|(k, _)| k == "velocity")
+                .map(|(_, v)| v),
+            Some(Value::Bool(false))
+        );
+        let level = if velocity {
+            vel.min(127) as f32 / 127.0
+        } else {
+            1.0
+        };
+        sampler.preview_at(sample, level);
     }
 
     /// The other tracks' MIDI notes where their clips play them (timeline start, end, key):

@@ -3,10 +3,11 @@
 //! what was recorded (the hits' onsets against when they were played) and the stats.
 //!
 //!     cargo run --release -p varimu-app --example sampler -- [--bpm 100] [--bars 2]
-//!         [--buffer-ms 20] [--kick FILE] [--snare FILE] [--hat FILE]
+//!         [--buffer-ms 20] [--kick FILE] [--snare FILE] [--hat FILE] [--midi]
 //!
 //! Without `--kick` / `--snare` / `--hat`, the first file of samples/drums/kick, snare and
-//! hihat_closed.
+//! hihat_closed. `--midi` records an event take (the Session view's "rec MIDI"): the pads
+//! as keys, then the take's notes, and its render offline against the audio heard.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,10 +34,12 @@ fn first_in(dir: &Path) -> Result<PathBuf, String> {
 fn main() -> Result<(), String> {
     let (mut bpm, mut bars, mut buffer_ms) = (100.0f64, 2usize, 20.0f64);
     let mut files: [Option<PathBuf>; 3] = [None, None, None];
+    let mut midi = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         let mut val = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
+            "--midi" => midi = true,
             "--bpm" => bpm = val()?.parse().map_err(|_| "--bpm")?,
             "--bars" => bars = val()?.parse().map_err(|_| "--bars")?,
             "--buffer-ms" => buffer_ms = val()?.parse().map_err(|_| "--buffer-ms")?,
@@ -82,8 +85,12 @@ fn main() -> Result<(), String> {
     while p.status().state == State::Starting {
         std::thread::sleep(Duration::from_millis(5));
     }
-    p.arm_take(true);
-    p.transport_run(true);
+    if midi {
+        p.begin_event_take(varimu_app::sampler::DEVICE_ID);
+    } else {
+        p.arm_take(true);
+        p.transport_run(true);
+    }
     // Wait for the transport to run (its first block), then play eighth notes.
     let t0 = Instant::now();
     while !p.status().transport.running && t0.elapsed() < Duration::from_secs(2) {
@@ -161,6 +168,38 @@ fn main() -> Result<(), String> {
     );
     if peak == 0.0 {
         return Err("the take is silent".into());
+    }
+    if midi {
+        let (perf, from) = take
+            .performance
+            .as_ref()
+            .ok_or("--midi: the take has no performance")?;
+        let ons = perf
+            .events
+            .iter()
+            .filter(|(_, e)| matches!(e, varimu_app::performance::Ev::On { .. }))
+            .count();
+        let hits: usize = (0..bars * 8)
+            .map(|k| match k % 8 {
+                0 | 5 | 2 | 6 => 2,
+                _ => 1,
+            })
+            .sum();
+        let mut p2 = (**perf).clone();
+        p2.end = from + x.len() as u64;
+        let r = varimu_app::sampler::render_performance(&p2, &mut Default::default())?;
+        let diff = r[*from as usize..]
+            .iter()
+            .zip(x)
+            .fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+        println!(
+            "performance: {ons} keys down (pads hit {hits}), {} notes, from sample {from}; \
+             render vs heard: max |diff| {diff:e}",
+            perf.notes().len()
+        );
+        if ons != hits || diff != 0.0 {
+            return Err("the event take doesn't match what was played".into());
+        }
     }
     Ok(())
 }

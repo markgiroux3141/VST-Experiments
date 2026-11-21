@@ -1445,7 +1445,15 @@ them), a browser of `samples/` whose files preview as they are clicked or steppe
 beside `app.json`. `varimu_app::sampler` (voices, cubic interpolation at the file's rate),
 `player::Source::Sampler` (no circuit, 64-sample blocks, the Emitter as every source), so the
 Session view records it like the synth. `examples/sampler.rs` plays a beat on the pads into
-an armed take and checks its onsets.
+an armed take and checks its onsets. **MIDI takes** (2026-11-21): with "rec MIDI" a sampler
+take is an event take (device `sampler::DEVICE_ID`; keys at their sample in the block, pads as
+their slot's key from C4, `PAD_NOTE`), its `values` the kit (each slot's path, level, velocity;
+kit changes as knob changes), rendered by `sampler::render_performance` (bit for bit the audio
+heard; `take_render` routes it there, key `sampler::render_key` incl. the files' size / mtime,
+quality Production), rendered automatically after a roll edit (it takes a moment); roll previews
+play the take's own slot on the preview voice. `examples/sampler.rs --midi` checks it through the
+real player. The browser's **Preview** slider (`Sampler::preview_db`, -12 dB default, in
+`sampler.json`) sets only what browsing plays.
 
 MIDI takes ([docs/MIDI_TAKES_PLAN.md](docs/MIDI_TAKES_PLAN.md), 2026-11-04; N1-N4 first
 versions built the same day, the plan's "Status"; milestones N1-N7): a take is the notes plus the panel, monitored through a cheap digital

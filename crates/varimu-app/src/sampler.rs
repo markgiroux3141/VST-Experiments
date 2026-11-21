@@ -9,20 +9,43 @@
 //! averaged) as everywhere in the app.
 //!
 //! **Preview**: a browsed file plays at once on a voice of its own ([`Sampler::preview`]),
-//! a new one cutting the last; it is heard but never recorded (the player keeps the kit's
-//! voices apart for the take).
+//! a new one cutting the last, at the preview level ([`Sampler::preview_db`], its own
+//! slider: one-shots are normalized near full scale); it is heard but never recorded (the
+//! player keeps the kit's voices apart for the take).
+//!
+//! **MIDI takes** (docs/MIDI_TAKES_PLAN.md): the sampler is an instrument like the circuit
+//! devices, so a take from it can be its notes ([`DEVICE_ID`]). The performance holds the
+//! kit as it was ([`Sampler::values`]: each slot's file, the level, velocity) and its
+//! changes as knob changes; [`render_performance`] replays it offline with the same
+//! [`Engine`] in the player's blocks, so the audio heard and its render agree, and an edit
+//! in the piano roll renders in a moment. A pad on screen records as its slot's key in
+//! octave 4 ([`PAD_NOTE`]).
 //!
 //! The kit (the slots' files) is the user's, kept outside the repo beside the app's
 //! settings (`sampler.json` next to `prefs::path()`).
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use varimu_circuit::yaml::Value as Knob;
 
 use crate::audio;
+use crate::live::Values;
+use crate::performance::{Ev, Performance};
+use crate::player::SAMPLER_BLOCK;
+
+/// The sampler's id where a device's would be (a take's `device`, a performance's).
+pub const DEVICE_ID: &str = "sampler";
+/// The key a pad on screen records as: its slot's key from C4.
+pub const PAD_NOTE: u8 = 60;
+/// How long a pad's key is held in a take (one-shots ignore it; the roll shows it).
+pub const PAD_HOLD_S: f64 = 0.1;
+/// A new kit's preview level (dB).
+pub const DEFAULT_PREVIEW_DB: f64 = -12.0;
 
 /// Slots in a kit: one octave.
 pub const SLOTS: usize = 12;
@@ -76,12 +99,17 @@ pub struct Sampler {
     slots: Mutex<Vec<Option<Arc<Sample>>>>,
     /// Hits from the pads on screen (slot, velocity), for the player's next block.
     pads: Mutex<VecDeque<(usize, u8)>>,
-    /// The file to preview (taken by the player's next block), and a stop asked for.
-    preview: Mutex<Option<Arc<Sample>>>,
+    /// The file to preview with its level (taken by the player's next block), and a stop
+    /// asked for.
+    preview: Mutex<Option<(Arc<Sample>, f32)>>,
     stop_preview: AtomicBool,
+    /// The preview's level (dB, f64 bits): it follows the slider while a preview sounds.
+    preview_db: AtomicU64,
     /// The kit's level (dB, f64 bits) and whether velocity sets each hit's level.
     gain_db: AtomicU64,
     velocity: AtomicBool,
+    /// Moves with every change to what a take records of the kit (slots, level, velocity).
+    generation: AtomicU64,
     /// Hits per slot so far (the window lights a slot when its count moves).
     hits: Vec<AtomicU64>,
 }
@@ -93,8 +121,10 @@ impl Default for Sampler {
             pads: Mutex::new(VecDeque::new()),
             preview: Mutex::new(None),
             stop_preview: AtomicBool::new(false),
+            preview_db: AtomicU64::new(DEFAULT_PREVIEW_DB.to_bits()),
             gain_db: AtomicU64::new(DEFAULT_GAIN_DB.to_bits()),
             velocity: AtomicBool::new(true),
+            generation: AtomicU64::new(0),
             hits: (0..SLOTS).map(|_| AtomicU64::new(0)).collect(),
         }
     }
@@ -109,6 +139,73 @@ impl Sampler {
         if let Some(x) = self.slots.lock().expect("slots").get_mut(i) {
             *x = s;
         }
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// A count that moves whenever what a take records of the kit changes.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Relaxed)
+    }
+
+    /// The pads hit since the last call (slot, velocity), oldest first.
+    pub fn take_pads(&self) -> Vec<(usize, u8)> {
+        self.pads.lock().expect("pads").drain(..).collect()
+    }
+
+    /// The kit as a take records it: `slot_1` .. `slot_12` (each a file's path, or null),
+    /// `gain_db` and `velocity`.
+    pub fn values(&self) -> Values {
+        let mut v: Values = (0..SLOTS)
+            .map(|i| {
+                let path = self
+                    .slot(i)
+                    .map_or(Knob::Null, |s| Knob::Str(s.path.display().to_string()));
+                (format!("slot_{}", i + 1), path)
+            })
+            .collect();
+        v.push(("gain_db".into(), Knob::Float(self.gain_db())));
+        v.push(("velocity".into(), Knob::Bool(self.velocity())));
+        v
+    }
+
+    /// The kit set from [`Sampler::values`]' form, its files from `cache` (loaded into it as
+    /// needed). A file that no longer loads is an error: a render of it would be silent.
+    pub fn apply_values(
+        &self,
+        v: &Values,
+        cache: &mut HashMap<String, Arc<Sample>>,
+    ) -> Result<(), String> {
+        for (k, x) in v {
+            if let Some(i) = k
+                .strip_prefix("slot_")
+                .and_then(|n| n.parse::<usize>().ok())
+                .filter(|&n| (1..=SLOTS).contains(&n))
+            {
+                let s = match x {
+                    Knob::Str(p) => Some(match cache.get(p) {
+                        Some(s) => s.clone(),
+                        None => {
+                            let s = Arc::new(Sample::load(Path::new(p))?);
+                            cache.insert(p.clone(), s.clone());
+                            s
+                        }
+                    }),
+                    _ => None,
+                };
+                self.set_slot(i - 1, s);
+            } else if k == "gain_db" {
+                match x {
+                    Knob::Float(g) => self.set_gain_db(*g),
+                    Knob::Int(g) => self.set_gain_db(*g as f64),
+                    _ => {}
+                }
+            } else if k == "velocity"
+                && let Knob::Bool(b) = x
+            {
+                self.set_velocity(*b);
+            }
+        }
+        Ok(())
     }
 
     /// Play slot `i` now (a pad clicked), as a key at `velocity` would.
@@ -120,9 +217,15 @@ impl Sampler {
         }
     }
 
-    /// Play `s` on the preview voice (cutting the one before).
+    /// Play `s` on the preview voice (cutting the one before), at the preview level.
     pub fn preview(&self, s: Arc<Sample>) {
-        *self.preview.lock().expect("preview") = Some(s);
+        self.preview_at(s, 1.0);
+    }
+
+    /// [`Sampler::preview`] at `level` (a linear factor on the preview level: a piano
+    /// roll's note at its velocity).
+    pub fn preview_at(&self, s: Arc<Sample>, level: f32) {
+        *self.preview.lock().expect("preview") = Some((s, level));
     }
 
     pub fn stop_preview(&self) {
@@ -130,12 +233,23 @@ impl Sampler {
         self.stop_preview.store(true, Ordering::Relaxed);
     }
 
+    /// The preview's level (dB).
+    pub fn preview_db(&self) -> f64 {
+        f64::from_bits(self.preview_db.load(Ordering::Relaxed))
+    }
+
+    pub fn set_preview_db(&self, db: f64) {
+        self.preview_db.store(db.to_bits(), Ordering::Relaxed);
+    }
+
     pub fn gain_db(&self) -> f64 {
         f64::from_bits(self.gain_db.load(Ordering::Relaxed))
     }
 
     pub fn set_gain_db(&self, db: f64) {
-        self.gain_db.store(db.to_bits(), Ordering::Relaxed);
+        if db.to_bits() != self.gain_db.swap(db.to_bits(), Ordering::Relaxed) {
+            self.generation.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn velocity(&self) -> bool {
@@ -143,7 +257,19 @@ impl Sampler {
     }
 
     pub fn set_velocity(&self, on: bool) {
-        self.velocity.store(on, Ordering::Relaxed);
+        if on != self.velocity.swap(on, Ordering::Relaxed) {
+            self.generation.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// A hit's level at `velocity`: the kit's level, times velocity's share when it counts.
+    fn hit_gain(&self, velocity: u8) -> f32 {
+        let level = if self.velocity() {
+            velocity.min(127) as f32 / 127.0
+        } else {
+            1.0
+        };
+        10f32.powf(self.gain_db() as f32 / 20.0) * level
     }
 
     /// How many times slot `i` has been played.
@@ -164,7 +290,12 @@ impl Sampler {
                     .map_or(Value::Null, |s| json!(s.path.display().to_string()))
             })
             .collect();
-        json!({"slots": slots, "gain_db": self.gain_db(), "velocity": self.velocity()})
+        json!({
+            "slots": slots,
+            "gain_db": self.gain_db(),
+            "velocity": self.velocity(),
+            "preview_db": self.preview_db(),
+        })
     }
 
     /// Fill the kit from [`Sampler::to_json`]'s form; files that no longer load are left
@@ -188,6 +319,9 @@ impl Sampler {
         }
         if let Some(b) = v["velocity"].as_bool() {
             self.set_velocity(b);
+        }
+        if let Some(g) = v["preview_db"].as_f64() {
+            self.set_preview_db(g);
         }
         errors
     }
@@ -273,6 +407,7 @@ impl Voice {
 pub struct Engine {
     rate: u32,
     voices: Vec<Voice>,
+    /// The preview's voice (its gain the level it was asked at; the slider's on top).
     preview: Option<Voice>,
 }
 
@@ -300,12 +435,7 @@ impl Engine {
         if let Some(h) = sampler.hits.get(slot) {
             h.fetch_add(1, Ordering::Relaxed);
         }
-        let level = if sampler.velocity() {
-            velocity.min(127) as f32 / 127.0
-        } else {
-            1.0
-        };
-        let g = 10f32.powf(sampler.gain_db() as f32 / 20.0) * level;
+        let g = sampler.hit_gain(velocity);
         if self.voices.len() >= MAX_VOICES {
             self.voices.remove(0);
         }
@@ -315,29 +445,131 @@ impl Engine {
     /// The next block: the kit's voices into `kit`, the preview into `preview` (both
     /// overwritten), after the pads hit and the preview asked for since the last block.
     pub fn render(&mut self, sampler: &Sampler, kit: &mut [f32], preview: &mut [f32]) {
-        let pads: Vec<(usize, u8)> = sampler.pads.lock().expect("pads").drain(..).collect();
-        for (slot, vel) in pads {
+        for (slot, vel) in sampler.take_pads() {
             self.trigger(sampler, slot, vel);
         }
+        self.process(sampler, &[], kit, preview);
+    }
+
+    /// The next block with `events` (offset in the block, in order): each key down starts
+    /// its slot at its own sample; the rest (keys up, pressure, the pedal) mean nothing to
+    /// one-shots. The kit's voices into `kit`, the preview into `preview` (both
+    /// overwritten). The pads aren't taken here: the player records them as keys.
+    pub fn process(
+        &mut self,
+        sampler: &Sampler,
+        events: &[(usize, Ev)],
+        kit: &mut [f32],
+        preview: &mut [f32],
+    ) {
         if sampler.stop_preview.swap(false, Ordering::Relaxed) {
             self.preview = None;
         }
-        if let Some(s) = sampler.preview.lock().expect("preview").take() {
-            self.preview = Some(Voice::new(s, self.rate, 1.0));
+        if let Some((s, level)) = sampler.preview.lock().expect("preview").take() {
+            self.preview = Some(Voice::new(s, self.rate, level));
         }
         kit.fill(0.0);
         preview.fill(0.0);
-        for v in &mut self.voices {
-            v.add(kit);
+        let mut from = 0;
+        for &(at, ev) in events {
+            let at = at.clamp(from, kit.len());
+            if at > from {
+                self.add_voices(&mut kit[from..at]);
+                from = at;
+            }
+            if let Ev::On { note, velocity } = ev {
+                self.note_on(sampler, note, velocity);
+            }
         }
-        self.voices.retain(|v| !v.done());
+        self.add_voices(&mut kit[from..]);
         if let Some(v) = &mut self.preview {
             v.add(preview);
             if v.done() {
                 self.preview = None;
             }
+            let g = 10f32.powf(sampler.preview_db() as f32 / 20.0);
+            for p in preview.iter_mut() {
+                *p *= g;
+            }
         }
     }
+
+    fn add_voices(&mut self, out: &mut [f32]) {
+        if out.is_empty() {
+            return;
+        }
+        for v in &mut self.voices {
+            v.add(out);
+        }
+        self.voices.retain(|v| !v.done());
+    }
+}
+
+/// A sampler take's events and kit changes, block by block as the player made them: the
+/// kit's voices at `perf.rate`, `perf.end` samples from its start (see the module docs).
+/// Its files are read from disk (`cache` holds them between calls).
+pub fn render_performance(
+    perf: &Performance,
+    cache: &mut HashMap<String, Arc<Sample>>,
+) -> Result<Vec<f32>, String> {
+    let sampler = Sampler::default();
+    sampler.apply_values(&perf.values, cache)?;
+    let mut engine = Engine::new(perf.rate);
+    let total = perf.end as usize;
+    let mut out = vec![0.0f32; total.div_ceil(SAMPLER_BLOCK) * SAMPLER_BLOCK];
+    let mut preview = vec![0.0f32; SAMPLER_BLOCK];
+    let (mut e, mut k) = (0, 0);
+    let mut events = Vec::new();
+    for (b, kit) in out.chunks_mut(SAMPLER_BLOCK).enumerate() {
+        let (start, end) = ((b * SAMPLER_BLOCK) as u64, ((b + 1) * SAMPLER_BLOCK) as u64);
+        // Kit changes logged in this block, at its start (the player logs them there).
+        while k < perf.knobs.len() && perf.knobs[k].at < end {
+            sampler.apply_values(&perf.knobs[k].values, cache)?;
+            k += 1;
+        }
+        events.clear();
+        while e < perf.events.len() && perf.events[e].0 < end {
+            let (at, ev) = perf.events[e];
+            events.push((at.saturating_sub(start) as usize, ev));
+            e += 1;
+        }
+        engine.process(&sampler, &events, kit, &mut preview);
+    }
+    out.truncate(total);
+    Ok(out)
+}
+
+/// What a sampler take's render is made from: the performance (the kit's paths in it) and
+/// each file's size and modification time (a file replaced under the same name renders
+/// again). The same at every quality: a sampler plays its files as they are.
+pub fn render_key(perf: &Performance) -> Result<String, String> {
+    let mut h = Sha256::new();
+    h.update(b"varimu sampler take render 1\n");
+    h.update(serde_json::to_vec(&perf.to_json()).map_err(|e| e.to_string())?);
+    let mut paths: Vec<&str> = perf
+        .values
+        .iter()
+        .chain(perf.knobs.iter().flat_map(|k| k.values.iter()))
+        .filter_map(|(_, v)| match v {
+            Knob::Str(p) => Some(p.as_str()),
+            _ => None,
+        })
+        .collect();
+    paths.sort_unstable();
+    paths.dedup();
+    for p in paths {
+        let m = std::fs::metadata(p).map_err(|e| format!("{p}: {e}"))?;
+        let t = m
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos());
+        h.update(format!("{p}\n{}\n{t}\n", m.len()).as_bytes());
+    }
+    Ok(h.finalize()[..16]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
 
 #[cfg(test)]
@@ -382,6 +614,7 @@ mod tests {
     fn hits_overlap_and_the_preview_stays_apart() {
         let s = Sampler::default();
         s.set_gain_db(0.0);
+        s.set_preview_db(0.0);
         s.set_slot(0, Some(sample(vec![1.0; 4], 48_000)));
         let mut e = Engine::new(48_000);
         e.note_on(&s, 60, 127);
@@ -406,6 +639,177 @@ mod tests {
         for (k, want) in [(0, 0.0), (2, 1.0), (3, 1.5), (4, 2.0)] {
             assert!((kit[k] - want).abs() < 1e-6, "{k}: {}", kit[k]);
         }
+    }
+
+    #[test]
+    fn the_preview_plays_at_its_own_level_and_follows_it() {
+        let s = Sampler::default();
+        s.set_preview_db(-20.0);
+        s.preview(sample(vec![1.0; 8], 48_000));
+        let mut e = Engine::new(48_000);
+        let (mut kit, mut pre) = (vec![0.0; 4], vec![0.0; 4]);
+        e.render(&s, &mut kit, &mut pre);
+        assert!((pre[0] - 0.1).abs() < 1e-6, "{}", pre[0]);
+        assert_eq!(kit, vec![0.0; 4]);
+        // The slider moves while it sounds: the rest of it follows.
+        s.set_preview_db(0.0);
+        e.render(&s, &mut kit, &mut pre);
+        assert!((pre[0] - 1.0).abs() < 1e-6);
+        // The kit's level doesn't touch it, nor a take's record of the kit.
+        let g = s.generation();
+        s.set_preview_db(-6.0);
+        assert_eq!(s.generation(), g);
+    }
+
+    #[test]
+    fn a_key_starts_at_its_sample_in_the_block() {
+        let s = Sampler::default();
+        s.set_gain_db(0.0);
+        s.set_slot(0, Some(sample(vec![1.0, 0.5], 48_000)));
+        let mut e = Engine::new(48_000);
+        let (mut kit, mut pre) = (vec![0.0; 6], vec![0.0; 6]);
+        let ev = [
+            (
+                3,
+                Ev::On {
+                    note: 60,
+                    velocity: 127,
+                },
+            ),
+            (4, Ev::Off { note: 60 }),
+            (
+                5,
+                Ev::On {
+                    note: 72,
+                    velocity: 127,
+                },
+            ),
+        ];
+        e.process(&s, &ev, &mut kit, &mut pre);
+        assert_eq!(kit, vec![0.0, 0.0, 0.0, 1.0, 0.5, 1.0]);
+        e.process(&s, &[], &mut kit, &mut pre);
+        assert_eq!(kit[0], 0.5);
+    }
+
+    /// A take as the player records one (keys at their samples, a change of the kit
+    /// mid-take at the block it was seen) replays offline bit for bit.
+    #[test]
+    fn a_take_replays_bit_for_bit() {
+        use crate::performance::{Knob as KnobChange, Playing, START_NOTE};
+        let dir = std::env::temp_dir().join(format!("varimu_sampler_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("a.wav"), dir.join("b.wav"));
+        let tone = |f: f64, n: usize| -> Vec<f64> {
+            (0..n)
+                .map(|i| (i as f64 * f).sin() * (-(i as f64) / 900.0).exp())
+                .collect()
+        };
+        crate::audio::write_wav(&a, &tone(0.05, 3000), 44_100).unwrap();
+        crate::audio::write_wav(&b, &tone(0.31, 1500), 48_000).unwrap();
+        let rate = 48_000;
+        let live = Sampler::default();
+        live.set_slot(0, Some(Arc::new(Sample::load(&a).unwrap())));
+        live.set_slot(2, Some(Arc::new(Sample::load(&b).unwrap())));
+        let mut perf = Performance {
+            device: DEVICE_ID.into(),
+            quality: crate::settings::Quality::Production,
+            rate,
+            values: live.values(),
+            playing: Playing::default(),
+            gain: 1.0,
+            noise: false,
+            start_note: START_NOTE,
+            start_low: false,
+            events: Vec::new(),
+            knobs: Vec::new(),
+            knobs_applied: false,
+            end: 0,
+        };
+        // Block by block as work_sampler: (block, offset, event); the level and velocity
+        // change at block 20.
+        let plan: Vec<(usize, usize, Ev)> = vec![
+            (
+                1,
+                10,
+                Ev::On {
+                    note: 60,
+                    velocity: 100,
+                },
+            ),
+            (
+                2,
+                63,
+                Ev::On {
+                    note: 62,
+                    velocity: 64,
+                },
+            ),
+            (5, 0, Ev::Off { note: 60 }),
+            (
+                5,
+                0,
+                Ev::On {
+                    note: 48,
+                    velocity: 127,
+                },
+            ),
+            (
+                21,
+                7,
+                Ev::On {
+                    note: 62,
+                    velocity: 30,
+                },
+            ),
+            (
+                22,
+                7,
+                Ev::On {
+                    note: 61,
+                    velocity: 127,
+                },
+            ), // an empty slot
+        ];
+        let mut engine = Engine::new(rate);
+        let (mut kit, mut pre) = (vec![0.0; SAMPLER_BLOCK], vec![0.0; SAMPLER_BLOCK]);
+        let mut heard = Vec::new();
+        for blk in 0..40 {
+            let at = (blk * SAMPLER_BLOCK) as u64;
+            if blk == 20 {
+                live.set_gain_db(-3.0);
+                live.set_velocity(false);
+                perf.knobs.push(KnobChange {
+                    at,
+                    values: live.values(),
+                    restart: None,
+                });
+            }
+            let ev: Vec<(usize, Ev)> = plan
+                .iter()
+                .filter(|(b, _, _)| *b == blk)
+                .map(|&(_, o, e)| (o, e))
+                .collect();
+            engine.process(&live, &ev, &mut kit, &mut pre);
+            perf.events
+                .extend(ev.iter().map(|&(o, e)| (at + o as u64, e)));
+            heard.extend_from_slice(&kit);
+        }
+        perf.end = heard.len() as u64 - 17; // a take ends anywhere
+        heard.truncate(perf.end as usize);
+        let mut cache = HashMap::new();
+        let rendered = render_performance(&perf, &mut cache).unwrap();
+        assert_eq!(rendered, heard);
+        assert!(heard.iter().any(|&v| v != 0.0));
+        // The key follows the kit's files.
+        let k0 = render_key(&perf).unwrap();
+        assert_eq!(render_key(&perf).unwrap(), k0);
+        let mut moved = perf.clone();
+        moved.events[0].0 += 1;
+        assert_ne!(render_key(&moved).unwrap(), k0);
+        // A performance survives its JSON (the kit's paths, a null slot, the level).
+        let back = Performance::from_json(&perf.to_json()).unwrap();
+        assert_eq!(render_performance(&back, &mut cache).unwrap(), heard);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

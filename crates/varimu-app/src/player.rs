@@ -71,7 +71,7 @@ use crate::performance::{Ev, Performance, Performer, Playing, START_NOTE};
 use crate::resample::StreamResampler;
 use crate::sampler::{Engine, Sampler};
 use crate::session::{Frame, Meters, Mix, Recorded, Recorder};
-use crate::settings::Settings;
+use crate::settings::{Quality, Settings};
 use crate::transport::{Clock, Grid, Phase, TransportSettings};
 
 /// Samples per block the worker computes (10 ms at 48 kHz, as the web player).
@@ -1466,8 +1466,11 @@ fn work_mix(rate: u32, buffer: usize, mut ring: rtrb::Producer<Frame>, shared: &
 pub const SAMPLER_BLOCK: usize = 64;
 
 /// The worker for the sampler (`Source::Sampler`): blocks of [`SAMPLER_BLOCK`] made as the
-/// queue drains, each starting the keys pressed since the last. The kit's voices are the
-/// take (`raw`); the preview is heard only.
+/// queue drains, each key at its place in the block, the pads as their slots' keys
+/// (`sampler::PAD_NOTE`). The kit's voices are the take (`raw`); the preview is heard only.
+/// An event take starts at once (nothing to settle, as the proxy's): the keys and pads at
+/// their samples, the kit at the start and each change to it (at the block it was seen),
+/// the kit's voices as heard (`sampler::render_performance` replays the same).
 fn work_sampler(
     rate: u32,
     buffer: usize,
@@ -1486,10 +1489,60 @@ fn work_sampler(
     // Playing once the output plays (its queue full, its latency known): a take started
     // before would measure its latency on an empty queue and land late.
     let mut playing = false;
+    let mut last_block = Instant::now();
+    if let Some(k) = keys {
+        k.take_events();
+    }
+    // Pads' keys held (note, samples until its key up).
+    let mut pads_held: Vec<(u8, usize)> = Vec::new();
+    let pad_hold = (crate::sampler::PAD_HOLD_S * rate as f64) as usize;
+    // An event take: the performance, its sample now, the kit as last logged.
+    let mut log: Option<Arc<Mutex<Performance>>> = None;
+    let mut at: u64 = 0;
+    let mut generation = sampler.generation();
     while !shared.stop.load(Ordering::Relaxed) {
         if !playing && shared.played.load(Ordering::Relaxed) > 0 {
             playing = true;
             shared.status.lock().expect("status").state = State::Playing;
+        }
+        if let Some(device) = shared.event_take.lock().expect("event_take").take() {
+            let perf = Performance {
+                device,
+                // Its render is the final sound at once: no draft to wait on.
+                quality: Quality::Production,
+                rate,
+                values: sampler.values(),
+                playing: Playing::default(),
+                gain: 1.0,
+                noise: false,
+                start_note: START_NOTE,
+                start_low: false,
+                events: Vec::new(),
+                knobs: Vec::new(),
+                knobs_applied: false,
+                end: 0,
+            };
+            generation = sampler.generation();
+            let perf = Arc::new(Mutex::new(perf));
+            {
+                let mut r = shared.recorder.lock().expect("recorder");
+                r.finish();
+                r.performance = Some(perf.clone());
+                r.armed = true;
+            }
+            shared.transport.lock().expect("transport").run = Some(true);
+            log = Some(perf);
+            at = 0;
+        }
+        if log.is_some()
+            && shared
+                .recorder
+                .lock()
+                .expect("recorder")
+                .performance
+                .is_none()
+        {
+            log = None;
         }
         let queued = capacity - ring.slots();
         shared.queued.store(queued, Ordering::Relaxed);
@@ -1497,16 +1550,58 @@ fn work_sampler(
             std::thread::sleep(Duration::from_micros(300));
             continue;
         }
-        if let Some(k) = keys {
-            for (note, vel) in k.take_note_ons() {
-                engine.note_on(sampler, note, vel);
+        let now = Instant::now();
+        let mut events: Vec<(usize, Ev)> = match keys {
+            Some(k) => note_offsets(k.take_events(), last_block, rate)
+                .into_iter()
+                .map(|(o, e)| (o.min(SAMPLER_BLOCK - 1), e))
+                .collect(),
+            None => Vec::new(),
+        };
+        last_block = now;
+        // Pads let go, then pads hit (at the block's start: a click has no finer time).
+        pads_held.retain_mut(|(note, left)| {
+            if *left < SAMPLER_BLOCK {
+                events.push((*left, Ev::Off { note: *note }));
+                false
+            } else {
+                *left -= SAMPLER_BLOCK;
+                true
+            }
+        });
+        for (slot, velocity) in sampler.take_pads() {
+            let note = crate::sampler::PAD_NOTE + slot as u8;
+            events.insert(0, (0, Ev::On { note, velocity }));
+            pads_held.retain(|&(n, _)| n != note);
+            pads_held.push((note, pad_hold));
+        }
+        events.sort_by_key(|&(o, _)| o);
+        if let Some(l) = &log {
+            let g = sampler.generation();
+            if g != generation {
+                generation = g;
+                l.lock()
+                    .expect("performance")
+                    .knobs
+                    .push(crate::performance::Knob {
+                        at,
+                        values: sampler.values(),
+                        restart: None,
+                    });
             }
         }
-        engine.render(sampler, &mut kit, &mut preview);
+        engine.process(sampler, &events, &mut kit, &mut preview);
+        if let Some(l) = &log {
+            let mut p = l.lock().expect("performance");
+            p.events
+                .extend(events.iter().map(|&(o, e)| (at + o as u64, e)));
+            p.end = at + SAMPLER_BLOCK as u64;
+        }
         let y: Vec<f32> = kit.iter().zip(&preview).map(|(a, b)| a + b).collect();
         peak = y.iter().fold(peak, |m, v| m.max(v.abs()));
         let before = capacity - ring.slots();
-        em.emit(shared, &mut ring, &kit, y, None);
+        em.emit(shared, &mut ring, &kit, y, log.as_ref().map(|_| at));
+        at += SAMPLER_BLOCK as u64;
         blocks += 1;
         if blocks >= per_meter.max(1) {
             let mut st = shared.status.lock().expect("status");

@@ -303,6 +303,9 @@ impl Job {
         let (pr, c) = (progress.clone(), cancel.clone());
         let handle = std::thread::spawn(move || {
             crate::print::lower_priority();
+            if perf.device == crate::sampler::DEVICE_ID {
+                return sampler_take(&perf, quality, &cache, render_missing);
+            }
             let prep = Prepared::load(&config_dir, &perf, quality)?;
             let key = prep.key(&perf)?;
             if let Some((audio, right)) = cached(&cache, &key, perf.rate)? {
@@ -369,6 +372,45 @@ impl Job {
                 .unwrap_or_else(|_| Err("the render's thread panicked".into())),
         )
     }
+}
+
+/// A sampler take (no circuit): replayed through the kit it recorded
+/// (`sampler::render_performance`), kept in `cache` as a device's render is. Its key is the
+/// same at every quality.
+fn sampler_take(
+    perf: &Performance,
+    quality: Quality,
+    cache: &Path,
+    render_missing: bool,
+) -> Result<Done, String> {
+    let key = crate::sampler::render_key(perf)?;
+    if let Some((audio, _)) = cached(cache, &key, perf.rate)? {
+        return Ok(Done {
+            key,
+            audio: Arc::new(audio),
+            right: None,
+            cached: true,
+        });
+    }
+    if !render_missing {
+        return Err(NOT_RENDERED.into());
+    }
+    let t0 = std::time::Instant::now();
+    let audio = crate::sampler::render_performance(perf, &mut Default::default())?;
+    store(
+        cache,
+        &key,
+        quality,
+        (&audio, None),
+        perf.rate,
+        t0.elapsed().as_secs_f64(),
+    )?;
+    Ok(Done {
+        key,
+        audio: Arc::new(audio),
+        right: None,
+        cached: false,
+    })
 }
 
 #[cfg(test)]

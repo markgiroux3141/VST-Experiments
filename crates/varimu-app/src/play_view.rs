@@ -749,6 +749,22 @@ impl PlayView {
             && self.device < DEVICES.len()
     }
 
+    /// Whether this view's player plays the sampler (from its keys or its pads).
+    pub fn plays_sampler(&self) -> bool {
+        self.player.is_some() && !self.adopted && self.sampler_on
+    }
+
+    /// Whether a take recorded from this view's instrument now is an event take (its notes,
+    /// for the piano roll): a device played from the keys, or the sampler.
+    pub fn records_events(&self) -> bool {
+        self.plays_keys() || self.plays_sampler()
+    }
+
+    /// The sampler's kit (shared with its player).
+    pub fn sampler(&self) -> &std::sync::Arc<varimu_app::sampler::Sampler> {
+        &self.kit.sampler
+    }
+
     /// Whether the chosen device has a proxy (its measured tables).
     pub fn has_proxy(&self) -> bool {
         self.proxy_tables.is_some()
@@ -1219,7 +1235,8 @@ impl PlayView {
         ui.label(
             RichText::new(
                 "Pick sounds here, then record in the Session view: select a track, press R \
-                 (the preview is never recorded)",
+                 (rec MIDI keeps the notes, keys and pads, for the piano roll; the preview is \
+                 never recorded)",
             )
             .small()
             .color(theme::FAINT),

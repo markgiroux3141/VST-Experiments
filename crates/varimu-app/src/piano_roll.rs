@@ -34,7 +34,10 @@
 //! the grid at the strength (with "ends", the ends too), Ctrl+A selects every note, Ctrl+C
 //! / X / V copy, cut and paste (at the session's cursor, keeping their spacing; the
 //! clipboard is shared by every roll), Ctrl+D duplicates the selection right after itself.
-//! The wheel scrolls the keys, Shift+wheel scrolls in time, Ctrl+wheel zooms.
+//! The wheel scrolls the keys, Shift+wheel scrolls in time, Ctrl+wheel zooms; H or = zoom
+//! in and G or - out about the pointer (over the roll), and the header's − / + about the
+//! middle. The scrollbar under the velocities scrolls in time (drag the thumb, click to
+//! jump, double-click to fit the take).
 //!
 //! Every gesture is one edit: when it ends the roll hands back the notes, and the Session
 //! view saves them as the take's next revision (one undo step; the take renders again
@@ -59,13 +62,23 @@ const BRIEF: Duration = Duration::from_millis(280);
 
 const KEYS_W: f32 = 44.0;
 const VEL_H: f32 = 56.0;
-/// Grid divisions of a beat on offer.
-const DIVISIONS: [(u32, &str); 5] = [
+/// The time scrollbar's strip under the velocities (px).
+const SCROLL_H: f32 = 14.0;
+/// The zoom buttons' and keys' step.
+const ZOOM_STEP: f64 = 1.5;
+/// Zoom's range (px per s).
+const ZOOM_MIN: f64 = 5.0;
+const ZOOM_MAX: f64 = 4000.0;
+/// Grid divisions of a beat on offer (steps per beat: a triplet is three in the time of
+/// two of its straight value).
+const DIVISIONS: [(u32, &str); 7] = [
     (1, "1/4"),
     (2, "1/8"),
     (3, "1/8T"),
     (4, "1/16"),
+    (6, "1/16T"),
     (8, "1/32"),
+    (12, "1/32T"),
 ];
 
 /// What the mouse does in the roll.
@@ -162,6 +175,11 @@ pub struct Roll {
     px_per_s: f64,
     top_key: f64,
     key_h: f32,
+    /// The grid's width last frame (px: the zoom buttons zoom about its middle), and the
+    /// scrollbar's drag: the pointer's offset from the view's left edge (s) and the bar's
+    /// scale as the drag started (its left end, its span: s).
+    grid_w: f32,
+    scroll_grab: Option<(f64, f64, f64)>,
     division: u32,
     /// Quantize strength (0-1), and whether quantize moves the ends too.
     strength: f64,
@@ -212,6 +230,8 @@ impl Roll {
             px_per_s: 120.0,
             top_key: 84.0,
             key_h: 12.0,
+            grid_w: 900.0,
+            scroll_grab: None,
             division: 4,
             strength: 1.0,
             quantize_ends: false,
@@ -398,6 +418,108 @@ impl Roll {
         sample(place, pos)
     }
 
+    /// Zoom in time by `factor`, the time under `x` (px from the grid's left) held still.
+    fn zoom_by(&mut self, factor: f64, x: f32) {
+        let at = self.view_s + x as f64 / self.px_per_s;
+        self.px_per_s = (self.px_per_s * factor).clamp(ZOOM_MIN, ZOOM_MAX);
+        self.view_s = at - x as f64 / self.px_per_s;
+    }
+
+    /// The time scrollbar under the velocities: the bar spans the take with a margin and
+    /// whatever is in view; the thumb is the view. Drag the thumb to scroll, click the bar
+    /// to centre the view there (and drag on), double-click it to fit the take.
+    fn scrollbar(&mut self, ui: &mut egui::Ui, place: &Place) {
+        let (bar, resp) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), SCROLL_H),
+            Sense::click_and_drag(),
+        );
+        let track = Rect::from_min_max(
+            Pos2::new(bar.left() + KEYS_W, bar.top() + 3.0),
+            Pos2::new(bar.right() - 2.0, bar.bottom() - 1.0),
+        );
+        let rate = place.rate as f64;
+        let view_w = self.grid_w as f64 / self.px_per_s;
+        let (lo, span) = match self.scroll_grab {
+            Some((_, lo, span)) => (lo, span),
+            None => {
+                let t0 = place.position as f64 / rate;
+                let t1 = (place.position + place.len as i64) as f64 / rate;
+                let margin = (t1 - t0).max(1.0) * 0.1;
+                let lo = (t0 - margin).min(self.view_s);
+                let hi = (t1 + margin).max(self.view_s + view_w);
+                (lo, (hi - lo).max(1e-6))
+            }
+        };
+        let tw = track.width().max(1.0) as f64;
+        let x_of = |s: f64| track.left() + ((s - lo) / span * tw) as f32;
+        let s_of = |x: f32| lo + (x - track.left()) as f64 / tw * span;
+        let (a, b) = (x_of(self.view_s), x_of(self.view_s + view_w));
+        let thumb = Rect::from_min_max(
+            Pos2::new(a.max(track.left()), track.top()),
+            Pos2::new(b.min(track.right()).max(a + 16.0), track.bottom()),
+        );
+        if resp.double_clicked() {
+            let len_s = place.len as f64 / rate;
+            self.view_s = place.position as f64 / rate - 0.1 * len_s.max(0.5);
+            self.px_per_s = (self.grid_w as f64 / (len_s * 1.2).max(0.5)).clamp(ZOOM_MIN, ZOOM_MAX);
+        } else if (resp.drag_started() || resp.clicked())
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let s = s_of(p.x);
+            if thumb.contains(p) {
+                self.scroll_grab = Some((s - self.view_s, lo, span));
+            } else {
+                self.view_s = s - view_w / 2.0;
+                self.scroll_grab = Some((view_w / 2.0, lo, span));
+            }
+        }
+        if resp.dragged()
+            && let (Some((grab, _, _)), Some(p)) = (self.scroll_grab, resp.interact_pointer_pos())
+        {
+            self.view_s = s_of(p.x) - grab;
+        }
+        if resp.drag_stopped() || (!resp.dragged() && !resp.is_pointer_button_down_on()) {
+            self.scroll_grab = None;
+        }
+        // Shift+wheel or a sideways wheel over the bar scrolls too.
+        if ui.rect_contains_pointer(bar) {
+            let d = ui.input(|i| i.smooth_scroll_delta);
+            let dx = if d.x != 0.0 { d.x } else { d.y };
+            self.view_s -= dx as f64 / self.px_per_s;
+        }
+        let painter = ui.painter_at(bar);
+        painter.rect_filled(track, 3.0, theme::CHROME2);
+        // The take's extent, faintly, so the thumb has something to find.
+        let (t0, t1) = (
+            x_of(place.position as f64 / rate),
+            x_of((place.position + place.len as i64) as f64 / rate),
+        );
+        painter.rect_filled(
+            Rect::from_min_max(
+                Pos2::new(t0, track.center().y - 1.0),
+                Pos2::new(t1, track.center().y + 1.0),
+            ),
+            0.0,
+            place.colour.gamma_multiply(0.6),
+        );
+        let hot = self.scroll_grab.is_some() || resp.hovered();
+        painter.rect_filled(
+            thumb,
+            3.0,
+            if hot { theme::MUTED } else { theme::CHROME3 }.gamma_multiply(0.85),
+        );
+        painter.rect_stroke(
+            thumb,
+            3.0,
+            Stroke::new(1.0, theme::LINE),
+            StrokeKind::Inside,
+        );
+        resp.on_hover_text(
+            "Drag to scroll in time; click to jump; double-click to fit the take. \
+             Zoom: − / + above, G / H or - / = over the roll, Ctrl+wheel",
+        );
+    }
+
     /// Show the roll in `ui`; what it asks for.
     pub fn ui(&mut self, ui: &mut egui::Ui, place: &Place) -> Vec<Out> {
         let mut out = Vec::new();
@@ -418,7 +540,8 @@ impl Roll {
         }
         self.header(ui, place, &mut out);
         let full = ui.available_rect_before_wrap();
-        let (rect, resp) = ui.allocate_exact_size(full.size(), Sense::click_and_drag());
+        let size = egui::vec2(full.width(), (full.height() - SCROLL_H).max(VEL_H + 40.0));
+        let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let grid_rect = Rect::from_min_max(
             Pos2::new(rect.left() + KEYS_W, rect.top()),
             Pos2::new(rect.right(), rect.bottom() - VEL_H),
@@ -437,12 +560,23 @@ impl Roll {
                     i.pointer.hover_pos(),
                 )
             });
+            // The keys zoom about the pointer too, while it is over the roll and no text
+            // field has the keyboard: H or = (+) in, G or - out (G / H as the arrangement's).
+            let typing = ui.ctx().egui_wants_keyboard_input();
+            let (zoom_in, zoom_out) = ui.input(|i| {
+                let plain = !typing && !i.modifiers.command;
+                let k = |key| plain && i.key_pressed(key);
+                (
+                    k(egui::Key::H) || k(egui::Key::Equals) || k(egui::Key::Plus),
+                    k(egui::Key::G) || k(egui::Key::Minus),
+                )
+            });
+            let x =
+                pointer.map_or(rect.center().x + KEYS_W / 2.0, |p| p.x) - (rect.left() + KEYS_W);
             if zoom != 1.0 {
-                let x = pointer.map_or(rect.center().x + KEYS_W / 2.0, |p| p.x)
-                    - (rect.left() + KEYS_W);
-                let at = self.view_s + x as f64 / self.px_per_s;
-                self.px_per_s = (self.px_per_s * zoom as f64).clamp(5.0, 4000.0);
-                self.view_s = at - x as f64 / self.px_per_s;
+                self.zoom_by(zoom as f64, x);
+            } else if zoom_in || zoom_out {
+                self.zoom_by(if zoom_in { ZOOM_STEP } else { 1.0 / ZOOM_STEP }, x);
             } else if shift || scroll.x != 0.0 {
                 let dx = if shift { scroll.y + scroll.x } else { scroll.x };
                 self.view_s -= dx as f64 / self.px_per_s;
@@ -450,6 +584,8 @@ impl Roll {
                 self.top_key = (self.top_key + (scroll.y / self.key_h) as f64).clamp(12.0, 127.0);
             }
         }
+        self.grid_w = grid_rect.width().max(1.0);
+        self.scrollbar(ui, place);
         let rate = place.rate as f64;
         // Follow the playhead while it runs (the header's toggle).
         if self.follow
@@ -1271,7 +1407,24 @@ impl Roll {
                 {
                     let len_s = place.len as f64 / place.rate as f64;
                     self.view_s = place.position as f64 / place.rate as f64 - 0.1 * len_s.max(0.5);
-                    self.px_per_s = (900.0 / (len_s * 1.2).max(0.5)).clamp(5.0, 4000.0);
+                    self.px_per_s = (self.grid_w as f64 / (len_s * 1.2).max(0.5))
+                        .clamp(ZOOM_MIN, ZOOM_MAX);
+                }
+                // Right to left: + then −, so they read "− +" before Fit.
+                let mid = self.grid_w / 2.0;
+                if ui
+                    .small_button("+")
+                    .on_hover_text("Zoom in, in time (=, or Ctrl+wheel over the roll)")
+                    .clicked()
+                {
+                    self.zoom_by(ZOOM_STEP, mid);
+                }
+                if ui
+                    .small_button("−")
+                    .on_hover_text("Zoom out, in time (-, or Ctrl+wheel over the roll)")
+                    .clicked()
+                {
+                    self.zoom_by(1.0 / ZOOM_STEP, mid);
                 }
             });
         });
@@ -1476,6 +1629,84 @@ mod tests {
         assert!(sounded(&out).is_empty());
     }
 
+    /// H over the roll zooms in about the pointer; a click on the scrollbar's far end
+    /// scrolls later; dragging it back scrolls earlier; − in the header's keys zooms out.
+    #[test]
+    fn the_roll_zooms_and_scrolls_in_time() {
+        let p = place(Vec::new());
+        let mut r = Roll::new(0, &p);
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 500.0));
+        let frame = |r: &mut Roll, i: usize, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                time: Some(i as f64 * 0.05),
+                events,
+                ..Default::default()
+            };
+            let _ = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    r.ui(ui, &p);
+                });
+            });
+        };
+        let key = |key| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let over = Pos2::new(600.0, 200.0);
+        frame(&mut r, 0, vec![egui::Event::PointerMoved(over)]);
+        // The time under the pointer, before and after zooming in.
+        let x = over.x - (8.0 + KEYS_W);
+        let at = |r: &Roll| r.view_s + x as f64 / r.px_per_s;
+        let (z0, t0) = (r.px_per_s, at(&r));
+        frame(&mut r, 1, vec![key(egui::Key::H)]);
+        assert!((r.px_per_s / z0 - ZOOM_STEP).abs() < 1e-9, "{}", r.px_per_s);
+        assert!((at(&r) - t0).abs() < 1e-9);
+        frame(&mut r, 2, vec![key(egui::Key::Minus)]);
+        assert!((r.px_per_s - z0).abs() < 1e-9);
+        // The scrollbar: the bottom strip of the panel (its margin 8 px). Zoomed in, so the
+        // 2 s take is wider than the view (else the thumb fills the bar: nothing to scroll).
+        r.px_per_s = 2000.0;
+        let y = 500.0 - 8.0 - SCROLL_H / 2.0;
+        let v0 = r.view_s;
+        let end = Pos2::new(1180.0, y);
+        frame(
+            &mut r,
+            3,
+            vec![egui::Event::PointerMoved(end), button(end, true)],
+        );
+        frame(&mut r, 4, vec![button(end, false)]);
+        frame(&mut r, 5, vec![]);
+        assert!(r.view_s > v0 + 0.1, "{v0} -> {}", r.view_s);
+        // Drag from there back to the left: earlier again.
+        let v1 = r.view_s;
+        let left = Pos2::new(8.0 + KEYS_W + 20.0, y);
+        let mut i = 6;
+        frame(
+            &mut r,
+            i,
+            vec![egui::Event::PointerMoved(end), button(end, true)],
+        );
+        for k in 1..=10 {
+            i += 1;
+            let x = end.x + (left.x - end.x) * k as f32 / 10.0;
+            frame(&mut r, i, vec![egui::Event::PointerMoved(Pos2::new(x, y))]);
+        }
+        frame(&mut r, i + 1, vec![button(left, false)]);
+        assert!(r.view_s < v1 - 0.1, "{v1} -> {}", r.view_s);
+        assert!(r.scroll_grab.is_none());
+    }
+
     #[test]
     fn a_quantize_lands_every_note_on_its_grid_sample() {
         let notes = vec![
@@ -1493,14 +1724,22 @@ mod tests {
             },
         ];
         let p = place(notes.clone());
-        let mut r = Roll::new(0, &p);
-        r.quantize(&p);
-        let step = step(&p, r.division);
-        for (n, before) in r.notes.iter().zip(&notes) {
-            let pos = r.timeline(&p, n.start) as f64;
-            let k = (pos - p.grid.beat(0) as f64) / step;
-            assert!((k - k.round()).abs() * step < 0.51, "{pos} is on the grid");
-            assert_eq!(n.end - n.start, before.end - before.start);
+        // Every grid on offer, the triplets (1/8T, 1/16T, 1/32T) among them.
+        for (division, label) in DIVISIONS {
+            let mut r = Roll::new(0, &p);
+            r.set_division(division);
+            r.quantize(&p);
+            let step = step(&p, r.division);
+            for (n, before) in r.notes.iter().zip(&notes) {
+                let pos = r.timeline(&p, n.start) as f64;
+                let k = (pos - p.grid.beat(0) as f64) / step;
+                // A note whose grid line is before the take's start stays at its start.
+                assert!(
+                    (k - k.round()).abs() * step < 0.51 || n.start == 0,
+                    "{label}: {pos} is on the grid"
+                );
+                assert_eq!(n.end - n.start, before.end - before.start);
+            }
         }
         // At half strength, half way there.
         let mut r = Roll::new(0, &p);

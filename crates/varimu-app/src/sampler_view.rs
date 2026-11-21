@@ -293,6 +293,29 @@ impl SamplerPanel {
         }
     }
 
+    /// The preview's level: heard at once on a preview sounding, kept with the kit. It
+    /// sets only what browsing plays, not the kit or a take.
+    fn preview_level_ui(&mut self, ui: &mut egui::Ui) {
+        let mut db = self.sampler.preview_db();
+        ui.label(RichText::new("Preview").color(theme::MUTED));
+        let r = ui
+            .add(
+                egui::Slider::new(&mut db, -40.0..=0.0)
+                    .step_by(0.5)
+                    .suffix(" dB"),
+            )
+            .on_hover_text(
+                "How loud browsed files play (they're normalized near full scale). \
+                 Only the preview: the kit's level is on the left",
+            );
+        if r.changed() {
+            self.sampler.set_preview_db(db);
+        }
+        if r.drag_stopped() || (r.changed() && !r.dragged()) {
+            self.save();
+        }
+    }
+
     /// The browser: folders, the filter, the files (a click plays one).
     pub fn browser_ui(&mut self, ui: &mut egui::Ui, wants: &mut Wants) {
         if self.groups.is_empty() {
@@ -400,6 +423,7 @@ impl SamplerPanel {
                     if ui.button("■").on_hover_text("Stop the preview").clicked() {
                         self.sampler.stop_preview();
                     }
+                    self.preview_level_ui(ui);
                     ui.label(
                         RichText::new(format!("{} files · ↑↓ play · Enter loads", listed.len()))
                             .small()
