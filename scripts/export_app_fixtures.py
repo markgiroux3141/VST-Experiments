@@ -89,18 +89,22 @@ def heated(c: spec.CircuitSpec) -> bool:
     return True
 
 
+KEYED_MODELS = ("harp", "wurli_reeds")  # elements that carry their compiled model inline
+
+
 def _harps_as_default(section: dict[str, Any], default: dict[str, Any]) -> dict[str, Any]:
-    """A case's section with each harp's compiled model (~4 MB) named "default": it is
-    always the default IR's (checked here; tests/agreement.rs puts it back)."""
+    """A case's section with each harp's (and the Wurlitzer's reeds') compiled model (~4 MB,
+    1.3 MB) named "default": it is always the default IR's (checked here;
+    tests/agreement.rs puts it back)."""
     models = {
         e["name"]: e["model"]
         for s in default["sections"]
         for e in s["elements"]
-        if e.get("kind") == "harp"
+        if e.get("kind") in KEYED_MODELS
     }
     els = []
     for e in section["elements"]:
-        if e.get("kind") == "harp":
+        if e.get("kind") in KEYED_MODELS:
             assert e["model"] == models[e["name"]], e["name"]
             e = {**e, "model": "default"}
         els.append(e)

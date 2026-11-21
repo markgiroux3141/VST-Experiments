@@ -1,11 +1,13 @@
 //! Media beside the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`; a Rhodes
-//! harp, `crate::harp`; a Clavinet's strings, `crate::clavinet`; the Nickel Organ's keys,
+//! harp, `crate::harp`; the Wurlitzer's reeds, `crate::wurli`; a Clavinet's strings, `crate::clavinet`; the Nickel Organ's keys,
 //! `crate::nickel`): each senses a voltage in
 //! the circuit after every sample (the keyboards' media sense nothing: their keys are note
 //! events) and drives its outputs' nodes at the next one, like control inputs
 //! ([`crate::mna::Mna::media`]); most have one output, `out`.
 
-use crate::ir::{ClavStrings, Harp, NickelKeys, NovaKeys, Plate, ReedKeys, Spring, Tape};
+use crate::ir::{
+    ClavStrings, Harp, NickelKeys, NovaKeys, Plate, ReedKeys, Spring, Tape, WurliReeds,
+};
 
 /// A medium's element in the IR.
 #[derive(Debug, Clone, PartialEq)]
@@ -14,6 +16,7 @@ pub enum MediumElement {
     Spring(Spring),
     Tape(Tape),
     Harp(Harp),
+    WurliReeds(WurliReeds),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
@@ -50,6 +53,7 @@ impl MediumElement {
             MediumElement::Spring(p) => &p.name,
             MediumElement::Tape(t) => &t.name,
             MediumElement::Harp(h) => &h.name,
+            MediumElement::WurliReeds(w) => &w.name,
             MediumElement::ClavStrings(c) => &c.name,
             MediumElement::NovaKeys(k) => &k.name,
             MediumElement::NickelKeys(k) => &k.name,
@@ -66,6 +70,7 @@ impl MediumElement {
                 .chain(t.sync_out.as_deref())
                 .collect(),
             MediumElement::Harp(h) => vec![&h.out],
+            MediumElement::WurliReeds(w) => vec![&w.out],
             MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
             MediumElement::NovaKeys(k) => k.outs.iter().map(String::as_str).collect(),
             MediumElement::NickelKeys(k) => vec![&k.out],
@@ -79,6 +84,7 @@ impl MediumElement {
             MediumElement::Plate(_)
             | MediumElement::Spring(_)
             | MediumElement::Harp(_)
+            | MediumElement::WurliReeds(_)
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
             | MediumElement::NickelKeys(_)
@@ -93,6 +99,7 @@ impl MediumElement {
             MediumElement::Plate(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Spring(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
+            MediumElement::WurliReeds(w) => (&w.plate, crate::ir::GROUND),
             MediumElement::Harp(_)
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
@@ -244,6 +251,7 @@ pub enum Medium {
     Spring(Box<crate::spring::Medium>),
     Tape(Box<TapeMedium>),
     Harp(Box<crate::harp::Medium>),
+    Wurli(Box<crate::wurli::Medium>),
     Clav(Box<ClavMedium>),
     Nova(Box<crate::novachord::Medium>),
     Nickel(Box<crate::nickel::Medium>),
@@ -283,6 +291,9 @@ impl Medium {
                 readouts: Default::default(),
             })),
             MediumElement::Harp(h) => Medium::Harp(Box::new(crate::harp::Medium::new(h, fs))),
+            MediumElement::WurliReeds(w) => {
+                Medium::Wurli(Box::new(crate::wurli::Medium::new(w, fs)))
+            }
             MediumElement::ClavStrings(c) => Medium::Clav(Box::new(ClavMedium {
                 strings: crate::clavinet::Medium::new(c, fs)?,
                 last: [0.0; 3],
@@ -332,6 +343,7 @@ impl Medium {
                 m.push(std::iter::repeat_n(v, k), supply_hz)
             }
             Medium::Harp(m) => m.push(),
+            Medium::Wurli(m) => m.push(v),
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense many nodes: push_senses"),
@@ -391,6 +403,7 @@ impl Medium {
             Medium::Plate(_)
             | Medium::Spring(_)
             | Medium::Harp(_)
+            | Medium::Wurli(_)
             | Medium::Clav(_)
             | Medium::Nova(_)
             | Medium::Reeds(_)
@@ -407,6 +420,7 @@ impl Medium {
             Medium::Spring(m) => m.push(*vs.last().expect("a sample")),
             Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
             Medium::Harp(m) => m.push(),
+            Medium::Wurli(m) => m.push(*vs.last().expect("a sample")),
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense their own part"),
@@ -419,6 +433,7 @@ impl Medium {
     pub fn queue_note(&mut self, at: usize, ev: NoteEvent) {
         match self {
             Medium::Harp(m) => m.queue(at, ev),
+            Medium::Wurli(m) => m.queue(at, ev),
             Medium::Clav(m) => m.strings.queue(at, ev),
             Medium::Nova(m) => m.queue(at, ev),
             Medium::Nickel(m) => m.queue(at, ev),
@@ -432,6 +447,7 @@ impl Medium {
     pub fn notes_known_until(&mut self, at: usize) {
         match self {
             Medium::Harp(m) => m.known_until(at),
+            Medium::Wurli(m) => m.known_until(at),
             Medium::Clav(m) => m.strings.known_until(at),
             Medium::Nickel(m) => m.known_until(at),
             _ => {}
@@ -444,6 +460,7 @@ impl Medium {
         matches!(
             self,
             Medium::Harp(_)
+                | Medium::Wurli(_)
                 | Medium::Clav(_)
                 | Medium::Nova(_)
                 | Medium::Nickel(_)
@@ -480,6 +497,12 @@ impl Medium {
             (Medium::Harp(m), MediumElement::Harp(h)) => {
                 if !m.same(h) {
                     return Err("a harp changed".into());
+                }
+            }
+            // Nor have the reeds (VIBRATO, VOLUME and OUTPUT are the circuit's).
+            (Medium::Wurli(m), MediumElement::WurliReeds(w)) => {
+                if !m.same(w) {
+                    return Err("the reeds changed".into());
                 }
             }
             // Nor have the strings (the rockers and the volume are the circuit's).

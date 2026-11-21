@@ -59,6 +59,7 @@ from varimu.circuit.ir import (
     Vccs,
     VoltageSource,
     Winding,
+    WurliReeds,
 )
 from varimu.devices import capsule as cap
 from varimu.devices import moving_coil as mc
@@ -1236,6 +1237,20 @@ def harp(name: str, out: str, data: dict, rate_hz: float, contact_rate_hz: float
         Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data),
         Resistor(f"R{upper}_coils", f"{n}_e", f"{n}_r", float(coils["r_ohm"])),
         Inductor(f"L{upper}_coils", f"{n}_r", out, float(coils["l_h"])),
+    ]
+
+
+def wurli_reeds(
+    name: str, plate: str, data: dict, rate_hz: float, contact_rate_hz: float
+) -> list[Element]:
+    """The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4) at `plate`: the medium
+    V<NAME> sensing the plate and driving <name>_d (circuitsim's reeds medium), and the
+    reeds' standing capacitance C<NAME> (the compiled reeds' `standing_f`) from <name>_d to
+    the plate, which so carries the reeds' current -d((C_r + dC) V)/dt."""
+    n, upper = name.lower(), name.upper()
+    return [
+        WurliReeds(f"V{upper}", f"{n}_d", plate, rate_hz, contact_rate_hz, data),
+        Capacitor(f"C{upper}", f"{n}_d", plate, float(data["standing_f"])),
     ]
 
 

@@ -50,6 +50,7 @@ pub struct Library {
     springs: Mutex<HashMap<String, SpringTankComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
+    wurli_reeds: Mutex<HashMap<String, std::sync::Arc<circuitsim::wurli::WurliModel>>>,
     clav_strings: Mutex<HashMap<String, (String, String)>>,
     nova_keys: Mutex<HashMap<String, (String, String)>>,
     nickel_keys: Mutex<HashMap<String, (String, String)>>,
@@ -73,6 +74,7 @@ impl Library {
             springs: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             harps: Mutex::new(HashMap::new()),
+            wurli_reeds: Mutex::new(HashMap::new()),
             clav_strings: Mutex::new(HashMap::new()),
             nova_keys: Mutex::new(HashMap::new()),
             nickel_keys: Mutex::new(HashMap::new()),
@@ -252,6 +254,52 @@ impl Library {
         model.check().map_err(|e| Error(format!("{r}: {e}")))?;
         let model = std::sync::Arc::new(model);
         self.harps.lock().unwrap().insert(key, model.clone());
+        Ok(model)
+    }
+
+    /// Reeds component `name`'s compiled data (kind `ep_reeds`; `varimu.wurlitzer.compile`):
+    /// the file its version names, checked against the sha256 the version gives.
+    pub fn wurli_reeds(
+        &self,
+        name: &str,
+    ) -> Result<std::sync::Arc<circuitsim::wurli::WurliModel>, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(h) = self.wurli_reeds.lock().unwrap().get(&key) {
+            return Ok(h.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let d = yaml::parse(&text, name)?;
+        let d = d
+            .as_map()
+            .ok_or_else(|| Error(format!("{r}: not a mapping")))?;
+        let kind = d.get("kind").and_then(Value::as_str);
+        if kind != Some("ep_reeds") {
+            return Err(Error(format!(
+                "{r} is not a reed keyboard of kind ep_reeds (kind {kind:?})"
+            )));
+        }
+        let data = d.get("data").and_then(Value::as_map);
+        let field = |k: &str| {
+            data.and_then(|m| m.get(k))
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error(format!("{r}: data.{k} is missing")))
+        };
+        let path = root.join(r.folder()).join(field("file")?);
+        let raw = std::fs::read_to_string(&path)
+            .map_err(|e| Error(format!("{r}: {}: {e}", path.display())))?;
+        if versions::text_hash(&raw) != field("sha256")? {
+            return Err(Error(format!(
+                "{r}'s data {} doesn't match the sha256 its version names",
+                path.display()
+            )));
+        }
+        let model: circuitsim::wurli::WurliModel = serde_json::from_str(&raw)
+            .map_err(|e| Error(format!("{r}: {}: {e}", path.display())))?;
+        model.check().map_err(|e| Error(format!("{r}: {e}")))?;
+        let model = std::sync::Arc::new(model);
+        self.wurli_reeds.lock().unwrap().insert(key, model.clone());
         Ok(model)
     }
 

@@ -367,7 +367,7 @@ pub fn replay_clavinet_strikes() {
 }
 
 /// The span (dB from velocity 127 to 1) of the velocity law of the medium played by keys in
-/// `ir` (a harp; a Clavinet's strings: their tangent's speed; the Nickel Organ's keys: their
+/// `ir` (a harp; the Wurlitzer's reeds; a Clavinet's strings: their tangent's speed; the Nickel Organ's keys: their
 /// hammer's), None without one.
 pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {
     ir.sections
@@ -375,6 +375,7 @@ pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {
         .flat_map(|s| &s.elements)
         .find_map(|e| match e {
             Element::Harp(h) => Some(h.model.velocity.range_db),
+            Element::WurliReeds(w) => Some(w.model.velocity.range_db),
             Element::ClavStrings(c) => circuitsim::clavinet::load(c)
                 .ok()
                 .map(|m| 20.0 * (m.speed(127) / m.speed(1)).log10()),
@@ -437,6 +438,7 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Spring(p) => ("Spring", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
             Element::Harp(h) => ("Harp", &h.name, vec![&h.out]),
+            Element::WurliReeds(w) => ("WurliReeds", &w.name, vec![&w.plate, &w.out]),
             Element::ClavStrings(c) => {
                 worn = match &c.wear {
                     Some(w) => format!("{} {:016x}", c.name, circuitsim::clavinet::wear_hash(w)),

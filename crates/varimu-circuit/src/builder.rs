@@ -906,7 +906,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 34] = [
+const MACROS: [&str; 35] = [
     "R",
     "C",
     "L",
@@ -936,6 +936,7 @@ const MACROS: [&str; 34] = [
     "spring_tank",
     "tape",
     "harp",
+    "wurli_reeds",
     "clav_strings",
     "nova_keys",
     "nickel_keys",
@@ -1058,6 +1059,15 @@ fn macro_of(kind: &str) -> Macro {
             false,
         ),
         "harp" => (
+            Some(1),
+            vec![
+                p("component", Raw),
+                p("rate_hz", Physical),
+                p("contact_rate_hz", Physical),
+            ],
+            false,
+        ),
+        "wurli_reeds" => (
             Some(1),
             vec![
                 p("component", Raw),
@@ -1629,6 +1639,7 @@ fn expand(
         "spring_tank" => return spring_tank_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
         "harp" => return harp_part(ctx, name, nodes, a),
+        "wurli_reeds" => return wurli_reeds_part(ctx, name, nodes, a),
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         "nova_keys" => return nova_keys_part(ctx, name, conn, a),
         "nickel_keys" => return nickel_keys_part(ctx, name, nodes, a),
@@ -2291,6 +2302,43 @@ const CLAV_WEAR: [&str; 7] = [
     "wear_yarn",
     "wear_pickups",
 ];
+
+/// The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4; `varimu.circuit.parts.wurli_reeds`):
+/// the medium V<NAME> sensing the plate and driving <name>_d, and the reeds' standing
+/// capacitance C<NAME> from <name>_d to the plate.
+fn wurli_reeds_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.wurli_reeds(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
+    let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let c_f = model.standing_f;
+    Ok(vec![
+        Element::WurliReeds(circuitsim::ir::WurliReeds {
+            name: format!("V{upper}"),
+            out: format!("{n}_d"),
+            plate: nodes[0].clone(),
+            rate_hz,
+            contact_rate_hz,
+            model: Box::new((*model).clone()),
+        }),
+        Element::Capacitor(circuitsim::ir::Capacitor {
+            name: format!("C{upper}"),
+            a: format!("{n}_d"),
+            b: nodes[0].clone(),
+            c_f,
+            v0_v: None,
+        }),
+    ])
+}
 
 /// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `varimu.circuit.parts.harp`): its EMF V<NAME>
 /// on <name>_e behind its coils' resistance R<NAME>_coils and inductance L<NAME>_coils

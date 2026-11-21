@@ -111,5 +111,5 @@ numerics:
   element_m: {value: 1.0e-3, source: "numerical: the longest beam element"}
   f_max_hz: {value: 40000.0, source: "numerical: the highest mode kept"}
   field_cell_m: {value: 0.025e-3, source: "numerical: the field solve's fine cells (the reed's thickness a whole number of them)"}
-  swing_m: {value: 6.0e-3, source: "numerical: the map covers the reed within +-this of the plate's mid-plane (a bass reed struck hard swings ~4 mm at the slot)"}
+  swing_m: {value: 7.5e-3, source: "numerical: the map covers the reed within +-this of the plate's mid-plane, up to the shield less the thick blank's half thickness (2026-11-20, WZ4: at 6 mm the bass reeds struck at velocity 127 swung to 7.0 mm, off the map, where c(z) is held: a kink twice a cycle, heard as crackle; velocity 100 reaches 5.9 mm)"}
   full_scale_v: {value: 0.5, source: "numerical: the study's WAVs' 0 dBFS, 0.5 V peak at the plate"}

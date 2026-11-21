@@ -109,8 +109,11 @@ def mesh(s: Section) -> Mesh:
         yp += _grow(yp[-1], c, half_p)
     yp = np.unique(np.round(np.array(yp), 12))
     y = np.concatenate([-yp[:0:-1], yp])
+    # the fine band covers the reed's swing, but never past the grounded shield
     band = s.swing_m + s.reed_thickness_m
-    n_band = int(np.ceil(band / c))
+    n_band = min(int(np.ceil(band / c)), int(np.floor(s.shield_distance_m / c + 1e-9)))
+    if (s.swing_m + s.reed_thickness_m / 2) >= s.shield_distance_m - c:
+        raise ValueError("the reed's swing reaches the shield: lower numerics.swing_m")
     zb = np.arange(-n_band, n_band + 1) * c
     top = _grow(zb[-1], c, s.shield_distance_m)
     z = np.unique(np.round(np.concatenate([-np.array(top[::-1]), zb, top]), 12))

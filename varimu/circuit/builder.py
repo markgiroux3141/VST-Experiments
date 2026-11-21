@@ -93,6 +93,13 @@ Macro parts (connection; params, * = required):
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
                 EMF behind its coils' resistance and inductance into out, its keys played
                 by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp)
+    wurli_reeds [plate]; component* (a reeds component version, NAME@N, or a parameter
+                naming one: kind ep_reeds, varimu.wurlitzer.compile), rate_hz* and
+                contact_rate_hz* (numerics: the voices' and the hammer's contact's rate
+                floors): the Wurlitzer 200A's reeds as circuitsim's medium, sensing the comb
+                plate and pushing the reeds' current into it through their standing
+                capacitance, its keys played by note events (docs/WURLITZER_PLAN.md WZ4;
+                varimu.circuit.parts.wurli_reeds)
     clav_strings [centre, bridge, bridge_neg]; component* (a Clavinet strings component
                 version, NAME@N, or a parameter naming one: kind clav_strings,
                 varimu.clavinet.compile), rate_hz* and contact_rate_hz* (numerics: the
@@ -1063,6 +1070,18 @@ def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
 
 
+def _wurli_reeds(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.wurlitzer import compile as wurli_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data = wurli_compile.load_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.wurli_reeds(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
+
+
 def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     from varimu.clavinet import compile as clav_compile
 
@@ -1424,6 +1443,9 @@ for _name, _macro in {
         optional_nodes=1,
     ),
     "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
+    "wurli_reeds": Macro(
+        _wurli_reeds, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}
+    ),
     "nova_keys": Macro(
         _nova_keys,
         None,

@@ -421,6 +421,27 @@ class Harp:
 
 
 @dataclass(frozen=True)
+class WurliReeds:
+    """The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4; varimu.wurlitzer.keyboard is
+    the reference, circuitsim's wurli.rs the port): its keys struck by note events, the
+    reeds' capacitance change dC to the comb plate summed. The medium senses `plate` (to
+    ground) after every step and drives `out` to ground at the next with
+    -v(plate) dC / standing_f, so a capacitor of the model's `standing_f` from `out` to the
+    plate (varimu.circuit.parts.wurli_reeds puts it there) carries the reeds' current
+    -d((C_r + dC) V)/dt. The voices run at the least whole multiple of the step rate at or
+    above `rate_hz`, the hammer's contact at `contact_rate_hz`. `model` is the compiled reeds
+    (a component version of kind ep_reeds: varimu.wurlitzer.compile's data). SPICE has no
+    reeds: ngspice sees `out` held at 0 V."""
+
+    name: str
+    out: str
+    plate: str
+    rate_hz: float
+    contact_rate_hz: float
+    model: dict = dataclasses.field(hash=False, repr=False)
+
+
+@dataclass(frozen=True)
 class ClavWear:
     """A worn Clavinet (docs/CLAVINET_PLAN.md, "Variation and wear"; varimu.clavinet.wear is
     the reference, circuitsim's `ClavModel::worn` the port): the unit `seed` (a whole
@@ -801,6 +822,7 @@ Element = (
     | Spring
     | Tape
     | Harp
+    | WurliReeds
     | ClavStrings
     | NovaKeys
     | NickelKeys
@@ -866,6 +888,7 @@ _PREFIX = {
     Spring: "V",
     Tape: "V",
     Harp: "V",
+    WurliReeds: "V",
     ClavStrings: "V",
     NovaKeys: "V",
     NickelKeys: "V",
@@ -906,6 +929,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.sense_pos, el.sense_neg, el.out)
     if isinstance(el, Harp):
         return (el.out,)
+    if isinstance(el, WurliReeds):
+        return (el.plate, el.out)
     if isinstance(el, ClavStrings):
         return el.outs
     if isinstance(el, NovaKeys):
@@ -1172,6 +1197,8 @@ class CircuitIR:
                 _validate_tape(el, self.input_node)
             elif isinstance(el, Harp):
                 _validate_harp(el, self.input_node)
+            elif isinstance(el, WurliReeds):
+                _validate_wurli_reeds(el, self.input_node)
             elif isinstance(el, ClavStrings):
                 _validate_clav_strings(el, self.input_node)
             elif isinstance(el, NovaKeys):
@@ -1553,6 +1580,7 @@ _ELEMENT_KINDS = {
     "spring": Spring,
     "tape": Tape,
     "harp": Harp,
+    "wurli_reeds": WurliReeds,
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
     "nickel_keys": NickelKeys,
@@ -1630,7 +1658,7 @@ def _encode(x: Any) -> Any:
         return x
     if isinstance(x, int | float):
         return float(x)
-    if isinstance(x, dict):  # a harp's compiled model
+    if isinstance(x, dict):  # a harp's or the reeds' compiled model
         return {str(k): _encode(v) for k, v in x.items()}
     raise IRError(f"can't encode {type(x).__name__} in the IR")
 
@@ -1786,6 +1814,19 @@ def _validate_harp(el: Harp, input_node: str) -> None:
         raise IRError(f"{el.name}.model: a compiled harp (format 1) with keys")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickups drive {el.out} (ground or the input)")
+
+
+def _validate_wurli_reeds(el: WurliReeds, input_node: str) -> None:
+    """The Rust IR's checks for the reeds' element (its model's arrays are checked there)."""
+    _positive(f"{el.name}.rate_hz", el.rate_hz)
+    _positive(f"{el.name}.contact_rate_hz", el.contact_rate_hz)
+    m = el.model
+    if not isinstance(m, dict) or m.get("format") != 1 or not m.get("keys"):
+        raise IRError(f"{el.name}.model: compiled reeds (format 1) with keys")
+    if el.out in (GROUND, input_node, el.plate):
+        raise IRError(f"{el.name}: its reeds drive {el.out} (ground, the input or the plate)")
+    if el.plate == GROUND:
+        raise IRError(f"{el.name}: its plate is ground")
 
 
 def _validate_clav_strings(el: ClavStrings, input_node: str) -> None:

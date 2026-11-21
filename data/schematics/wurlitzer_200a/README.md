@@ -178,10 +178,16 @@ fully in WZ0). Printed DC voltages are on the drawing for most transistor nodes.
 
 The sharp scan (p. 23 of the diagrams PDF) settles what page 76 of the manual couldn't:
 
-- **The preamp's feedback node x** (the drawing's bus to point 1): TR-1's emitter returns to it
-  through R5 33K and C5 4.7 uF in parallel, D1 (anode on x) and C2 220 pF go from TR-1's base
-  to it, and R10 56K comes back to it from the output: a non-inverting amplifier whose input is
-  bootstrapped (TR-1's base, x and its emitter move together), gain ~1 + 56K / Z(x).
+- **The preamp's feedback node x** (the drawing's bus to point 1): TR-1's emitter couples to it
+  through C5 4.7 uF and R10 56K comes back to it from the output: a non-inverting amplifier,
+  gain ~1 + 56K / Z(x). R5 33K (TR-1's emitter), D1 (anode) and C2 220 pF (TR-1's base) share a
+  net that the scan draws ending at R5's corner, joined neither to x nor to a ground symbol.
+  TR-1's emitter needs its DC return there: WZ2 first read it as x, but **ground** is what the
+  printed voltages fit (the model idles at b1 2.72 / e1 2.17 / e2 3.68 / c2 8.92 V against the
+  drawing's 2.45 / 1.95 / 3.4 / 8.8; on x, 3.21 / 2.66 / 4.33 / 7.85) and what the Pie-finger
+  set confirms (on x, the emitter's DC runs through LG-1's cell and VIBRATO throbs at 5.7 Hz,
+  0.35 V p-p at AUX with no note; the recordings' 5.7 Hz content is ~-54 dB re a note, the same
+  as with VIBRATO off). D1 is then a clamp on the base and C2 an RF shunt (2026-11-20, WZ4).
 - **x to ground** is the VIBRATO control's network: the 50K control with x on its top and
   ground on its bottom, 18K from x to its wiper, the wiper to LG-1's cell (pin 4; pin 3
   grounded). VIBRATO at 0 shorts the cell (Z = 50K || 18K); fully up shorts the 18K (Z = 50K ||

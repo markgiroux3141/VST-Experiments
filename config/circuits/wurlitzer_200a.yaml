@@ -10,11 +10,20 @@
 #             +150 V line to pa; C1 .022 to TR-1's base. The reeds are grounded through the reed bar
 #             casting.
 #   preamp    TR-1 / TR-2 direct coupled on +15 V: R4 150K and R6 1.8K the collector loads, C3 / C4
-#             100 pF Miller caps, R5 33K and C5 4.7 uF from TR-1's emitter to the feedback node x,
+#             100 pF Miller caps, R5 33K from TR-1's emitter to ground and C5 4.7 uF from it to the
+#             feedback node x,
 #             TR-2's emitter R7 270 + R8 820 to ground with C7 22 uF across both, R3 470K from the
-#             R7 / R8 junction back to TR-1's base (the DC servo), D1 and C2 220 pF from the base to
-#             x (bootstrapped), C6 4.7 uF out, R10 56K from the output to x, R9 6.8K to the amp
+#             R7 / R8 junction back to TR-1's base (the DC servo), D1 (a clamp) and C2 220 pF from the
+#             base to ground, C6 4.7 uF out, R10 56K from the output to x, R9 6.8K to the amp
 #             board. With x to ground through Z, the AC gain is ~1 + 56K / Z.
+#             R5, D1 and C2 share a net the drawing doesn't join to anything (it stops at R5's corner,
+#             short of x, and has no ground symbol); TR-1's emitter needs its DC return there, and
+#             ground is the reading the drawing's printed voltages fit (b1 2.72 / e1 2.17 / e2 3.68 /
+#             c2 8.92 V against 2.45 / 1.95 / 3.4 / 8.8; joined to x, WZ2's first reading: 3.21 /
+#             2.66 / 4.33 / 7.85, x 0.67 V) and the Pie-finger set confirms: joined to x the
+#             emitter's DC flows through the cell, so VIBRATO throbs at 5.7 Hz (0.35 V p-p at AUX with
+#             no note); the recording's 5.7 Hz content is ~-54 dB re a note, as with VIBRATO off
+#             (2026-11-20, WZ4).
 #   vibrato   x leaves the board (point 1) to the 50K VIBRATO control: x on its top, ground on its
 #             bottom, 18K from x to the wiper, the wiper to LG-1's cell (pin 4; pin 3 grounded).
 #             VIBRATO off: Z = 50K || 18K, no modulation; full: Z = 50K || the cell.
@@ -69,7 +78,7 @@ controls:
   aux_volume: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 100K AUX volume, 203755, model 200A only; fully up: the AUX jack's level set by its 1K trim)"}
   aux_trim: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the 1K screwdriver trim, 204524, at the AUX jack: fully up, the drawing's approx. .4 V AC maximum)"}
   reedbar_trim: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (R11, the 25K 'reed bar volume' trimmer, 203717-1, between the preamp and the main volume: 0 = no series resistance; its factory setting is unknown)"}
-  vib_trim: {value: 0.056, min: 0.0, max: 1.0, unit: rotation, source: "fit (2026-11-20, scripts/wurlitzer_amp_study.py --only vibrato_fit): R17, the 4.7K trimmer (203717-2) in the LED's string, at ~260 ohm puts VIBRATO full's depth at the Pie-finger set's (6.2 dB p-p, its octave 4 measured as the model is) with the VTL5C2 stand-in; the depth peaks ~9 dB near a quarter turn and falls toward 0 (the cell saturated)"}
+  vib_trim: {value: 1.0000, min: 0.0, max: 1.0, unit: rotation, source: "fit (scripts/fit_wurlitzer_lg1.py, with LG1_200A@2): R17, the 4.7K trimmer (203717-2) in the LED's string, at 4700 ohm; with the cell, least squares on VIBRATO full's depth, level against off and envelope H2: 5.28 dB p-p, -0.60 dB, -13.7 dB, the Pie-finger set's 6.22 dB p-p, -1.50 dB, -13.8 dB (the cell's resistance swings 5.4x over the LED's cycle: both together are out of its reach)"}
 
 values:
   mains_hz: {value: 60.0, source: "manual p.3 (50 / 60 Hz; the US 60)"}
@@ -112,7 +121,7 @@ values:
   c18_f: {value: 0.12e-6, source: "the drawing: C18 .12"}
   kick_v: {value: 0.5, source: "numerical: C16's start voltage, held for the operating point only: a kick so the oscillator starts (a simulation sits at its unstable equilibrium otherwise)"}
   tr3: {value: 2N5088@1, source: "provisional: model knowledge (TR-3, TR-4 are Wurlitzer 142083-2, a small-signal NPN; the 200's manual p.5: 'TR-4, a Darlington Pair transistor'; drawn as TR-3 / TR-4 here)"}
-  lg1: {value: VTL5C2@2, source: "provisional: model knowledge (LG-1, Wurlitzer 142312, an LED / LDR pair of unpublished type; the VTL5C2 Vactrol stands in, as for the Rhodes Suitcase, until the depth and shape are fitted to the Pie-finger set; Vintage Vibe sells a 200A LDR: web: https://www.vintagevibe.com/products/wurlitzer-200a-ldr)"}
+  lg1: {value: LG1_200A@2, source: "fit (scripts/fit_wurlitzer_lg1.py): LG-1 (Wurlitzer 142312, an LED / LDR pair of unpublished type) as the VTL5C2's cell scaled and sped up to the Pie-finger set's VIBRATO full; Vintage Vibe sells a 200A LDR: web: https://www.vintagevibe.com/products/wurlitzer-200a-ldr"}
   opto_state_c_f: {value: 1.0, source: "numerical: the optocoupler's state node capacitor (varimu/devices/opto.py: 1 F, the device's convention)"}
   # --- the volume chain (the drawing)
   r11_ohm: {value: 25.0e+3, source: "the drawing: R11, the 25K reed bar volume (203717-1)"}
@@ -224,13 +233,13 @@ sections:
 
   - title: preamp
     parts:
-      DD1: {device: [x, b1], model: D1}
-      C2: {C: [b1, x], c: c2_f}
+      DD1: {device: ["0", b1], model: D1}
+      C2: {C: [b1, "0"], c: c2_f}
       R3: {R: [b1, j2], r: r3_ohm}
       QTR1: {bjt: [c1, b1, e1], model: TR1}
       R4: {R: [v15, c1], r: r4_ohm}
       C3: {C: [c1, b1], c: c3_f}
-      R5: {R: [e1, x], r: r5_ohm}
+      R5: {R: [e1, "0"], r: r5_ohm}
       C5: {C: [e1, x], c: c5_f}
       QTR2: {bjt: [c2, c1, e2], model: TR2}
       R6: {R: [v15, c2], r: r6_ohm}

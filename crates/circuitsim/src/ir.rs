@@ -229,6 +229,7 @@ pub enum Element {
     Spring(Spring),
     Tape(Tape),
     Harp(Harp),
+    WurliReeds(WurliReeds),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
@@ -457,6 +458,25 @@ pub struct Harp {
     pub rate_hz: f64,
     pub contact_rate_hz: f64,
     pub model: Box<crate::harp::HarpModel>,
+}
+
+/// The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4; `crate::wurli`;
+/// `varimu.wurlitzer.keyboard` is the reference): its keys struck by note events, the reeds'
+/// capacitance to the comb plate summed; the medium senses `plate` (to ground) after every
+/// step and drives `out` to ground at the next with `-v(plate) dC / standing_f`, so the
+/// capacitor of the model's `standing_f` from `out` to the plate (the part's) carries the
+/// reeds' current. The voices run at the least whole multiple of the step rate at or above
+/// `rate_hz`, the hammer's contact at `contact_rate_hz`. `model` is the compiled reeds (a
+/// component version of kind `ep_reeds`). SPICE has no reeds: ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WurliReeds {
+    pub name: String,
+    pub out: String,
+    pub plate: String,
+    pub rate_hz: f64,
+    pub contact_rate_hz: f64,
+    pub model: Box<crate::wurli::WurliModel>,
 }
 
 /// The Hohner Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; `crate::clavinet`;
@@ -1310,6 +1330,7 @@ impl Element {
             Element::Spring(e) => &e.name,
             Element::Tape(e) => &e.name,
             Element::Harp(e) => &e.name,
+            Element::WurliReeds(e) => &e.name,
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
             Element::NickelKeys(e) => &e.name,
@@ -1346,6 +1367,7 @@ impl Element {
                 v
             }
             Element::Harp(e) => vec![&e.out],
+            Element::WurliReeds(e) => vec![&e.plate, &e.out],
             Element::ClavStrings(e) => vec![&e.centre, &e.bridge, &e.bridge_neg],
             Element::NovaKeys(e) => {
                 let mut v = e.senses();
@@ -1387,6 +1409,7 @@ impl Element {
                 v
             }
             Element::Harp(e) => vec![&mut e.out],
+            Element::WurliReeds(e) => vec![&mut e.plate, &mut e.out],
             Element::ClavStrings(e) => vec![&mut e.centre, &mut e.bridge, &mut e.bridge_neg],
             Element::NovaKeys(_) => return None,
             Element::NickelKeys(e) => vec![&mut e.out],
@@ -1947,6 +1970,23 @@ impl CircuitIr {
                             "{name}: its pickups drive {} (ground or the input)",
                             e.out
                         ));
+                    }
+                    'V'
+                }
+                Element::WurliReeds(e) => {
+                    positive(&format!("{name}.rate_hz"), e.rate_hz)?;
+                    positive(&format!("{name}.contact_rate_hz"), e.contact_rate_hz)?;
+                    if let Err(m) = e.model.check() {
+                        return err(format!("{name}: {m}"));
+                    }
+                    if e.out == GROUND || e.out == self.input_node || e.out == e.plate {
+                        return err(format!(
+                            "{name}: its reeds drive {} (ground, the input or the plate)",
+                            e.out
+                        ));
+                    }
+                    if e.plate == GROUND {
+                        return err(format!("{name}: its plate is ground"));
                     }
                     'V'
                 }

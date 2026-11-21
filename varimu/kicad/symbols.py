@@ -427,6 +427,26 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "WurliReeds",
+        "wurli_reeds",
+        "WR",
+        "The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md WZ4, varimu.wurlitzer): pin 1 the "
+        "comb plate (sensed; the reeds' current into it through their standing capacitance), "
+        "its keys played by note events; Value is its component version",
+        (Pin("1", "1", 7.62, 0, 180, 2.54),),
+        [
+            rect(-5.08, -3.81, 5.08, 3.81),
+            poly((-3.81, -2.54), (2.54, -2.54)),
+            poly((-3.81, 0), (2.54, 0)),
+            poly((-3.81, 2.54), (2.54, 2.54)),
+            poly((3.81, -3.175), (3.81, 3.175)),
+        ],
+        "component",
+        ("rate_hz", "contact_rate_hz"),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "ClavStrings",
         "clav_strings",
         "CS",

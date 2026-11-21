@@ -257,6 +257,31 @@ fn harp_render<'py>(
         .into_any())
 }
 
+/// The Wurlitzer's reeds alone (`wurli.rs`'s `render`; docs/WURLITZER_PLAN.md WZ4):
+/// `element` an IR `wurli_reeds` element (JSON), `n` steps at `fs` from rest with `notes` as
+/// `simulate` takes them, on `workers` worker threads (None: the default). Returns (dC at
+/// every step, every internal sample, (k, s)), farads: sample 0 is the rest's. Releases the
+/// GIL.
+#[pyfunction]
+#[pyo3(signature = (element, fs, n, notes, workers=None))]
+fn wurli_render<'py>(
+    py: Python<'py>,
+    element: &str,
+    fs: f64,
+    n: usize,
+    notes: Vec<(usize, String, u8, u8)>,
+    workers: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let el: crate::ir::WurliReeds =
+        serde_json::from_str(element).map_err(|e| invalid(format!("wurli_render: {e}")))?;
+    el.model.check().map_err(invalid)?;
+    let notes = note_events(notes)?;
+    let (y, raw, ks) = py.detach(|| crate::wurli::render(&el, fs, n.max(1), &notes, workers));
+    Ok((y.into_pyarray(py), raw.into_pyarray(py), ks)
+        .into_pyobject(py)?
+        .into_any())
+}
+
 /// A Clavinet's strings alone (`clavinet.rs`'s `render`; docs/CLAVINET_PLAN.md CL3):
 /// `element` an IR `clav_strings` element (JSON), `n` steps at `fs` from rest with `notes`
 /// as `simulate` takes them, on `workers` worker threads (None: the default). Returns
@@ -795,6 +820,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
     m.add_function(wrap_pyfunction!(harp_render, m)?)?;
+    m.add_function(wrap_pyfunction!(wurli_render, m)?)?;
     m.add_function(wrap_pyfunction!(clav_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
     m.add_function(wrap_pyfunction!(tape_moving_stats, m)?)?;

@@ -783,6 +783,7 @@ impl Stream {
                 matches!(
                     e,
                     Element::Harp(_)
+                        | Element::WurliReeds(_)
                         | Element::ClavStrings(_)
                         | Element::NovaKeys(_)
                         | Element::NickelKeys(_)

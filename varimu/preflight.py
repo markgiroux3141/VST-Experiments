@@ -48,6 +48,7 @@ from varimu.circuit.ir import (
     ThyratronEvents,
     VoltageSource,
     Winding,
+    WurliReeds,
     element_nodes,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
@@ -181,6 +182,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     driven += [(el.out, f"<spring {el.name}>") for el in ir.elements() if isinstance(el, Spring)]
     driven += [(el.out, f"<tape {el.name}>") for el in ir.elements() if isinstance(el, Tape)]
     driven += [(el.out, f"<harp {el.name}>") for el in ir.elements() if isinstance(el, Harp)]
+    driven += [(el.out, f"<reeds {el.name}>") for el in ir.elements() if isinstance(el, WurliReeds)]
     driven += [(el.out, f"<keys {el.name}>") for el in ir.elements() if isinstance(el, NickelKeys)]
     driven += [
         (o, f"<strings {el.name}>")

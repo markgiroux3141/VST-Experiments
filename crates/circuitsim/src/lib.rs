@@ -40,6 +40,7 @@ pub mod tape;
 pub mod tape_stream;
 pub mod timing;
 pub mod transient;
+pub mod wurli;
 
 #[cfg(feature = "python")]
 mod python;

@@ -45,7 +45,7 @@ const LANES: usize = 4;
 
 // --- The model (the component version's data) --------------------------------------
 
-fn count<'de, D: Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
+pub(crate) fn count<'de, D: Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
     let x = f64::deserialize(d)?;
     if x >= 0.0 && x.fract() == 0.0 && x < 1e9 {
         Ok(x as usize)
@@ -55,7 +55,7 @@ fn count<'de, D: Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
 }
 
 /// Counts as floats, as the Python IR writes every number.
-fn as_f64<S: Serializer>(x: &usize, s: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn as_f64<S: Serializer>(x: &usize, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_f64(*x as f64)
 }
 
@@ -68,11 +68,11 @@ pub struct Complexes {
 }
 
 impl Complexes {
-    fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.re.len()
     }
 
-    fn get(&self, i: usize) -> C64 {
+    pub(crate) fn get(&self, i: usize) -> C64 {
         C64(self.re[i], self.im[i])
     }
 }

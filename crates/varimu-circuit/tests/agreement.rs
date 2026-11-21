@@ -27,14 +27,14 @@ fn to_value(j: &Json) -> Value {
     }
 }
 
-/// The default IR's harp `name`'s compiled model.
+/// The default IR's harp's (or reeds') `name`'s compiled model.
 fn harp_model(default: &Json, name: &str) -> Json {
     default["sections"]
         .as_array()
         .unwrap()
         .iter()
         .flat_map(|s| s["elements"].as_array().unwrap())
-        .find(|e| e["kind"] == "harp" && e["name"] == name)
+        .find(|e| (e["kind"] == "harp" || e["kind"] == "wurli_reeds") && e["name"] == name)
         .map(|e| e["model"].clone())
         .unwrap_or_else(|| panic!("no harp {name} in the default IR"))
 }
@@ -180,10 +180,12 @@ fn rust_builds_the_ir_python_builds() {
             for (i, s) in case["sections"].as_object().unwrap() {
                 want["sections"][i.parse::<usize>().unwrap()] = s.clone();
             }
-            // A case's harp names its model "default" (the fixture keeps it once).
+            // A case's harp (or reeds) names its model "default" (the fixture keeps it once).
             for s in want["sections"].as_array_mut().unwrap() {
                 for e in s["elements"].as_array_mut().unwrap() {
-                    if e["kind"] == "harp" && e["model"] == "default" {
+                    if (e["kind"] == "harp" || e["kind"] == "wurli_reeds")
+                        && e["model"] == "default"
+                    {
                         let model = harp_model(&fx["default"], e["name"].as_str().unwrap());
                         e["model"] = model;
                     }

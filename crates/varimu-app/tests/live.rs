@@ -522,6 +522,133 @@ fn the_clavinet_plays_from_note_events() {
     assert!(peak > 1e-3, "it sounds: {peak}");
 }
 
+/// The Wurlitzer 200A (docs/WURLITZER_PLAN.md, WZ4): its reeds are a medium played by keys;
+/// its touch spans the hammer's speed law (WURLI_REEDS@2: 9.2 dB); VOLUME and VIBRATO are
+/// values (a turn plays on), OUTPUT builds the power amplifier or not (a restart); a key
+/// struck through `Live` sounds at the AUX jack.
+#[test]
+fn the_wurlitzer_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "wurlitzer_200a").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, circuit.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["volume", "vibrato", "speakers"]);
+    let span = circuit.key_velocity_span_db(&v).unwrap().unwrap();
+    assert!((span - 9.2177).abs() < 1e-3, "{span}");
+    let base = structure(&circuit.build(&v).unwrap());
+    for (k, x) in [
+        ("volume", Value::Float(0.4)),
+        ("vibrato", Value::Float(1.0)),
+    ] {
+        let turned = structure(&circuit.build(&set(&v, k, x)).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let speakers = structure(&circuit.build(&set(&v, "speakers", Value::Int(1))).unwrap());
+    assert_ne!(base, speakers, "SPEAKERS builds the power amplifier");
+    let mut live = Live::new(&vec![0.0; 48_000], v, circuit, s).unwrap();
+    assert!(live.has_keys());
+    let x = vec![0.0; 480];
+    let mut peak = 0.0f32;
+    for b in 0..40 {
+        let notes: Vec<(usize, NoteEvent)> = match b {
+            1 => vec![(
+                10,
+                NoteEvent::On {
+                    note: 57,
+                    velocity: 110,
+                },
+            )],
+            30 => vec![(0, NoteEvent::Off { note: 57 })],
+            _ => vec![],
+        };
+        let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+        peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+    }
+    assert!(peak > 1e-3, "it sounds: {peak}");
+}
+
+/// The Wurlitzer's VIBRATO through `Live` (docs/WURLITZER_PLAN.md WZ2's ~6 dB p-p at 5.7 Hz):
+/// a held A4's level over 20 ms windows, its linear decay in dB removed, peak to peak, at
+/// VIBRATO 0, at 1 from the start and turned to 1 while it plays.
+#[test]
+fn the_wurlitzer_vibrato_modulates_live() {
+    use circuitsim::media::NoteEvent;
+    use std::time::Duration;
+    let dev = DEVICES.iter().find(|d| d.id == "wurlitzer_200a").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let fs = s.host() as f64;
+    let run = |start: f64, turn_to: Option<f64>| -> f64 {
+        let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+        let v = values(&knobs(dev, circuit.spec()));
+        let v0 = set(&v, "vibrato", Value::Float(start));
+        let mut live = Live::new(&vec![0.0; 48_000], v0, circuit, s.clone()).unwrap();
+        let x = vec![0.0; 480];
+        let mut y_all = Vec::new();
+        let blocks = (4.0 * fs / 480.0) as usize;
+        for b in 0..blocks {
+            if b == 10
+                && let Some(to) = turn_to
+            {
+                live.set(set(&v, "vibrato", Value::Float(to)));
+                std::thread::sleep(Duration::from_millis(500)); // the build in the background
+            }
+            let notes: Vec<(usize, NoteEvent)> = if b == 2 {
+                vec![(
+                    0,
+                    NoteEvent::On {
+                        note: 69,
+                        velocity: 110,
+                    },
+                )]
+            } else {
+                vec![]
+            };
+            let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+            y_all.extend(y.iter().map(|&s| s as f64));
+        }
+        // windows of 20 ms over 1.5-3.9 s
+        let w = (0.02 * fs) as usize;
+        let (a, b) = ((1.5 * fs) as usize, (3.9 * fs) as usize);
+        let db: Vec<f64> = y_all[a..b]
+            .chunks_exact(w)
+            .map(|c| 10.0 * (c.iter().map(|v| v * v).sum::<f64>() / w as f64).log10())
+            .collect();
+        let n = db.len() as f64;
+        let tm = (n - 1.0) / 2.0;
+        let mean = db.iter().sum::<f64>() / n;
+        let slope = db
+            .iter()
+            .enumerate()
+            .map(|(i, d)| (i as f64 - tm) * (d - mean))
+            .sum::<f64>()
+            / db.iter()
+                .enumerate()
+                .map(|(i, _)| (i as f64 - tm).powi(2))
+                .sum::<f64>();
+        let r: Vec<f64> = db
+            .iter()
+            .enumerate()
+            .map(|(i, d)| d - mean - slope * (i as f64 - tm))
+            .collect();
+        r.iter().cloned().fold(f64::MIN, f64::max) - r.iter().cloned().fold(f64::MAX, f64::min)
+    };
+    let off = run(0.0, None);
+    let half = run(0.5, None);
+    let full = run(1.0, None);
+    let turned = run(0.0, Some(1.0));
+    println!(
+        "vibrato p-p: off {off:.2} dB, half {half:.2} dB, full {full:.2} dB, \
+         turned up live {turned:.2} dB"
+    );
+    assert!(off < 1.5, "off: {off}");
+    // LG1_200A@1: the knob deepens across its travel (2 dB at half on a steady tone)
+    assert!(half > off + 0.8 && half < full - 1.5, "half: {half}");
+    assert!(full > 4.0, "full: {full}");
+    assert!(turned > 4.0, "turned up: {turned}");
+}
+
 /// The Nickel Organ (docs/NICKEL_ORGAN_DEVICE_PLAN.md): its keys are a medium played by keys;
 /// its touch spans the hammer's speed law (0.02-0.25 m/s: 21.9 dB); SUSTAIN and POLARIZE
 /// are values (a turn plays on); a key struck through `Live` sounds.

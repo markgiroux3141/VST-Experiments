@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 44] = [
+pub const DEVICES: [Device; 45] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1264,6 +1264,40 @@ pub const DEVICES: [Device; 44] = [
         // over two drivers in series), full scale 14 V.
         live_speaker_v: Some(14.0),
         newton: Some((4e-3, 4e-2)),
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "wurlitzer_200a",
+        label: "Wurlitzer 200A",
+        short: "Wurlitzer",
+        about: "A Wurlitzer 200A electric piano: 64 steel reeds struck by felt hammers, read \
+            by the electrostatic comb pickup at +150 V, its transistor preamp with the LED / \
+            photocell vibrato, the AUX OUTPUT jack and the power amplifier",
+        group: Group::Instruments,
+        // The reeds are circuitsim's medium (docs/WURLITZER_PLAN.md WZ4), pushing their
+        // current into the plate; the rest is the 200A's own circuit.
+        circuit: "wurlitzer_200a_live",
+        // The 200A's two knobs, then OUTPUT (AUX OUT or the speaker terminals, a readout of
+        // each: WZ5's speakers later).
+        panel: Some(&["volume", "vibrato", "speakers"]),
+        ahead_s: 0.25,
+        // The reeds' voices at 2 x 96 kHz, as the reference's (their rate_hz).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys strike the reeds (note events, `Live::process_notes`): no test
+        // oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
         method: None,
         live_circuit: None,
     },
@@ -2764,8 +2798,9 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 61] = [
+const LABELS: [(&str, &str); 62] = [
     ("range", "Range (AUTO: by key)"),
+    ("speakers", "Output: SPEAKERS (off: AUX OUT)"),
     ("osc_range", "Range (0 LO, 1 32', 2 16', 3 8', 4 4', 5 2')"),
     ("drive", "Drive (console line amp)"),
     ("send", "Send"),
@@ -3027,6 +3062,7 @@ mod tests {
                         "tube_synth",
                         "rhodes_stage_5e3",
                         "rhodes_suitcase",
+                        "wurlitzer_200a",
                         "clavinet_d6",
                         "novachord",
                         "nickel_organ",
