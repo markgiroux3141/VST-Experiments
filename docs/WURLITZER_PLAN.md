@@ -74,7 +74,7 @@ output follows VOLUME (read: it doesn't); the transistors' JEDEC types (stand-in
 (VTL5C2 stands in: the envelope's shape); the low-level crossover distortion (real or the
 stand-ins' Vbe).
 
-## Status (2026-11-20, second session): WZ3 built (branch `wurlitzer`, uncommitted)
+## Status (2026-11-20, second session): WZ3 built (branch `wurlitzer`, commit aa97133)
 
 **The keyboard** (`varimu/wurlitzer/keyboard.py`; `tests/test_wurlitzer_keyboard.py`, 9 tests):
 every key a voice over the events, as the Rhodes' harp: between events the reed moves in closed
