@@ -95,7 +95,11 @@ fn replace_take(
     from: Value,
 ) -> Result<String, String> {
     let track = &s.tracks[t];
-    let active = track.active_take().ok_or("the track has no take")?.id.clone();
+    let active = track
+        .active_take()
+        .ok_or("the track has no take")?
+        .id
+        .clone();
     let c = track
         .clips
         .iter()
@@ -227,7 +231,9 @@ fn main() -> Result<(), String> {
             let write = |x: &[f32], suffix: &str| -> Result<PathBuf, String> {
                 let mut y = vec![0.0f64; lead];
                 y.extend(x.iter().map(|&v| v as f64));
-                let p = rdir.join("sources").join(format!("{}{suffix}.wav", safe(name)));
+                let p = rdir
+                    .join("sources")
+                    .join(format!("{}{suffix}.wav", safe(name)));
                 audio::write_wav(&p, &y, rate)?;
                 Ok(p)
             };
@@ -243,8 +249,11 @@ fn main() -> Result<(), String> {
         }
         let scene_json = scene.render_json_lr(&clips, &rights);
         let scene_path = rdir.join("scene.json");
-        std::fs::write(&scene_path, serde_json::to_string_pretty(&scene_json).unwrap())
-            .map_err(|e| e.to_string())?;
+        std::fs::write(
+            &scene_path,
+            serde_json::to_string_pretty(&scene_json).unwrap(),
+        )
+        .map_err(|e| e.to_string())?;
         eprintln!("room: rendering into {}", rdir.display());
         let mut job = RenderJob::spawn(&repo, &scene_path, &rdir.join("render"))?;
         let t0 = Instant::now();
@@ -285,7 +294,8 @@ fn main() -> Result<(), String> {
     // 3. Every chain printed, then the master's.
     let cache = dir.join("prints");
     for t in 0..s.tracks.len() {
-        let (Some(sig), Some((start, lane, lane_r))) = (s.chain_signature(t), s.tracks[t].lane_lr())
+        let (Some(sig), Some((start, lane, lane_r))) =
+            (s.chain_signature(t), s.tracks[t].lane_lr())
         else {
             continue;
         };
@@ -315,7 +325,12 @@ fn main() -> Result<(), String> {
     }
     if let Some(sig) = s.master_signature() {
         let (start, l, r) = s.master_input().ok_or("nothing to print on the master")?;
-        let slots: Vec<Slot> = s.master_inserts.iter().filter(|x| !x.bypass).cloned().collect();
+        let slots: Vec<Slot> = s
+            .master_inserts
+            .iter()
+            .filter(|x| !x.bypass)
+            .cloned()
+            .collect();
         let sides = vec![None; slots.len()];
         let job = Job::spawn(config.clone(), slots, sides, l, Some(r), rate, Some(cache));
         let t0 = Instant::now();
