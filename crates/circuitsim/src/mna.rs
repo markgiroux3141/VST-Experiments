@@ -378,6 +378,9 @@ impl Mna {
                 }
                 Element::NovaKeys(k) => Some(crate::media::MediumElement::NovaKeys(k.clone())),
                 Element::NickelKeys(k) => Some(crate::media::MediumElement::NickelKeys(k.clone())),
+                Element::InventedKeys(k) => {
+                    Some(crate::media::MediumElement::InventedKeys(k.clone()))
+                }
                 Element::ReedKeys(k) => Some(crate::media::MediumElement::ReedKeys(k.clone())),
                 _ => None,
             })
@@ -611,6 +614,7 @@ impl Mna {
                 | Element::ClavStrings(_)
                 | Element::NovaKeys(_)
                 | Element::NickelKeys(_)
+                | Element::InventedKeys(_)
                 | Element::ReedKeys(_) => {}
             }
         }

@@ -19,6 +19,7 @@ pub mod dk;
 pub mod events;
 pub mod fastmath;
 pub mod harp;
+pub mod invented;
 pub mod ir;
 pub mod keyed;
 pub mod linalg;

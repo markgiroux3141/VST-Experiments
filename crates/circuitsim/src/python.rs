@@ -282,6 +282,31 @@ fn wurli_render<'py>(
         .into_any())
 }
 
+/// An invented instrument's keys alone (`invented.rs`'s `render_raw`;
+/// docs/INVENTED_LIVE_PLAN.md): `element` an IR `invented_keys` element (JSON), `n` internal
+/// samples at `fs` (its `rate_hz` at most `fs`: one sample a step) with `notes` as `simulate`
+/// takes them, on `workers` worker threads (None: the default). Returns the summed output,
+/// sample p after the events at p. Releases the GIL.
+#[pyfunction]
+#[pyo3(signature = (element, fs, n, notes, workers=None))]
+fn invented_render<'py>(
+    py: Python<'py>,
+    element: &str,
+    fs: f64,
+    n: usize,
+    notes: Vec<(usize, String, u8, u8)>,
+    workers: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let el: crate::ir::InventedKeys =
+        serde_json::from_str(element).map_err(|e| invalid(format!("invented_render: {e}")))?;
+    let notes = note_events(notes)?;
+    let w = workers.unwrap_or_else(crate::keyed::workers);
+    let y = py
+        .detach(|| crate::invented::render_raw(&el, fs, n, &notes, w))
+        .map_err(invalid)?;
+    Ok(y.into_pyarray(py).into_any())
+}
+
 /// A Clavinet's strings alone (`clavinet.rs`'s `render`; docs/CLAVINET_PLAN.md CL3):
 /// `element` an IR `clav_strings` element (JSON), `n` steps at `fs` from rest with `notes`
 /// as `simulate` takes them, on `workers` worker threads (None: the default). Returns
@@ -821,6 +846,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
     m.add_function(wrap_pyfunction!(harp_render, m)?)?;
     m.add_function(wrap_pyfunction!(wurli_render, m)?)?;
+    m.add_function(wrap_pyfunction!(invented_render, m)?)?;
     m.add_function(wrap_pyfunction!(clav_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
     m.add_function(wrap_pyfunction!(tape_moving_stats, m)?)?;

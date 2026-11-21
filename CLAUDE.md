@@ -253,6 +253,24 @@ circuitsim's keyed medium (IR `NickelKeys`, part `nickel_keys: [out]` in both bu
 `max_keys` via `keyed::Medium::set_max_awake`), `config/circuits/nickel_organ.yaml`, the app's
 `nickel_organ` (draft-2x; source, monitor, Render, chain end, event takes as every keyed
 instrument; 12 keys live without dropouts at a 50 ms buffer); the bare instrument is gone.
+**A second brainstorm (2026-11-21, unattended, the user's ask: instruments that sound different
+from those built; INVENTED_DEVICES.md "Second brainstorm"):** sound sources the engine never had,
+each sketched offline in Python (`varimu/invented/`, outside the render cache key; 48 kHz):
+I11 the Rosin Wheel Organ (bowed bars, stick-slip), I12 the Aeolian Keyboard (wake oscillators on
+strings), I13 the Arc Organ (a Mayr / Ayrton singing arc), I14 the Buzz Zither (jawari contact on a
+FD string), I15 the Siren Organ (a perforated disc: a harmonic-series keyboard, motor and wind
+sag), I16 the Bubble Organ (Minnaert bubbles), and I7 the Rijke Organ heard for the first time.
+`scripts/invented_sketches.py [--only NAME]` -> `reports/invented/<name>/` (dry + EMT 140 plate,
+-20 LUFS, spectrograms; guide `reports/invented/README.md`); `tests/test_invented.py`. The user
+loved all seven: **making them playable live is [docs/INVENTED_LIVE_PLAN.md](docs/INVENTED_LIVE_PLAN.md)**
+(IL1-IL7, multiple sessions; its "How to add the next instrument" is the recipe, "Status" where
+it stopped). **IL0 + IL1 built (2026-11-21):** one generic IR element / part `invented_keys:
+[out]` (`instrument`, `data` + `sha256` of a component of kind `invented_keys`, `rate_hz`,
+`max_keys`, panel `k0`-`k3` that play on), circuitsim's `invented.rs` on `keyed.rs`, references
+in `varimu/invented/keys/` (bit-exact with the Rust: `tests/test_invented_keys.py`), components
+by `scripts/compile_invented_keys.py` (`ROSIN_WHEEL@1`), `config/circuits/rosin_wheel.yaml`, the
+app's `rosin_wheel` (mod wheel = WHEEL; 16 bars 13-17 % worst block), demo renders through the
+circuit by `scripts/invented_live_render.py`. Next: IL2, the Buzz Zither.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

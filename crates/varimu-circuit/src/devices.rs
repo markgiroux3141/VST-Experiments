@@ -54,6 +54,8 @@ pub struct Library {
     clav_strings: Mutex<HashMap<String, (String, String)>>,
     nova_keys: Mutex<HashMap<String, (String, String)>>,
     nickel_keys: Mutex<HashMap<String, (String, String)>>,
+    invented_keys: Mutex<HashMap<String, (String, String)>>,
+    invented_instruments: Mutex<HashMap<String, String>>,
     reed_keys: Mutex<HashMap<String, (String, String)>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
@@ -78,6 +80,8 @@ impl Library {
             clav_strings: Mutex::new(HashMap::new()),
             nova_keys: Mutex::new(HashMap::new()),
             nickel_keys: Mutex::new(HashMap::new()),
+            invented_keys: Mutex::new(HashMap::new()),
+            invented_instruments: Mutex::new(HashMap::new()),
             reed_keys: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
@@ -389,6 +393,37 @@ impl Library {
             "the Nickel Organ's keys",
             &self.nickel_keys,
         )
+    }
+
+    /// An invented keyboard `name` (kind `invented_keys`; `varimu.invented.keys.compile`):
+    /// (the instrument its version names, then its data's path and sha256 as
+    /// [`Library::nova_keys`] reads the Novachord's).
+    pub fn invented_keys(&self, name: &str) -> Result<(String, String, String), Error> {
+        let (data, sha256) = self.json_data(
+            name,
+            "invented_keys",
+            "an invented keyboard",
+            &self.invented_keys,
+        )?;
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(i) = self.invented_instruments.lock().unwrap().get(&key) {
+            return Ok((i.clone(), data, sha256));
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let d = yaml::parse(&text, name)?;
+        let instrument = d
+            .as_map()
+            .and_then(|m| m.get("instrument"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| Error(format!("{r}: instrument is missing")))?
+            .to_string();
+        self.invented_instruments
+            .lock()
+            .unwrap()
+            .insert(key, instrument.clone());
+        Ok((instrument, data, sha256))
     }
 
     /// The Victorian synth's reed keyboard `name` (kind `reed_keys`;

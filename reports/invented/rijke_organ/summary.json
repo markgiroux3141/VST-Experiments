@@ -1,0 +1,24 @@
+{
+  "compute_s": 52.4,
+  "takes": [
+    {
+      "take": "blooming_chord",
+      "seconds": 10.0,
+      "peak_dbfs_dry": -8.889293918372509,
+      "peak_dbfs_plate": -8.16209158061252
+    },
+    {
+      "take": "heater_hysteresis_A3",
+      "seconds": 14.0,
+      "peak_dbfs_dry": -14.499091147447993,
+      "peak_dbfs_plate": -12.875732794401525,
+      "heater": "0.2 -> 1 -> 0.2 x K"
+    },
+    {
+      "take": "melody_over_drone",
+      "seconds": 11.5,
+      "peak_dbfs_dry": -9.9455719566969,
+      "peak_dbfs_plate": -9.686092229737673
+    }
+  ]
+}

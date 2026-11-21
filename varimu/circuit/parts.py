@@ -45,6 +45,7 @@ from varimu.circuit.ir import (
     Element,
     Harp,
     Inductor,
+    InventedKeys,
     NickelKeys,
     NovaKeys,
     Plate,
@@ -1311,6 +1312,32 @@ def nickel_keys(
             sustain,
             polarize,
             max_keys,
+        )
+    ]
+
+
+def invented_keys(
+    name: str,
+    out: str,
+    instrument: str,
+    data: str,
+    sha256: str,
+    rate_hz: float,
+    max_keys: int,
+    k: tuple[float, float, float, float],
+) -> list[Element]:
+    """An invented instrument's keys (docs/INVENTED_LIVE_PLAN.md) as circuitsim's medium
+    V<NAME>: the keys' summed output on `out` (to ground); `k` its panel k0-k3."""
+    return [
+        InventedKeys(
+            f"V{name.upper()}",
+            out,
+            instrument,
+            data,
+            sha256,
+            rate_hz,
+            max_keys,
+            *k,
         )
     ]
 

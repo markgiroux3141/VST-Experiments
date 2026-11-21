@@ -906,7 +906,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 35] = [
+const MACROS: [&str; 36] = [
     "R",
     "C",
     "L",
@@ -940,6 +940,7 @@ const MACROS: [&str; 35] = [
     "clav_strings",
     "nova_keys",
     "nickel_keys",
+    "invented_keys",
     "reed_keys",
     "opamp",
 ];
@@ -1098,6 +1099,18 @@ fn macro_of(kind: &str) -> Macro {
                 p("polarize", Number),
                 p("max_keys", Count),
             ],
+            false,
+        ),
+        "invented_keys" => (
+            Some(1),
+            [
+                p("component", Raw),
+                p("rate_hz", Physical),
+                p("max_keys", Count),
+            ]
+            .into_iter()
+            .chain(INVENTED_KEYS_PANEL.iter().map(|k| num(k, 0.0)))
+            .collect(),
             false,
         ),
         "reed_keys" => (
@@ -1643,6 +1656,7 @@ fn expand(
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         "nova_keys" => return nova_keys_part(ctx, name, conn, a),
         "nickel_keys" => return nickel_keys_part(ctx, name, nodes, a),
+        "invented_keys" => return invented_keys_part(ctx, name, nodes, a),
         "reed_keys" => return reed_keys_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
@@ -2203,6 +2217,57 @@ fn nickel_keys_part(
         sustain,
         polarize,
         max_keys,
+    })])
+}
+
+/// An invented keyboard's panel (builder.py's `INVENTED_KEYS_PANEL`): optional, 0 when absent.
+const INVENTED_KEYS_PANEL: [&str; 4] = ["k0", "k1", "k2", "k3"];
+
+/// An invented instrument's keys (docs/INVENTED_LIVE_PLAN.md;
+/// `varimu.circuit.parts.invented_keys`): the keys' summed output on the one node.
+fn invented_keys_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let (instrument, data, sha256) =
+        versions::require_pinned(&ctx.lib.components_dir(), &reference)
+            .and_then(|r| ctx.lib.invented_keys(&r.to_string()))
+            .map_err(|e| ctx.fail(&where_, e.0))?;
+    let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
+    let mut k = [0.0; 4];
+    for (x, what) in k.iter_mut().zip(INVENTED_KEYS_PANEL) {
+        *x = ctx.float(&format!("{name}.{what}"), &a[what])?;
+        if !(0.0..=1.0).contains(x) {
+            return Err(ctx.fail(
+                &format!("{name}.{what}"),
+                format!("{} (0-1)", crate::yaml::py_float_repr(*x)),
+            ));
+        }
+    }
+    let max_keys = a["max_keys"].as_f64().unwrap_or(0.0);
+    if !(1.0..=128.0).contains(&max_keys) {
+        return Err(ctx.fail(
+            &format!("{name}.max_keys"),
+            format!("{} (1-128)", max_keys as i64),
+        ));
+    }
+    let [k0, k1, k2, k3] = k;
+    Ok(vec![Element::InventedKeys(circuitsim::ir::InventedKeys {
+        name: format!("V{}", name.to_uppercase()),
+        out: nodes[0].clone(),
+        instrument,
+        data,
+        sha256,
+        rate_hz,
+        max_keys,
+        k0,
+        k1,
+        k2,
+        k3,
     })])
 }
 

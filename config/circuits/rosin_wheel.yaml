@@ -1,0 +1,38 @@
+# The Rosin Wheel Organ as a device (docs/INVENTED_LIVE_PLAN.md IL1; docs/INVENTED_DEVICES.md
+# I11): tuned steel bars (C2-C6, free-free, 8 x 25 mm) bowed by a rosined wheel that each key
+# presses its bar onto; key velocity is the press force, aftertouch adds to it, the pedal
+# holds released keys pressed, and a felt damper falls when a key lets go. The keys are
+# circuitsim's invented-keys medium (the component ROSIN_WHEEL: crates/circuitsim/src/
+# invented.rs, varimu/invented/keys/rosin.py the reference), each bar read by a magnetic
+# pickup at its far end through its tuned tube; the pickups sum onto `out`.
+#
+# The panel (they play on): WHEEL (k0: the wheel's surface speed 0.1-0.5 m/s), RESONATOR (k1:
+# the tubes' gain 0-4), TOUCH (k2: the press 0.5-2x the key's force).
+
+title: "Rosin Wheel Organ (bowed steel bars, keyed)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 4.0, source: "measured: a bar's stick-slip limit cycle follows the wheel's speed (~0.25 m/s at the end: ~1 V at 2 V per m/s through its tube), reached ~3-4 s into a held note; four held bars peak ~2.2 V (scripts/invented_live_render.py, docs/INVENTED_LIVE_PLAN.md)"}
+
+controls:
+  wheel: {value: 0.375, min: 0.0, max: 1.0, unit: rotation, source: "design: WHEEL, the wheel's surface speed 0.1-0.5 m/s (0.25 m/s, the sketch's, at 0.375)"}
+  resonator: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: RESONATOR, the tubes' gain 0-4 (2, the sketch's, at 0.5)"}
+  touch: {value: 0.333, min: 0.0, max: 1.0, unit: rotation, source: "design: TOUCH, the press 0.5-2x the key's force (1x at 0.333)"}
+
+values:
+  keys_model: {value: ROSIN_WHEEL@1, source: "config/components/rosin_wheel/1.yaml (varimu/invented/keys/rosin.py's model from varimu/invented/friction.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_rate_hz: {value: 96000.0, source: "numerical: each bar stepped at the project's 96 kHz (one trapezoidal step a sample)"}
+  keys_max_keys: {value: 16, source: "numerical: bars sounding at once (a bar costs well under 1 % of a core; another struck silences a released one, else the one struck longest ago)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 100.0e+3, source: "numerical: a DC path on the line (the pickups' load)"}
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the bars: their pickups' sum on out (to ground), played by note events
+      KEYS: {invented_keys: [out], component: keys_model, rate_hz: keys_rate_hz, max_keys: keys_max_keys, k0: wheel, k1: resonator, k2: touch}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

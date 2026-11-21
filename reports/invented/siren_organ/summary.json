@@ -1,0 +1,50 @@
+{
+  "compute_s": 3.4,
+  "takes": [
+    {
+      "take": "harmonic_melody_flute",
+      "seconds": 8.41,
+      "peak_dbfs_dry": -14.257390696757497,
+      "peak_dbfs_plate": -10.860999291511666,
+      "rps_min": 13.681479365761735,
+      "rps_max": 13.921440807108288,
+      "wind_pa_min": 851.125
+    },
+    {
+      "take": "harmonic_melody_reed",
+      "seconds": 8.41,
+      "peak_dbfs_dry": -9.9766854939526,
+      "peak_dbfs_plate": -10.145082390518416,
+      "rps_min": 13.677658285730114,
+      "rps_max": 13.903047748934075,
+      "wind_pa_min": 851.125
+    },
+    {
+      "take": "just_chord_sag_flute",
+      "seconds": 8.0,
+      "peak_dbfs_dry": -8.10026740429176,
+      "peak_dbfs_plate": -7.155677981708721,
+      "rps_min": 13.224607348292944,
+      "rps_max": 13.894225277940693,
+      "wind_pa_min": 678.547469883331
+    },
+    {
+      "take": "just_chord_sag_reed",
+      "seconds": 8.0,
+      "peak_dbfs_dry": -3.703723389291367,
+      "peak_dbfs_plate": -4.3926936312183065,
+      "rps_min": 13.226651567600376,
+      "rps_max": 13.909234173827537,
+      "wind_pa_min": 815.1060160364527
+    },
+    {
+      "take": "speed_glide_reed",
+      "seconds": 9.0,
+      "peak_dbfs_dry": -7.30052658327859,
+      "peak_dbfs_plate": -6.848514285010779,
+      "rps_min": 9.770766575663199,
+      "rps_max": 25.746649143526795,
+      "wind_pa_min": 851.125
+    }
+  ]
+}

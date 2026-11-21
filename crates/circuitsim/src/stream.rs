@@ -787,6 +787,7 @@ impl Stream {
                         | Element::ClavStrings(_)
                         | Element::NovaKeys(_)
                         | Element::NickelKeys(_)
+                        | Element::InventedKeys(_)
                         | Element::ReedKeys(_)
                 )
             })

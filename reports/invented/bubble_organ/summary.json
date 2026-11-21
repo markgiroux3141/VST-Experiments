@@ -1,0 +1,24 @@
+{
+  "compute_s": 2.3,
+  "takes": [
+    {
+      "take": "single_bubbles",
+      "seconds": 8.949979166666667,
+      "peak_dbfs_dry": -1.6226927476450534,
+      "peak_dbfs_plate": -0.4700175635351138
+    },
+    {
+      "take": "held_streams_chord",
+      "seconds": 9.0,
+      "peak_dbfs_dry": -8.191769535455013,
+      "peak_dbfs_plate": -7.520035895730597
+    },
+    {
+      "take": "breath_bend_A3",
+      "seconds": 9.0,
+      "peak_dbfs_dry": -7.320319793044626,
+      "peak_dbfs_plate": -7.314397521312557,
+      "flow": "0.7 -> 1.4 -> 0.7"
+    }
+  ]
+}

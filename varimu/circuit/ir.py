@@ -548,6 +548,31 @@ class NickelKeys:
 
 
 @dataclass(frozen=True)
+class InventedKeys:
+    """An invented instrument's keys (docs/INVENTED_LIVE_PLAN.md; varimu/invented/keys/ is the
+    reference, circuitsim's invented.rs the port): per key its voice of the instrument
+    `instrument` names (rosin_wheel, ...), played by note events at `rate_hz` (the step rate's
+    least whole multiple at or above it); it senses nothing and drives `out` (to ground) to the
+    keys' summed output at the next step. `k0`-`k3` are its panel (0-1, the instrument says
+    what they are; a change plays on). At most `max_keys` keys sound at once (the oldest
+    released first). `data` is the compiled keyboard (a component version of kind
+    invented_keys: varimu.invented.keys.compile), a path relative to the repository's root,
+    `sha256` its hash. SPICE has no keys: ngspice sees `out` held at 0 V."""
+
+    name: str
+    out: str
+    instrument: str
+    data: str
+    sha256: str
+    rate_hz: float
+    max_keys: int
+    k0: float
+    k1: float
+    k2: float
+    k3: float
+
+
+@dataclass(frozen=True)
 class ReedKeys:
     """The Victorian synth's keyboard of self-interrupting reeds (docs/VICTORIAN_SYNTH_PLAN.md;
     varimu/victorian/reed.py is the reference, circuitsim's reeds.rs the port): per key a steel
@@ -826,6 +851,7 @@ Element = (
     | ClavStrings
     | NovaKeys
     | NickelKeys
+    | InventedKeys
     | ReedKeys
     | ThyratronEvents
     | ResetEvents
@@ -892,6 +918,7 @@ _PREFIX = {
     ClavStrings: "V",
     NovaKeys: "V",
     NickelKeys: "V",
+    InventedKeys: "V",
     ReedKeys: "V",
     ThyratronEvents: "X",
     ResetEvents: "X",
@@ -935,7 +962,7 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return el.outs
     if isinstance(el, NovaKeys):
         return (*el.senses, *el.outs)
-    if isinstance(el, NickelKeys):
+    if isinstance(el, NickelKeys | InventedKeys):
         return (el.out,)
     if isinstance(el, ReedKeys):
         return (el.loc, el.line, el.out_loc, el.out_line)
@@ -1205,6 +1232,8 @@ class CircuitIR:
                 _validate_nova_keys(el, self.input_node)
             elif isinstance(el, NickelKeys):
                 _validate_nickel_keys(el, self.input_node)
+            elif isinstance(el, InventedKeys):
+                _validate_invented_keys(el, self.input_node)
             elif isinstance(el, ReedKeys):
                 _validate_reed_keys(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
@@ -1584,6 +1613,7 @@ _ELEMENT_KINDS = {
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
     "nickel_keys": NickelKeys,
+    "invented_keys": InventedKeys,
     "reed_keys": ReedKeys,
     "thyratron_events": ThyratronEvents,
     "reset_events": ResetEvents,
@@ -1724,7 +1754,7 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         )
     if cls is NovaKeys:
         return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
-    if cls is NickelKeys:
+    if cls in (NickelKeys, InventedKeys):
         return _fields(cls, d, tagged=True, max_keys=_count)
     if cls is ReedKeys:
         return _fields(cls, d, tagged=True)
@@ -1886,6 +1916,24 @@ def _validate_nickel_keys(el: NickelKeys, input_node: str) -> None:
     hexdigits = set("0123456789abcdefABCDEF")
     if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
         raise IRError(f"{el.name}: data names the compiled organ, sha256 its hash")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its keys drive {el.out} (ground or the input)")
+
+
+def _validate_invented_keys(el: InventedKeys, input_node: str) -> None:
+    """The Rust IR's checks for an invented instrument's keys (its data is checked on
+    loading)."""
+    _positive(f"{el.name}.rate_hz", el.rate_hz)
+    for what in ("k0", "k1", "k2", "k3"):
+        if not 0.0 <= getattr(el, what) <= 1.0:
+            raise IRError(f"{el.name}: {what} {getattr(el, what)} (0-1)")
+    if not 1 <= el.max_keys <= 128:
+        raise IRError(f"{el.name}: max_keys {el.max_keys} (a whole number, 1-128)")
+    if not el.instrument:
+        raise IRError(f"{el.name}: instrument names the voice")
+    hexdigits = set("0123456789abcdefABCDEF")
+    if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
+        raise IRError(f"{el.name}: data names the compiled keyboard, sha256 its hash")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its keys drive {el.out} (ground or the input)")
 

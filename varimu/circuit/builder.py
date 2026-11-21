@@ -124,6 +124,12 @@ Macro parts (connection; params, * = required):
                 at once): the keys' summed line outs on out (to ground), played by
                 note events (docs/NICKEL_ORGAN_DEVICE_PLAN.md;
                 varimu.circuit.parts.nickel_keys)
+    invented_keys [out]; component* (an invented keyboard component version, NAME@N, or a
+                parameter naming one: kind invented_keys, varimu.invented.keys.compile),
+                rate_hz* (numerics: the keys' rate floor), max_keys* (keys sounding at
+                once), k0-k3 (0-1: the panel, the instrument says what each is; absent,
+                0): the keys' summed output on out (to ground), played by note events
+                (docs/INVENTED_LIVE_PLAN.md; varimu.circuit.parts.invented_keys)
     reed_keys   [loc, line, out_loc, out_line]; component* (a reed keyboard component version,
                 NAME@N, or a parameter naming one: kind reed_keys,
                 varimu.victorian.compile), step_hz* (numerics: the keys' internal
@@ -1126,6 +1132,29 @@ def _nickel_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Elem
     )
 
 
+INVENTED_KEYS_PANEL = ("k0", "k1", "k2", "k3")
+
+
+def _invented_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.invented.keys import compile as keys_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        instrument, data, sha = keys_compile.ir_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    for what in INVENTED_KEYS_PANEL:
+        if not 0.0 <= a[what] <= 1.0:
+            raise ctx.fail(f"{name}.{what}", f"{a[what]} (0-1)")
+    if not 1 <= a["max_keys"] <= 128:
+        raise ctx.fail(f"{name}.max_keys", f"{a['max_keys']} (1-128)")
+    k0, k1, k2, k3 = (float(a[k]) for k in INVENTED_KEYS_PANEL)
+    return parts.invented_keys(
+        name, *conn, instrument, data, sha, a["rate_hz"], a["max_keys"], (k0, k1, k2, k3)
+    )
+
+
 def _reed_keys(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     from varimu.victorian import compile as reeds_compile
 
@@ -1474,6 +1503,16 @@ for _name, _macro in {
             "sustain": Param("number"),
             "polarize": Param("number"),
             "max_keys": Param("count"),
+        },
+    ),
+    "invented_keys": Macro(
+        _invented_keys,
+        1,
+        {
+            "component": Param("raw"),
+            "rate_hz": _P,
+            "max_keys": Param("count"),
+            **{k: Param("number", 0.0) for k in INVENTED_KEYS_PANEL},
         },
     ),
     "clav_strings": Macro(

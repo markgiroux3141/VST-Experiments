@@ -649,6 +649,46 @@ fn the_wurlitzer_vibrato_modulates_live() {
     assert!(turned > 4.0, "turned up: {turned}");
 }
 
+/// The Rosin Wheel Organ (docs/INVENTED_LIVE_PLAN.md IL1): its bars are the invented-keys
+/// medium played by keys; WHEEL, RESONATOR and TOUCH are values (a turn plays on); a key
+/// pressed through `Live` sounds, and aftertouch reaches it.
+#[test]
+fn the_rosin_wheel_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "rosin_wheel").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, circuit.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["wheel", "resonator", "touch"]);
+    let base = structure(&circuit.build(&v).unwrap());
+    for (k, x) in [("wheel", 0.9), ("resonator", 0.1), ("touch", 0.8)] {
+        let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let mut live = Live::new(&vec![0.0; 48_000], v, circuit, s).unwrap();
+    assert!(live.has_keys());
+    let x = vec![0.0; 480];
+    let mut peak = 0.0f32;
+    for b in 0..40 {
+        let notes: Vec<(usize, NoteEvent)> = match b {
+            1 => vec![(
+                10,
+                NoteEvent::On {
+                    note: 57,
+                    velocity: 100,
+                },
+            )],
+            10 => vec![(0, NoteEvent::Pressure { value: 90 })],
+            30 => vec![(0, NoteEvent::Off { note: 57 })],
+            _ => vec![],
+        };
+        let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+        peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+    }
+    assert!(peak > 1e-3, "it sounds: {peak}");
+}
+
 /// The Nickel Organ (docs/NICKEL_ORGAN_DEVICE_PLAN.md): its keys are a medium played by keys;
 /// its touch spans the hammer's speed law (0.02-0.25 m/s: 21.9 dB); SUSTAIN and POLARIZE
 /// are values (a turn plays on); a key struck through `Live` sounds.

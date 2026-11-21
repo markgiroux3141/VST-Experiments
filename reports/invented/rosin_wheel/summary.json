@@ -1,0 +1,18 @@
+{
+  "compute_s": 18.0,
+  "takes": [
+    {
+      "take": "melody_and_chord",
+      "seconds": 13.6,
+      "peak_dbfs_dry": -5.053741447687336,
+      "peak_dbfs_plate": -5.294631539522673
+    },
+    {
+      "take": "press_sweep_A2",
+      "seconds": 9.0,
+      "peak_dbfs_dry": -14.06070959049371,
+      "peak_dbfs_plate": -13.819647592522259,
+      "force_n": "0.15 -> 6 N over 7 s"
+    }
+  ]
+}

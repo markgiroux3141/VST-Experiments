@@ -1,0 +1,23 @@
+{
+  "compute_s": 272.6,
+  "takes": [
+    {
+      "take": "tanpura_cycle",
+      "seconds": 18.399979166666668,
+      "peak_dbfs_dry": -4.167618132099836,
+      "peak_dbfs_plate": -3.339212216174536
+    },
+    {
+      "take": "sharp_then_jawari_C3",
+      "seconds": 10.0,
+      "peak_dbfs_dry": -3.5990597553304275,
+      "peak_dbfs_plate": -2.9285943408151853
+    },
+    {
+      "take": "melody_over_tanpura",
+      "seconds": 16.6,
+      "peak_dbfs_dry": -1.181153856640572,
+      "peak_dbfs_plate": -1.551886396641581
+    }
+  ]
+}

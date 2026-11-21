@@ -1,0 +1,7 @@
+rosin_wheel: 2 takes in 18 s -> D:\Claude Code Projects\VST Experiments\reports\invented\rosin_wheel
+aeolian: 2 takes in 136 s -> D:\Claude Code Projects\VST Experiments\reports\invented\aeolian
+arc_organ: 4 takes in 175 s -> D:\Claude Code Projects\VST Experiments\reports\invented\arc_organ
+siren_organ: 5 takes in 3 s -> D:\Claude Code Projects\VST Experiments\reports\invented\siren_organ
+buzz_zither: 3 takes in 273 s -> D:\Claude Code Projects\VST Experiments\reports\invented\buzz_zither
+bubble_organ: 3 takes in 2 s -> D:\Claude Code Projects\VST Experiments\reports\invented\bubble_organ
+rijke_organ: 3 takes in 52 s -> D:\Claude Code Projects\VST Experiments\reports\invented\rijke_organ

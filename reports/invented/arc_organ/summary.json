@@ -1,0 +1,40 @@
+{
+  "compute_s": 174.6,
+  "takes": [
+    {
+      "take": "melody_5A",
+      "seconds": 7.5,
+      "peak_dbfs_dry": -6.448255115056691,
+      "peak_dbfs_plate": -6.701185001676661,
+      "current_a": 5.0
+    },
+    {
+      "take": "currents_3_5_9A",
+      "seconds": 12.5999375,
+      "peak_dbfs_dry": -4.3294112238726425,
+      "peak_dbfs_plate": -5.200529156734214,
+      "current_a": [
+        3,
+        5,
+        9
+      ]
+    },
+    {
+      "take": "speak_0.4_1.1_1.25ohm",
+      "seconds": 12.5999375,
+      "peak_dbfs_dry": -2.4371536658088315,
+      "peak_dbfs_plate": -0.7881679580364427,
+      "tank_ohm": [
+        0.4,
+        1.1,
+        1.25
+      ]
+    },
+    {
+      "take": "two_arcs",
+      "seconds": 7.0,
+      "peak_dbfs_dry": -5.449731969231282,
+      "peak_dbfs_plate": -5.329906561380348
+    }
+  ]
+}

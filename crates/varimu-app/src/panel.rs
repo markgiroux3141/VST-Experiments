@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 45] = [
+pub const DEVICES: [Device; 46] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1439,6 +1439,36 @@ pub const DEVICES: [Device; 45] = [
         velocity: None,
         pitch: None,
         // The keys strike the bars (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "rosin_wheel",
+        label: "Rosin Wheel Organ",
+        short: "Rosin",
+        about: "An invented bowed-bar organ: tuned steel bars that each key presses onto a \
+            rosined wheel (velocity and aftertouch are the press, the mod wheel the wheel's \
+            speed), read by magnetic pickups through tuned tubes",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL1):
+        // each bar a handful of modes and one friction contact at 96 kHz.
+        circuit: "rosin_wheel",
+        panel: Some(&["wheel", "resonator", "touch"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("wheel"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys press the bars (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3066,6 +3096,7 @@ mod tests {
                         "clavinet_d6",
                         "novachord",
                         "nickel_organ",
+                        "rosin_wheel",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

@@ -233,6 +233,7 @@ pub enum Element {
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
+    InventedKeys(InventedKeys),
     ReedKeys(ReedKeys),
     ThyratronEvents(ThyratronEvents),
     ResetEvents(ResetEvents),
@@ -702,6 +703,68 @@ impl ReedKeys {
         }
         if self.out_loc == self.out_line {
             return Err(format!("it drives {} twice", self.out_loc));
+        }
+        Ok(())
+    }
+}
+
+/// An invented instrument's keys (docs/INVENTED_LIVE_PLAN.md; [`crate::invented`];
+/// `varimu/invented/keys/` is the reference): per key its voice of the instrument
+/// `instrument` names (`rosin_wheel`, ...), played by note events at `rate_hz` (the step
+/// rate's least whole multiple at or above it); it senses nothing and drives `out` to the
+/// keys' summed output at the next step. `k0`-`k3` are its panel (0-1, the instrument says
+/// what they are; they play on). At most `max_keys` keys sound at once (the oldest released
+/// first). `data` is the compiled keyboard (a component version of kind `invented_keys`:
+/// `varimu.invented.keys.compile`), a path relative to the repository's root or absolute,
+/// its sha256 `sha256`. SPICE has no keys: ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InventedKeys {
+    pub name: String,
+    pub out: String,
+    pub instrument: String,
+    pub data: String,
+    pub sha256: String,
+    pub rate_hz: f64,
+    pub max_keys: f64,
+    pub k0: f64,
+    pub k1: f64,
+    pub k2: f64,
+    pub k3: f64,
+}
+
+impl InventedKeys {
+    fn check(&self, input: &str) -> Result<(), String> {
+        if !(self.rate_hz.is_finite() && self.rate_hz > 0.0) {
+            return Err(format!("rate_hz = {} must be finite and > 0", self.rate_hz));
+        }
+        for (what, x) in [
+            ("k0", self.k0),
+            ("k1", self.k1),
+            ("k2", self.k2),
+            ("k3", self.k3),
+        ] {
+            if !(0.0..=1.0).contains(&x) {
+                return Err(format!("{what} {x} (0-1)"));
+            }
+        }
+        if !(self.max_keys >= 1.0 && self.max_keys.fract() == 0.0 && self.max_keys <= 128.0) {
+            return Err(format!(
+                "max_keys {} (a whole number, 1-128)",
+                self.max_keys
+            ));
+        }
+        if self.instrument.is_empty() {
+            return Err("instrument names the voice".into());
+        }
+        if self.data.is_empty()
+            || self.sha256.len() != 64
+            || !self.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("data names the compiled keyboard, sha256 its hash".into());
+        }
+        if self.out == GROUND || self.out == input {
+            return Err(format!("its keys drive {} (ground or the input)", self.out));
         }
         Ok(())
     }
@@ -1334,6 +1397,7 @@ impl Element {
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
             Element::NickelKeys(e) => &e.name,
+            Element::InventedKeys(e) => &e.name,
             Element::ReedKeys(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
             Element::ResetEvents(e) => &e.name,
@@ -1375,6 +1439,7 @@ impl Element {
                 v
             }
             Element::NickelKeys(e) => vec![&e.out],
+            Element::InventedKeys(e) => vec![&e.out],
             Element::ReedKeys(e) => vec![&e.loc, &e.line, &e.out_loc, &e.out_line],
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
             Element::ResetEvents(e) => vec![&e.sense, &e.src, &e.dst],
@@ -1413,6 +1478,7 @@ impl Element {
             Element::ClavStrings(e) => vec![&mut e.centre, &mut e.bridge, &mut e.bridge_neg],
             Element::NovaKeys(_) => return None,
             Element::NickelKeys(e) => vec![&mut e.out],
+            Element::InventedKeys(e) => vec![&mut e.out],
             Element::ReedKeys(e) => vec![&mut e.loc, &mut e.line, &mut e.out_loc, &mut e.out_line],
             Element::ThyratronEvents(e) => vec![&mut e.a, &mut e.g, &mut e.w, &mut e.k],
             Element::ResetEvents(e) => vec![&mut e.sense, &mut e.src, &mut e.dst],
@@ -2022,6 +2088,12 @@ impl CircuitIr {
                     'V'
                 }
                 Element::NickelKeys(e) => {
+                    if let Err(m) = e.check(&self.input_node) {
+                        return err(format!("{name}: {m}"));
+                    }
+                    'V'
+                }
+                Element::InventedKeys(e) => {
                     if let Err(m) = e.check(&self.input_node) {
                         return err(format!("{name}: {m}"));
                     }

@@ -468,6 +468,15 @@ pub fn structure(ir: &CircuitIr) -> Structure {
                 );
                 ("NickelKeys", &worn, vec![&k.out])
             }
+            // The panel (k0-k3) plays on (values); other data, rates or a cap are another
+            // keyboard.
+            Element::InventedKeys(k) => {
+                worn = format!(
+                    "{} {} {} {} {} {}",
+                    k.name, k.instrument, k.data, k.sha256, k.rate_hz, k.max_keys
+                );
+                ("InventedKeys", &worn, vec![&k.out])
+            }
             // MELLOW plays on (a value); other keys, data or nodes are another instrument.
             Element::NovaKeys(k) => {
                 worn = format!("{} {} {:?}", k.name, k.sha256, k.range());

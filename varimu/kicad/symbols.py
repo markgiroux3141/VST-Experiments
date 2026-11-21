@@ -489,6 +489,25 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "InventedKeys",
+        "invented_keys",
+        "IK",
+        "An invented instrument's keys (docs/INVENTED_LIVE_PLAN.md, varimu.invented.keys): pin "
+        "1 the keys' summed output (to ground), its keys played by note events; Value is its "
+        "component version",
+        (Pin("1", "1", 7.62, 0, 180, 2.54),),
+        [
+            rect(-5.08, -3.81, 5.08, 3.81),
+            poly((-3.81, -2.54), (3.81, -2.54)),
+            poly((-3.81, 0), (3.81, 0)),
+            poly((-3.81, 2.54), (2.54, 2.54)),
+        ],
+        "component",
+        ("rate_hz", "max_keys", "k0", "k1", "k2", "k3"),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "ReedKeys",
         "reed_keys",
         "RK",

@@ -6,7 +6,8 @@
 //! ([`crate::mna::Mna::media`]); most have one output, `out`.
 
 use crate::ir::{
-    ClavStrings, Harp, NickelKeys, NovaKeys, Plate, ReedKeys, Spring, Tape, WurliReeds,
+    ClavStrings, Harp, InventedKeys, NickelKeys, NovaKeys, Plate, ReedKeys, Spring, Tape,
+    WurliReeds,
 };
 
 /// A medium's element in the IR.
@@ -20,6 +21,7 @@ pub enum MediumElement {
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
+    InventedKeys(InventedKeys),
     ReedKeys(ReedKeys),
 }
 
@@ -57,6 +59,7 @@ impl MediumElement {
             MediumElement::ClavStrings(c) => &c.name,
             MediumElement::NovaKeys(k) => &k.name,
             MediumElement::NickelKeys(k) => &k.name,
+            MediumElement::InventedKeys(k) => &k.name,
             MediumElement::ReedKeys(k) => &k.name,
         }
     }
@@ -74,6 +77,7 @@ impl MediumElement {
             MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
             MediumElement::NovaKeys(k) => k.outs.iter().map(String::as_str).collect(),
             MediumElement::NickelKeys(k) => vec![&k.out],
+            MediumElement::InventedKeys(k) => vec![&k.out],
             MediumElement::ReedKeys(k) => vec![&k.out_loc, &k.out_line],
         }
     }
@@ -88,6 +92,7 @@ impl MediumElement {
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
             | MediumElement::NickelKeys(_)
+            | MediumElement::InventedKeys(_)
             | MediumElement::ReedKeys(_) => None,
             MediumElement::Tape(t) => t.supply.as_deref(),
         }
@@ -104,6 +109,7 @@ impl MediumElement {
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
             | MediumElement::NickelKeys(_)
+            | MediumElement::InventedKeys(_)
             | MediumElement::ReedKeys(_) => (crate::ir::GROUND, crate::ir::GROUND),
         }
     }
@@ -255,6 +261,7 @@ pub enum Medium {
     Clav(Box<ClavMedium>),
     Nova(Box<crate::novachord::Medium>),
     Nickel(Box<crate::nickel::Medium>),
+    Invented(Box<crate::invented::Medium>),
     Reeds(Box<crate::reeds::Medium>),
 }
 
@@ -304,6 +311,9 @@ impl Medium {
             MediumElement::NickelKeys(k) => {
                 Medium::Nickel(Box::new(crate::nickel::Medium::new(k, fs, noise_seed)?))
             }
+            MediumElement::InventedKeys(k) => {
+                Medium::Invented(Box::new(crate::invented::Medium::new(k, fs)?))
+            }
             MediumElement::ReedKeys(k) => {
                 Medium::Reeds(Box::new(crate::reeds::Medium::new(k, fs)?))
             }
@@ -346,6 +356,7 @@ impl Medium {
             Medium::Wurli(m) => m.push(v),
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
+            Medium::Invented(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense many nodes: push_senses"),
             Medium::Reeds(_) => panic!("the reeds sense two nodes: push_senses"),
         }
@@ -407,7 +418,8 @@ impl Medium {
             | Medium::Clav(_)
             | Medium::Nova(_)
             | Medium::Reeds(_)
-            | Medium::Nickel(_) => 1,
+            | Medium::Nickel(_)
+            | Medium::Invented(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -423,6 +435,7 @@ impl Medium {
             Medium::Wurli(m) => m.push(*vs.last().expect("a sample")),
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
+            Medium::Invented(m) => m.push(),
             Medium::Nova(_) => panic!("the Novachord's keys sense their own part"),
             Medium::Reeds(_) => panic!("the reeds sense their own part"),
         }
@@ -437,6 +450,7 @@ impl Medium {
             Medium::Clav(m) => m.strings.queue(at, ev),
             Medium::Nova(m) => m.queue(at, ev),
             Medium::Nickel(m) => m.queue(at, ev),
+            Medium::Invented(m) => m.queue(at, ev),
             Medium::Reeds(m) => m.queue(at, ev),
             _ => {}
         }
@@ -450,6 +464,7 @@ impl Medium {
             Medium::Wurli(m) => m.known_until(at),
             Medium::Clav(m) => m.strings.known_until(at),
             Medium::Nickel(m) => m.known_until(at),
+            Medium::Invented(m) => m.known_until(at),
             _ => {}
         }
     }
@@ -464,6 +479,7 @@ impl Medium {
                 | Medium::Clav(_)
                 | Medium::Nova(_)
                 | Medium::Nickel(_)
+                | Medium::Invented(_)
                 | Medium::Reeds(_)
         )
     }
@@ -520,6 +536,13 @@ impl Medium {
             }
             // SUSTAIN and POLARIZE play on; anything else is another organ.
             (Medium::Nickel(m), MediumElement::NickelKeys(k)) => {
+                if !m.same(k) {
+                    return Err("the keys changed".into());
+                }
+                m.update(k);
+            }
+            // The panel (k0-k3) plays on; anything else is another keyboard.
+            (Medium::Invented(m), MediumElement::InventedKeys(k)) => {
                 if !m.same(k) {
                     return Err("the keys changed".into());
                 }
