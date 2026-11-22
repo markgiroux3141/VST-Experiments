@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 46] = [
+pub const DEVICES: [Device; 47] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1469,6 +1469,34 @@ pub const DEVICES: [Device; 46] = [
         velocity: None,
         pitch: None,
         // The keys press the bars (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "buzz_zither",
+        label: "Buzz Zither",
+        short: "Zither",
+        about: "An invented keyed zither: steel strings plucked over curved jawari bridges             (the tanpura's buzz; velocity is the pluck, the mod wheel the bridge's curve), and             under the sustain pedal a cam plucking a tanpura's four drone strings",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL2):
+        // each string a finite-difference grid with the bridge's contact at 96 kHz.
+        circuit: "buzz_zither",
+        panel: Some(&["jawari", "pluck", "drone", "drone_tonic"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("jawari"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys pluck the strings (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3097,6 +3125,7 @@ mod tests {
                         "novachord",
                         "nickel_organ",
                         "rosin_wheel",
+                        "buzz_zither",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

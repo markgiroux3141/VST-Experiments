@@ -270,7 +270,13 @@ it stopped). **IL0 + IL1 built (2026-11-21):** one generic IR element / part `in
 in `varimu/invented/keys/` (bit-exact with the Rust: `tests/test_invented_keys.py`), components
 by `scripts/compile_invented_keys.py` (`ROSIN_WHEEL@1`), `config/circuits/rosin_wheel.yaml`, the
 app's `rosin_wheel` (mod wheel = WHEEL; 16 bars 13-17 % worst block), demo renders through the
-circuit by `scripts/invented_live_render.py`. Next: IL2, the Buzz Zither.
+circuit by `scripts/invented_live_render.py`. **IL2 built (2026-11-21):** the Buzz Zither
+(`varimu/invented/keys/zither.py`: an FD string per key on the stream's 96 kHz grid with the
+implicit jawari contact, velocity = the finger's force; the sustain pedal runs a tanpura cam on
+four more strings, notes 0-3, woken by the pedal: keyed.rs's `KeyVoice::wakes_on_broadcast`),
+`BUZZ_ZITHER@1`, `config/circuits/buzz_zither.yaml`, the app's `buzz_zither` (mod wheel = JAWARI;
+16 bass strings 18 % load); the Touch sliders know the invented keys' laws
+(`invented::Model::velocity_span_db`). Next: IL3, the Rijke Organ.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

@@ -32,6 +32,12 @@ pub trait KeyVoice: Send + 'static {
     type Ctx: Send + Sync + 'static;
     /// Asleep: silent until an event of its own wakes it.
     fn asleep(&self) -> bool;
+    /// Whether every key's events (the pedal, pressure) may wake it too (the Buzz Zither's
+    /// tanpura, on the pedal). Asleep voices that can't skip a chunk without them; by default
+    /// none can.
+    fn wakes_on_broadcast(&self) -> bool {
+        false
+    }
     /// An event at the current sample: its key's, or every key's (the pedal, pressure).
     fn event(&mut self, ev: NoteEvent, ctx: &Self::Ctx);
     /// Add internal samples `from..to` of its outputs into `buf`: channel c's sample i at
@@ -93,7 +99,8 @@ impl<V: KeyVoice> Shared<V> {
         let Slot { voice, buf, silent } = &mut *slot;
         let note = self.notes[i];
         let mine = |ev: &NoteEvent| own(ev, note) || broadcast(ev);
-        let touched = job.events.iter().any(|(_, ev)| own(ev, note));
+        let touched = job.events.iter().any(|(_, ev)| own(ev, note))
+            || (voice.wakes_on_broadcast() && job.events.iter().any(|(_, ev)| broadcast(ev)));
         if voice.asleep() && !touched {
             // Asleep through the chunk: only every key's events move it.
             for (_, ev) in job.events.iter() {

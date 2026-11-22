@@ -21,7 +21,19 @@ from varimu.invented.common import note  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "reports" / "invented"
 
-# (circuit, take, [(start_s, dur_s, note name, velocity)], seconds)
+# (circuit, take, [(start_s, dur_s, note name, velocity)], seconds[, [(pedal down_s, up_s)]])
+MELODY = "C4:1 Db4:1 E4:2 F4:1 G4:2 Ab4:1 G4:1 F4:1 E4:2 Db4:1 C4:3"  # the sketch's (I14)
+
+
+def beats(text: str, start: float, beat_s: float, vel: int, gap_s: float = 0.02) -> list:
+    out, t = [], start
+    for tok in text.split():
+        nm, n = tok.split(":")
+        out.append((t, int(n) * beat_s - gap_s, nm, vel))
+        t += int(n) * beat_s
+    return out
+
+
 DEMOS = {
     "rosin_wheel": (
         "melody_and_chord",
@@ -40,6 +52,13 @@ DEMOS = {
         ],
         12.0,
     ),
+    # the tanpura's cam on the pedal (DRONE TONIC 0: Sa = C3), the sketch's melody over it
+    "buzz_zither": (
+        "melody_over_tanpura",
+        beats(MELODY, 4.0, 0.38, 90),
+        14.0,
+        [(0.0, 12.5)],
+    ),
 }
 
 
@@ -56,7 +75,7 @@ def main() -> None:
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--quality", default="production")
     args = ap.parse_args()
-    for name, (take, phrase, seconds) in DEMOS.items():
+    for name, (take, phrase, seconds, *rest) in DEMOS.items():
         if args.only and name not in args.only:
             continue
         sp = spec.load_circuit(spec.circuit_path(name))
@@ -70,6 +89,9 @@ def main() -> None:
         for start, dur, nm, vel in phrase:
             notes.append((start, "on", note(nm), vel))
             notes.append((start + dur, "off", note(nm), 0))
+        for down, up in rest[0] if rest else []:
+            notes.append((down, "pedal", 0, 1))
+            notes.append((up, "pedal", 0, 0))
         notes.sort(key=lambda e: e[0])
         x = np.zeros(int(seconds * fs))
         res = fast.run_transient(ir, x, settings=st, notes=notes)

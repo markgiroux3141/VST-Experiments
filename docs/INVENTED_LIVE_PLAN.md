@@ -71,9 +71,12 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
 1. **Reference:** `varimu/invented/keys/<name>.py`, written like `rosin.py`: `model()` gives
    the data dict (with `"instrument": KIND` and `"source"`), and a `Voice` class with
    `asleep / on(vel) / off / pedal(down) / pressure(v) / step() -> float`, in plain scalar
-   Python. Its arithmetic must be in the Rust's exact order: sums in a loop, no numpy in the
-   step. Shared pieces are in `common.py` (`Gauss`, `key_seed`, `bandpass`, `modal_step`,
-   `play`).
+   Python. Its arithmetic must be in the Rust's exact order: sums in a loop, no numpy
+   reductions in the step. Elementwise numpy (`2.0 * u - c1 * u1`, slices) is exactly
+   rounded, as Rust's scalar loop is, so a grid's update may be vectorized (the zither's
+   string). Shared pieces are in `common.py` (`Gauss`, `key_seed`, `bandpass`, `modal_step`,
+   `play`). A voice that the pedal or pressure must wake (the zither's tanpura) says so with
+   `KeyVoice::wakes_on_broadcast` in the Rust; keyed.rs skips asleep voices otherwise.
 2. **Register it** in `varimu/invented/keys/compile.py`'s `models()` (component name ->
    `model`), then run `uv run python scripts/compile_invented_keys.py` to save `NAME@1`.
 3. **Rust:** in `crates/circuitsim/src/invented.rs`, add:
@@ -83,7 +86,8 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
    - a `Voice` variant, and its arms in `awake / set_knobs / event / step / silence` and
      `voices()`.
 
-   Nothing else in circuitsim changes.
+   Also add its arm in `Model::velocity_span_db` (what velocity sets, for the Play view's
+   Touch sliders). Nothing else in circuitsim changes.
 4. **Agreement test:** in `tests/test_invented_keys.py`, a performance through
    `circuitsim.invented_render` against `common.play` with the reference (target:
    bit-exact or < -120 dB).
@@ -138,6 +142,54 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
   - the touch range: `Circuit::key_velocity_span_db` has no law for this element, so the
     Play view's Touch sliders don't know its span.
 
-**Next:** IL2, the Buzz Zither (the FD string with the implicit bridge contact; the
-recipe above; the drone strings on the pedal or a key range), then IL3-IL7 in the table's
-order.
+### Session 2 (2026-11-21): IL2 built
+
+- **Built:** `varimu/invented/keys/zither.py` (the reference), the zither's voice in
+  `invented.rs` (`JawariString`, `ZitherVoice`), `BUZZ_ZITHER@1`,
+  `config/circuits/buzz_zither.yaml`, the app's `buzz_zither` device, its demo in
+  `scripts/invented_live_render.py` (`melody_over_tanpura`: the sketch's melody over the
+  pedal's tanpura; demos may hold the pedal now).
+- **Shared:** `keyed.rs`'s `KeyVoice::wakes_on_broadcast` (default false: every other
+  medium bit for bit unchanged); `invented::Model::velocity_span_db`, read by the app's
+  `key_velocity_span_db`, so the Touch sliders know both instruments' laws (IL1's open
+  item: the rosin's press force spans 19.9 dB, the zither's pluck force 19.4 dB).
+- **Agreement:** bit-exact with the reference on a performance (a re-pluck of a ringing
+  string, a release, the tanpura on the pedal at a raised tonic, the jawari's contact), and
+  the same on 0 and 3 worker threads (`tests/test_invented_keys.py`; also: JAWARI 0.6 keeps
+  the energy above 1.5 kHz >6 dB over a sharp bridge a second after the pluck, the sketch's
+  finding). Rust builds the circuit's IR bit for bit (`agreement.rs`). The app's test
+  `the_buzz_zither_plays_from_note_events`.
+- **Live:** cheaper than estimated. 16 strings ringing in the bass (C2 up, ~360-720 points
+  each) run at 18 % load, worst block 27 %; every key struck with the pedal down (the top 16
+  and the tanpura) 18 %, worst block 30 %; 0 dropouts at a 30 ms buffer.
+- **Level:** full scale 6 V. A pluck at velocity 127 peaks 1.0-1.3 V on any string; a
+  six-note chord struck at once 5.7 V; the demo -14.5 dBFS peak.
+- **Decided (IL2):**
+  - **Strings C2-C6** (49 keys), each a finite-difference string on the stream's 96 kHz grid,
+    which is the sketch's own (48 kHz x 2): h = c k / 0.98, so ~0.98 fs / (2 f0) points
+    whatever the length. Lengths 1 m at C3 as 1 / f, capped to 0.2-1.4 m (the sketch's
+    formula gave 2 m at C2).
+  - **Velocity is the finger's force** (0.1-1 N, linear), not the pluck's displacement: the
+    displacement law made the short, tense treble strings ~30 dB louder at the bridge than the
+    bass (bridge force T A / p). With A = F p (L - p) / (T L) the bridge feels ~F (1 - p / L)
+    on every string.
+  - **A pluck replaces the string's state** (the finger catches a ringing string and plucks
+    it again); a key up drops the felt damper (sigma0 x 60, the sketch's), the voice sleeps
+    1 s later. No sustain pedal for the keys.
+  - **The sustain pedal runs the tanpura's cam** (the plan's "drone strings on a pedal"):
+    four more strings (Pa, Sa, Sa, low Sa) on notes 0-3, which no key plays, plucked in turn
+    every 0.95 s (the sketch's cycle), damped by the cam's felt when the pedal lifts. The cap
+    on voices never silences them (it then lets up to four more keys sound).
+  - **The panel:** JAWARI (k0; the mod wheel), the bridge's drop 6 um / JAWARI over its
+    12 mm (the sketch's best, 10 um, at the default 0.6; 0 a sharp bridge, no contact; the
+    old linear map put the sharp bridge next to the flattest); PLUCK POINT (k1, 0.1-0.5 of the
+    length); DRONE (k2, the cam's pluck force 0-0.45 N); DRONE TONIC (k3, Sa C3-B3 in
+    semitones, each drone string re-strung at its next pluck).
+  - **The soundboard in each voice:** the sketch's four body resonances as RBJ band-passes
+    (scipy's `iirpeak` in the sketch), read off the bridge force by a piezo at 1 V/N
+    (provisional).
+- **Not done yet for IL2:** the user's first play; the cotton thread (the jawari's tuning aid)
+  and sympathetic strings (the sketch's "next if picked"); per-key variation (every string
+  is nominal).
+
+**Next:** IL3, the Rijke Organ, then IL4-IL7 in the table's order.

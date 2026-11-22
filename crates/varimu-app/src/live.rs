@@ -368,7 +368,7 @@ pub fn replay_clavinet_strikes() {
 
 /// The span (dB from velocity 127 to 1) of the velocity law of the medium played by keys in
 /// `ir` (a harp; the Wurlitzer's reeds; a Clavinet's strings: their tangent's speed; the Nickel Organ's keys: their
-/// hammer's), None without one.
+/// hammer's; the invented keys: their press or pluck), None without one.
 pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {
     ir.sections
         .iter()
@@ -383,6 +383,10 @@ pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {
             Element::NickelKeys(k) => circuitsim::nickel::load(k)
                 .ok()
                 .map(|m| 20.0 * (m.params.v_max / m.params.v_min).log10()),
+            // The invented keys: what velocity sets (a press force, a pluck's amplitude).
+            Element::InventedKeys(k) => circuitsim::invented::load(k)
+                .ok()
+                .map(|m| m.velocity_span_db()),
             _ => None,
         })
 }
