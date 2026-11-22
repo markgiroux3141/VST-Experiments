@@ -67,6 +67,7 @@ from varimu.devices import moving_coil as mc
 from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices import spring as spr
+from varimu.devices.arc import Arc
 from varimu.devices.bjt import Bjt
 from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
@@ -1016,6 +1017,10 @@ def device_instance(
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a lamp takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
+    if isinstance(base, Arc):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: an arc takes no parallel, emission or area")
         return dataclasses.replace(base, name=name)
     if isinstance(base, Contact):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):

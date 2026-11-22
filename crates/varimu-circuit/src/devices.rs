@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    Bjt, Carbon, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode,
+    Arc, Bjt, Carbon, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode,
     KorenPentode, KorenTriode, Lamp, Optocoupler, Pentode, Photocell, PlateModel, Polarity,
     ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
@@ -703,6 +703,24 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "arc" => {
+            // arc.py's arc_from_data (its gap the instance's; the default 2 mm)
+            let a = sub(d, "ayrton", what)?;
+            let m = sub(d, "mayr", what)?;
+            DeviceModel::Arc(Arc {
+                name,
+                a_v: num(a, "a_v", what)?,
+                b_v_mm: num(a, "b_v_mm", what)?,
+                c_w: num(a, "c_w", what)?,
+                d_w_mm: num(a, "d_w_mm", what)?,
+                tau_s: num(m, "tau_s", what)?,
+                v_strike_v: num(m, "v_strike_v", what)?,
+                ratio_max: num(m, "ratio_max", what)?,
+                g_floor_s: num(m, "g_floor_s", what)?,
+                ln_g_max: num(m, "ln_g_max", what)?,
+                gap_mm: 2.0,
             })
         }
         "carbon" => {

@@ -754,6 +754,16 @@ pub fn device_instance(
             l.name = s(name);
             Ok(DeviceModel::Lamp(l))
         }
+        DeviceModel::Arc(a) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: an arc takes no parallel, emission or area"
+                )));
+            }
+            let mut a = a.clone();
+            a.name = s(name);
+            Ok(DeviceModel::Arc(a))
+        }
         DeviceModel::Contact(c) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

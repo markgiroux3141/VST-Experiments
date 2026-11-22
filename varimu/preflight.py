@@ -53,6 +53,7 @@ from varimu.circuit.ir import (
     element_nodes,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
+from varimu.devices.arc import Arc
 from varimu.devices.bjt import Bjt
 from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
@@ -224,7 +225,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         t = _terminals(el)
         if isinstance(el, Resistor | Inductor | VoltageSource | SineSource | Winding):
             dc.join(*t)
-        if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp):
+        if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp | Arc):
             for n in el.nodes[1:]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Device) and isinstance(models.get(el.model), Contact | Carbon):

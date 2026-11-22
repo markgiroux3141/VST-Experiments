@@ -50,7 +50,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 16] = [
+const DEVICE_KEYS: [&str; 17] = [
     "device",
     "name",
     "instance",
@@ -67,6 +67,7 @@ const DEVICE_KEYS: [&str; 16] = [
     "tol_scale",
     "lux",
     "emit",
+    "gap_mm",
 ];
 
 // --- Tolerance -------------------------------------------------------------------------
@@ -3234,6 +3235,26 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                     return Err(ctx.fail(&format!("{where_}.lux"), "for photocells"));
                 }
                 m
+            }
+        };
+        // An arc's gap (builder.py's): the carbons' feed, per instance (the component's
+        // 2 mm when absent).
+        let model = match (model, e.get("gap_mm")) {
+            (m, None) => m,
+            (DeviceModel::Arc(mut a), Some(x))
+                if e.get("instance") != Some(&Value::Bool(false)) =>
+            {
+                let w = format!("{where_}.gap_mm");
+                let v = ctx.physical(&w, x)?;
+                let gap = ctx.float(&w, &v)?;
+                if gap.is_nan() || gap <= 0.0 {
+                    return Err(ctx.fail(&w, format!("{gap}: a gap, > 0")));
+                }
+                a.gap_mm = gap;
+                DeviceModel::Arc(a)
+            }
+            (_, Some(_)) => {
+                return Err(ctx.fail(&format!("{where_}.gap_mm"), "for arcs"));
             }
         };
         ctx.types.insert(model.name().to_string(), base_name);

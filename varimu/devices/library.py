@@ -24,6 +24,7 @@ import yaml
 import varimu
 from varimu.config import REPO_ROOT
 from varimu.devices import versions
+from varimu.devices.arc import Arc, arc_from_data
 from varimu.devices.bjt import Bjt, bjt_from_data, depletion_c_f, parse_card
 from varimu.devices.capsule import (
     Capsule,
@@ -70,6 +71,7 @@ Device = (
     | JunctionDiode
     | VacuumDiode
     | Lamp
+    | Arc
     | Thyratron
     | Bjt
     | Jfet
@@ -151,6 +153,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
     if kind == "lamp":
         return lamp_from_data(d, name)
+    if kind == "arc":
+        return arc_from_data(d, name)
     if kind == "optocoupler":
         return opto_from_data(d, name)
     if kind == "photocell":
@@ -3668,6 +3672,40 @@ def build_lamp327() -> dict[str, Any]:
     }
 
 
+def build_carbon_arc() -> dict[str, Any]:
+    """A DC arc between solid carbons (docs/INVENTED_LIVE_PLAN.md IL7, the Arc Organ): Ayrton's
+    static law and Mayr's thermal memory, the sketch's values (varimu.invented.arc,
+    varimu.devices.arc)."""
+    from varimu.invented import arc as sk
+
+    a, b, c, d = sk.AYRTON
+    return {
+        "name": "CARBON_ARC",
+        "kind": "arc",
+        "source": "varimu.devices.arc: Mayr's arc on Ayrton's static law (the Arc Organ's "
+        "sketch, varimu/invented/arc.py)",
+        "ayrton": {
+            "a_v": a,
+            "b_v_mm": b,
+            "c_w": c,
+            "d_w_mm": d,
+            "source": "H. Ayrton, The Electric Arc (London, 1902): V = a + b l + (c + d l) / I "
+            "for solid carbons, l in mm (her constants as the sketch quotes them)",
+        },
+        "mayr": {
+            "tau_s": sk.TAU_S,
+            "v_strike_v": sk.STRIKE_V,
+            "ratio_max": 20.0,
+            "g_floor_s": sk.G_FLOOR_S,
+            "ln_g_max": 2.0,
+            "source": "O. Mayr, Archiv fuer Elektrotechnik 37 (1943): d ln g / dt = (v i / P - 1) "
+            "/ tau. tau, v_strike_v, g_floor_s provisional: model knowledge (a free carbon arc's "
+            "time constant; hot carbons restrike; their residual conductance), the sketch's; "
+            "ratio_max and ln_g_max the sketch's numerics (a cap on the growth, a cap on g)",
+        },
+    }
+
+
 def _thyratron_data(t: Thyratron, source: str, model_sources: dict, report: dict) -> dict:
     fields = [f for f in t.__dataclass_fields__ if f not in ("name", "c_gk", "c_ga", "c_ak")]
     return {
@@ -4538,6 +4576,7 @@ BUILDERS = {
     "ACC4AB3C1B": build_acc4ab3c1b,
     "SCOTCH111": build_scotch111,
     "LAMP327": build_lamp327,
+    "CARBON_ARC": build_carbon_arc,
     "VTL5C1": fit_vtl5c1,
     "VTL5C2": fit_vtl5c2,
     "PDVP9203": fit_pdvp9203,

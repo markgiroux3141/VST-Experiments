@@ -264,6 +264,7 @@ from varimu.devices import hum as hum_mod
 from varimu.devices import noise as noise_mod
 from varimu.devices import ribbon as ribbon_mod
 from varimu.devices import versions
+from varimu.devices.arc import Arc
 from varimu.devices.bjt import Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
@@ -1607,7 +1608,7 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "temp_c", "events", "source", "notes", "tol_scale", "lux", "emit",
+    "area", "temp_c", "events", "source", "notes", "tol_scale", "lux", "emit", "gap_mm",
 }  # fmt: skip
 
 # A `devices` entry's `emit: used` (CHAINS_PLAN.md NH3): its model is in the IR only when an
@@ -1684,6 +1685,15 @@ def make_models(ctx: Context) -> dict[str, str]:
                 model = dataclasses.replace(model, lux=float(lux))
             elif "lux" in e:
                 raise ctx.fail(f"{where}.lux", "for photocells")
+            # An arc's gap (varimu.devices.arc): the carbons' feed, so per instance (the
+            # component's default 2 mm when absent).
+            if "gap_mm" in e:
+                if not isinstance(model, Arc):
+                    raise ctx.fail(f"{where}.gap_mm", "for arcs")
+                gap = ctx.physical(f"{where}.gap_mm", e["gap_mm"])
+                if not gap > 0.0:
+                    raise ctx.fail(f"{where}.gap_mm", f"{gap}: a gap, > 0")
+                model = dataclasses.replace(model, gap_mm=float(gap))
         ctx.models[key] = model
         ctx.parallel[model.name] = (
             1 if e.get("instance", True) is False else ctx.count(where, e.get("parallel", 1))

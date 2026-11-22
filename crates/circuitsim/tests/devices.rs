@@ -219,6 +219,9 @@ fn junction_diode_limits_and_tubes_do_not() {
             // A lamp's filament moves at most 1 V per iteration from 0 V; its
             // temperature 5 K is within its 50 K step.
             DeviceModel::Lamp(_) => assert!(limited && v == [1.0, 5.0], "{v:?}"),
+            // An arc's state moves at most 1 neper per iteration; its voltage 5 V is within
+            // its 10 V step; its power readout unlimited.
+            DeviceModel::Arc(_) => assert!(limited && v == [5.0, 1.0, 5.0], "{v:?}"),
             // An NPN's b-e junction jumping 5 V forward is pulled back like a diode's (V(c, e)
             // follows, the b-c junction unmoved); a PNP sees the same jump as reverse bias.
             DeviceModel::Bjt(ref q) if q.polarity == circuitsim::ir::Polarity::Npn => {

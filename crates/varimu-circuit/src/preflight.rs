@@ -237,7 +237,7 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
         if let Element::Device(d) = el
             && matches!(
                 models.get(d.model.as_str()),
-                Some(DeviceModel::MagneticCore(_) | DeviceModel::Lamp(_))
+                Some(DeviceModel::MagneticCore(_) | DeviceModel::Lamp(_) | DeviceModel::Arc(_))
             )
         {
             for n in &d.nodes[1..] {

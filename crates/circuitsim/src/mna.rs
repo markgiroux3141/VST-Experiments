@@ -526,6 +526,7 @@ impl Mna {
                         DeviceModel::VacuumDiode(_)
                         | DeviceModel::MagneticCore(_)
                         | DeviceModel::Lamp(_)
+                        | DeviceModel::Arc(_)
                         | DeviceModel::Optocoupler(_)
                         | DeviceModel::Photocell(_)
                         | DeviceModel::Contact(_)

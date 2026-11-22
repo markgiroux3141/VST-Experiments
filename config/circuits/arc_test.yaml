@@ -1,0 +1,52 @@
+# Duddell's singing arc on one condenser (docs/INVENTED_LIVE_PLAN.md IL7): the carbon arc
+# device (varimu/devices/arc.py, CARBON_ARC@1) fed from 110 V DC through a ballast and a
+# choke, a mica condenser across the carbons, and an LC tank across them that the arc's
+# negative resistance sustains (the sketch varimu/invented/arc.py's values; the condenser is
+# A4's after the sketch's trim). The arc is its own loudspeaker: its power (out of pin w, on
+# 1 ohm) differentiated into the pressure 1 m away (a thermophone), `out` in pascals.
+# tests/test_arc.py.
+
+title: "Singing arc (Duddell, one condenser)"
+input: in
+probes: [out, arc, w]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused"}
+  output_volts_peak: {value: 1.0, source: "provisional: pascals at 1 m (the arc's own sound)"}
+
+values:
+  supply_v: {value: 110.0, source: "provisional: model knowledge (Edison DC mains), the sketch's"}
+  ballast_ohm: {value: 12.0848, source: "derived: (110 V - Ayrton's V at 5 A on a 2 mm gap, 49.576 V) / 5 A (the sketch's ballast for 5 A)"}
+  choke_h: {value: 0.1, source: "design: the ballast choke (the sketch's)"}
+  shunt_f: {value: 0.5e-6, source: "design: a mica condenser across the carbons (the sketch's)"}
+  tank_h: {value: 4.0e-3, source: "design: the tank coil (the sketch's; Duddell used mH coils and uF condensers)"}
+  tank_ohm: {value: 0.4, source: "provisional: design choice (the tank coil's resistance, the sketch's)"}
+  key_f: {value: 30.5e-6, source: "derived: the sketch's factory trim for A4 at 5 A (varimu.invented.arc.tuned_condenser; docs/INVENTED_DEVICES.md I13)"}
+  arc_gap_mm: {value: 2.0, source: "design: the carbons' gap (the sketch's)"}
+  c_state_f: {value: 1.0, source: "numerical: the arc's state node (ln g, 1 V = 1 neper)"}
+  r_state_ohm: {value: 1.0e+9, source: "numerical: a leak on the state node, its DC path for Newton's first iterate (at 0 V the arc's growth doesn't depend on its state); ~1e-9 neper/s against the arc's ~3e4"}
+  r_power_ohm: {value: 1.0, source: "numerical: the power readout's load (V(w) = the arc's power, 1 V = 1 W)"}
+  c_thermo_f: {value: 1.0e-6, source: "numerical: the thermophone differentiator's condenser"}
+  r_thermo_ohm: {value: 0.27063, source: "derived: (gamma - 1) / (4 pi r c^2) at 1 m, gamma 1.4, c 343 m/s (varimu.devices.arc.thermophone_rc_s: 2.7063e-7 s), over c_thermo_f: out in pascals"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+
+devices:
+  ARC: {device: CARBON_ARC@1, gap_mm: arc_gap_mm}
+
+sections:
+  - title: arc
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      VS: {V: [sup, "0"], v: supply_v}
+      RB: {R: [sup, bal], r: ballast_ohm, tolerance: none}
+      LCH: {L: [bal, arc], l: choke_h}
+      XARC: {device: [arc, s, w, "0"], model: ARC}
+      CS: {C: [s, "0"], c: c_state_f}
+      RS: {R: [s, "0"], r: r_state_ohm, tolerance: none}
+      RW: {R: [w, "0"], r: r_power_ohm, tolerance: none}
+      CSH: {C: [arc, "0"], c: shunt_f}
+      LT: {L: [arc, t1], l: tank_h}
+      RT: {R: [t1, t2], r: tank_ohm, tolerance: none}
+      CK: {C: [t2, "0"], c: key_f}
+      CD: {C: [w, out], c: c_thermo_f}
+      RD: {R: [out, "0"], r: r_thermo_ohm, tolerance: none}

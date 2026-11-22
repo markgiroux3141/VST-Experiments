@@ -131,6 +131,44 @@ def test_lamp_agrees():
     np.testing.assert_allclose(got_t, it, rtol=RTOL, atol=1e-4, err_msg="dT/dt")
 
 
+def test_arc_agrees():
+    """The carbon arc's current, -d ln g / dt (its state port's current) and its power readout:
+    burning on its
+    static curve, cold (below the floor), past the cap, both polarities, through the strike's
+    ramp, at two gaps."""
+    import dataclasses
+
+    for d in (
+        load_device("CARBON_ARC@1"),
+        dataclasses.replace(load_device("CARBON_ARC@1"), name="ARC_GAP4", gap_mm=4.0),
+    ):
+        volts = (-85.0, -20.0, 0.0, 0.4, 12.0, 49.6, 70.0, 77.0, 90.0)
+        pts = [(v, u) for v in volts for u in (-11.0, -6.0, -2.29, 0.0, 2.5)]
+        lines = [d.subckt()]
+        for k, (v, u) in enumerate(pts):
+            lines += [
+                f"va{k} a{k} 0 dc {v}",
+                f"vs{k} s{k} 0 dc {u}",
+                f"vw{k} w{k} 0 dc 0",
+                f"x{k} a{k} s{k} w{k} 0 {d.subckt_name}",
+            ]
+        r = _op(
+            lines,
+            [f"i(va{k})" for k in range(len(pts))]
+            + [f"i(vs{k})" for k in range(len(pts))]
+            + [f"i(vw{k})" for k in range(len(pts))],
+        )
+        v, u = np.array(pts, float).T
+        ia, i_s, i_w = d.currents(v, u)
+        got_a = -np.array([r[f"i(va{k})"] for k in range(len(pts))])
+        got_s = -np.array([r[f"i(vs{k})"] for k in range(len(pts))])
+        got_w = -np.array([r[f"i(vw{k})"] for k in range(len(pts))])
+        np.testing.assert_allclose(got_w, i_w, rtol=RTOL, atol=ATOL, err_msg="power readout")
+        np.testing.assert_allclose(got_a, ia, rtol=RTOL, atol=ATOL, err_msg="arc current")
+        # Past the floor the restoring term is ~1e7 per neper: wrdata's 10 digits of it.
+        np.testing.assert_allclose(got_s, i_s, rtol=RTOL, atol=1e-2, err_msg="-d ln g / dt")
+
+
 def test_optocoupler_agrees():
     """The optocoupler's four port currents (the LED's both ends, the cell's state, the cell):
     the LED off, at its knee, bright and past its tangent's start; the state dark to bright

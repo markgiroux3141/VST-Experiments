@@ -14,6 +14,7 @@ use std::fmt;
 
 use crate::ir::DeviceModel;
 
+pub mod arc;
 pub mod bjt;
 pub mod carbon;
 pub mod contact;
@@ -30,6 +31,7 @@ pub mod triode;
 pub mod triode_table;
 
 pub use self::core::MagneticCore;
+pub use arc::Arc;
 pub use bjt::Bjt;
 pub use carbon::Carbon;
 pub use contact::Contact;
@@ -197,6 +199,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::VacuumDiode(m) => Box::new(VacuumDiode::new(m)),
         DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
         DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
+        DeviceModel::Arc(m) => Box::new(Arc::new(m)),
         DeviceModel::Optocoupler(m) => Box::new(Optocoupler::new(m)),
         DeviceModel::Photocell(m) => Box::new(Photocell::new(m)),
         DeviceModel::Contact(m) => Box::new(Contact::new(m)),

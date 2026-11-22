@@ -34,6 +34,7 @@ import numpy as np
 
 from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
+from varimu.devices.arc import Arc
 from varimu.devices.bjt import Bjt
 from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
@@ -72,6 +73,10 @@ _VACUUM_V = (-50, -5, -1, -0.3, -0.1, 0, 0.05, 0.1, 0.5, 1, 5, 20, 50, 100, 300)
 # fits' range (clamped), never on its edges.
 _LAMP_V = (-40, -5, -0.3, 0, 0.02, 0.5, 2, 10, 28, 60)
 _LAMP_DT = (-150, -40, 0, 1, 50, 300, 700, 1500, 2000, 2600, 3300)
+# An arc's voltage (both ways, burning, near and past the strike) and ln g (below the floor
+# to past the cap).
+_ARC_V = (-90, -77, -20, -0.5, 0, 0.3, 12, 45, 49.6, 70, 76.5, 82)
+_ARC_LNG = (-12, -9.21, -6, -2.3, 0, 1.5, 2.4)
 # An optocoupler's LED off, at its knee, bright and past its tangent's start; its cell's
 # state dark, dim, bright and (Newton's excursions) negative; the cell's voltage both ways.
 _OPTO_VLED = (-2.0, 0.0, 1.3, 1.45, 1.55, 1.7, 2.6)
@@ -135,6 +140,8 @@ def _models() -> list:
         dataclasses.replace(diode, name=diode.name + "_rs0", rs_ohm=0.0),
         load_device("GZ34"),
         load_device("LAMP327@1"),
+        load_device("CARBON_ARC@1"),
+        dataclasses.replace(load_device("CARBON_ARC@1"), name="CARBON_ARC_GAP4", gap_mm=4.0),
         load_device("VTL5C1@1"),
         dataclasses.replace(load_device("PDVP9203@1"), name="PDVP9203_40lux", lux=40.0),
         load_device("KEY_CONTACT@1"),
@@ -195,6 +202,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         currents = np.stack([m.ip(vg1, vg2, vp), m.ig2(vg1, vg2), m.ig1(vg1)], axis=1)
     elif isinstance(m, MagneticCore):
         ports, currents, _ = _core_points(m)
+    elif isinstance(m, Arc):
+        ports = [(float(v), float(u), 0.0) for v, u in itertools.product(_ARC_V, _ARC_LNG)]
+        v, u, w = np.array(ports, float).T
+        currents = np.stack(m.currents(v, u, w), axis=1)
     elif isinstance(m, Lamp):
         ports = [(float(v), float(u)) for v, u in itertools.product(_LAMP_V, _LAMP_DT)]
         v, u = np.array(ports, float).T

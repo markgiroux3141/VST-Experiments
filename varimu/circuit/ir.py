@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from varimu.devices import jfet as jfet_mod
+from varimu.devices.arc import Arc
 from varimu.devices.bjt import POLARITIES, Bjt
 from varimu.devices.carbon import Carbon
 from varimu.devices.contact import Contact
@@ -864,6 +865,7 @@ DeviceModel = (
     | VacuumDiode
     | MagneticCore
     | Lamp
+    | Arc
     | Thyratron
     | Bjt
     | jfet_mod.Jfet
@@ -881,6 +883,7 @@ PINS: dict[type, tuple[str, ...]] = {
     VacuumDiode: ("a", "k"),
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
+    Arc: ("a", "s", "w", "b"),
     Optocoupler: ("la", "lk", "s", "ra", "rb"),
     Photocell: ("t", "tb", "s", "ra", "rb"),
     Bjt: ("c", "b", "e"),
@@ -1489,6 +1492,20 @@ def _validate_model(m: DeviceModel) -> None:
             raise IRError(f"{m.name}.emissivity: 4 coefficients (c0..c3)")
         for c in m.emissivity:
             _finite(f"{m.name}.emissivity[]", c)
+    elif isinstance(m, Arc):
+        values += [
+            ("tau_s", m.tau_s),
+            ("v_strike_v", m.v_strike_v),
+            ("ratio_max", m.ratio_max),
+            ("g_floor_s", m.g_floor_s),
+            ("gap_mm", m.gap_mm),
+        ]
+        for w in ("a_v", "b_v_mm", "c_w", "d_w_mm", "ln_g_max"):
+            _finite(f"{m.name}.{w}", getattr(m, w))
+        if not m.pc > 0.0:
+            raise IRError(f"{m.name}: c + d gap must be > 0 (Ayrton's loss)")
+        if not math.log(m.g_floor_s) < m.ln_g_max:
+            raise IRError(f"{m.name}: ln(g_floor_s) must be below ln_g_max")
     elif isinstance(m, Contact):
         values += [("r_on_ohm", m.r_on_ohm), ("r_off_ohm", m.r_off_ohm)]
         _finite(f"{m.name}.v_open_v", m.v_open_v)
@@ -1626,6 +1643,7 @@ _MODEL_KINDS = {
     "vacuum_diode": VacuumDiode,
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
+    "arc": Arc,
     "optocoupler": Optocoupler,
     "photocell": Photocell,
     "contact": Contact,

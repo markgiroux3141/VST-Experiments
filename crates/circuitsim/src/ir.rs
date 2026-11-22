@@ -980,6 +980,7 @@ pub enum DeviceModel {
     VacuumDiode(VacuumDiode),
     MagneticCore(MagneticCore),
     Lamp(Lamp),
+    Arc(Arc),
     Thyratron(Thyratron),
     Bjt(Bjt),
     Jfet(Jfet),
@@ -1128,6 +1129,26 @@ pub struct Lamp {
     /// Total emissivity c0 + c1 T + c2 T^2 + c3 T^3.
     pub emissivity: [f64; 4],
     pub t_amb_k: f64,
+}
+
+/// `varimu.devices.arc.Arc`: a carbon arc, pins (a, s, w, b): the arc from a to b, ln(g / 1 S)
+/// on s (1 V = 1 neper; a 1 F capacitor from s to b holds it), its power out of w (1 A = 1 W).
+/// Port currents: the arc's current, -d ln g / dt and -v i (Mayr's arc on Ayrton's static law
+/// at the gap `gap_mm`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Arc {
+    pub name: String,
+    pub a_v: f64,
+    pub b_v_mm: f64,
+    pub c_w: f64,
+    pub d_w_mm: f64,
+    pub tau_s: f64,
+    pub v_strike_v: f64,
+    pub ratio_max: f64,
+    pub g_floor_s: f64,
+    pub ln_g_max: f64,
+    pub gap_mm: f64,
 }
 
 /// `varimu.devices.opto.Optocoupler`: an LED / photoresistor optocoupler, pins (la, lk, s,
@@ -1330,6 +1351,7 @@ impl DeviceModel {
             DeviceModel::VacuumDiode(m) => &m.name,
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
+            DeviceModel::Arc(m) => &m.name,
             DeviceModel::Optocoupler(m) => &m.name,
             DeviceModel::Photocell(m) => &m.name,
             DeviceModel::Contact(m) => &m.name,
@@ -1349,6 +1371,7 @@ impl DeviceModel {
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
+            DeviceModel::Arc(_) => &["a", "s", "w", "b"],
             DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
             DeviceModel::Photocell(_) => &["t", "tb", "s", "ra", "rb"],
             DeviceModel::Contact(_) => &["a", "b", "c", "ref"],
@@ -2402,6 +2425,30 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             ]);
             for c in l.emissivity {
                 finite(&format!("{name}.emissivity[]"), c)?;
+            }
+        }
+        DeviceModel::Arc(a) => {
+            values.extend([
+                ("tau_s", a.tau_s),
+                ("v_strike_v", a.v_strike_v),
+                ("ratio_max", a.ratio_max),
+                ("g_floor_s", a.g_floor_s),
+                ("gap_mm", a.gap_mm),
+            ]);
+            for (w, x) in [
+                ("a_v", a.a_v),
+                ("b_v_mm", a.b_v_mm),
+                ("c_w", a.c_w),
+                ("d_w_mm", a.d_w_mm),
+                ("ln_g_max", a.ln_g_max),
+            ] {
+                finite(&format!("{name}.{w}"), x)?;
+            }
+            if a.c_w + a.d_w_mm * a.gap_mm <= 0.0 {
+                return err(format!("{name}: c + d gap must be > 0 (Ayrton's loss)"));
+            }
+            if a.g_floor_s.ln() >= a.ln_g_max {
+                return err(format!("{name}: ln(g_floor_s) must be below ln_g_max"));
             }
         }
         DeviceModel::Contact(c) => {
