@@ -1,0 +1,124 @@
+{
+ "ei_x1": {
+  "rail_modes_hz": [
+   18.1,
+   72.4,
+   163.0,
+   289.7,
+   452.7,
+   651.9,
+   887.3,
+   1159.0
+  ],
+  "thump": {
+   "sympathetic_re_whole_db": -19.895263816333085,
+   "struck_keys_moved_db": -15.419700453724658,
+   "rail_peak_um": 267.1818715036856,
+   "force_peak_n": 18.313947493053796,
+   "thump_db": {
+    "29": {
+     "rigid": -26.6,
+     "rail": -23.9,
+     "real": -16.3
+    },
+    "40": {
+     "rigid": -25.6,
+     "rail": -14.9,
+     "real": -20.0
+    },
+    "45": {
+     "rigid": -25.8,
+     "rail": -11.5,
+     "real": -23.7
+    }
+   }
+  },
+  "pedal": {
+   "sympathetic_re_whole_db": -23.82198476116661,
+   "struck_keys_moved_db": -17.388968900186896,
+   "rail_peak_um": 530.0397697993413,
+   "force_peak_n": 36.65267233966766
+  }
+ },
+ "ei_x4": {
+  "rail_modes_hz": [
+   36.2,
+   144.9,
+   326.0,
+   579.5,
+   905.4,
+   1303.8,
+   1774.7,
+   2317.9
+  ],
+  "thump": {
+   "sympathetic_re_whole_db": -23.686907085758385,
+   "struck_keys_moved_db": -29.58436325943549,
+   "rail_peak_um": 123.03033198499922,
+   "force_peak_n": 18.313947493053796,
+   "thump_db": {
+    "29": {
+     "rigid": -26.6,
+     "rail": -26.0,
+     "real": -16.3
+    },
+    "40": {
+     "rigid": -25.6,
+     "rail": -14.1,
+     "real": -20.0
+    },
+    "45": {
+     "rigid": -25.8,
+     "rail": -12.3,
+     "real": -23.7
+    }
+   }
+  },
+  "pedal": {
+   "sympathetic_re_whole_db": -27.692231366137626,
+   "struck_keys_moved_db": -25.422777661768848,
+   "rail_peak_um": 179.8633679872367,
+   "force_peak_n": 36.65267233966766
+  }
+ },
+ "ei_x16": {
+  "rail_modes_hz": [
+   72.4,
+   289.7,
+   651.9,
+   1159.0,
+   1810.9,
+   2607.7,
+   3549.3
+  ],
+  "thump": {
+   "sympathetic_re_whole_db": -24.2957669036263,
+   "struck_keys_moved_db": -24.656013592413103,
+   "rail_peak_um": 55.48967835375598,
+   "force_peak_n": 18.313947493053796,
+   "thump_db": {
+    "29": {
+     "rigid": -26.6,
+     "rail": -26.6,
+     "real": -16.3
+    },
+    "40": {
+     "rigid": -25.6,
+     "rail": -22.2,
+     "real": -20.0
+    },
+    "45": {
+     "rigid": -25.8,
+     "rail": -14.1,
+     "real": -23.7
+    }
+   }
+  },
+  "pedal": {
+   "sympathetic_re_whole_db": -21.01660560335221,
+   "struck_keys_moved_db": -25.602414089719993,
+   "rail_peak_um": 227.7905364120312,
+   "force_peak_n": 36.65267233966766
+  }
+ }
+}

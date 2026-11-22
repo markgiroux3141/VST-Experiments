@@ -101,8 +101,64 @@ shakes every other key's block. It would give, from one mechanism:
 - tines never starting from exactly rest.
 
 No source gives the rail's modes or its mounting: they would be provisional, bounded, and fitted
-only to SC4's thump. Status below.
+only to SC4's thump.
+
+**Studied offline (2026-11-22), not adopted.** `varimu/rhodes/rail.py` (the module docstring has
+the model: weak coupling in three passes, the struck keys' grommet forces into a simply supported
+plywood plank's modes, its motion back into all 73 keys as a base excitation through their
+grommets; the plank 1 m x 100 x 19 mm, the assemblies' mass added, all provisional; the plywood
+rail and its two screws through springs per assembly: web: https://shadetreekeys.com/category/tines)
+and `scripts/rhodes_rail_study.py` -> `reports/rhodes/imperfection/rail/` (summary.json, WAVs: each
+scene rigid / on the rail at one gain, and the keys never struck alone). At three plank stiffnesses
+(EI x1, x4, x16: first mode 18, 36, 72 Hz):
+
+| | EI x1 | EI x4 | EI x16 | real (SC4) | rigid |
+|---|---|---|---|---|---|
+| thump F1 (dB, < 0.7 f0 in the first 50 ms) | -23.9 | -26.0 | -26.6 | -16.3 | -26.6 |
+| thump E2 | -14.9 | -14.1 | -22.2 | -20.0 | -25.6 |
+| thump A2 | -11.5 | -12.3 | -14.1 | -23.7 | -25.8 |
+| pedal down: the unstruck keys re the whole | -23.8 dB | -27.7 | -21.0 | ? | none |
+| pedal down: the struck keys' own sound moved | -17.4 dB | -25.4 | -25.6 | | 0 |
+| the rail's largest swing | 530 um | 180 um | 228 um | | 0 |
+
+- **The thump has the wrong register pattern** at every stiffness: the real piano's grows toward
+  the deep bass (F1 the most), the rail's grows upward (a rail mode under A2's f0 / 0.7, not under
+  F1's) and overshoots A2 by ~10 dB. The real thump isn't this mechanism, or the pickups move with
+  the tone bars (both rails on one harp frame: only their relative motion counts, which this model
+  doesn't have), or the rail is far stiffer than any plank here.
+- **The sympathetic ring is strong** (-21 to -28 dB re the played notes, pedal down): likely more
+  than a real Mark I's (players describe a faint halo; nothing measured).
+- So: no live port. What would decide it: a recording of a real Rhodes with the pedal down,
+  one note struck and the others' ring audible (or a measured harp frame's modes). The WAVs are
+  there to hear what it would add.
 
 ## Status
 
-(updated as the session goes)
+**2026-11-22 (one night, the user away):**
+
+- **Built and tested:** the imperfection knobs above, live on `rhodes_suitcase` (Python reference,
+  circuitsim port, both builders, the circuit, the app's panel; a change restarts the live stream:
+  `live::structure` keys the harp's element on its imperfection). Tests listed above, plus
+  `live::tests::the_rhodes_imperfection_restarts_the_stream`. Default IMPERFECTION 1.
+- **Live load:** none measurable. `examples/play.rs --device rhodes_suitcase --hold-bass 6 --from
+  48 --restrike 2 --mute --buffer 0.05 --for 15`, twice each: amount 0 84-93% mean (16 / 4
+  dropouts), amount 1 84-95% (6 / 0): the spread is run to run. The all-keys stress test (`--strike-all
+  127 --restrike 3`) overloads either way, as on main.
+- **Renders** (`reports/rhodes/imperfection/audio/`, `README.md` there says what to listen for): the
+  phrase through the whole Suitcase at draft (speakers' pressure, stereo, -23 LUFS each), 62x real
+  time with three at once. In it a repeated C4 at one velocity varies -0.6 to +1.2 dB at amount 1,
+  -1.3 to +2.1 dB at 2 (0: +-0.1 dB, the vibrato's pan).
+- **Not done / open (the user's):**
+  - the user plays it, especially IMPERFECTION 0 against 1 (the spreads at 1 are the measured
+    piano's where it could say; "Each strike" and "Each release" are provisional);
+  - merge or not (the branch keeps main's Rhodes untouched until then);
+  - per-strike strike position (where the hammer meets the tine): measured, ±1 mm moves the
+    fundamental ±0.4 dB and the upper modes 1-4 dB, about as subtle as the per-strike stiffness;
+    it needs a recompiled harp (each key's input at a second point), so not built;
+  - the release itself is still the switch the user disliked in RHODES_VARIATION.md (only its
+    length now varies key to key and release to release); a real release reference would decide
+    the felt-as-contact model INSTRUMENT_REALISM_FABLE.md describes;
+  - the rail: offline only (above);
+  - found on the way, not this work's: varimu-app's `print::tests::an_inserts_noise_seed_and_hum_change_its_build_and_key`
+    (the V76's hum count, 13 sources, not a multiple of 3) and clippy's `repeat_vec_with_capacity`
+    in circuitsim's `noise.rs` fail on the branch with code it didn't touch.
