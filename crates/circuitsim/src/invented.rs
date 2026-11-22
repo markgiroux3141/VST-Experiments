@@ -13,11 +13,13 @@
 //! and a tanpura on the pedal: `varimu/invented/keys/zither.py`), `rijke_organ` (IL3, pipes
 //! sung by heated gauzes: `varimu/invented/keys/rijke.py`), `aeolian_keyboard` (IL4, gut
 //! strings sung by the wind: `varimu/invented/keys/aeolian.py`), `bubble_organ` (IL5, air
-//! bubbles from nozzles in a water tank: `varimu/invented/keys/bubbles.py`).
+//! bubbles from nozzles in a water tank: `varimu/invented/keys/bubbles.py`), `siren_organ`
+//! (IL6, rings of holes on one motor's shaft chopping one bellows' wind:
+//! `varimu/invented/keys/siren.py`; its shaft is state every key shares, [`Shaft`]).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use serde::Deserialize;
 
@@ -120,6 +122,7 @@ pub enum Model {
     Rijke(RijkeModel),
     Aeolian(AeolianModel),
     Bubble(BubbleModel),
+    Siren(SirenModel),
 }
 
 impl Model {
@@ -151,6 +154,9 @@ impl Model {
             "bubble_organ" => Ok(Model::Bubble(
                 serde_json::from_value(head).map_err(|e| format!("bubble_organ: {e}"))?,
             )),
+            "siren_organ" => Ok(Model::Siren(
+                serde_json::from_value(head).map_err(|e| format!("siren_organ: {e}"))?,
+            )),
             other => Err(format!("no invented instrument {other:?}")),
         }
     }
@@ -174,6 +180,8 @@ impl Model {
             Model::Aeolian(m) => 20.0 * (1.0 / knob([m.open_min, 1.0], lo)).log10(),
             // A struck bubble's pinch-off (0.5 + velocity; the flow's size law aside).
             Model::Bubble(_) => 20.0 * (1.5 / (0.5 + lo)).log10(),
+            // The valve's opening: the flow through the ring.
+            Model::Siren(m) => 20.0 * (1.0 / knob(m.open_range, lo)).log10(),
         }
     }
 
@@ -184,6 +192,7 @@ impl Model {
             Model::Rijke(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Aeolian(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Bubble(m) => m.keys.iter().map(|k| k.note).collect(),
+            Model::Siren(m) => m.keys.iter().map(|k| k.note).collect(),
         }
     }
 }
@@ -1752,6 +1761,405 @@ impl BubbleVoice {
     }
 }
 
+// --- IL6 the Siren Organ ----------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SirenKey {
+    pub note: u8,
+    pub holes: f64,
+    pub f_hz: f64,
+    pub area_m2: f64,
+    pub phase: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SirenModel {
+    pub keys: Vec<SirenKey>,
+    pub shaft_hz: f64,
+    pub rho: f64,
+    pub cd: f64,
+    pub p_max_pa: f64,
+    pub blower_q_m3_s: f64,
+    pub bellows_m3_pa: f64,
+    pub motor_slope: f64,
+    pub friction: f64,
+    pub key_drag: f64,
+    pub inertia: f64,
+    pub chamber_q: f64,
+    pub jet_noise: f64,
+    pub jet_noise_hz: f64,
+    pub noise_ref_holes: f64,
+    pub duty: [f64; 2],
+    pub mean_open: [f64; 2],
+    pub open_range: [f64; 2],
+    pub valve_open_s: f64,
+    pub valve_close_s: f64,
+    pub speed_octaves: f64,
+    pub wind_range: [f64; 2],
+    pub motor_octaves: f64,
+    pub hunt_hz: f64,
+    pub hunt_depth: f64,
+    pub wander: f64,
+    pub wander_hz: f64,
+    pub tail_s: f64,
+    pub mic_r_m: f64,
+    pub mic_v_per_pa: f64,
+    pub seed: u64,
+    pub wander_seed: u64,
+}
+
+/// A key's valve (`siren.Valve`): the voice and the shaft each keep one, moved by the same
+/// events.
+#[derive(Debug, Clone)]
+struct Valve {
+    up: f64,
+    dn: f64,
+    open_range: [f64; 2],
+    v: f64,
+    down: bool,
+    pedal_down: bool,
+    held: bool,
+    opening: f64,
+    after: f64,
+}
+
+impl Valve {
+    fn new(m: &SirenModel, fs: f64) -> Valve {
+        Valve {
+            up: 1.0 / (m.valve_open_s * fs),
+            dn: 1.0 / (m.valve_close_s * fs),
+            open_range: m.open_range,
+            v: 0.0,
+            down: false,
+            pedal_down: false,
+            held: false,
+            opening: 0.0,
+            after: 0.0,
+        }
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        match ev {
+            NoteEvent::On { velocity, .. } => {
+                self.down = true;
+                self.held = true;
+                self.opening = knob(self.open_range, velocity as f64 / 127.0);
+            }
+            NoteEvent::Off { .. } => {
+                self.down = false;
+                self.held = self.pedal_down;
+            }
+            NoteEvent::Pedal { down } => {
+                self.pedal_down = down;
+                self.held = self.down || (down && self.held);
+            }
+            NoteEvent::Pressure { value } => self.after = value as f64 / 127.0,
+        }
+    }
+
+    fn target(&self) -> f64 {
+        if self.held {
+            self.opening + (1.0 - self.opening) * self.after
+        } else {
+            0.0
+        }
+    }
+
+    fn step(&mut self) -> f64 {
+        let t = self.target();
+        if self.v < t {
+            self.v = (self.v + self.up).min(t);
+        } else if self.v > t {
+            self.v = (self.v - self.dn).max(t);
+        }
+        self.v
+    }
+}
+
+/// The motor, the bellows and the shaft's angle, shared by every key (`siren.Shaft`, step
+/// for step): stepped per chunk on the calling thread before the voices render
+/// ([`crate::keyed::KeyVoice::prepare`]), from the chunk's events, into per-sample buffers
+/// the voices read. It depends only on the valves, so the coupling is exact.
+#[derive(Debug)]
+pub struct Shaft {
+    m: Arc<Model>,
+    fs: f64,
+    dt: f64,
+    /// Per key in note order: its valve and its ring's area.
+    valves: Vec<Valve>,
+    area: Vec<f64>,
+    by_note: [Option<usize>; 128],
+    wander: Chest,
+    w: f64,
+    p: f64,
+    rev: f64,
+    /// Per internal sample of the chunk: the shaft's angle (revolutions, 0-1) and the jet's
+    /// speed (m/s).
+    rev_buf: Vec<f64>,
+    jet_buf: Vec<f64>,
+}
+
+/// The panel's values the shaft reads.
+struct ShaftPanel {
+    lever: f64,
+    stop: usize,
+    p_max: f64,
+    motor: f64,
+    w_nl: f64,
+}
+
+fn shaft_panel(m: &SirenModel, k: [f64; 4]) -> ShaftPanel {
+    let lever = 2f64.powf(m.speed_octaves * (2.0 * k[0] - 1.0));
+    let stop = usize::from(k[1] >= 0.5);
+    let p_max = m.p_max_pa * knob(m.wind_range, k[2]);
+    let motor = m.motor_slope * 2f64.powf(m.motor_octaves * (2.0 * k[3] - 1.0));
+    let w_nl = m.shaft_hz * (motor + m.friction + m.key_drag) / motor;
+    ShaftPanel {
+        lever,
+        stop,
+        p_max,
+        motor,
+        w_nl,
+    }
+}
+
+impl Shaft {
+    fn new(model: &Arc<Model>, fs: f64, knobs: [f64; 4]) -> Shaft {
+        let Model::Siren(m) = &**model else {
+            unreachable!("a shaft on another model")
+        };
+        let mut by_note = [None; 128];
+        for (i, k) in m.keys.iter().enumerate() {
+            by_note[k.note as usize] = Some(i);
+        }
+        let pn = shaft_panel(m, knobs);
+        let p = pn.p_max;
+        Shaft {
+            m: model.clone(),
+            fs,
+            dt: 1.0 / fs,
+            valves: m.keys.iter().map(|_| Valve::new(m, fs)).collect(),
+            area: m.keys.iter().map(|k| k.area_m2).collect(),
+            by_note,
+            wander: Chest {
+                seed: m.wander_seed,
+                per: fs / (2.0 * m.wander_hz),
+                i: -1,
+                a: 0.0,
+                b: 0.0,
+            },
+            w: pn.w_nl * pn.lever * pn.motor / (pn.motor + m.friction),
+            p,
+            rev: 0.0,
+            rev_buf: Vec::new(),
+            jet_buf: Vec::new(),
+        }
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        match ev {
+            NoteEvent::On { note, .. } | NoteEvent::Off { note } => {
+                if let Some(i) = self.by_note[note as usize & 127] {
+                    self.valves[i].event(ev);
+                }
+            }
+            NoteEvent::Pedal { .. } | NoteEvent::Pressure { .. } => {
+                for v in &mut self.valves {
+                    v.event(ev);
+                }
+            }
+        }
+    }
+
+    /// Internal samples `start .. start + n` (absolute), `events` at their offsets: each
+    /// sample's events, then its step.
+    fn prepare(&mut self, knobs: [f64; 4], start: usize, n: usize, events: &[(usize, NoteEvent)]) {
+        let model = self.m.clone();
+        let Model::Siren(m) = &*model else {
+            unreachable!("a shaft on another model")
+        };
+        let pn = shaft_panel(m, knobs);
+        let mo = m.mean_open[pn.stop];
+        let two_pi = 2.0 * std::f64::consts::PI;
+        self.rev_buf.clear();
+        self.jet_buf.clear();
+        let mut e = 0;
+        for i in 0..n {
+            while e < events.len() && events[e].0 <= i {
+                self.event(events[e].1);
+                e += 1;
+            }
+            let mut open_sum = 0.0;
+            let mut draw = 0.0;
+            for (v, a) in self.valves.iter_mut().zip(&self.area) {
+                let x = v.step();
+                if x > 0.0 {
+                    open_sum += x;
+                    draw += mo * x * a;
+                }
+            }
+            let drag = m.friction + m.key_drag * open_sum;
+            self.w +=
+                self.dt / m.inertia * (pn.motor * (pn.w_nl * pn.lever - self.w) - drag * self.w);
+            let q_out = m.cd * draw * (2.0 * self.p / m.rho).sqrt();
+            let q_in = m.blower_q_m3_s * (1.0 - self.p / pn.p_max);
+            self.p = (self.p + self.dt / m.bellows_m3_pa * (q_in - q_out))
+                .max(1.0)
+                .min(pn.p_max);
+            let t = start + i;
+            let hunt = 1.0
+                + m.hunt_depth * (two_pi * m.hunt_hz * t as f64 / self.fs).sin()
+                + m.wander * self.wander.at(t);
+            self.rev += self.w * hunt * self.dt;
+            self.rev -= self.rev.floor();
+            self.rev_buf.push(self.rev);
+            self.jet_buf.push((2.0 * self.p / m.rho).sqrt());
+        }
+    }
+}
+
+/// The FLUTE's Helmholtz chamber wn^2 / (s^2 + wn / Q s + wn^2), bilinear (`siren.chamber`).
+fn siren_chamber(f_hz: f64, q: f64, fs: f64) -> [f64; 5] {
+    let wn = 2.0 * std::f64::consts::PI * f_hz;
+    let k = 2.0 * fs;
+    let k2 = k * k;
+    let w2 = wn * wn;
+    let a0 = k2 + wn * k / q + w2;
+    [
+        w2 / a0,
+        2.0 * w2 / a0,
+        w2 / a0,
+        (2.0 * w2 - 2.0 * k2) / a0,
+        (k2 - wn * k / q + w2) / a0,
+    ]
+}
+
+/// One key's ring (`siren.Voice`, step for step): it reads the shaft's buffers.
+#[derive(Debug, Clone)]
+pub struct SirenVoice {
+    m: Arc<Model>,
+    holes: f64,
+    phase: f64,
+    area: f64,
+    valve: Valve,
+    ch: [f64; 5],
+    gauss: Gauss,
+    na: f64,
+    norm: f64,
+    gain: f64,
+    tail_n: usize,
+    awake: bool,
+    quiet: usize,
+    nz: f64,
+    nz1: f64,
+    x1: f64,
+    x2: f64,
+    y1: f64,
+    y2: f64,
+    u1: f64,
+    stop: usize,
+}
+
+impl SirenVoice {
+    fn new(model: &Arc<Model>, key: &SirenKey, fs: f64, knobs: [f64; 4]) -> SirenVoice {
+        let Model::Siren(m) = &**model else {
+            unreachable!("a siren voice on another model")
+        };
+        let pi = std::f64::consts::PI;
+        let band = m.jet_noise_hz * key.holes / m.noise_ref_holes;
+        let a = (-2.0 * pi * band / fs).exp();
+        let norm = 1.0 / ((1.0 - a).powf(4.0) * (1.0 + a * a) / (1.0 - a * a).powf(3.0)).sqrt();
+        let mut v = SirenVoice {
+            m: model.clone(),
+            holes: key.holes,
+            phase: key.phase,
+            area: key.area_m2,
+            valve: Valve::new(m, fs),
+            ch: siren_chamber(key.f_hz, m.chamber_q, fs),
+            gauss: Gauss::new(key_seed(m.seed, key.note)),
+            na: a,
+            norm,
+            gain: m.mic_v_per_pa * m.rho / (4.0 * pi * m.mic_r_m) * fs,
+            tail_n: (m.tail_s * fs) as usize,
+            awake: false,
+            quiet: 0,
+            nz: 0.0,
+            nz1: 0.0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+            u1: 0.0,
+            stop: 0,
+        };
+        v.set_knobs(knobs);
+        v
+    }
+
+    fn reset(&mut self) {
+        self.nz = 0.0;
+        self.nz1 = 0.0;
+        self.x1 = 0.0;
+        self.x2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
+        self.u1 = 0.0;
+    }
+
+    fn set_knobs(&mut self, k: [f64; 4]) {
+        self.stop = usize::from(k[1] >= 0.5);
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        if matches!(ev, NoteEvent::On { .. }) {
+            self.awake = true;
+            self.quiet = 0;
+        }
+        self.valve.event(ev);
+    }
+
+    /// One sample at the shaft's angle `rev` and the jet's speed `jet`.
+    fn step(&mut self, rev: f64, jet: f64) -> f64 {
+        let model = self.m.clone();
+        let Model::Siren(m) = &*model else {
+            unreachable!("a siren voice on another model")
+        };
+        let v = self.valve.step();
+        let x = self.holes * rev + self.phase;
+        let f = x - x.floor();
+        let dist = f.min(1.0 - f);
+        let xx = (dist / m.duty[self.stop]).min(1.0);
+        let open = (2.0 * xx.acos() - 2.0 * xx * (1.0 - xx * xx).sqrt()) / std::f64::consts::PI;
+        let mut q = m.cd * self.area * open * jet * v;
+        self.nz1 = self.na * self.nz1 + (1.0 - self.na) * self.gauss.sample();
+        self.nz = self.na * self.nz + (1.0 - self.na) * self.nz1;
+        q += m.jet_noise * q * (self.nz * self.norm);
+        let u = if self.stop == 0 {
+            let [b0, b1, b2, a1, a2] = self.ch;
+            let u = b0 * q + b1 * self.x1 + b2 * self.x2 - a1 * self.y1 - a2 * self.y2;
+            self.x2 = self.x1;
+            self.x1 = q;
+            self.y2 = self.y1;
+            self.y1 = u;
+            u
+        } else {
+            q
+        };
+        let y = self.gain * (u - self.u1);
+        self.u1 = u;
+        if v == 0.0 && self.valve.target() == 0.0 {
+            self.quiet += 1;
+            if self.quiet >= self.tail_n {
+                self.awake = false;
+                self.reset();
+            }
+        } else {
+            self.quiet = 0;
+        }
+        y
+    }
+}
+
 // --- the keyboard -----------------------------------------------------------------------
 
 /// The panel every key reads, set between chunks ([`Medium::update`]).
@@ -1782,6 +2190,7 @@ pub enum Voice {
     Rijke(RijkeVoice),
     Aeolian(AeolianVoice),
     Bubble(BubbleVoice),
+    Siren(SirenVoice),
 }
 
 impl Voice {
@@ -1792,6 +2201,7 @@ impl Voice {
             Voice::Rijke(v) => v.awake,
             Voice::Aeolian(v) => v.awake,
             Voice::Bubble(v) => v.awake,
+            Voice::Siren(v) => v.awake,
         }
     }
 
@@ -1802,6 +2212,7 @@ impl Voice {
             Voice::Rijke(v) => v.set_knobs(k),
             Voice::Aeolian(v) => v.set_knobs(k),
             Voice::Bubble(v) => v.set_knobs(k),
+            Voice::Siren(v) => v.set_knobs(k),
         }
     }
 
@@ -1812,6 +2223,7 @@ impl Voice {
             Voice::Rijke(v) => v.event(ev),
             Voice::Aeolian(v) => v.event(ev),
             Voice::Bubble(v) => v.event(ev),
+            Voice::Siren(v) => v.event(ev),
         }
     }
 
@@ -1823,12 +2235,20 @@ impl Voice {
             Voice::Rijke(v) => v.step(),
             Voice::Aeolian(v) => v.step(),
             Voice::Bubble(v) => v.step(),
+            Voice::Siren(_) => unreachable!("a siren key steps with its shaft"),
         }
     }
 }
 
+/// What every key reads: the panel, and the Siren Organ's shaft (None for the others).
+#[derive(Debug)]
+pub struct Ctx {
+    knobs: Knobs,
+    shaft: Option<RwLock<Shaft>>,
+}
+
 impl crate::keyed::KeyVoice for Voice {
-    type Ctx = Knobs;
+    type Ctx = Ctx;
 
     fn asleep(&self) -> bool {
         !self.awake()
@@ -1844,15 +2264,34 @@ impl crate::keyed::KeyVoice for Voice {
         }
     }
 
-    fn event(&mut self, ev: NoteEvent, _ctx: &Knobs) {
+    fn prepare(ctx: &Ctx, start: usize, n: usize, events: &[(usize, NoteEvent)]) {
+        if let Some(s) = &ctx.shaft {
+            s.write()
+                .expect("shaft")
+                .prepare(ctx.knobs.get(), start, n, events);
+        }
+    }
+
+    fn event(&mut self, ev: NoteEvent, _ctx: &Ctx) {
         Voice::event(self, ev);
     }
 
-    fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &Knobs) {
+    fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &Ctx) {
         if !self.awake() {
             return;
         }
-        self.set_knobs(ctx.get());
+        self.set_knobs(ctx.knobs.get());
+        if let Voice::Siren(v) = self {
+            let s = ctx.shaft.as_ref().expect("shaft").read().expect("shaft");
+            let shaft = s.rev_buf[from..to].iter().zip(&s.jet_buf[from..to]);
+            for (o, (&rev, &jet)) in buf[from..to].iter_mut().zip(shaft) {
+                if !v.awake {
+                    break;
+                }
+                *o += v.step(rev, jet);
+            }
+            return;
+        }
         if let Voice::Aeolian(v) = self {
             v.now = v.chunk0 + from;
         }
@@ -1893,6 +2332,15 @@ impl crate::keyed::KeyVoice for Voice {
                 v.held = false;
                 v.pending = false;
                 v.slots.iter_mut().for_each(|s| *s = None);
+            }
+            // Its ring falls silent; the shaft still counts the key's valve (held, it draws
+            // on the motor and the bellows).
+            Voice::Siren(v) => {
+                v.awake = false;
+                v.valve.down = false;
+                v.valve.held = false;
+                v.valve.v = 0.0;
+                v.reset();
             }
         }
     }
@@ -1936,6 +2384,11 @@ pub fn voices(model: &Arc<Model>, fs: f64, knobs: [f64; 4]) -> Vec<(u8, Voice)> 
             .keys
             .iter()
             .map(|k| (k.note, Voice::Bubble(BubbleVoice::new(model, k, fs, knobs))))
+            .collect(),
+        Model::Siren(m) => m
+            .keys
+            .iter()
+            .map(|k| (k.note, Voice::Siren(SirenVoice::new(model, k, fs, knobs))))
             .collect(),
     }
 }
@@ -1981,7 +2434,13 @@ impl Medium {
         let k = Medium::rate(el, fs);
         let knobs = knobs_of(el);
         let v = voices(&model, fs * k as f64, knobs);
-        let mut keys = crate::keyed::Medium::new(v, Knobs::new(knobs), fs, k, 1, n);
+        let shaft = matches!(*model, Model::Siren(_))
+            .then(|| RwLock::new(Shaft::new(&model, fs * k as f64, knobs)));
+        let ctx = Ctx {
+            knobs: Knobs::new(knobs),
+            shaft,
+        };
+        let mut keys = crate::keyed::Medium::new(v, ctx, fs, k, 1, n);
         keys.set_max_awake(Some(el.max_keys as usize));
         Ok(Medium {
             el: el.clone(),
@@ -2046,7 +2505,7 @@ impl Medium {
         self.el.k1 = el.k1;
         self.el.k2 = el.k2;
         self.el.k3 = el.k3;
-        self.keys.ctx().set(knobs_of(el));
+        self.keys.ctx().knobs.set(knobs_of(el));
     }
 
     pub fn fs(&self) -> f64 {

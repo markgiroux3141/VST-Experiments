@@ -286,7 +286,12 @@ the slot's opening), `AEOLIAN_KEYBOARD@1`, `config/circuits/aeolian_keyboard.yam
 `aeolian_keyboard` (mod wheel = WIND; capped at 12 strings, 29 % load). **IL5 built (2026-11-21):**
 the Bubble Organ (`varimu/invented/keys/bubbles.py`: bubbles in closed form per nozzle, STRUCK /
 HELD; velocity = the air flow, which bends flat), `BUBBLE_ORGAN@1`, `config/circuits/bubble_organ.yaml`,
-the app's `bubble_organ` (mod wheel = FLOW). Next: IL6, the Siren Organ, then IL7, the Arc Organ.
+the app's `bubble_organ` (mod wheel = FLOW). **IL6 built (2026-11-21):** the Siren Organ
+(`varimu/invented/keys/siren.py`: rings of holes on one shaft, the keyboard the harmonic series on
+A; the motor and bellows shared, stepped per chunk before the keys from the events alone:
+keyed.rs's `KeyVoice::prepare`, `invented::Shaft`; exact, not a chunk late), `SIREN_ORGAN@1`,
+`config/circuits/siren_organ.yaml`, the app's `siren_organ` (mod wheel = SPEED; 24 rings 21 % worst
+block). Next: IL7, the Arc Organ.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

@@ -299,3 +299,77 @@ def test_a_bubble_bends_flat_with_the_flow():
 
     assert abs(12 * np.log2(pitch(0.4) / 440.0)) < 0.5
     assert -3.8 < 12 * np.log2(pitch(1.0) / pitch(0.4)) < -2.5
+
+
+def test_the_siren_organ_agrees_with_its_reference():
+    """Both stops: keys struck mid-chunk and overlapping (the shaft and the bellows sag under
+    them), aftertouch, the pedal holding a released key's valve, then lifting, a re-strike of
+    a key still sounding; off-centre SPEED, WIND and MOTOR; at the stream's 96 kHz."""
+    from varimu.invented.keys import siren
+
+    fs = 96_000.0
+    ref = kc.latest("SIREN_ORGAN")
+    n = int(0.9 * fs)
+    perf = [
+        (0, "on", 57, 100),
+        (int(0.1 * fs) + 37, "on", 64, 60),
+        (int(0.2 * fs) + 101, "on", 36, 127),
+        (int(0.3 * fs), "pressure", 0, 90),
+        (int(0.4 * fs), "pedal", 0, 1),
+        (int(0.45 * fs), "off", 57, 0),
+        (int(0.5 * fs), "on", 64, 110),
+        (int(0.6 * fs), "pedal", 0, 0),
+        (int(0.65 * fs), "off", 36, 0),
+        (int(0.7 * fs), "off", 64, 0),
+    ]
+    for knobs in ([0.5, 0.0, 0.5, 0.5], [0.62, 1.0, 0.3, 0.2]):
+        m = kc.load(ref)
+        kb, shaft = siren.keyboard(m, fs, knobs)
+        kb = {k: v for k, v in kb.items() if k in (36, 57, 64)}
+        want = common.play(kb, n, perf, lambda v: v.step(), shared=shaft)
+        el = element(ref, knobs)
+        el["rate_hz"] = fs
+        got = circuitsim.invented_render(json.dumps(el), fs, n, perf, 0)
+        assert np.sqrt(np.mean(want**2)) > 1e-2  # it sounds
+        assert np.array_equal(got, want)  # bit-exact
+
+
+def test_the_siren_organ_is_the_same_on_any_number_of_threads():
+    ref = kc.latest("SIREN_ORGAN")
+    el = element(ref, [0.5, 0.0, 0.5, 0.5])
+    el["rate_hz"] = 96_000.0
+    chord = [(0, "on", k, 80) for k in (45, 52, 57, 61, 64, 67, 72)]
+    a = circuitsim.invented_render(json.dumps(el), 96_000.0, 19200, chord, 0)
+    b = circuitsim.invented_render(json.dumps(el), 96_000.0, 19200, chord, 3)
+    assert np.array_equal(a, b)
+
+
+def test_a_chord_drags_the_shaft_and_the_wind():
+    """One key at its full opening runs the shaft at its nominal speed; three more pull every
+    pitch down together (~20 cents a ring, the sketch's KEY_DRAG) and the bellows' wind sags;
+    a weak MOTOR sags further. The keyboard is the harmonic series on A (the 7th harmonic's
+    G a third of a semitone flat)."""
+    from varimu.invented.keys import siren
+
+    fs = 96_000.0
+    m = kc.load(kc.latest("SIREN_ORGAN"))
+
+    def settle(keys: list[int], motor_k: float = 0.5) -> tuple[float, float]:
+        sh = siren.Shaft(m, fs, [0.5, 0.0, 0.5, motor_k])
+        for k in keys:
+            sh.event("on", k, 127)
+        w = p = 0.0
+        for _ in range(int(2.5 * fs)):
+            sh.step()
+            w, p = sh.w, sh.p
+        return w, p
+
+    w1, p1 = settle([57])
+    w4, p4 = settle([57, 61, 64, 67])
+    w4_weak, _ = settle([57, 61, 64, 67], motor_k=0.25)
+    assert abs(1200 * np.log2(w1 / siren.SHAFT_HZ)) < 0.5
+    assert -70 < 1200 * np.log2(w4 / w1) < -45
+    assert 1200 * np.log2(w4_weak / w1) < 1200 * np.log2(w4 / w1) - 30
+    assert p4 < 0.9 * p1
+    # A 64, C# 80, E 96, G 112 holes: 16:20:24:28 (the G the 7th harmonic, -31 cents)
+    assert [siren.holes_of(k) for k in (57, 61, 64, 67)] == [64, 80, 96, 112]

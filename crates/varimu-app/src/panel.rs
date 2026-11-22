@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 50] = [
+pub const DEVICES: [Device; 51] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1588,6 +1588,34 @@ pub const DEVICES: [Device; 50] = [
         velocity: None,
         pitch: None,
         // The keys open the nozzles (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "siren_organ",
+        label: "Siren Organ",
+        short: "Siren",
+        about: "An invented organ of sirens: one motor turns a ring of holes per key, chopping             one bellows' wind, so the keyboard is the harmonic series and every chord is just;             each open ring drags the shaft (every pitch sags together) and draws on the wind             (velocity opens the valve; the mod wheel the shaft's SPEED, the siren's glide)",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL6):
+        // the shaft and the bellows stepped per chunk, then each ring at 96 kHz.
+        circuit: "siren_organ",
+        panel: Some(&["speed", "stop", "wind", "motor"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("speed"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys open the valves (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3220,6 +3248,7 @@ mod tests {
                         "rijke_organ",
                         "aeolian_keyboard",
                         "bubble_organ",
+                        "siren_organ",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

@@ -79,6 +79,19 @@ DEMOS = {
         ],
         9.0,
     ),
+    # the sketch's harmonic melody (16 18 20 24 27 28 ... holes: A3 B3 C#4 E4 F#4 G4, the G the
+    # 7th harmonic), then its 4:5:6:7 chord entering a key at a time (the shaft and wind sag)
+    "siren_organ": (
+        "harmonic_melody_and_chord",
+        beats(
+            "A3:1 B3:1 C#4:1 E4:2 F#4:1 G4:1 F#4:1 E4:1 C#4:2 D4:1 C#4:1 B3:1 A3:3", 0.3, 0.42, 100
+        )
+        + [
+            (7.5 + 1.3 * j, 6.5 - 1.3 * j, nm, 100)
+            for j, nm in enumerate(("A3", "C#4", "E4", "G4"))
+        ],
+        15.0,
+    ),
     # the tanpura's cam on the pedal (DRONE TONIC 0: Sa = C3), the sketch's melody over it
     "buzz_zither": (
         "melody_over_tanpura",

@@ -42,6 +42,11 @@ pub trait KeyVoice: Send + 'static {
     /// for voices that read the absolute time (the Aeolian Keyboard's shared chest). Nothing
     /// by default.
     fn chunk_start(&mut self, _start: usize) {}
+    /// Before a chunk's voices render, on the calling thread: state every voice reads that
+    /// follows the events alone (the Siren Organ's shaft and bellows), stepped over the chunk's
+    /// internal samples `start .. start + n` (absolute) with its `events` at their offsets.
+    /// Nothing by default.
+    fn prepare(_ctx: &Self::Ctx, _start: usize, _n: usize, _events: &[(usize, NoteEvent)]) {}
     /// An event at the current sample: its key's, or every key's (the pedal, pressure).
     fn event(&mut self, ev: NoteEvent, ctx: &Self::Ctx);
     /// Add internal samples `from..to` of its outputs into `buf`: channel c's sample i at
@@ -460,6 +465,7 @@ impl<V: KeyVoice> Medium<V> {
             start: start * k,
             events: Arc::new(evs),
         };
+        V::prepare(&sh.ctx, job.start, n, &job.events);
         if self.threads.is_empty() || self.awake + struck <= self.inline_voices {
             for i in 0..sh.slots.len() {
                 sh.render_slot(i, &job);

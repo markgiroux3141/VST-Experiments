@@ -79,12 +79,15 @@ def play(
     n: int,
     events: Sequence[tuple[int, str, int, float]],
     sample: Callable[[object], float],
+    shared: object | None = None,
 ) -> np.ndarray:
     """keyed.rs's loop in the plain: for each step, the events landing there (on / off to
     the key's voice, pedal / pressure to every voice), then every awake voice's sample
     (voice.asleep(), voice.on(vel), voice.off(), voice.pedal(down), voice.pressure(v)),
     summed in note order. A voice with a `now` attribute is told the sample before each step
-    (keyed.rs's `KeyVoice::chunk_start`: the Aeolian Keyboard's shared chest)."""
+    (keyed.rs's `KeyVoice::chunk_start`: the Aeolian Keyboard's shared chest). `shared`, if
+    given, gets every event too (shared.event(kind, note, value)) and steps once a sample
+    after them, before the voices (keyed.rs's `KeyVoice::prepare`: the Siren Organ's shaft)."""
     evs = sorted(events, key=lambda e: e[0])
     out = np.zeros(n)
     order = sorted(voices)
@@ -93,6 +96,8 @@ def play(
         while j < len(evs) and evs[j][0] <= p:
             _, kind, note, value = evs[j]
             j += 1
+            if shared is not None:
+                shared.event(kind, note, value)
             if kind == "on" and value > 0 and note in voices:
                 voices[note].on(int(value))
             elif kind in ("on", "off") and note in voices:
@@ -103,6 +108,8 @@ def play(
             elif kind == "pressure":
                 for v in voices.values():
                     v.pressure(int(value))
+        if shared is not None:
+            shared.step()
         acc = 0.0
         for note in order:
             v = voices[note]

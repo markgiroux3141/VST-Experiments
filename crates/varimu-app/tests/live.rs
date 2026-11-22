@@ -875,6 +875,56 @@ fn the_bubble_organ_plays_from_note_events() {
     }
 }
 
+/// The Siren Organ (docs/INVENTED_LIVE_PLAN.md IL6): its rings are the invented-keys medium
+/// played by keys, their shaft shared; its touch spans the valve's opening (0.2-1); SPEED,
+/// STOP, WIND and MOTOR are values (a turn plays on); a key struck through `Live` sounds on
+/// either stop.
+#[test]
+fn the_siren_organ_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "siren_organ").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, circuit.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["speed", "stop", "wind", "motor"]);
+    let span = circuit.key_velocity_span_db(&v).unwrap().unwrap();
+    let lo: f64 = 0.2 + 0.8 / 127.0;
+    assert!((span - 20.0 * (1.0 / lo).log10()).abs() < 1e-9, "{span}");
+    let base = structure(&circuit.build(&v).unwrap());
+    for (k, x) in [("speed", 0.9), ("wind", 0.1), ("motor", 0.8)] {
+        let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let reed = set(&v, "stop", Value::Float(1.0));
+    assert_eq!(
+        base,
+        structure(&circuit.build(&reed).unwrap()),
+        "STOP plays on"
+    );
+    for values in [v.clone(), reed] {
+        let mut live = Live::new(&vec![0.0; 48_000], values, circuit.clone(), s.clone()).unwrap();
+        assert!(live.has_keys());
+        let x = vec![0.0; 480];
+        let mut peak = 0.0f32;
+        for b in 0..40 {
+            let notes: Vec<(usize, NoteEvent)> = match b {
+                1 => vec![(
+                    10,
+                    NoteEvent::On {
+                        note: 57,
+                        velocity: 100,
+                    },
+                )],
+                _ => vec![],
+            };
+            let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+            peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+        }
+        assert!(peak > 1e-3, "it sounds: {peak}");
+    }
+}
+
 /// The Nickel Organ (docs/NICKEL_ORGAN_DEVICE_PLAN.md): its keys are a medium played by keys;
 /// its touch spans the hammer's speed law (0.02-0.25 m/s: 21.9 dB); SUSTAIN and POLARIZE
 /// are values (a turn plays on); a key struck through `Live` sounds.

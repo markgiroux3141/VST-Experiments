@@ -1,0 +1,45 @@
+# The Siren Organ as a device (docs/INVENTED_LIVE_PLAN.md IL6; docs/INVENTED_DEVICES.md I15):
+# one motor turns a stack of discs, a ring of holes per key chopping a jet from one bellows,
+# so every pitch is a whole multiple of the shaft's speed. The keyboard is the harmonic series
+# on A (a 3.4375 rev/s shaft: A1 = 16 holes, C2 19, C6 304; the 7th harmonic's G and the 11th's
+# D# famously flat): any chord is in just intonation. Every open ring drags the motor (every
+# pitch sags together, ~20 cents a ring) and draws on the bellows (the wind sags). Velocity
+# opens the key's valve, aftertouch the rest of the way, the pedal holds released valves. The
+# rings are circuitsim's invented-keys medium (the component SIREN_ORGAN: crates/circuitsim/
+# src/invented.rs, its shared shaft stepped before the keys; varimu/invented/keys/siren.py the
+# reference); a microphone 1 m from the rings is `out`.
+#
+# The panel (they play on): SPEED (k0: the motor's no-load speed 0.5-2x, 1x at 0.5; the mod
+# wheel: the siren's glide), STOP (k1: FLUTE, wide holes into Helmholtz chambers, or REED,
+# narrow holes venting straight: a buzzy pulse train ~10 dB quieter), WIND (k2: the blower's
+# stall pressure 0.5-1.5x of 1000 Pa), MOTOR (k3: the motor's stiffness 0.25-4x, 1x at 0.5:
+# a weak motor sags further under a chord).
+
+title: "Siren Organ (rings of holes on one shaft, keyed)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 8.0, source: "measured: a key at 127 peaks 1.4-1.6 V on any key and either stop (FLUTE rms ~1 V, REED ~0.3 V), at velocity 1 0.3 V; six at once at 127 5.2 V (FLUTE), eight 6.7 V; the demo -7.0 dBFS peak (scripts/invented_live_render.py, docs/INVENTED_LIVE_PLAN.md)"}
+
+controls:
+  speed: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: SPEED, the motor's no-load speed 0.5-2x as 2^(2 k - 1) (1x at 0.5: one key down at its full opening is in tune)"}
+  stop: {value: 0, min: 0, max: 1, unit: switch, source: "design: STOP, FLUTE (0: wide holes, duty 0.7, into each key's Helmholtz chamber) or REED (1: narrow holes, duty 0.35, venting straight; the sketch's two stops)"}
+  wind: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: WIND, the blower's stall pressure 0.5-1.5x of 1000 Pa (~100 mm water, organ wind; 1x at 0.5)"}
+  motor: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: MOTOR, the motor's stiffness (torque per droop) 0.25-4x as 2^(4 k - 2) (1x at 0.5: the sketch's)"}
+
+values:
+  keys_model: {value: SIREN_ORGAN@1, source: "config/components/siren_organ/1.yaml (varimu/invented/keys/siren.py's model from varimu/invented/siren.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_rate_hz: {value: 96000.0, source: "numerical: the rings, the shaft and the bellows per sample at the project's 96 kHz"}
+  keys_max_keys: {value: 24, source: "numerical: rings sounding at once (another struck silences a released one, else the one struck longest ago; a silenced key still held keeps drawing on the shaft)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 100.0e+3, source: "numerical: a DC path on the line (the microphone's load)"}
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the rings: the microphone's signal on out (to ground), played by note events
+      KEYS: {invented_keys: [out], component: keys_model, rate_hz: keys_rate_hz, max_keys: keys_max_keys, k0: speed, k1: stop, k2: wind, k3: motor}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

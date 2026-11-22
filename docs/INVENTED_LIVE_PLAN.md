@@ -76,7 +76,10 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
    rounded, as Rust's scalar loop is, so a grid's update may be vectorized (the zither's
    string). Shared pieces are in `common.py` (`Gauss`, `key_seed`, `bandpass`, `modal_step`,
    `play`). A voice that the pedal or pressure must wake (the zither's tanpura) says so with
-   `KeyVoice::wakes_on_broadcast` in the Rust; keyed.rs skips asleep voices otherwise.
+   `KeyVoice::wakes_on_broadcast` in the Rust; keyed.rs skips asleep voices otherwise. State
+   every key shares that follows the events alone (the Siren Organ's shaft and bellows) is a
+   `shared` object in the reference (`common.play`'s) and `KeyVoice::prepare` in the Rust,
+   stepped per chunk before the voices into buffers they read (`invented::Shaft`).
    **Check evenness first:** play C2, A3 and C6 at velocity 127 and 1 through the
    reference before compiling. Every sketch so far was 20-30 dB uneven across the keyboard,
    and each needed a physical voicing (IL2-IL5's "Decided").
@@ -307,17 +310,68 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
     by an RBJ band-pass at 3.2 kHz, Q 0.59 (the sketch's 1.5-7 kHz Butterworth).
 - **Not done yet for IL5:** the user's first play; per-nozzle variation.
 
-**Next:** IL6, the Siren Organ (global state: the shaft and the bellows), then IL7, the Arc
-Organ (a new device kind).
+### Session 3 (2026-11-21): IL6 built
 
-**IL6's open design (for the next session to decide and record):** the keyed voices are
-independent, but the siren's motor speed and bellows pressure depend on every open key (the
-sketch's sag). Options:
-- (a) The shared state in the medium's context (`Knobs`'s neighbour), advanced by
-  `invented::Medium` once per chunk from what the voices published in the last one (each
-  voice's air draw, summed in note order): a chunk late (<= 256 steps, 2.7 ms at 96 kHz,
-  far faster than a shaft or a bellows moves). Deterministic on any number of threads.
-  The reference does the same per chunk. Recommended.
-- (b) One voice for the whole instrument (every key's ring in it): exact coupling, but one
-  thread for all keys and no sleeping per key.
-- (c) Drop the coupling live (each key its own motor): loses the sag the sketch was about.
+- **Built:** `varimu/invented/keys/siren.py` (the reference: `Valve`, `Shaft`, `Voice`),
+  `invented.rs`'s `SirenVoice`, `Valve` and `Shaft`, `SIREN_ORGAN@1`,
+  `config/circuits/siren_organ.yaml`, the app's `siren_organ`, its demo
+  (`harmonic_melody_and_chord`: the sketch's harmonic melody, then its 4:5:6:7 chord entering
+  a key at a time).
+- **Shared:** `keyed.rs`'s `KeyVoice::prepare(ctx, start, n, events)`: called on the calling
+  thread before a chunk's voices render, with the chunk's events at their offsets (default
+  nothing: every other medium bit for bit unchanged, its tests and the five instruments' agreement
+  rerun). `invented.rs`'s context is now `Ctx { knobs, shaft }`. The reference's `common.play`
+  takes a `shared` object (its `event` gets every event, its `step` runs once a sample after
+  them, before the voices).
+- **Agreement:** bit-exact with the reference on both stops (three keys overlapping, two struck
+  mid-chunk, aftertouch, the pedal holding a released valve, then lifting, a re-strike;
+  off-centre SPEED / WIND / MOTOR), and the same on 0 and 3 worker threads.
+  `test_a_chord_drags_the_shaft_and_the_wind`: one key at full opening runs the shaft at its
+  nominal speed within 0.5 cent; three more pull every pitch down 59 cents (MOTOR 0.25: 107;
+  MOTOR 1.0: 16); the idle shaft runs 20 cents sharp; the wind 894 -> 712 Pa (a bass chord: 342
+  Pa).
+- **Live:** every key struck (24 rings sounding, the cap) 16-17 % load, worst block 21 %, 0
+  dropouts at 30 ms.
+- **Level:** full scale 8 V. A key at 127 peaks 1.4-1.6 V on any key and either stop (FLUTE rms
+  ~1 V, REED ~0.3 V: narrow holes, no chamber), at velocity 1 0.3 V; six at once 5.2 V, eight
+  6.7 V; the demo -7.0 dBFS peak.
+- **Decided (IL6):**
+  - **The shared state exact, not a chunk late** (none of the open design's three options):
+    the motor and the bellows depend only on the valves, and the valves only on the events, so
+    the medium steps the shaft per sample over the chunk before the voices render, into
+    per-sample buffers (the shaft's angle, the jet's speed) every ring reads. Exact coupling,
+    independent of where chunks start, the same on any number of threads; costs one valve step
+    per key per sample on the calling thread (small). A key silenced by the cap still draws on
+    the shaft while held.
+  - **The keyboard is the harmonic series on A** (C2-C6): each pitch class a harmonic 16-30 of a
+    3.4375 rev/s shaft (A 16, A# 17, B 18, C 19, C# 20, D 21, D# 22 (the 11th, ~half a semitone
+    flat), E 24, F 25, F# 27, G 28 (the 7th, -31 cents), G# 30), each octave doubling the holes
+    (C2 19, A3 64, C6 304). The sketch's 13.75 Hz shaft (A3 = 16) gave duplicates below A3;
+    the shaft's dynamics are normalized, so the slower shaft keeps the sketch's sag.
+  - **One key at full opening is in tune at any MOTOR** (the sketch's: the no-load speed
+    `w_nl` from the motor's slope); the idle shaft runs ~20 cents sharp, so a staccato note
+    scoops down ~0.35 s (the siren's character; MOTOR sets how far).
+  - **Velocity is the valve's opening** 0.2-1 (13.6 dB), aftertouch opens it the rest of the
+    way, the pedal holds released keys' valves; valves open over 12 ms and close over 20 ms
+    (the sketch's); a key sleeps 0.3 s after its valve shuts.
+  - **The ring's area voiced as 1 / holes** (the radiated pressure goes as dU/dt, so the
+    sketch's sqrt(16 / holes) left the treble ~6 dB an octave over the bass): FLUTE within 1 dB
+    C2-C6.
+  - **The turbulence's band as the holes** (4 kHz at A3's ring; 2nd-order low-passed noise,
+    unit rms): every ring at the sketch's one radius, so a slot's width goes as 1 / holes and the
+    band (U / w) as holes. The sketch's fixed 4 kHz band put 84 % of a C2 REED's energy above 5
+    kHz (8 dB over A3, crest factor ~8); now REED is within 0.5 dB C2-C6.
+  - **Each ring drilled at its own angle** (its note's golden-ratio fraction of a hole pitch):
+    the sketch's rings all had a hole at angle 0, so a chord's pulses lined up once a
+    revolution (a 3.4 Hz accent; six keys peaked 8.6 V at 1.6 V rms, now 5.2 V).
+  - **The sound:** the pressure 1 m from the ring as a monopole, rho / (4 pi r) dU/dt (a
+    backward difference: the sketch's central `np.gradient` can't stream), a microphone at
+    2 V/Pa (provisional). The motor's hunting and wander as the sketch's, the wander a seeded
+    Gaussian lattice at 0.5 Hz (the Aeolian chest's value noise) of absolute time.
+  - **The panel:** SPEED (k0; the mod wheel) the no-load speed 0.5-2x (1x at 0.5), STOP (k1)
+    FLUTE / REED, WIND (k2) the blower's stall pressure 0.5-1.5x of 1000 Pa, MOTOR (k3) the
+    motor's stiffness 0.25-4x. The cap at 24 rings.
+- **Not done yet for IL6:** the user's first play; a SPEED glide in the demo (the demo script
+  plays no knob changes; the sketch's `speed_glide_reed` is the reference); per-ring variation.
+
+**Next:** IL7, the Arc Organ (a new device kind).
