@@ -1,0 +1,42 @@
+# The Bubble Organ as a device (docs/INVENTED_LIVE_PLAN.md IL5; docs/INVENTED_DEVICES.md
+# I16): notes made of air bubbles in water. Each key opens air to its own nozzle at the bottom
+# of a tank (C2-C6: bubbles ~5 cm-3 mm, the bass nozzles deeper), read by a hydrophone. A
+# bubble rings at its Minnaert frequency as it pinches off, chirps up as the surface's image
+# nears, and pops when it arrives. STRUCK: a key releases one bubble; HELD: a stream while the
+# key (or the pedal) holds its valve open. Velocity sets the air flow (more flow, bigger
+# bubbles: the note bends flat; in tune at velocity 64), aftertouch adds to it. The nozzles are
+# circuitsim's invented-keys medium (the component BUBBLE_ORGAN: crates/circuitsim/src/
+# invented.rs, varimu/invented/keys/bubbles.py the reference); the hydrophone's signal is `out`.
+#
+# The panel (they play on): HELD (k0: STRUCK / HELD), FLOW (k1: the air flow 0.6-1.6x the
+# key's; 1x at 0.4), RATE (k2: the held stream's rate 3-24 Hz at the key's flow; 9 Hz at
+# 0.2857), DEPTH (k3: the nozzles' depths 0.5-2.5x; 1x at 0.25: a longer chirp, a later pop).
+
+title: "Bubble Organ (air bubbles from nozzles in water, keyed)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 8.0, source: "measured: a bubble struck at 127 peaks 1.1-1.2 V on any key (the hydrophone voiced per nozzle), at velocity 1 0.4 V; six struck at once at 127 6.2 V; HELD at full FLOW and RATE a bass stream 6 V; the demo -12.0 dBFS peak (scripts/invented_live_render.py, docs/INVENTED_LIVE_PLAN.md)"}
+
+controls:
+  held: {value: 0, min: 0, max: 1, unit: switch, source: "design: MODE, STRUCK (0: one bubble a key) or HELD (1: a stream while the valve is open)"}
+  flow: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "design: FLOW, the air flow 0.6-1.6x the key's (1x at 0.4)"}
+  rate: {value: 0.2857, min: 0.0, max: 1.0, unit: rotation, source: "design: RATE, the held stream's rate 3-24 Hz at the key's flow (9 Hz at 0.2857; the sketch's streams 7-13 Hz)"}
+  depth: {value: 0.25, min: 0.0, max: 1.0, unit: rotation, source: "design: DEPTH, the nozzles' depths 0.5-2.5x (1x at 0.25: 8 cm, the bass deeper, at least 3 radii)"}
+
+values:
+  keys_model: {value: BUBBLE_ORGAN@1, source: "config/components/bubble_organ/1.yaml (varimu/invented/keys/bubbles.py's model from varimu/invented/bubbles.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_rate_hz: {value: 96000.0, source: "numerical: each nozzle's bubbles in closed form at the project's 96 kHz"}
+  keys_max_keys: {value: 16, source: "numerical: nozzles sounding at once (another struck silences a released one, else the one struck longest ago)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 100.0e+3, source: "numerical: a DC path on the line (the hydrophone's load)"}
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the nozzles: the hydrophone's signal on out (to ground), played by note events
+      KEYS: {invented_keys: [out], component: keys_model, rate_hz: keys_rate_hz, max_keys: keys_max_keys, k0: held, k1: flow, k2: rate, k3: depth}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

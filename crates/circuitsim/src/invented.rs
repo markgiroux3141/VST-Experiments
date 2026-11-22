@@ -12,7 +12,8 @@
 //! `varimu/invented/keys/rosin.py`), `buzz_zither` (IL2, plucked strings over jawari bridges
 //! and a tanpura on the pedal: `varimu/invented/keys/zither.py`), `rijke_organ` (IL3, pipes
 //! sung by heated gauzes: `varimu/invented/keys/rijke.py`), `aeolian_keyboard` (IL4, gut
-//! strings sung by the wind: `varimu/invented/keys/aeolian.py`).
+//! strings sung by the wind: `varimu/invented/keys/aeolian.py`), `bubble_organ` (IL5, air
+//! bubbles from nozzles in a water tank: `varimu/invented/keys/bubbles.py`).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -118,6 +119,7 @@ pub enum Model {
     Zither(ZitherModel),
     Rijke(RijkeModel),
     Aeolian(AeolianModel),
+    Bubble(BubbleModel),
 }
 
 impl Model {
@@ -146,6 +148,9 @@ impl Model {
             "aeolian_keyboard" => Ok(Model::Aeolian(
                 serde_json::from_value(head).map_err(|e| format!("aeolian_keyboard: {e}"))?,
             )),
+            "bubble_organ" => Ok(Model::Bubble(
+                serde_json::from_value(head).map_err(|e| format!("bubble_organ: {e}"))?,
+            )),
             other => Err(format!("no invented instrument {other:?}")),
         }
     }
@@ -167,6 +172,8 @@ impl Model {
             Model::Rijke(m) => 20.0 * (knob(m.k_range, 1.0) / knob(m.k_range, lo)).log10(),
             // The slot's opening: the jet's width, so the lift.
             Model::Aeolian(m) => 20.0 * (1.0 / knob([m.open_min, 1.0], lo)).log10(),
+            // A struck bubble's pinch-off (0.5 + velocity; the flow's size law aside).
+            Model::Bubble(_) => 20.0 * (1.5 / (0.5 + lo)).log10(),
         }
     }
 
@@ -176,6 +183,7 @@ impl Model {
             Model::Zither(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Rijke(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Aeolian(m) => m.keys.iter().map(|k| k.note).collect(),
+            Model::Bubble(m) => m.keys.iter().map(|k| k.note).collect(),
         }
     }
 }
@@ -1467,6 +1475,283 @@ impl AeolianVoice {
     }
 }
 
+// --- IL5 the Bubble Organ ---------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BubbleKey {
+    pub note: u8,
+    pub f_hz: f64,
+    pub r_m: f64,
+    pub depth_m: f64,
+    pub voicing: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BubbleModel {
+    pub keys: Vec<BubbleKey>,
+    pub gamma: f64,
+    pub rho_w: f64,
+    pub c_w: f64,
+    pub p_atm: f64,
+    pub rise_m_s: f64,
+    pub thermal_delta_3mm: f64,
+    pub size_spread: f64,
+    pub rate_jitter: f64,
+    pub pop_level: f64,
+    pub slots: usize,
+    pub q_range: [f64; 2],
+    pub q_pressure: f64,
+    pub flow_range: [f64; 2],
+    pub rate_range_hz: [f64; 2],
+    pub depth_range: [f64; 2],
+    pub attack_s: f64,
+    pub life_max_s: f64,
+    pub pop_s: f64,
+    pub pop_decay_s: f64,
+    pub pop_hz: f64,
+    pub pop_q: f64,
+    pub pop_gain: f64,
+    pub interval_min_s: f64,
+    pub hydrophone_v: f64,
+    pub seed: u64,
+}
+
+/// One bubble's state (`bubbles.Bubble`).
+#[derive(Debug, Clone)]
+struct Bubble {
+    r: f64,
+    depth: f64,
+    f0: f64,
+    amp: f64,
+    n_ring: usize,
+    k_pop: usize,
+    n_pop: usize,
+    n_life: usize,
+    d1: f64,
+    d2: f64,
+    e1: f64,
+    e2: f64,
+    ph: f64,
+    pe: f64,
+    pd: f64,
+    bx1: f64,
+    bx2: f64,
+    by1: f64,
+    by2: f64,
+    i: usize,
+}
+
+impl Bubble {
+    fn new(m: &BubbleModel, r: f64, depth: f64, amp: f64, fs: f64) -> Bubble {
+        let pi = std::f64::consts::PI;
+        let p = m.p_atm + m.rho_w * 9.81 * depth;
+        let f0 = (3.0 * m.gamma * p / m.rho_w).sqrt() / (2.0 * pi * r);
+        let delta = 2.0 * pi * f0 * r / m.c_w + m.thermal_delta_3mm * (3e-3 / r).sqrt();
+        let tau = 1.0 / (pi * delta * f0);
+        let n_ring = ((7.0 * tau).min(m.life_max_s) * fs) as usize;
+        let k_pop = ((depth - r) / m.rise_m_s * fs) as usize;
+        let n_pop = (m.pop_s * fs) as usize;
+        Bubble {
+            r,
+            depth,
+            f0,
+            amp,
+            n_ring,
+            k_pop,
+            n_pop,
+            n_life: n_ring.max(k_pop + n_pop),
+            d1: (-1.0 / (tau * fs)).exp(),
+            d2: (-1.0 / (tau * fs) - 1.0 / (m.attack_s * fs)).exp(),
+            e1: 1.0,
+            e2: 1.0,
+            ph: 0.0,
+            pe: 1.0,
+            pd: (-1.0 / (m.pop_decay_s * fs)).exp(),
+            bx1: 0.0,
+            bx2: 0.0,
+            by1: 0.0,
+            by2: 0.0,
+            i: 0,
+        }
+    }
+}
+
+/// One key's nozzle (`bubbles.Voice`, step for step).
+#[derive(Debug, Clone)]
+pub struct BubbleVoice {
+    m: Arc<Model>,
+    fs: f64,
+    r_key: f64,
+    depth_key: f64,
+    voicing: f64,
+    slots: Vec<Option<Bubble>>,
+    bp: [f64; 5],
+    gauss: Gauss,
+    down: bool,
+    pedal_down: bool,
+    held: bool,
+    pending: bool,
+    velocity: f64,
+    aftertouch: f64,
+    next_n: i64,
+    awake: bool,
+    held_mode: bool,
+    flow: f64,
+    rate: f64,
+    depth_scale: f64,
+}
+
+impl BubbleVoice {
+    fn new(model: &Arc<Model>, key: &BubbleKey, fs: f64, knobs: [f64; 4]) -> BubbleVoice {
+        let Model::Bubble(m) = &**model else {
+            unreachable!("a bubble voice on another model")
+        };
+        let mut v = BubbleVoice {
+            m: model.clone(),
+            fs,
+            r_key: key.r_m,
+            depth_key: key.depth_m,
+            voicing: key.voicing,
+            slots: vec![None; m.slots],
+            bp: bandpass(m.pop_hz, m.pop_q, fs),
+            gauss: Gauss::new(key_seed(m.seed, key.note)),
+            down: false,
+            pedal_down: false,
+            held: false,
+            pending: false,
+            velocity: 0.0,
+            aftertouch: 0.0,
+            next_n: 0,
+            awake: false,
+            held_mode: false,
+            flow: 0.0,
+            rate: 0.0,
+            depth_scale: 0.0,
+        };
+        v.set_knobs(knobs);
+        v
+    }
+
+    fn set_knobs(&mut self, k: [f64; 4]) {
+        let Model::Bubble(m) = &*self.m else {
+            unreachable!("a bubble voice on another model")
+        };
+        let (flow, rate, depth) = (
+            knob(m.flow_range, k[1]),
+            knob(m.rate_range_hz, k[2]),
+            knob(m.depth_range, k[3]),
+        );
+        self.held_mode = k[0] >= 0.5;
+        self.flow = flow;
+        self.rate = rate;
+        self.depth_scale = depth;
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        match ev {
+            NoteEvent::On { velocity, .. } => {
+                self.down = true;
+                self.held = true;
+                self.velocity = velocity as f64 / 127.0;
+                self.awake = true;
+                self.pending = true;
+                self.next_n = 0;
+            }
+            NoteEvent::Off { .. } => {
+                self.down = false;
+                self.held = self.pedal_down;
+            }
+            NoteEvent::Pedal { down } => {
+                self.pedal_down = down;
+                self.held = self.down || (down && self.held);
+            }
+            NoteEvent::Pressure { value } => self.aftertouch = value as f64 / 127.0,
+        }
+    }
+
+    fn emit(&mut self, m: &BubbleModel, q: f64, amp: f64) {
+        let r = self.r_key * q.powf(0.4) * (m.size_spread * self.gauss.sample()).exp();
+        let depth = self.depth_key * self.depth_scale;
+        let b = Bubble::new(m, r, depth.max(1.2 * r), amp, self.fs);
+        let mut free = None;
+        let mut oldest = 0;
+        for (j, s) in self.slots.iter().enumerate() {
+            match s {
+                None => {
+                    free = Some(j);
+                    break;
+                }
+                Some(s) => {
+                    if s.i > self.slots[oldest].as_ref().map_or(0, |o| o.i) {
+                        oldest = j;
+                    }
+                }
+            }
+        }
+        self.slots[free.unwrap_or(oldest)] = Some(b);
+    }
+
+    fn step(&mut self) -> f64 {
+        let model = self.m.clone();
+        let Model::Bubble(m) = &*model else {
+            unreachable!("a bubble voice on another model")
+        };
+        let q = self.flow * (knob(m.q_range, self.velocity) + m.q_pressure * self.aftertouch);
+        if self.held_mode {
+            if self.held {
+                if self.next_n <= 0 {
+                    self.emit(m, q, 1.0);
+                    let iv = 1.0 / (self.rate * q.powf(0.8))
+                        * (1.0 + m.rate_jitter * self.gauss.sample());
+                    self.next_n = (iv.max(m.interval_min_s) * self.fs) as i64;
+                }
+                self.next_n -= 1;
+            }
+            self.pending = false;
+        } else if self.pending {
+            self.emit(m, q, 0.5 + self.velocity);
+            self.pending = false;
+        }
+        let mut y = 0.0;
+        let mut sounding = false;
+        let two_pi_fs = 2.0 * std::f64::consts::PI / self.fs;
+        let [b0, b1, b2, a1, a2] = self.bp;
+        for slot in self.slots.iter_mut() {
+            let Some(b) = slot else { continue };
+            let i = b.i;
+            if i < b.n_ring {
+                let t = i as f64 / self.fs;
+                let h = (b.depth - m.rise_m_s * t).max(1.2 * b.r);
+                let f = b.f0 / (1.0 - b.r / (2.0 * h)).sqrt();
+                b.ph += two_pi_fs * f;
+                y += b.amp * b.r * (b.e1 - b.e2) * b.ph.sin();
+                b.e1 *= b.d1;
+                b.e2 *= b.d2;
+            }
+            if b.k_pop <= i && i < b.k_pop + b.n_pop {
+                let x = self.gauss.sample() * b.pe;
+                b.pe *= b.pd;
+                let yb = b0 * x + b1 * b.bx1 + b2 * b.bx2 - a1 * b.by1 - a2 * b.by2;
+                b.bx2 = b.bx1;
+                b.bx1 = x;
+                b.by2 = b.by1;
+                b.by1 = yb;
+                y += m.pop_level * b.r * m.pop_gain * b.amp * yb;
+            }
+            b.i = i + 1;
+            if b.i >= b.n_life {
+                *slot = None;
+            } else {
+                sounding = true;
+            }
+        }
+        if !(sounding || self.pending || (self.held_mode && self.held)) {
+            self.awake = false;
+        }
+        m.hydrophone_v * self.voicing * y
+    }
+}
+
 // --- the keyboard -----------------------------------------------------------------------
 
 /// The panel every key reads, set between chunks ([`Medium::update`]).
@@ -1496,6 +1781,7 @@ pub enum Voice {
     Zither(ZitherVoice),
     Rijke(RijkeVoice),
     Aeolian(AeolianVoice),
+    Bubble(BubbleVoice),
 }
 
 impl Voice {
@@ -1505,6 +1791,7 @@ impl Voice {
             Voice::Zither(v) => v.awake,
             Voice::Rijke(v) => v.awake,
             Voice::Aeolian(v) => v.awake,
+            Voice::Bubble(v) => v.awake,
         }
     }
 
@@ -1514,6 +1801,7 @@ impl Voice {
             Voice::Zither(v) => v.set_knobs(k),
             Voice::Rijke(v) => v.set_knobs(k),
             Voice::Aeolian(v) => v.set_knobs(k),
+            Voice::Bubble(v) => v.set_knobs(k),
         }
     }
 
@@ -1523,6 +1811,7 @@ impl Voice {
             Voice::Zither(v) => v.event(ev),
             Voice::Rijke(v) => v.event(ev),
             Voice::Aeolian(v) => v.event(ev),
+            Voice::Bubble(v) => v.event(ev),
         }
     }
 
@@ -1533,6 +1822,7 @@ impl Voice {
             Voice::Zither(v) => v.step(),
             Voice::Rijke(v) => v.step(),
             Voice::Aeolian(v) => v.step(),
+            Voice::Bubble(v) => v.step(),
         }
     }
 }
@@ -1597,6 +1887,13 @@ impl crate::keyed::KeyVoice for Voice {
                 v.down = false;
                 v.held = false;
             }
+            Voice::Bubble(v) => {
+                v.awake = false;
+                v.down = false;
+                v.held = false;
+                v.pending = false;
+                v.slots.iter_mut().for_each(|s| *s = None);
+            }
         }
     }
 }
@@ -1634,6 +1931,11 @@ pub fn voices(model: &Arc<Model>, fs: f64, knobs: [f64; 4]) -> Vec<(u8, Voice)> 
                     Voice::Aeolian(AeolianVoice::new(model, k, fs, knobs)),
                 )
             })
+            .collect(),
+        Model::Bubble(m) => m
+            .keys
+            .iter()
+            .map(|k| (k.note, Voice::Bubble(BubbleVoice::new(model, k, fs, knobs))))
             .collect(),
     }
 }

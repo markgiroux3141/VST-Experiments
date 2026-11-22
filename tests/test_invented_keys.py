@@ -245,3 +245,57 @@ def test_the_aeolian_keyboard_is_the_same_on_any_number_of_threads():
     a = circuitsim.invented_render(el, 96_000.0, 19200, chord, 0)
     b = circuitsim.invented_render(el, 96_000.0, 19200, chord, 3)
     assert np.array_equal(a, b)
+
+
+def test_the_bubble_organ_agrees_with_its_reference():
+    """STRUCK (single bubbles, a chord, their pops) and HELD (streams; aftertouch; the pedal
+    holding a released key's valve, then lifting), at the stream's 96 kHz."""
+    from varimu.invented.keys import bubbles
+
+    fs = 96_000.0
+    ref = kc.latest("BUBBLE_ORGAN")
+    n = int(1.0 * fs)
+    for knobs, perf in (
+        (
+            [0.0, 0.4, 0.2857, 0.25],
+            [(0, "on", 72, 100), (int(0.2 * fs), "on", 48, 40), (int(0.2 * fs), "on", 55, 90)],
+        ),
+        (
+            [1.0, 0.5, 0.4, 0.4],
+            [
+                (0, "on", 60, 100),
+                (int(0.1 * fs), "on", 67, 64),
+                (int(0.3 * fs), "pressure", 0, 100),
+                (int(0.4 * fs), "pedal", 0, 1),
+                (int(0.45 * fs), "off", 60, 0),
+                (int(0.6 * fs), "pedal", 0, 0),
+                (int(0.7 * fs), "off", 67, 0),
+            ],
+        ),
+    ):
+        kb = bubbles.keyboard(kc.load(ref), fs, knobs)
+        kb = {k: v for k, v in kb.items() if k in (48, 55, 60, 67, 72)}
+        want = common.play(kb, n, perf, lambda v: v.step())
+        el = element(ref, knobs)
+        el["rate_hz"] = fs
+        got = circuitsim.invented_render(json.dumps(el), fs, n, perf, 0)
+        assert np.sqrt(np.mean(want**2)) > 1e-3  # it sounds
+        assert np.array_equal(got, want)  # bit-exact
+
+
+def test_a_bubble_bends_flat_with_the_flow():
+    """A struck bubble rings at its key at velocity 64 (the image included), and flat with
+    more flow (r ~ q^0.4: FLOW 1.6x is ~3 semitones flat)."""
+    from varimu.invented.keys import bubbles
+
+    fs = 96_000.0
+    m = kc.load(kc.latest("BUBBLE_ORGAN"))
+
+    def pitch(flow_k: float) -> float:
+        kb = {69: bubbles.keyboard(m, fs, [0.0, flow_k, 0.2857, 0.25])[69]}
+        y = common.play(kb, int(0.05 * fs), [(0, "on", 69, 64)], lambda v: v.step())
+        sp = np.abs(np.fft.rfft(y * np.hanning(y.size), 16 * y.size))
+        return float(np.fft.rfftfreq(16 * y.size, 1 / fs)[np.argmax(sp)])
+
+    assert abs(12 * np.log2(pitch(0.4) / 440.0)) < 0.5
+    assert -3.8 < 12 * np.log2(pitch(1.0) / pitch(0.4)) < -2.5

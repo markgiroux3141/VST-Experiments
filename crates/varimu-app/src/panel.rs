@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 49] = [
+pub const DEVICES: [Device; 50] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1558,6 +1558,36 @@ pub const DEVICES: [Device; 49] = [
         velocity: None,
         pitch: None,
         // The keys open the slots (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "bubble_organ",
+        label: "Bubble Organ",
+        short: "Bubbles",
+        about: "An invented organ of air bubbles in water: each key opens air to its own nozzle \
+            in a tank, read by a hydrophone (struck, one bubble; held, a stream; velocity and \
+            aftertouch are the air flow, which bends the notes flat; the mod wheel FLOW)",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL5):
+        // each nozzle's bubbles in closed form at 96 kHz.
+        circuit: "bubble_organ",
+        panel: Some(&["held", "flow", "rate", "depth"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("flow"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys open the nozzles (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3189,6 +3219,7 @@ mod tests {
                         "buzz_zither",
                         "rijke_organ",
                         "aeolian_keyboard",
+                        "bubble_organ",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

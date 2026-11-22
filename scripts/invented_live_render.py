@@ -66,6 +66,19 @@ DEMOS = {
         + beats("A3:2 C4:1 E4:1 D4:2 C4:1 B3:1 A3:2 E4:2 A4:4", 1.0, 0.6, 100, -0.15),
         12.0,
     ),
+    # STRUCK (the default): the sketch's tune of single bubbles, then four chords
+    "bubble_organ": (
+        "single_bubbles",
+        beats("G4:1 E4:1 G4:1 C5:2 A4:1 G4:1 E4:1 D4:1 E4:1 C4:3", 0.5, 0.3, 80)
+        + [
+            (4.6 + 0.9 * j + 0.025 * k, 0.1, nm, 90)
+            for j, ch in enumerate(
+                (("C3", "G3", "E4"), ("A2", "E3", "C4"), ("F2", "C3", "A3"), ("G2", "D3", "B3"))
+            )
+            for k, nm in enumerate(ch)
+        ],
+        9.0,
+    ),
     # the tanpura's cam on the pedal (DRONE TONIC 0: Sa = C3), the sketch's melody over it
     "buzz_zither": (
         "melody_over_tanpura",

@@ -273,4 +273,36 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
 - **Not done yet for IL4:** the user's first play; a second slot height per key (the
   sketch's "choose the harmonic per key"); the soundboard as modes.
 
-**Next:** IL5, the Bubble Organ, then IL6-IL7 in the table's order.
+### Session 2, continued: IL5 built
+
+- **Built:** `varimu/invented/keys/bubbles.py` (the reference), `invented.rs`'s
+  `BubbleVoice` and `Bubble`, `BUBBLE_ORGAN@1`, `config/circuits/bubble_organ.yaml`, the
+  app's `bubble_organ`, its demo (`single_bubbles`: the sketch's struck tune and chords).
+- **Agreement:** bit-exact with the reference in both modes (STRUCK: single bubbles, a
+  chord, their pops; HELD: streams, aftertouch, the pedal holding a valve, then lifting).
+  `test_a_bubble_bends_flat_with_the_flow`: a struck A4 rings within half a semitone of its
+  key at velocity 64, and 2.5-3.8 semitones flat at FLOW 1.6x.
+- **Live:** every key streaming with the pedal down 14 % worst block, 0 dropouts at 30 ms.
+- **Level:** full scale 8 V. A bubble struck at 127 peaks 1.1-1.2 V on any key, at velocity
+  1 0.4 V; six at once 6.2 V; HELD at full FLOW and RATE a bass stream 6 V; the demo
+  -12.0 dBFS peak.
+- **Decided (IL5):**
+  - **Nozzles C2-C6**, each at depth max(8 cm, 3 r) (the bass's 5.5 cm bubbles need room to
+    rise: C2 at 17 cm) and voiced so the pitch at pinch-off is the key's with the surface's
+    image included (the sketch voiced without it: its bass rang sharp).
+  - **Velocity is the air flow** over 0.9-1.1 (in tune at velocity 64, +-3/4 semitone; the
+    sketch's swell 0.7-1.4 put velocity 100 ~9 % flat); aftertouch adds up to 0.4 (bends ~2.5
+    semitones flat), FLOW (k1; the mod wheel) scales it 0.6-1.6x. r ~ q^0.4, the held rate ~
+    q^0.8 (the sketch's laws).
+  - **MODE** (k0, a switch): STRUCK releases one bubble a key (excitation 0.5 + velocity, the
+    sketch's), HELD streams while the key or the pedal holds the valve (RATE, k2, 3-24 Hz;
+    interval and size jitter the sketch's). DEPTH (k3) scales the nozzles' depths 0.5-2.5x.
+  - **The hydrophone voiced per nozzle** as r(A3) / r (a bubble's pressure goes as its
+    radius: unvoiced, C2 rang 25 dB over C6), 50 V per unit at A3.
+  - **Bubbles in closed form, streamed:** up to 16 per key (a new one takes the first free
+    slot, else the oldest's); the envelope as two decaying exponentials; the pop band-passed
+    by an RBJ band-pass at 3.2 kHz, Q 0.59 (the sketch's 1.5-7 kHz Butterworth).
+- **Not done yet for IL5:** the user's first play; per-nozzle variation.
+
+**Next:** IL6, the Siren Organ (global state: the shaft and the bellows), then IL7, the Arc
+Organ (a new device kind).
