@@ -413,6 +413,8 @@ class Harp:
     at or above `rate_hz`, the hammer's contact at `contact_rate_hz`. `model` is the
     compiled harp (a component version of kind ep_harp: varimu.rhodes.compile's data).
     `imperfection` (None: as compiled) makes it an imperfect instrument (`HarpImperfection`).
+    `sympathetic` (None: off) couples the keys through the tone bar rail, its value the
+    coupling (1 the compiled rail; varimu.rhodes.sympathetic; the model must have a rail).
     SPICE has no harp: ngspice sees `out` held at 0 V."""
 
     name: str
@@ -421,13 +423,14 @@ class Harp:
     contact_rate_hz: float
     model: dict = dataclasses.field(hash=False, repr=False)
     imperfection: HarpImperfection | None = None
+    sympathetic: float | None = None
 
 
 @dataclass(frozen=True)
 class HarpImperfection:
     """An imperfect Rhodes (docs/RHODES_IMPERFECTION_PLAN.md; varimu.rhodes.imperfection is
     the reference, circuitsim's harp.rs the port): the unit `seed` (a whole number), the
-    `amount` and each part's share of it, every one in [0, 2]."""
+    `amount` and each part's share of it, every one in [0, 10]."""
 
     seed: int
     amount: float
@@ -1680,6 +1683,7 @@ _OMITTED_WHEN_NONE = {
     (EdgeEvents, "follow_gain"),
     (ClavStrings, "wear"),
     (Harp, "imperfection"),
+    (Harp, "sympathetic"),
     (Section, "substeps"),
     (Section, "decimate"),
     (Section, "owns"),
@@ -1896,6 +1900,13 @@ def _validate_harp(el: Harp, input_node: str) -> None:
             rhodes_imp.check(rhodes_imp.Imperfection(**dataclasses.asdict(el.imperfection)))
         except ValueError as err:
             raise IRError(f"{el.name}.imperfection: {err}") from err
+    if el.sympathetic is not None:
+        from varimu.rhodes import sympathetic as rhodes_sym
+
+        try:
+            rhodes_sym.check(el.sympathetic, el.model)
+        except ValueError as err:
+            raise IRError(f"{el.name}.sympathetic: {err}") from err
 
 
 def _validate_wurli_reeds(el: WurliReeds, input_node: str) -> None:

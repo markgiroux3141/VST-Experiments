@@ -462,12 +462,17 @@ pub struct Harp {
     /// An imperfect instrument ([`HarpImperfection`]); absent: as compiled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imperfection: Option<HarpImperfection>,
+    /// The keys ringing in sympathy through the tone bar rail, this the coupling (1 the
+    /// compiled rail, at most [`crate::harp::SYMPATHETIC_MAX`]; the model must have a rail);
+    /// absent: off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sympathetic: Option<f64>,
 }
 
 /// An imperfect Rhodes (docs/RHODES_IMPERFECTION_PLAN.md; `varimu.rhodes.imperfection` is
 /// the reference, [`crate::harp`]'s voices the port): the unit `seed` (a whole number, as the
 /// JSON's floats carry it), the `amount` and each part's share of it (a part's amount is
-/// amount x share, at most [`crate::harp::AMOUNT_MAX`]), every one in [0, 2].
+/// amount x share, at most [`crate::harp::AMOUNT_MAX`]), every one in [0, 10].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HarpImperfection {
@@ -2074,6 +2079,10 @@ impl CircuitIr {
                     positive(&format!("{name}.contact_rate_hz"), e.contact_rate_hz)?;
                     if let Err(m) = e.model.check() {
                         return err(format!("{name}: {m}"));
+                    }
+                    if let Some(a) = e.sympathetic {
+                        crate::harp::check_sympathetic(a, &e.model)
+                            .map_err(|m| IrError(format!("{name}.sympathetic: {m}")))?;
                     }
                     if let Some(i) = &e.imperfection {
                         crate::harp::check_imperfection(i)

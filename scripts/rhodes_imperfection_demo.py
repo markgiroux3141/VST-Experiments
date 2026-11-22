@@ -1,7 +1,8 @@
 """The imperfect Rhodes measured and heard (docs/RHODES_IMPERFECTION_PLAN.md).
 
     uv run --extra fast --extra listen python scripts/rhodes_imperfection_demo.py
-        [--measure] [--render] [--amounts 0 1 2] [--unit 1] [--quality draft]
+        [--measure] [--render] [--amounts 0 1 2 5 10] [--unit 1] [--quality draft]
+        [--sympathy 1 5 30]
 
 `--measure` (seconds; the harp alone, circuitsim's medium): over the 73 keys at velocity 90,
 each key's level, pitch, sustain and release against the compiled harp at each amount; a
@@ -14,6 +15,12 @@ the demo's pedalled progression) through the whole Suitcase (config/circuits/
 rhodes_suitcase_100w.yaml: the speakers' pressure, stereo) at each amount, every other knob at
 the file's values. Each WAV is matched to -23 LUFS (loudness lies), and the harp's own EMF is
 written beside it. -> reports/rhodes/imperfection/audio/.
+
+`--sympathy A ...` (with `--render`): a phrase built for the keys ringing in sympathy (a bass
+note under the pedal left to ring, pedalled chords and a melody, then the same without the
+pedal) through the Suitcase with SYMPATHY off and at each amount A (IMPERFECTION 0), each
+matched to -23 LUFS, beside the harp's EMF and the rail's part alone (the harp's EMF on minus
+off, at the on file's gain). -> reports/rhodes/imperfection/audio/sympathy_*.
 """
 
 from __future__ import annotations
@@ -35,7 +42,7 @@ from varimu.rhodes import midi
 ROOT = Path(__file__).parents[1]
 OUT = ROOT / "reports" / "rhodes" / "imperfection"
 FS = 96000.0
-MODEL = "MK1_HARP@2"
+MODEL = "MK1_HARP@3"
 CIRCUIT = "rhodes_suitcase_100w"
 
 
@@ -204,21 +211,49 @@ def phrase() -> list[midi.Event]:
     return sorted(ev, key=lambda e: (e.t_s, e.kind != "off"))
 
 
-def _render_one(job: tuple[float, int, str]) -> str:
-    a, unit, quality = job
+def phrase_sympathy() -> list[midi.Event]:
+    """A bass note left to ring under the pedal, pedalled chords and a melody, then a chord and
+    the melody without the pedal (nothing rings in sympathy but held keys)."""
+    ev: list[midi.Event] = []
+
+    def note(t, n, vel, dur):
+        ev.append(midi.Event(t, "on", n, vel))
+        ev.append(midi.Event(t + dur, "off", n, 0))
+
+    ev.append(midi.Event(0.1, "pedal", value=1))
+    note(0.2, 36, 115, 0.3)  # C2, the key let go: the pedal holds every felt off
+    ev.append(midi.Event(3.6, "pedal", value=0))
+    ev.append(midi.Event(4.0, "pedal", value=1))
+    for j, n in enumerate([48, 55, 64]):
+        note(4.1 + 0.01 * j, n, 95, 0.4)
+    for k, n in enumerate([76, 74, 72, 67, 69, 72]):
+        note(5.0 + 0.35 * k, n, 85, 0.2)
+    ev.append(midi.Event(8.5, "pedal", value=0))
+    for j, n in enumerate([48, 55, 64]):
+        note(9.0 + 0.01 * j, n, 95, 0.4)
+    for k, n in enumerate([76, 74, 72, 67, 69, 72]):
+        note(9.9 + 0.35 * k, n, 85, 0.2)
+    return sorted(ev, key=lambda e: (e.t_s, e.kind != "off"))
+
+
+def _render_one(job: tuple[float, int, str, float | None]) -> str:
+    a, unit, quality, sym = job
     from varimu.circuit import builder, spec
     from varimu.rhodes import spec as rspec
     from varimu.separation.metrics import match_loudness
     from varimu.sim import fast
     from varimu.sim.io import TransientSettings, write_audio
 
-    events = phrase()
+    events = phrase() if sym is None else phrase_sympathy()
     duration = max(e.t_s for e in events) + 3.0
     c = spec.load_circuit(spec.circuit_path(CIRCUIT))
-    ir = builder.build(c, {"imp_amount": a, "imp_unit": float(unit)}).ir
+    over = {"imp_amount": a, "imp_unit": float(unit)}
+    if sym is not None and sym > 0:
+        over.update({"sympathy": 1, "sympathy_amount": sym})
+    ir = builder.build(c, over).ir
     s = TransientSettings.from_sim_settings(engine="circuitsim", quality=quality)
     notes = [(e.t_s, e.kind, e.note, e.value) for e in events]
-    name = f"amount_{a:g}_unit_{unit}"
+    name = f"amount_{a:g}_unit_{unit}" if sym is None else f"sympathy_{sym:g}"
     audio = OUT / "audio"
     (el,) = [e for e in ir.elements() if e.name == "VHARP"]
     element = {
@@ -232,15 +267,28 @@ def _render_one(job: tuple[float, int, str]) -> str:
         element["imperfection"] = {
             k: float(v) for k, v in dataclasses.asdict(el.imperfection).items()
         }
+    if el.sympathetic is not None:
+        element["sympathetic"] = el.sympathetic
     fs = float(s.sample_rate)
-    emf, _, _ = circuitsim.harp_render(
-        json.dumps(element),
-        fs,
-        int(round(duration * fs)) + 1,
-        [(round(t * fs), k, n, v) for t, k, n, v in notes],
-    )
-    emf = np.asarray(emf) / rspec.load()["numerics"]["full_scale_v"]
-    write_audio(audio / f"{name}_harp.wav", match_loudness(emf, fs).astype(np.float32), int(fs))
+
+    def harp_emf(e: dict) -> np.ndarray:
+        emf, _, _ = circuitsim.harp_render(
+            json.dumps(e),
+            fs,
+            int(round(duration * fs)) + 1,
+            [(round(t * fs), k, n, v) for t, k, n, v in notes],
+        )
+        return np.asarray(emf) / rspec.load()["numerics"]["full_scale_v"]
+
+    emf = harp_emf(element)
+    matched = match_loudness(emf, fs)
+    write_audio(audio / f"{name}_harp.wav", matched.astype(np.float32), int(fs))
+    if sym:
+        rigid = harp_emf({k: v for k, v in element.items() if k != "sympathetic"})
+        gain = float(np.max(np.abs(matched)) / np.max(np.abs(emf)))
+        write_audio(
+            audio / f"{name}_rail_part.wav", (gain * (emf - rigid)).astype(np.float32), int(fs)
+        )
     t0 = time.perf_counter()
     x = np.zeros(int(round(duration * fs)))
     vec = fast.run_transient(ir, x, settings=s, notes=notes).vectors
@@ -253,7 +301,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--measure", action="store_true")
     ap.add_argument("--render", action="store_true")
-    ap.add_argument("--amounts", type=float, nargs="*", default=[0.0, 1.0, 2.0])
+    ap.add_argument("--amounts", type=float, nargs="*", default=[0.0, 1.0, 2.0, 5.0, 10.0])
+    ap.add_argument("--sympathy", type=float, nargs="*", default=[])
     ap.add_argument("--unit", type=int, default=1)
     ap.add_argument("--quality", default="draft", choices=["draft", "draft-1x"])
     args = ap.parse_args()
@@ -264,8 +313,11 @@ def main() -> None:
     if args.render:
         (OUT / "audio").mkdir(parents=True, exist_ok=True)
         midi.write(OUT / "audio" / "phrase.mid", phrase())
-        jobs = [(a, args.unit, args.quality) for a in args.amounts]
-        with ProcessPoolExecutor(len(jobs)) as pool:
+        jobs = [(a, args.unit, args.quality, None) for a in args.amounts]
+        if args.sympathy:
+            midi.write(OUT / "audio" / "phrase_sympathy.mid", phrase_sympathy())
+            jobs += [(0.0, args.unit, args.quality, s) for s in [0.0, *args.sympathy]]
+        with ProcessPoolExecutor(min(len(jobs), 6)) as pool:
             for line in pool.map(_render_one, jobs):
                 print(line, flush=True)
 

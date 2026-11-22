@@ -177,10 +177,53 @@ def test_a_detuned_key_sounds_its_cents(data):
 def test_the_ir_checks_the_imperfection():
     from varimu.circuit import ir
 
-    bad = imp.Imperfection(seed=1, amount=2.5)
+    bad = imp.Imperfection(seed=1, amount=10.5)
     with pytest.raises(ValueError):
         imp.check(bad)
+    imp.check(imp.Imperfection(seed=1, amount=10.0))
     model = {"format": 1, "keys": [1]}
-    el = ir.Harp("VH", "h", 96e3, 192e3, model, ir.HarpImperfection(1, 2.5, 1, 1, 1, 1, 1, 1, 1))
+    el = ir.Harp("VH", "h", 96e3, 192e3, model, ir.HarpImperfection(1, 10.5, 1, 1, 1, 1, 1, 1, 1))
     with pytest.raises(ir.IRError, match="imperfection"):
         ir._validate_harp(el, "in")
+
+
+def test_growth_is_linear_to_two_then_reaches_thirty_at_ten():
+    assert [imp.growth(a) for a in (0.0, 0.5, 1.0, 2.0)] == [0.0, 0.5, 1.0, 2.0]
+    assert imp.growth(imp.AMOUNT_MAX) == pytest.approx(imp.GROWTH_AT_MAX)
+    a = np.linspace(0, imp.AMOUNT_MAX, 201)
+    g = np.array([imp.growth(x) for x in a])
+    assert np.all(np.diff(g) > 0)
+    # smooth at the knee: the slope 1 on both sides
+    h = 1e-6
+    assert (imp.growth(2 + h) - imp.growth(2)) / h == pytest.approx(1.0, abs=1e-4)
+
+
+def test_a_wreck_stays_within_its_caps():
+    """At 10 every draw is held to its part's cap (over many keys and strikes)."""
+    wreck = imp.Imperfection(seed=11, amount=imp.AMOUNT_MAX)
+    d = [imp.key_draws(wreck, n, 2e-3) for n in range(8, 81)]
+    cents = 1200 * np.log2([x.ratio for x in d])
+    assert np.max(np.abs(cents)) <= imp.TUNING_MAX_CENTS + 1e-9
+    assert np.std(cents) > 30  # a wreck: far out of tune
+    for x in d:
+        assert 1 / imp.TIPS_MAX <= x.stiffness <= imp.TIPS_MAX
+        assert 1 / imp.DECAY_MAX <= x.decay <= imp.DECAY_MAX
+        assert imp.DAMPER_MIN <= x.damper <= imp.DAMPER_MAX
+        assert imp.VOICING_RANGE_M[0] <= x.voicing_m <= imp.VOICING_RANGE_M[1]
+    for n in (20, 44, 70):
+        for c in range(50):
+            k, v = imp.strike_draws(wreck, n, c)
+            assert 1 / imp.STRIKE_K_MAX <= k <= imp.STRIKE_K_MAX
+            db = 20 * np.log10(v)
+            assert imp.STRIKE_SPEED_MIN_DB - 1e-9 <= db <= imp.STRIKE_SPEED_MAX_DB + 1e-9
+            assert 1 / imp.RELEASE_MAX <= imp.release_draw(wreck, n, c) <= imp.RELEASE_MAX
+
+
+def test_circuitsim_plays_a_wreck_as_the_reference(data):
+    wreck = imp.Imperfection(seed=7, amount=imp.AMOUNT_MAX)
+    ref = harp.render(
+        EVENTS, (N - 1) / FS, fs_hz=FS, oversample=2, step_oversample=4, imperfection=wreck
+    ).raw_v
+    raw = _rust(data, EVENTS, N, wreck)
+    assert np.all(np.isfinite(raw))
+    assert _db(raw - ref, ref) < -100

@@ -25,6 +25,11 @@ tine, and the tine under the damper's felt):
 - **The damper's switch**: the state moved to the other system's modes through the
   physical coordinates, `z_new = A z + B conj(z)` (B's columns zero for real modes).
 
+**The tone bar rail** (since MK1_HARP@3; `varimu/rhodes/sympathetic.py`): the plank's modes
+(`rail`: frequencies and damping) and per key its grommets, the rail's mode shapes at its place
+and per system the grommets' force rows and the modes' input (`rail`: the keys ringing in
+sympathy; a harp without them plays as before).
+
 The pickup's flux map (one for every key: their pickups are alike) as its bicubic
 B-spline (`pickup.FluxMap.spline`'s knots and coefficients, FITPACK's order: the y basis
 outer, the arc's inner), the velocity law, the wiring's weights, the contact's window, the
@@ -47,7 +52,7 @@ from typing import Any
 import numpy as np
 
 from varimu.devices import versions
-from varimu.rhodes import harp, spec
+from varimu.rhodes import harp, spec, sympathetic
 from varimu.rhodes import key as ky
 from varimu.rhodes import pickup as pk
 
@@ -119,9 +124,10 @@ def _key(job: tuple[int, str, float]) -> dict[str, Any]:
     k = spec.key(n, name)
     free = ky._System(k, "modes")
     damp = ky._System(k, "modes", k.damped)
-    f, fi, _ = _system(free, arc_tol)
-    d, di, _ = _system(damp, arc_tol)
+    f, fi, ff = _system(free, arc_tol)
+    d, di, df = _system(damp, arc_tol)
     h = k.hammer
+    rail = sympathetic.key_rail(k, free, damp, {id(free): (fi, ff), id(damp): (di, df)})
     return {
         "key": n,
         "note": n + harp.MIDI_KEY_OFFSET,
@@ -137,6 +143,7 @@ def _key(job: tuple[int, str, float]) -> dict[str, Any]:
         "damped": d,
         "to_damped": _transfer(free, fi, damp, di),
         "to_free": _transfer(damp, di, free, fi),
+        "rail": rail,
     }
 
 
@@ -184,6 +191,9 @@ def compile_harp(
                     os.environ[v] = old
     else:
         ks = [_key(j) for j in jobs]
+    rail_block, phi = sympathetic.rail_data(name)
+    for kd in ks:
+        kd["rail"]["phi"] = phi[kd["key"]]
     # a group of g coils in parallel is coil / g; each key is one of its group's g
     r_ohm = sum(p.coil_ohm / harp.group_size(n) ** 2 for n in keys)
     x = float(np.sqrt(max(HARP_IMPEDANCE_OHM**2 - r_ohm**2, 0.0)))
@@ -204,6 +214,7 @@ def compile_harp(
             "r_ohm": r_ohm,
             "l_h": x / (2 * np.pi * HARP_IMPEDANCE_HZ),
         },
+        "rail": rail_block,
     }
 
 

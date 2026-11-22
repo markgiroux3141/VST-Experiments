@@ -1305,8 +1305,9 @@ pub const DEVICES: [Device; 52] = [
         group: Group::Instruments,
         circuit: "rhodes_suitcase_100w",
         // The preamp's front panel (ACCESSORY IN stays empty: the harp plays), then the
-        // instrument's imperfection (docs/RHODES_IMPERFECTION_PLAN.md: a change is another
-        // instrument, so the stream restarts).
+        // instrument's imperfection and the keys' sympathy through the tone bar rail
+        // (docs/RHODES_IMPERFECTION_PLAN.md: a change is another instrument, so the stream
+        // restarts).
         panel: Some(&[
             "volume",
             "bass",
@@ -1314,15 +1315,10 @@ pub const DEVICES: [Device; 52] = [
             "vibrato",
             "speed",
             "intensity",
-            "imp_unit",
             "imp_amount",
-            "imp_tuning",
-            "imp_voicing",
-            "imp_tips",
-            "imp_decay",
-            "imp_dampers",
-            "imp_hammer",
-            "imp_release",
+            "imp_unit",
+            "sympathy",
+            "sympathy_amount",
         ]),
         ahead_s: 0.25,
         // The harp's voices step at 96 kHz (its rate_hz), as the Stage's.
@@ -3101,7 +3097,7 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 72] = [
+const LABELS: [(&str, &str); 67] = [
     ("range", "Range (AUTO: by key)"),
     // The Rosin Wheel's k3 (its key stays `limit`: takes saved with it still load).
     ("limit", "EVEN (0: the free swell)"),
@@ -3167,20 +3163,15 @@ const LABELS: [(&str, &str); 72] = [
     ("wear_tangents", "  Hard tangents (share of age)"),
     ("wear_yarn", "  Worn yarn (share of age)"),
     ("wear_pickups", "  Pickup heights (share of age)"),
-    // The Rhodes' imperfection (varimu/rhodes/imperfection.py): a part's amount is
-    // IMPERFECTION x its share.
-    ("imp_unit", "Unit # (which instrument)"),
+    // The Rhodes' imperfection (varimu/rhodes/imperfection.py) and sympathy
+    // (varimu/rhodes/sympathetic.py).
     (
         "imp_amount",
-        "Imperfection (0 perfect, 1 real, 2 neglected)",
+        "Imperfection (0 as built, 1 real, 2 neglected, 10 wrecked)",
     ),
-    ("imp_tuning", "  Tuning, key to key (share)"),
-    ("imp_voicing", "  Voicing, key to key (share)"),
-    ("imp_tips", "  Hammer tips, key to key (share)"),
-    ("imp_decay", "  Sustain, key to key (share)"),
-    ("imp_dampers", "  Dampers, key to key (share)"),
-    ("imp_hammer", "  Each strike (share)"),
-    ("imp_release", "  Each release (share)"),
+    ("imp_unit", "  Unit # (which instrument)"),
+    ("sympathy", "Sympathetic resonance"),
+    ("sympathy_amount", "  Sympathy (1 the rail, up to 30)"),
 ];
 
 /// How a knob moves.

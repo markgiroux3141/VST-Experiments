@@ -4,7 +4,9 @@
 //!     cargo run --release -p circuitsim --example harp_bench -- [MODEL.harp.json] [FS] [RATE] [SECONDS]
 //!
 //! MODEL defaults to config/components/mk1_harp/1.harp.json, FS to 96000, RATE (the voices'
-//! rate floor) to 96000, SECONDS to 2.
+//! rate floor) to 96000, SECONDS to 2. Env: `SYMPATHY=A` rings the keys in sympathy at amount A
+//! (a model with a rail: MK1_HARP@3 on); `CHORD=1` strikes four keys (C3 E3 G3 C4) instead of
+//! every key; `WORKERS=N` sets the worker threads.
 
 use std::time::Instant;
 
@@ -31,10 +33,20 @@ fn main() {
         contact_rate_hz: 384_000.0,
         model: Box::new(model),
         imperfection: None,
+        sympathetic: std::env::var("SYMPATHY")
+            .ok()
+            .map(|a| a.parse().expect("SYMPATHY")),
     };
-    let mut m = Medium::new(&el, fs);
+    let mut m = match std::env::var("WORKERS") {
+        Ok(w) => Medium::with_workers(&el, fs, w.parse().expect("WORKERS")),
+        Err(_) => Medium::new(&el, fs),
+    };
+    let chord = std::env::var("CHORD").is_ok();
     m.queue(1, NoteEvent::Pedal { down: true });
     for (i, k) in el.model.keys.iter().enumerate() {
+        if chord && ![48, 52, 55, 60].contains(&k.note) {
+            continue;
+        }
         m.queue(
             2 + 5 * i,
             NoteEvent::On {

@@ -33,6 +33,17 @@
 //! [`crate::ir::HarpImperfection`] retunes, revoices, rehardens and re-damps each key once,
 //! where the voices are built, and varies each strike's hammer and each release's felt by
 //! draws keyed on that key's count of them, so a take replays bit for bit.
+//!
+//! **Sympathetic resonance** (`varimu/rhodes/sympathetic.py` is the reference): with the IR
+//! element's `sympathetic` amount and a compiled rail (MK1_HARP@3 on), the medium is coupled
+//! ([`crate::keyed`]'s two phases): every voice renders its own motion and records its
+//! grommets' force on the tone bar rail, the rail's modes are stepped on the calling thread
+//! from all of them, then every voice whose felt is off adds the rail-driven motion of its
+//! modes relative to the rail (`zs`, driven by the rail's acceleration under it less its own
+//! push's part, kept apart from its own motion) and reads the two through its pickup, which
+//! rides with the rail.
+
+use std::sync::{Mutex, RwLock};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -140,6 +151,41 @@ pub struct HarpKey {
     pub damped: HarpSystem,
     pub to_damped: HarpTransfer,
     pub to_free: HarpTransfer,
+    /// Its coupling to the tone bar rail (None: a harp compiled without one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail: Option<HarpKeyRail>,
+}
+
+/// A key's coupling to the tone bar rail (`sympathetic.key_rail`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarpKeyRail {
+    /// Its grommets' spring and dashpot (each of the two).
+    pub grommet_k_n_m: f64,
+    pub grommet_c_n_s_m: f64,
+    pub free: HarpRailRows,
+    pub damped: HarpRailRows,
+    /// The rail's mass-normalized modes at its place.
+    pub phi: Vec<f64>,
+}
+
+/// A system's rows for the rail: the grommets' force on it is Re((mount + mount_v) z) (the
+/// springs', the dashpots'; doubled for pairs), `base` the modes' input of a unit force
+/// spread as the grommets'.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarpRailRows {
+    pub mount: Complexes,
+    pub mount_v: Complexes,
+    pub base: Complexes,
+}
+
+/// The tone bar rail (`sympathetic.rail_data`): a plank's bending modes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarpRail {
+    pub modes_hz: Vec<f64>,
+    pub zeta: f64,
 }
 
 /// The pickup's flux linkage over the tip's height y and its pull-back g: a bicubic
@@ -193,6 +239,9 @@ pub struct HarpModel {
     pub sleep_m: f64,
     pub arc_rank_tol: f64,
     pub coils: HarpCoils,
+    /// The tone bar rail (None: compiled without one; MK1_HARP@3 has it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail: Option<HarpRail>,
 }
 
 impl HarpModel {
@@ -249,6 +298,40 @@ impl HarpModel {
                     return Err(format!("{at}, {what}: not {} x {}", to.modes, from.modes));
                 }
             }
+            match (&k.rail, &self.rail) {
+                (None, _) => {}
+                (Some(_), None) => return Err(format!("{at}: a rail's rows without a rail")),
+                (Some(r), Some(rail)) => {
+                    let finite = |v: &[f64]| v.iter().all(|x| x.is_finite());
+                    let grommets = [r.grommet_k_n_m, r.grommet_c_n_s_m];
+                    let ok = r.phi.len() == rail.modes_hz.len()
+                        && finite(&r.phi)
+                        && grommets.iter().all(|g| g.is_finite() && *g >= 0.0);
+                    if !ok {
+                        return Err(format!("{at}: its rail's shapes or grommets"));
+                    }
+                    for (what, rows, s) in
+                        [("free", &r.free, &k.free), ("damped", &r.damped, &k.damped)]
+                    {
+                        let m = s.modes;
+                        let vecs = [&rows.mount, &rows.mount_v, &rows.base];
+                        if vecs.iter().any(|v| {
+                            v.len() != m || v.im.len() != m || !finite(&v.re) || !finite(&v.im)
+                        }) {
+                            return Err(format!(
+                                "{at}, {what}: its rail rows don't match its {m} modes"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(rail) = &self.rail
+            && (rail.modes_hz.is_empty()
+                || rail.modes_hz.iter().any(|f| !(f.is_finite() && *f > 0.0))
+                || !(rail.zeta > 0.0 && rail.zeta < 1.0))
+        {
+            return Err("rail: its modes must be positive, its damping in (0, 1)".into());
         }
         let f = &self.flux;
         if f.ty.len() < 8
@@ -541,6 +624,11 @@ struct Sys {
 }
 
 impl Sys {
+    /// The arc's rank.
+    fn rank(&self) -> usize {
+        self.arc.0.len() / self.m
+    }
+
     /// The system at step dt; `rot` its modes' eigenvalues for the free rotation (None: its
     /// own; the imperfection's decays: the outputs keep the system's).
     fn new(s: &HarpSystem, dt: f64, rot: Option<&[C64]>) -> Sys {
@@ -676,12 +764,79 @@ struct Voice {
     /// Step the hammer's whole window (the free modes' decay changed: the window steps the
     /// compiled decays, so ending it early would move the result).
     full_window: bool,
+    /// Sympathetic resonance (None: off): the key's rows for the rail, and its rail-driven
+    /// motion and the chunk's record.
+    rail_rows: Option<Box<RailRows>>,
+    couple: Option<Box<Couple>>,
+}
+
+/// A voice's fixed rows for the rail, at its tuning (`sympathetic.Voice.setup`).
+#[derive(Debug, Clone)]
+struct RailRows {
+    phi: Vec<f64>,
+    /// The grommets' force rows (mount + r mount_v) on each system, padded.
+    mount_free: (Vec<f64>, Vec<f64>),
+    mount_damped: (Vec<f64>, Vec<f64>),
+    /// The free modes' input over a sample (a zero-order hold of the rail's acceleration),
+    /// padded.
+    gz: (Vec<f64>, Vec<f64>),
+    /// A bound on the tip's steady response to a unit acceleration (its modes at resonance):
+    /// the rail-driven motion sleeps and wakes against `sleep_m` by it.
+    drive_gain: f64,
+    /// The chunk's record per sample: tip, tip rate, then the arc's p and p rates.
+    stride: usize,
+    rank: usize,
+}
+
+/// A voice's rail-driven motion and its chunk's record (phase one's).
+#[derive(Debug, Clone)]
+struct Couple {
+    zs: (Vec<f64>, Vec<f64>),
+    zs_awake: bool,
+    zs_since: usize,
+    /// The largest base force since the last sleep check.
+    zs_peak: f64,
+    /// Small enough (its tip's bound under [`LINEAR_M`] at the last check) to be read through
+    /// the pickup's small-signal gain while the key's own motion is asleep; that gain
+    /// (-weight dPhi/dy at the voicing; NaN until first needed).
+    zs_linear: bool,
+    lin_gain: f64,
+    /// Phase one: the samples where the own motion was awake (in order, not overlapping).
+    own_on: Vec<(usize, usize)>,
+    /// The rail's modes moved by this key's own push alone (displacements, velocities, the
+    /// last sample's modal force), subtracted from the rail it feels (a key doesn't feel its
+    /// own push: `sympathetic`'s docstring); `self_on`: any of it nonzero.
+    self_q: Vec<f64>,
+    self_qd: Vec<f64>,
+    self_drive: Vec<f64>,
+    self_qdd: Vec<f64>,
+    self_on: bool,
+    /// Phase one: the own motion's outputs and force on the rail per sample (zeros where
+    /// asleep; only once it was awake in the chunk: `own_any`).
+    own: Vec<f64>,
+    force: Vec<f64>,
+    own_any: bool,
+    /// The damper's switches (internal sample, onto the felt, the felt's generation), the
+    /// felts a release replaced in the chunk (generation g's), the system at the chunk's
+    /// start and the sample phase one is at.
+    marks: Vec<(usize, bool, usize)>,
+    gens: Vec<Sys>,
+    felt: usize,
+    start_damped: bool,
+    t: usize,
 }
 
 const GRAVITY_M_S2: f64 = 9.81;
 
 impl Voice {
-    fn new(k: &HarpKey, dt: f64, s: usize, imp: Option<Imp>, voicing: f64) -> Voice {
+    fn new(
+        k: &HarpKey,
+        dt: f64,
+        s: usize,
+        imp: Option<Imp>,
+        voicing: f64,
+        sympathetic: bool,
+    ) -> Voice {
         let d = imp.map_or(KeyDraws::identity(voicing), |i| i.key(k.key, voicing));
         let (free, damped) = if d.ratio != 1.0 {
             (
@@ -702,6 +857,42 @@ impl Voice {
         if d.stiffness != 1.0 {
             hammer.stiffness *= d.stiffness;
         }
+        let rail_rows = match (&k.rail, sympathetic) {
+            (Some(r), true) => Some(Box::new(RailRows::new(
+                r,
+                &free_sys,
+                &damped_sys,
+                &rot_f,
+                d.ratio,
+                dt,
+            ))),
+            _ => None,
+        };
+        let couple = rail_rows.as_ref().map(|rows| {
+            let nm = rows.phi.len();
+            Box::new(Couple {
+                zs: (vec![0.0; m], vec![0.0; m]),
+                zs_awake: false,
+                zs_since: 0,
+                zs_peak: 0.0,
+                zs_linear: true,
+                lin_gain: f64::NAN,
+                own_on: Vec::new(),
+                self_q: vec![0.0; nm],
+                self_qd: vec![0.0; nm],
+                self_drive: vec![0.0; nm],
+                self_qdd: vec![0.0; nm],
+                self_on: false,
+                own: Vec::new(),
+                force: Vec::new(),
+                own_any: false,
+                marks: Vec::new(),
+                gens: Vec::new(),
+                felt: 0,
+                start_damped: true,
+                t: 0,
+            })
+        });
         Voice {
             weight: k.weight,
             hammer,
@@ -729,6 +920,8 @@ impl Voice {
             free_lam: lam_f,
             dt,
             full_window: d.decay != 1.0,
+            rail_rows,
+            couple,
         }
     }
 
@@ -745,7 +938,11 @@ impl Voice {
         let rot = damped_lam(&lam_d, &self.free_lam, g);
         let sys = Sys::new(src, self.dt, Some(&rot));
         if sys.rot != self.damped.rot {
-            self.damped = sys;
+            let old = std::mem::replace(&mut self.damped, sys);
+            if let Some(c) = self.couple.as_mut() {
+                c.gens.push(old);
+                c.felt += 1;
+            }
         }
     }
 
@@ -773,21 +970,10 @@ impl Voice {
             } else {
                 (&self.to_free, self.damped.modes, self.free.modes)
             };
-            let z: Vec<C64> = (0..from).map(|j| C64(self.z.0[j], self.z.1[j])).collect();
-            let mut new = vec![C64(0.0, 0.0); to];
-            for (i, n) in new.iter_mut().enumerate() {
-                for (j, zj) in z.iter().enumerate() {
-                    let a = t.a.get(i * from + j);
-                    let b = t.b.get(i * from + j);
-                    *n = n.add(a.mul(*zj)).add(b.mul(C64(zj.0, -zj.1)));
-                }
-            }
-            self.z.0.fill(0.0);
-            self.z.1.fill(0.0);
-            for (j, c) in new.iter().enumerate() {
-                self.z.0[j] = c.0;
-                self.z.1[j] = c.1;
-            }
+            transfer(t, from, to, &mut self.z);
+        }
+        if let Some(c) = self.couple.as_mut() {
+            c.marks.push((c.t, damped, c.felt));
         }
         self.on_damped = damped;
     }
@@ -1085,17 +1271,672 @@ fn free_run_impl(
     }
 }
 
+// --- Sympathetic resonance (`varimu.rhodes.sympathetic`) ----------------------------
+
+/// The largest sympathetic amount (30x the compiled rail's coupling, for effect).
+pub const SYMPATHETIC_MAX: f64 = 30.0;
+/// A rail mode under this (m, m/s) is zeroed (`sympathetic.RAIL_FLOOR`).
+const RAIL_FLOOR: f64 = 1e-20;
+/// A key only ringing in sympathy is read through the pickup's small-signal gain while its
+/// tip's bound stays under this (m; checked every [`SLEEP_EVERY`] samples): its swing is a
+/// thousandth of the pickup's scale, the readout's error ~1e-3 of its own sound. The
+/// reference reads every key through the whole map (the live tier's one approximation;
+/// tests/test_rhodes_sympathetic.py measures it).
+const LINEAR_M: f64 = 10e-6;
+
+/// The IR's checks of a sympathetic amount (`sympathetic.check`).
+pub fn check_sympathetic(amount: f64, model: &HarpModel) -> Result<(), String> {
+    if !(amount.is_finite() && (0.0..=SYMPATHETIC_MAX).contains(&amount)) {
+        return Err(format!("amount {amount}: in [0, {SYMPATHETIC_MAX}]"));
+    }
+    if model.rail.is_none() || model.keys.iter().any(|k| k.rail.is_none()) {
+        return Err("the compiled harp has no rail (MK1_HARP@3 or later)".into());
+    }
+    Ok(())
+}
+
+/// A mode q'' + 2 zeta w q' + w^2 q = d stepped exactly over dt with d held
+/// (`sympathetic.osc_zoh`, the same arithmetic): (Ad row-major, Bd).
+fn osc_zoh(w: f64, zeta: f64, dt: f64) -> ([f64; 4], [f64; 2]) {
+    let s = zeta * w;
+    let wd = w * (1.0 - zeta * zeta).sqrt();
+    let e = (-s * dt).exp();
+    let c = (wd * dt).cos();
+    let sn = (wd * dt).sin();
+    let half = (0.5 * wd * dt).sin();
+    let ad = [
+        e * (c + s / wd * sn),
+        e * sn / wd,
+        -w * w * e * sn / wd,
+        e * (c - s / wd * sn),
+    ];
+    let one_minus = -(-s * dt).exp_m1() + e * 2.0 * half * half - e * s / wd * sn;
+    (ad, [one_minus / (w * w), e * sn / wd])
+}
+
+/// The state moved to another system's modes through the physical coordinates:
+/// z_new = A z + B conj(z) (`to` x `from`).
+fn transfer(t: &HarpTransfer, from: usize, to: usize, z: &mut (Vec<f64>, Vec<f64>)) {
+    let old: Vec<C64> = (0..from).map(|j| C64(z.0[j], z.1[j])).collect();
+    let mut new = vec![C64(0.0, 0.0); to];
+    for (i, n) in new.iter_mut().enumerate() {
+        for (j, zj) in old.iter().enumerate() {
+            let a = t.a.get(i * from + j);
+            let b = t.b.get(i * from + j);
+            *n = n.add(a.mul(*zj)).add(b.mul(C64(zj.0, -zj.1)));
+        }
+    }
+    z.0.fill(0.0);
+    z.1.fill(0.0);
+    for (j, c) in new.iter().enumerate() {
+        z.0[j] = c.0;
+        z.1[j] = c.1;
+    }
+}
+
+/// One sample of a system's free rotation (`free_run`'s arithmetic).
+#[inline(always)]
+fn rotate(sys: &Sys, z: &mut (Vec<f64>, Vec<f64>)) {
+    let m = sys.m;
+    for (((zr, zi), rr), ri) in z.0[..m]
+        .chunks_exact_mut(LANES)
+        .zip(z.1[..m].chunks_exact_mut(LANES))
+        .zip(sys.rot.0[..m].chunks_exact(LANES))
+        .zip(sys.rot.1[..m].chunks_exact(LANES))
+    {
+        for l in 0..LANES {
+            let (a, c) = (zr[l], zi[l]);
+            zr[l] = a * rr[l] - c * ri[l];
+            zi[l] = a * ri[l] + c * rr[l];
+        }
+    }
+}
+
+/// One sample of a system's free rotation with an input: z = rot z + g f.
+#[inline(always)]
+fn rotate_driven(sys: &Sys, z: &mut (Vec<f64>, Vec<f64>), g: &(Vec<f64>, Vec<f64>), f: f64) {
+    let m = sys.m;
+    for (((zr, zi), (rr, ri)), (gr, gi)) in z.0[..m]
+        .chunks_exact_mut(LANES)
+        .zip(z.1[..m].chunks_exact_mut(LANES))
+        .zip(
+            sys.rot.0[..m]
+                .chunks_exact(LANES)
+                .zip(sys.rot.1[..m].chunks_exact(LANES)),
+        )
+        .zip(
+            g.0[..m]
+                .chunks_exact(LANES)
+                .zip(g.1[..m].chunks_exact(LANES)),
+        )
+    {
+        for l in 0..LANES {
+            let (a, c) = (zr[l], zi[l]);
+            zr[l] = a * rr[l] - c * ri[l] + gr[l] * f;
+            zi[l] = a * ri[l] + c * rr[l] + gi[l] * f;
+        }
+    }
+}
+
+impl RailRows {
+    /// The key's rows at its tuning `ratio` (the dashpots' rows times it, the input over it)
+    /// for its systems at step dt; `lam_f` the free modes' rotation eigenvalues.
+    fn new(r: &HarpKeyRail, free: &Sys, damped: &Sys, lam_f: &[C64], ratio: f64, dt: f64) -> Self {
+        let mount = |rows: &HarpRailRows, sys: &Sys| {
+            let (mut re, mut im) = (vec![0.0; sys.m], vec![0.0; sys.m]);
+            for j in 0..sys.modes {
+                let c = rows.mount.get(j).add(rows.mount_v.get(j).scale(ratio));
+                re[j] = c.0;
+                im[j] = c.1;
+            }
+            (re, im)
+        };
+        let mut gz = (vec![0.0; free.m], vec![0.0; free.m]);
+        let mut drive_gain = 0.0;
+        for (j, &lam) in lam_f.iter().enumerate().take(free.modes) {
+            let a = lam.scale(dt).exp();
+            let g = r
+                .free
+                .base
+                .get(j)
+                .scale(1.0 / ratio)
+                .mul(a.sub(C64(1.0, 0.0)))
+                .div(lam);
+            gz.0[j] = g.0;
+            gz.1[j] = g.1;
+            drive_gain += free.tip_abs[j] * g.norm() / (1.0 - a.norm()).max(1e-300);
+        }
+        let rank = free.rank().max(damped.rank());
+        RailRows {
+            phi: r.phi.clone(),
+            mount_free: mount(&r.free, free),
+            mount_damped: mount(&r.damped, damped),
+            gz,
+            drive_gain,
+            stride: 2 + 2 * rank,
+            rank,
+        }
+    }
+}
+
+/// The tone bar rail while the keys ring in sympathy: its modes' steps, its state, and the
+/// chunk's motion the voices read in phase two.
+#[derive(Debug)]
+struct RailCtx {
+    amount: f64,
+    nm: usize,
+    ad: Vec<[f64; 4]>,
+    bd: Vec<[f64; 2]>,
+    /// Each mode's w^2 and 2 zeta w (its acceleration q'' = -w^2 q - 2 zeta w q' + force).
+    w2: Vec<f64>,
+    c2: Vec<f64>,
+    state: Mutex<RailState>,
+    motion: RwLock<RailMotion>,
+}
+
+#[derive(Debug)]
+struct RailState {
+    q: Vec<f64>,
+    qd: Vec<f64>,
+    /// The modal force from the last sample's grommet forces (applied from the next).
+    drive: Vec<f64>,
+    /// The last sample's modal accelerations.
+    qdd: Vec<f64>,
+}
+
+/// The chunk's rail: per sample (index 0 the last chunk's last) each mode's acceleration;
+/// `moving`: the rail not at rest.
+#[derive(Debug)]
+struct RailMotion {
+    qdd: Vec<f64>,
+    moving: bool,
+}
+
+impl RailCtx {
+    fn new(r: &HarpRail, amount: f64, dt: f64) -> RailCtx {
+        let nm = r.modes_hz.len();
+        let (ad, bd) = r
+            .modes_hz
+            .iter()
+            .map(|f| osc_zoh(2.0 * std::f64::consts::PI * f, r.zeta, dt))
+            .unzip();
+        let w: Vec<f64> = r
+            .modes_hz
+            .iter()
+            .map(|f| 2.0 * std::f64::consts::PI * f)
+            .collect();
+        RailCtx {
+            amount,
+            nm,
+            ad,
+            bd,
+            w2: w.iter().map(|w| w * w).collect(),
+            c2: w.iter().map(|w| 2.0 * r.zeta * w).collect(),
+            state: Mutex::new(RailState {
+                q: vec![0.0; nm],
+                qd: vec![0.0; nm],
+                drive: vec![0.0; nm],
+                qdd: vec![0.0; nm],
+            }),
+            motion: RwLock::new(RailMotion {
+                qdd: vec![0.0; nm],
+                moving: false,
+            }),
+        }
+    }
+
+    /// The rail over the chunk's `n` samples from the voices' forces (phase one's), summed in
+    /// the voices' order.
+    fn step(&self, voices: &[&Voice], n: usize) {
+        let nm = self.nm;
+        let mut st = self.state.lock().expect("rail");
+        let mut mo = self.motion.write().expect("rail");
+        let RailState { q, qd, drive, qdd } = &mut *st;
+        let RailMotion { qdd: mqdd, moving } = &mut *mo;
+        mqdd.clear();
+        mqdd.extend_from_slice(qdd);
+        mqdd.resize((n + 1) * nm, 0.0);
+        let pushing: Vec<(&[f64], &[f64])> = voices
+            .iter()
+            .filter_map(|v| {
+                let c = v.couple.as_ref()?;
+                let rows = v.rail_rows.as_ref()?;
+                c.own_any
+                    .then_some((rows.phi.as_slice(), c.force.as_slice()))
+            })
+            .collect();
+        *moving = !pushing.is_empty()
+            || q.iter()
+                .chain(qd.iter())
+                .chain(drive.iter())
+                .chain(qdd.iter())
+                .any(|&x| x != 0.0);
+        // each sample's modal force from the grommet forces, summed in the voices' order
+        let mut force = vec![0.0; n * nm];
+        for (phi, f) in &pushing {
+            for (s, fs) in f.iter().take(n).enumerate() {
+                let row = &mut force[s * nm..(s + 1) * nm];
+                for (r, p) in row.iter_mut().zip(phi.iter()) {
+                    *r += p * fs;
+                }
+            }
+        }
+        for s in 0..n {
+            for m in 0..nm {
+                let (a, b) = (self.ad[m], self.bd[m]);
+                let (x, v, d) = (q[m], qd[m], drive[m]);
+                let mut nx = a[0] * x + a[1] * v + b[0] * d;
+                let mut nv = a[2] * x + a[3] * v + b[1] * d;
+                if nx.abs() < RAIL_FLOOR && nv.abs() < RAIL_FLOOR {
+                    nx = 0.0;
+                    nv = 0.0;
+                }
+                q[m] = nx;
+                qd[m] = nv;
+                let acc = -self.w2[m] * nx - self.c2[m] * nv + d;
+                qdd[m] = acc;
+                mqdd[(s + 1) * nm + m] = acc;
+            }
+            drive.copy_from_slice(&force[s * nm..(s + 1) * nm]);
+        }
+    }
+}
+
+impl Voice {
+    /// Phase one (coupled), at the chunk's start (before its first `render_own`): its record
+    /// emptied, the system it starts on noted.
+    fn begin_chunk(&mut self) {
+        let on_damped = self.on_damped;
+        if let Some(c) = self.couple.as_mut() {
+            c.marks.clear();
+            c.gens.clear();
+            c.felt = 0;
+            c.start_damped = on_damped;
+            c.own_any = false;
+            c.own_on.clear();
+            c.t = 0;
+        }
+    }
+
+    /// Phase one (coupled): internal samples `from..to` of the chunk's `n` of the voice's own
+    /// motion, its outputs and its force on the rail recorded (`render`'s steps exactly; an
+    /// event between two calls lands at the first's `to`).
+    fn render_own(&mut self, from: usize, to: usize, n: usize, s: usize, sleep: f64) {
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("avx2") {
+            // SAFETY: the CPU has AVX2 (checked above).
+            unsafe { self.render_own_avx2(from, to, n, s, sleep) };
+            return;
+        }
+        self.render_own_impl(from, to, n, s, sleep);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    unsafe fn render_own_avx2(&mut self, from: usize, to: usize, n: usize, s: usize, sleep: f64) {
+        self.render_own_impl(from, to, n, s, sleep);
+    }
+
+    #[inline(always)]
+    fn render_own_impl(&mut self, from: usize, to: usize, n: usize, s: usize, sleep: f64) {
+        let stride = self.rail_rows.as_ref().expect("coupled").stride;
+        self.couple.as_mut().expect("coupled").t = from;
+        let mut i = from;
+        let awake_from = (!self.asleep).then_some(from);
+        while i < to && !self.asleep {
+            {
+                let c = self.couple.as_mut().expect("coupled");
+                if !c.own_any {
+                    c.own.clear();
+                    c.own.resize(n * stride, 0.0);
+                    c.force.clear();
+                    c.force.resize(n, 0.0);
+                    c.own_any = true;
+                }
+            }
+            if self.contact.is_some() {
+                self.contact_sample(s);
+                self.record(i);
+                i += 1;
+                self.couple.as_mut().expect("coupled").t = i;
+                if self.contact.as_ref().is_some_and(|c| c.left == 0) {
+                    self.end_contact();
+                }
+                continue;
+            }
+            let m = (to - i).min(SLEEP_EVERY - self.since_check);
+            for _ in 0..m {
+                let sys = if self.on_damped {
+                    &self.damped
+                } else {
+                    &self.free
+                };
+                rotate(sys, &mut self.z);
+                self.record(i);
+                i += 1;
+            }
+            self.couple.as_mut().expect("coupled").t = i;
+            self.since_check += m;
+            if self.since_check >= SLEEP_EVERY {
+                self.since_check = 0;
+                let sys = self.sys();
+                let bound: f64 = (0..sys.modes)
+                    .map(|j| sys.tip_abs[j] * self.z.0[j].hypot(self.z.1[j]))
+                    .sum();
+                if bound < sleep {
+                    self.asleep = true;
+                    self.z.0.fill(0.0);
+                    self.z.1.fill(0.0);
+                } else {
+                    for j in 0..self.z.0.len() {
+                        if self.z.0[j].abs() < MODE_FLOOR && self.z.1[j].abs() < MODE_FLOOR {
+                            self.z.0[j] = 0.0;
+                            self.z.1[j] = 0.0;
+                        }
+                    }
+                }
+            }
+        }
+        let c = self.couple.as_mut().expect("coupled");
+        if let Some(a) = awake_from
+            && i > a
+        {
+            match c.own_on.last_mut() {
+                Some(last) if last.1 == a => last.1 = i,
+                _ => c.own_on.push((a, i)),
+            }
+        }
+        c.t = to;
+    }
+
+    /// Record sample i of the own motion: the tip, its rate, the arc's p and p rates (on the
+    /// system it is on), its grommets' force.
+    #[inline(always)]
+    fn record(&mut self, i: usize) {
+        let rows = self.rail_rows.as_deref().expect("coupled");
+        let c = self.couple.as_deref_mut().expect("coupled");
+        let (sys, mount) = if self.on_damped {
+            (&self.damped, &rows.mount_damped)
+        } else {
+            (&self.free, &rows.mount_free)
+        };
+        let m = sys.m;
+        let (zr, zi) = (&self.z.0[..m], &self.z.1[..m]);
+        let rec = &mut c.own[i * rows.stride..(i + 1) * rows.stride];
+        rec[0] = dot(&sys.tip.0[..m], &sys.tip.1[..m], zr, zi);
+        rec[1] = dot(&sys.tip_v.0[..m], &sys.tip_v.1[..m], zr, zi);
+        let rank = rows.rank;
+        for (r, ((ar, ai), (vr, vi))) in sys
+            .arc
+            .0
+            .chunks_exact(m)
+            .zip(sys.arc.1.chunks_exact(m))
+            .zip(sys.arc_v.0.chunks_exact(m).zip(sys.arc_v.1.chunks_exact(m)))
+            .enumerate()
+        {
+            rec[2 + r] = dot(ar, ai, zr, zi);
+            rec[2 + rank + r] = dot(vr, vi, zr, zi);
+        }
+        c.force[i] = dot(&mount.0[..m], &mount.1[..m], zr, zi);
+    }
+
+    /// Phase two (coupled): the chunk's EMF into `out` from the own motion recorded and the
+    /// rail's drive (its motion while the felt is off; carried through the damper's switches
+    /// as the own is). False when nothing was written.
+    fn finish(&mut self, out: &mut [f64], ctx: &HarpCtx) -> bool {
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("avx2") {
+            // SAFETY: the CPU has AVX2 (checked above).
+            return unsafe { self.finish_avx2(out, ctx) };
+        }
+        self.finish_impl(out, ctx)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    unsafe fn finish_avx2(&mut self, out: &mut [f64], ctx: &HarpCtx) -> bool {
+        self.finish_impl(out, ctx)
+    }
+
+    #[inline(always)]
+    fn finish_impl(&mut self, out: &mut [f64], ctx: &HarpCtx) -> bool {
+        let rail = ctx.rail.as_ref().expect("coupled");
+        let motion = rail.motion.read().expect("rail");
+        let rows = self.rail_rows.as_deref().expect("coupled");
+        let Couple {
+            zs,
+            zs_awake,
+            zs_since,
+            zs_peak,
+            zs_linear,
+            lin_gain,
+            own_on,
+            self_q,
+            self_qd,
+            self_drive,
+            self_qdd,
+            self_on,
+            own,
+            force,
+            own_any,
+            marks,
+            gens,
+            start_damped,
+            ..
+        } = self.couple.as_deref_mut().expect("coupled");
+        if lin_gain.is_nan() {
+            let (py, _) = ctx.flux.gradient(self.voicing, 0.0, &mut self.span);
+            *lin_gain = -self.weight * py;
+        }
+        let mut on = 0;
+        let (nm, stride, rank_max) = (rail.nm, rows.stride, rows.rank);
+        // the rail's push on the key over the chunk (its grommets' k u + c u', times the amount)
+        // the rail's acceleration under the key less its own push's part, stepped as the rail
+        // steps it
+        let pushing = *self_on || *own_any;
+        let base: Vec<f64> = if motion.moving || pushing {
+            let mut b = Vec::with_capacity(out.len());
+            for (s, qdd) in motion.qdd.chunks_exact(nm).take(out.len()).enumerate() {
+                let mut udd = 0.0;
+                for m in 0..nm {
+                    udd += rows.phi[m] * (qdd[m] - self_qdd[m]);
+                }
+                b.push(rail.amount * udd);
+                if pushing {
+                    let f = if *own_any { force[s] } else { 0.0 };
+                    for m in 0..nm {
+                        let (a, bd) = (rail.ad[m], rail.bd[m]);
+                        let (x, v, d) = (self_q[m], self_qd[m], self_drive[m]);
+                        let mut nx = a[0] * x + a[1] * v + bd[0] * d;
+                        let mut nv = a[2] * x + a[3] * v + bd[1] * d;
+                        if nx.abs() < RAIL_FLOOR && nv.abs() < RAIL_FLOOR {
+                            nx = 0.0;
+                            nv = 0.0;
+                        }
+                        self_q[m] = nx;
+                        self_qd[m] = nv;
+                        self_qdd[m] = -rail.w2[m] * nx - rail.c2[m] * nv + d;
+                        self_drive[m] = 0.0 + rows.phi[m] * f;
+                    }
+                }
+            }
+            *self_on = self_q
+                .iter()
+                .chain(self_qd.iter())
+                .chain(self_drive.iter())
+                .chain(self_qdd.iter())
+                .any(|&x| x != 0.0);
+            b
+        } else {
+            Vec::new()
+        };
+        if !*own_any
+            && !*zs_awake
+            && !(motion.moving && (!*start_damped || marks.iter().any(|m| !m.1)))
+        {
+            return false;
+        }
+        let (mut damped, mut felt, mut mi) = (*start_damped, 0, 0);
+        let mut p = vec![0.0; rank_max];
+        let mut pv = vec![0.0; rank_max];
+        let mut wrote = false;
+        let switch = |to_d: bool, from_d: bool, awake: bool, zs: &mut (Vec<f64>, Vec<f64>)| {
+            if to_d != from_d && awake {
+                let (t, from, to) = if to_d {
+                    (&self.to_damped, self.free.modes, self.damped.modes)
+                } else {
+                    (&self.to_free, self.damped.modes, self.free.modes)
+                };
+                transfer(t, from, to, zs);
+            }
+        };
+        for (s, o) in out.iter_mut().enumerate() {
+            while mi < marks.len() && marks[mi].0 <= s {
+                let (_, to_d, g) = marks[mi];
+                switch(to_d, damped, *zs_awake, zs);
+                damped = to_d;
+                felt = g;
+                mi += 1;
+            }
+            let sys: &Sys = if damped {
+                gens.get(felt).unwrap_or(&self.damped)
+            } else {
+                &self.free
+            };
+            let fb = if !damped && motion.moving {
+                base[s]
+            } else {
+                0.0
+            };
+            if !*zs_awake && fb.abs() * rows.drive_gain >= ctx.sleep {
+                *zs_awake = true;
+                zs.0.fill(0.0);
+                zs.1.fill(0.0);
+                *zs_since = 0;
+                *zs_peak = 0.0;
+                *zs_linear = true;
+            }
+            while on < own_on.len() && own_on[on].1 <= s {
+                on += 1;
+            }
+            let own_now = on < own_on.len() && own_on[on].0 <= s;
+            if *zs_awake {
+                if fb != 0.0 {
+                    rotate_driven(sys, zs, &rows.gz, fb);
+                } else {
+                    rotate(sys, zs);
+                }
+                *zs_peak = zs_peak.max(fb.abs());
+            }
+            if !own_now && *zs_awake && *zs_linear {
+                // only ringing in sympathy, a small swing: the pickup's small-signal gain
+                let m = sys.m;
+                let tip_v = dot(&sys.tip_v.0[..m], &sys.tip_v.1[..m], &zs.0[..m], &zs.1[..m]);
+                *o += *lin_gain * tip_v;
+                wrote = true;
+            } else if *own_any || *zs_awake {
+                let m = sys.m;
+                let rank = sys.rank();
+                let (mut tip, mut tip_v) = (0.0, 0.0);
+                p.fill(0.0);
+                pv.fill(0.0);
+                if *own_any {
+                    let rec = &own[s * stride..(s + 1) * stride];
+                    tip = rec[0];
+                    tip_v = rec[1];
+                    p[..rank].copy_from_slice(&rec[2..2 + rank]);
+                    pv[..rank].copy_from_slice(&rec[2 + rank_max..2 + rank_max + rank]);
+                }
+                if *zs_awake {
+                    let (zr, zi) = (&zs.0[..m], &zs.1[..m]);
+                    tip += dot(&sys.tip.0[..m], &sys.tip.1[..m], zr, zi);
+                    tip_v += dot(&sys.tip_v.0[..m], &sys.tip_v.1[..m], zr, zi);
+                    for r in 0..rank {
+                        let row = r * m..(r + 1) * m;
+                        p[r] += dot(&sys.arc.0[row.clone()], &sys.arc.1[row.clone()], zr, zi);
+                        pv[r] += dot(&sys.arc_v.0[row.clone()], &sys.arc_v.1[row], zr, zi);
+                    }
+                }
+                let (mut arc, mut arc_v) = (0.0, 0.0);
+                for r in 0..rank {
+                    arc += p[r] * p[r];
+                    arc_v += p[r] * pv[r];
+                }
+                let (py, pg) = ctx
+                    .flux
+                    .gradient(self.voicing + tip, 0.5 * arc, &mut self.span);
+                *o -= self.weight * (py * tip_v + pg * arc_v);
+                wrote = true;
+            }
+            if *zs_awake {
+                *zs_since += 1;
+                if *zs_since >= SLEEP_EVERY {
+                    *zs_since = 0;
+                    let bound: f64 = (0..sys.modes)
+                        .map(|j| sys.tip_abs[j] * zs.0[j].hypot(zs.1[j]))
+                        .sum();
+                    *zs_linear = bound < LINEAR_M;
+                    if bound + rows.drive_gain * *zs_peak < ctx.sleep {
+                        *zs_awake = false;
+                        zs.0.fill(0.0);
+                        zs.1.fill(0.0);
+                    } else {
+                        for j in 0..zs.0.len() {
+                            if zs.0[j].abs() < MODE_FLOOR && zs.1[j].abs() < MODE_FLOOR {
+                                zs.0[j] = 0.0;
+                                zs.1[j] = 0.0;
+                            }
+                        }
+                    }
+                    *zs_peak = 0.0;
+                }
+            }
+        }
+        // switches at the chunk's end (a contact ending on its last sample)
+        for &(_, to_d, _) in &marks[mi..] {
+            switch(to_d, damped, *zs_awake, zs);
+            damped = to_d;
+        }
+        wrote
+    }
+}
+
 // --- Imperfection (`varimu.rhodes.imperfection`: the constants' sources are there) -----
 
-/// The largest part amount (2: beyond a realistic instrument).
-pub const AMOUNT_MAX: f64 = 2.0;
+/// The largest amount (10: a wreck; 1 a real Mark I, 2 a neglected one).
+pub const AMOUNT_MAX: f64 = 10.0;
+const GROWTH_KNEE: f64 = 2.0;
+const GROWTH_AT_MAX: f64 = 30.0;
+const TUNING_MAX_CENTS: f64 = 200.0;
+const TIPS_MAX: f64 = 20.0;
+const DECAY_MAX: f64 = 20.0;
+const DAMPER_MAX: f64 = 20.0;
+const STRIKE_K_MAX: f64 = 10.0;
+const STRIKE_SPEED_MIN_DB: f64 = -20.0;
+const STRIKE_SPEED_MAX_DB: f64 = 1.5;
+const RELEASE_MAX: f64 = 20.0;
 const TUNING_CENTS: f64 = 2.1;
 const VOICING_M: f64 = 0.3e-3;
 const VOICING_RANGE_M: (f64, f64) = (0.5e-3, 3.5e-3);
 const TIPS_SPREAD: f64 = 0.2;
 const DECAY_SPREAD: f64 = 0.25;
 const DAMPER_SPREAD: f64 = 0.35;
-const DAMPER_MIN: f64 = 0.1;
+const DAMPER_MIN: f64 = 0.02;
+
+/// A part's amount -> its spreads' factor (`imperfection.growth`).
+fn growth(a: f64) -> f64 {
+    if a <= GROWTH_KNEE {
+        return a;
+    }
+    let c =
+        (GROWTH_AT_MAX - AMOUNT_MAX) / ((AMOUNT_MAX - GROWTH_KNEE) * (AMOUNT_MAX - GROWTH_KNEE));
+    a + c * ((a - GROWTH_KNEE) * (a - GROWTH_KNEE))
+}
+
+/// exp(log_x) kept within [1 / cap, cap] (`imperfection._lognormal`).
+fn lognormal(log_x: f64, cap: f64) -> f64 {
+    log_x.exp().clamp(1.0 / cap, cap)
+}
 const DAMPER_BAND: f64 = 0.15;
 const STRIKE_K_SPREAD: f64 = 0.08;
 const STRIKE_SPEED_DB: f64 = 0.4;
@@ -1165,7 +2006,7 @@ impl Imp {
         let parts = [
             i.tuning, i.voicing, i.tips, i.decay, i.dampers, i.hammer, i.release,
         ]
-        .map(|share| (i.amount * share).min(AMOUNT_MAX));
+        .map(|share| growth((i.amount * share).min(AMOUNT_MAX)));
         if parts.iter().all(|&a| a == 0.0) {
             return None;
         }
@@ -1184,7 +2025,8 @@ impl Imp {
         );
         let [tuning, voicing_a, tips, decay, dampers, _, _] = self.parts;
         let ratio = if tuning > 0.0 {
-            2f64.powf(tuning * TUNING_CENTS * z[0] / 1200.0)
+            let cents = (tuning * TUNING_CENTS * z[0]).clamp(-TUNING_MAX_CENTS, TUNING_MAX_CENTS);
+            2f64.powf(cents / 1200.0)
         } else {
             1.0
         };
@@ -1194,17 +2036,19 @@ impl Imp {
             voicing
         };
         let k = if tips > 0.0 {
-            (tips * TIPS_SPREAD * z[2]).exp()
+            lognormal(tips * TIPS_SPREAD * z[2], TIPS_MAX)
         } else {
             1.0
         };
         let d = if decay > 0.0 {
-            (decay * DECAY_SPREAD * z[3]).exp()
+            lognormal(decay * DECAY_SPREAD * z[3], DECAY_MAX)
         } else {
             1.0
         };
         let g = if dampers > 0.0 {
-            (dampers * DAMPER_SPREAD * z[4]).exp().max(DAMPER_MIN)
+            (dampers * DAMPER_SPREAD * z[4])
+                .exp()
+                .clamp(DAMPER_MIN, DAMPER_MAX)
         } else {
             1.0
         };
@@ -1226,9 +2070,10 @@ impl Imp {
         let mut z = [0.0; 2];
         let k = crate::noise::key(self.seed, STRIKE_NAME, key as u32);
         crate::noise::normals(k, 2 * count, &mut z);
+        let speed_db = (a * STRIKE_SPEED_DB * z[1]).clamp(STRIKE_SPEED_MIN_DB, STRIKE_SPEED_MAX_DB);
         (
-            (a * STRIKE_K_SPREAD * z[0]).exp(),
-            10f64.powf(a * STRIKE_SPEED_DB * z[1] / 20.0),
+            lognormal(a * STRIKE_K_SPREAD * z[0], STRIKE_K_MAX),
+            10f64.powf(speed_db / 20.0),
         )
     }
 
@@ -1241,7 +2086,7 @@ impl Imp {
         let mut z = [0.0; 1];
         let k = crate::noise::key(self.seed, RELEASE_NAME, key as u32);
         crate::noise::normals(k, count, &mut z);
-        (a * RELEASE_SPREAD * z[0]).exp()
+        lognormal(a * RELEASE_SPREAD * z[0], RELEASE_MAX)
     }
 }
 
@@ -1326,13 +2171,15 @@ pub struct HarpCtx {
     s: usize,
     window: usize,
     velocity: HarpVelocity,
+    /// The tone bar rail (None: sympathetic resonance off).
+    rail: Option<RailCtx>,
 }
 
 impl crate::keyed::KeyVoice for Voice {
     type Ctx = HarpCtx;
 
     fn asleep(&self) -> bool {
-        self.asleep
+        self.asleep && self.couple.as_ref().is_none_or(|c| !c.zs_awake)
     }
 
     fn event(&mut self, ev: NoteEvent, ctx: &HarpCtx) {
@@ -1344,8 +2191,43 @@ impl crate::keyed::KeyVoice for Voice {
         Voice::event(self, ev, speed, ctx.window);
     }
 
-    fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &HarpCtx) {
-        Voice::render(self, &mut buf[from..to], &ctx.flux, ctx.s, ctx.sleep);
+    fn render(&mut self, buf: &mut [f64], n: usize, from: usize, to: usize, ctx: &HarpCtx) {
+        if self.couple.is_some() {
+            self.render_own(from, to, n, ctx.s, ctx.sleep);
+        } else {
+            Voice::render(self, &mut buf[from..to], &ctx.flux, ctx.s, ctx.sleep);
+        }
+    }
+
+    fn coupled(ctx: &HarpCtx) -> bool {
+        ctx.rail.is_some()
+    }
+
+    fn chunk_start(&mut self, _start: usize) {
+        self.begin_chunk();
+    }
+
+    fn couple(ctx: &HarpCtx, voices: &[&Voice], _start: usize, n: usize) {
+        if let Some(rail) = &ctx.rail {
+            rail.step(voices, n);
+        }
+    }
+
+    fn finishing(&self, ctx: &HarpCtx) -> bool {
+        match (&self.couple, &ctx.rail) {
+            (Some(c), Some(rail)) => {
+                c.own_any
+                    || c.zs_awake
+                    || c.self_on
+                    || (rail.motion.read().expect("rail").moving
+                        && (!c.start_damped || c.marks.iter().any(|m| !m.1)))
+            }
+            _ => !self.asleep,
+        }
+    }
+
+    fn finish(&mut self, buf: &mut [f64], n: usize, ctx: &HarpCtx) -> bool {
+        Voice::finish(self, &mut buf[..n], ctx)
     }
 }
 
@@ -1384,10 +2266,17 @@ impl Medium {
         let dt = 1.0 / (fs * k as f64);
         let model = &el.model;
         let imp = el.imperfection.as_ref().and_then(Imp::new);
+        let rail = match (el.sympathetic, &model.rail) {
+            (Some(amount), Some(r)) => Some(RailCtx::new(r, amount, dt)),
+            _ => None,
+        };
         let voices = model
             .keys
             .iter()
-            .map(|key| (key.note as u8, Voice::new(key, dt, s, imp, model.voicing_m)))
+            .map(|key| {
+                let v = Voice::new(key, dt, s, imp, model.voicing_m, rail.is_some());
+                (key.note as u8, v)
+            })
             .collect();
         let ctx = HarpCtx {
             flux: FluxPoly::new(&model.flux),
@@ -1395,6 +2284,7 @@ impl Medium {
             s,
             window: (model.contact_window_s * fs * k as f64).round() as usize,
             velocity: model.velocity.clone(),
+            rail,
         };
         Medium {
             harp: el.clone(),
@@ -1455,6 +2345,7 @@ impl Medium {
     pub fn same(&self, el: &crate::ir::Harp) -> bool {
         el.model == self.harp.model
             && el.imperfection == self.harp.imperfection
+            && el.sympathetic == self.harp.sympathetic
             && el.rate_hz == self.harp.rate_hz
             && el.contact_rate_hz == self.harp.contact_rate_hz
     }

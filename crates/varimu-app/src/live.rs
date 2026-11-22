@@ -441,20 +441,22 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Spring(p) => ("Spring", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
-            // An imperfect Rhodes is another instrument too
-            // (docs/RHODES_IMPERFECTION_PLAN.md): its knobs restart the stream.
+            // An imperfect Rhodes is another instrument too, and so is one ringing in sympathy
+            // (docs/RHODES_IMPERFECTION_PLAN.md): their knobs restart the stream.
             Element::Harp(h) => {
+                let sym = h.sympathetic.map(f64::to_bits);
                 worn = match &h.imperfection {
                     Some(i) => format!(
-                        "{} {:?}",
+                        "{} {:?} {:?}",
                         h.name,
                         [
                             i.seed, i.amount, i.tuning, i.voicing, i.tips, i.decay, i.dampers,
                             i.hammer, i.release,
                         ]
-                        .map(f64::to_bits)
+                        .map(f64::to_bits),
+                        sym
                     ),
-                    None => h.name.clone(),
+                    None => format!("{} {:?}", h.name, sym),
                 };
                 ("Harp", &worn, vec![&h.out])
             }
@@ -1330,8 +1332,9 @@ mod tests {
         assert!((15..=30).contains(&lag), "{lag}");
     }
 
-    /// The Rhodes' imperfection knobs (docs/RHODES_IMPERFECTION_PLAN.md) are another
-    /// instrument: they change the live structure (the stream restarts), a preamp knob doesn't.
+    /// The Rhodes' imperfection and sympathy knobs (docs/RHODES_IMPERFECTION_PLAN.md) are
+    /// another instrument: they change the live structure (the stream restarts), a preamp knob
+    /// doesn't.
     #[test]
     fn the_rhodes_imperfection_restarts_the_stream() {
         use super::{Circuit, structure};
@@ -1348,8 +1351,16 @@ mod tests {
         };
         let base = build("volume", 0.7);
         assert!(base == build("volume", 0.5));
-        assert!(base != build("imp_amount", 0.0));
-        assert!(base != build("imp_hammer", 0.5));
+        assert!(base != build("imp_amount", 1.0));
+        assert!(base != build("sympathy", 1.0));
+        let on = |a: f64| {
+            let values = vec![
+                ("sympathy".to_string(), Value::Int(1)),
+                ("sympathy_amount".to_string(), Value::Float(a)),
+            ];
+            structure(&c.build(&values).unwrap())
+        };
+        assert!(on(1.0) != on(4.0));
     }
 
     /// A keyed 670 (KEY EXT) live: a bass tone, then kicks on its key input from 0.4 s, as

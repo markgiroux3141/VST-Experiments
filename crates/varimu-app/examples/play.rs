@@ -6,7 +6,7 @@
 //!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N]
 //!          | --midi [NAME] [--wave saw|square] | --hold NOTE
 //!          | --strike-all [VELOCITY] [--restrike S]
-//!          | --hold-bass N [--from NOTE] [--restrike S])
+//!          | --hold-bass N [--from NOTE] [--restrike S] [--pedal])
 //!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
@@ -119,6 +119,7 @@ fn main() -> Result<(), String> {
     let mut strike_all: Option<u8> = None;
     let mut restrike: Option<f64> = None;
     let mut hold_bass: Option<u8> = None;
+    let mut pedal = false;
     let mut from_note: u8 = 29;
     let (mut end, mut end_sets, mut end_mix): (Option<String>, Vec<(String, Value)>, f64) =
         (None, Vec::new(), END_MIX);
@@ -163,6 +164,7 @@ fn main() -> Result<(), String> {
             }
             "--restrike" => restrike = Some(num(args.next(), &a)?),
             "--hold-bass" => hold_bass = Some(num(args.next(), &a)? as u8),
+            "--pedal" => pedal = true,
             "--from" => from_note = num(args.next(), &a)? as u8,
             "--list-midi" => {
                 for p in midi::ports()? {
@@ -270,7 +272,8 @@ fn main() -> Result<(), String> {
         });
         keys
     }));
-    // N keys held from `from_note`, the next N struck at once every `restrike` seconds.
+    // N keys held from `from_note`, the next N struck at once every `restrike` seconds (with
+    // `--pedal` the sustain pedal down from the start: every key's felt off).
     let held = held.or(hold_bass.map(|n| {
         let keys = Arc::new(Keys::default());
         let k = keys.clone();
@@ -278,6 +281,9 @@ fn main() -> Result<(), String> {
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(2));
             wait_for_strike_tables();
+            if pedal {
+                k.message(&[0xb0, 64, 127]);
+            }
             for note in from_note..from_note.saturating_add(n) {
                 k.message(&[0x90, note & 127, 100]);
                 std::thread::sleep(Duration::from_millis(1));

@@ -1,7 +1,7 @@
 {
  "format": 1,
  "circuit": "rhodes_suitcase_100w",
- "circuit_sha256": "577ffff1e0ae5758da40b4524e12ed7d42234e65905abcc85ee74801b7fff76c",
+ "circuit_sha256": "9c687cb23dee295559e8c03078a30cf3f4bf6975ec79d9c18bc4157861ffcace",
  "speaker_component": "P12R@1",
  "source": "scripts/suitcase_speaker_filter.py: AC analysis of the circuit's speaker parts, readout over terminal build (docs/INSTRUMENT_REALISM_FABLE.md SC1)",
  "input": "the live build's out / out_r: one driver's terminal volts",

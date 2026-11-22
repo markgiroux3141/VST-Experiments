@@ -79,21 +79,17 @@ controls:
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage; fig11-3 gives 120 V or 240 V export primaries, a 120 V cord for 1978 USA)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
   # The instrument's imperfection (docs/RHODES_IMPERFECTION_PLAN.md; varimu/rhodes/imperfection.py):
-  # a part's amount is IMPERFECTION x its share; 0 everywhere = the compiled harp exactly. A change
-  # is another instrument: the stream restarts.
+  # one knob; 0 = the compiled harp exactly. A change is another instrument: the stream restarts.
   imp_unit: {value: 1, min: 1, max: 64, unit: position, source: "design choice: the instrument (the seed of its per-key and per-strike draws)"}
-  imp_amount: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice (2026-11-22: a real, played, maintained Mark I by default; 0 the compiled harp, 2 a neglected one)"}
-  imp_tuning: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each key's detune's share (2.1 cents rms at 1, measured on jRhodes3d)"}
-  imp_voicing: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each key's voicing scatter's share (0.3 mm rms at 1: timbre and level key to key)"}
-  imp_tips: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each hammer tip's hardness scatter's share (attack brightness key to key)"}
-  imp_decay: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each key's sustain scatter's share (0.25 in ln Q at 1, measured on jRhodes3d)"}
-  imp_dampers: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each damper felt's scatter's share (how fast a key stops when released)"}
-  imp_hammer: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each strike's hammer variation's share (a repeated note never quite the same)"}
-  imp_release: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: each release's felt landing's share"}
+  imp_amount: {value: 0.0, min: 0.0, max: 10.0, unit: ratio, source: "design choice (2026-11-22, the user's: one knob, 0 the compiled harp by default, 1 a real played Mark I (spreads measured on jRhodes3d where it could say), 2 a neglected one, 10 a wreck)"}
+  # The keys ringing in sympathy through the tone bar rail (varimu/rhodes/sympathetic.py): off by
+  # default (the compiled harp, and no extra work); on, every key whose felt is off answers the rail.
+  sympathy: {value: 0, choices: [0, 1], unit: switch, source: "design choice (2026-11-22, the user's: off by default to save compute)"}
+  sympathy_amount: {value: 1.0, min: 0.0, max: 30.0, unit: ratio, source: "design choice: the rail's coupling, 1 the compiled rail (provisional: its plank's values are model knowledge), up to 30 for effect"}
 
 values:
   # --- The harp (as rhodes_stage_5e3's) ------------------------------------------------
-  harp_model: {value: MK1_HARP@2, source: "config/components/mk1_harp/2.yaml (the Mark I's 73-key harp from physics; its coils' resistance and inductance with their sources there)"}
+  harp_model: {value: MK1_HARP@3, source: "config/components/mk1_harp/3.yaml (the Mark I's 73-key harp from physics, with its tone bar rail; its coils' resistance and inductance with their sources there; @2's data otherwise)"}
   harp_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate (docs/RHODES_PLAN.md, RH3)"}
   harp_contact_rate_hz: {value: 384000.0, source: "numerical: the hammer's contact stepped at 384 kHz (RH1's rate, RH3)"}
   harp_cable_c_f: {value: 150.0e-12, source: "provisional: model knowledge (the Suitcase's short shielded harp lead to the preamp in the name rail, ~1.5 m at ~100 pF/m)"}
@@ -277,7 +273,7 @@ sections:
     parts:
       # The harp over its lead to P1; J1's normally closed contact to `inn` when ACCESSORY
       # IN is empty, its tip (the audio input) when a plug is in.
-      HARP: {harp: [hl], component: harp_model, rate_hz: harp_rate_hz, contact_rate_hz: harp_contact_rate_hz, imp_seed: imp_unit, imp_amount: imp_amount, imp_tuning: imp_tuning, imp_voicing: imp_voicing, imp_tips: imp_tips, imp_decay: imp_decay, imp_dampers: imp_dampers, imp_hammer: imp_hammer, imp_release: imp_release}
+      HARP: {harp: [hl], component: harp_model, rate_hz: harp_rate_hz, contact_rate_hz: harp_contact_rate_hz, imp_seed: imp_unit, imp_amount: imp_amount, sym_on: sympathy, sym_amount: sympathy_amount}
       CCABLE: {C: [hl, "0"], c: harp_cable_c_f, tolerance: none}
       RIN_UNUSED: {R: [in, "0"], r: r_input_unused_ohm, tolerance: none}
       SJ1:

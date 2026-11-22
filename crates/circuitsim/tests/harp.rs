@@ -22,6 +22,7 @@ fn harp(rate_hz: f64) -> Option<Harp> {
         contact_rate_hz: 384_000.0,
         model: Box::new(model),
         imperfection: None,
+        sympathetic: None,
     })
 }
 
@@ -79,6 +80,65 @@ fn an_imperfect_harp_is_the_same_on_any_threads() {
     let three = play(&el, 3, 6000);
     assert_eq!(one, three);
     assert_ne!(one, perfect);
+}
+
+/// The saved harp with its rail (MK1_HARP@3), sympathetic at `amount`.
+fn harp_with_rail(amount: Option<f64>) -> Option<Harp> {
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/components/mk1_harp/3.harp.json");
+    let text = std::fs::read_to_string(path).ok()?;
+    let model: HarpModel = serde_json::from_str(&text).expect("a harp model");
+    model.check().expect("valid");
+    Some(Harp {
+        name: "VHARP".into(),
+        out: "h".into(),
+        rate_hz: 96_000.0,
+        contact_rate_hz: 384_000.0,
+        model: Box::new(model),
+        imperfection: None,
+        sympathetic: amount,
+    })
+}
+
+/// A pedalled phrase with events on chunk boundaries (`block` steps a chunk when fed in
+/// blocks): the case where a switch at a chunk's first sample was lost.
+fn phrase(el: &Harp, workers: usize, n: usize, block: Option<usize>) -> Vec<f64> {
+    let mut m = Medium::with_workers(el, 48_000.0, workers);
+    m.queue(10, NoteEvent::Pedal { down: true });
+    chord(&mut m, 20, &[40, 52, 59, 64], 100);
+    m.queue(37 * 40, NoteEvent::Off { note: 52 });
+    m.queue(37 * 81, NoteEvent::Pedal { down: false });
+    chord(&mut m, 37 * 100, &[45, 57, 64], 120);
+    m.queue(37 * 130, NoteEvent::Off { note: 64 });
+    let mut y = Vec::with_capacity(n);
+    for p in 0..n {
+        match block {
+            Some(b) if p % b == 0 => m.known_until(p + b - 1),
+            None if p == 0 => m.known_until(usize::MAX),
+            _ => {}
+        }
+        y.push(m.push());
+    }
+    y
+}
+
+/// Sympathetic resonance (docs/RHODES_IMPERFECTION_PLAN.md): the coupled medium is the same
+/// on any number of threads and any chunking, off at amount 0 bit for bit, and another sound.
+#[test]
+fn sympathy_is_the_same_on_any_threads_and_chunks() {
+    let Some(off) = harp_with_rail(None) else {
+        return;
+    };
+    let n = 6000;
+    let plain = phrase(&off, 0, n, None);
+    let zero = harp_with_rail(Some(0.0)).expect("the rail");
+    assert_eq!(phrase(&zero, 0, n, None), plain);
+    let on = harp_with_rail(Some(3.0)).expect("the rail");
+    let whole = phrase(&on, 0, n, None);
+    assert_eq!(phrase(&on, 3, n, None), whole);
+    assert_eq!(phrase(&on, 3, n, Some(37)), whole);
+    assert_eq!(phrase(&on, 0, n, Some(1)), whole);
+    assert_ne!(whole, plain);
 }
 
 #[test]

@@ -93,9 +93,12 @@ Macro parts (connection; params, * = required):
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
                 EMF behind its coils' resistance and inductance into out, its keys played
                 by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp).
-                Optional, all or none: imp_seed, imp_amount, imp_tuning, imp_voicing,
-                imp_tips, imp_decay, imp_dampers, imp_hammer, imp_release (an imperfect
-                instrument: varimu.rhodes.imperfection)
+                Optional: imp_seed and imp_amount (an imperfect instrument:
+                varimu.rhodes.imperfection), with the parts' shares imp_tuning,
+                imp_voicing, imp_tips, imp_decay, imp_dampers, imp_hammer, imp_release
+                (each 1 when absent); sym_on (> 0.5: the keys ring in sympathy through
+                the tone bar rail, varimu.rhodes.sympathetic) and sym_amount (its
+                coupling, 1 when absent)
     wurli_reeds [plate]; component* (a reeds component version, NAME@N, or a parameter
                 naming one: kind ep_reeds, varimu.wurlitzer.compile), rate_hz* and
                 contact_rate_hz* (numerics: the voices' and the hammer's contact's rate
@@ -1077,12 +1080,18 @@ def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
         data = harp_compile.load_data(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
+    required = parts.HARP_IMPERFECTION[:2]
     given = [k for k in parts.HARP_IMPERFECTION if a[k] is not None]
-    if given and len(given) < len(parts.HARP_IMPERFECTION):
-        missing = sorted(set(parts.HARP_IMPERFECTION) - set(given))
-        raise ctx.fail(f"{name}.{missing[0]}", "the imperfection's values go all or none")
-    imp = {k: a[k] for k in parts.HARP_IMPERFECTION} if given else None
-    return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"], imp)
+    if given and any(a[k] is None for k in required):
+        missing = next(k for k in required if a[k] is None)
+        raise ctx.fail(f"{name}.{missing}", "an imperfection needs imp_seed and imp_amount")
+    imp = None
+    if given:
+        imp = {k: (1.0 if a[k] is None else a[k]) for k in parts.HARP_IMPERFECTION}
+    sym = None
+    if a["sym_on"] is not None and a["sym_on"] > 0.5:
+        sym = 1.0 if a["sym_amount"] is None else a["sym_amount"]
+    return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"], imp, sym)
 
 
 def _wurli_reeds(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1488,6 +1497,8 @@ for _name, _macro in {
             "rate_hz": _P,
             "contact_rate_hz": _P,
             **{k: Param("physical", None) for k in parts.HARP_IMPERFECTION},
+            "sym_on": Param("physical", None),
+            "sym_amount": Param("physical", None),
         },
     ),
     "wurli_reeds": Macro(

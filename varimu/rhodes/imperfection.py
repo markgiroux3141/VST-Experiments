@@ -3,12 +3,16 @@ release differs from the last (docs/RHODES_IMPERFECTION_PLAN.md). `varimu/rhodes
 voices take it (`harp.render(..., imperfection=)`, the reference); circuitsim's `harp.rs`
 (`Imperfection`, applied where the medium builds its voices and at each event) is the port.
 
-An **amount** (the panel's IMPERFECTION) and seven parts' shares of it, and a seed (the unit:
-which instrument). A part's amount is amount x its share, at most `AMOUNT_MAX`: 0 the compiled
-harp exactly, 1 a real, played, maintained Mark I (the spreads below), 2 beyond (a neglected
-one, for character). The shares default to 1. Every draw is a pure function of (seed, its name,
-the key) and, per strike or release, of that key's count of them since the medium started, so
-a take replays bit for bit and changing one share moves only what it scales.
+An **amount** (the panel's one IMPERFECTION knob, 0 to `AMOUNT_MAX`) and seven parts' shares
+of it (1 each on the panel; tests and studies set them apart), and a seed (the unit: which
+instrument). A part's amount is amount x its share, at most `AMOUNT_MAX`: 0 the compiled harp
+exactly, 1 a real, played, maintained Mark I (the spreads below), 2 a neglected one, 10 a
+wreck. Each spread is its value at 1 times `growth(part)`: linear to 2 (so 0-2 is as measured
+and labelled), then quadratic to 30x at 10, every draw then clamped to its part's cap (the
+`*_MAX` / `*_MIN` constants: design choices that keep a wreck playable and its numerics sound,
+not data). Every draw is a pure function of (seed, its name, the key) and, per strike or
+release, of that key's count of them since the medium started, so a take replays bit for bit
+and changing one share moves only what it scales.
 
 **Per instrument** (drawn once per key, applied when the voices are built):
 
@@ -48,8 +52,24 @@ import numpy as np
 
 from varimu.devices import noise
 
-#: The largest part amount (2: beyond a realistic instrument).
-AMOUNT_MAX = 2.0
+#: The largest amount (10: a wreck; 1 a real Mark I, 2 a neglected one).
+AMOUNT_MAX = 10.0
+#: Past this amount the spreads grow quadratically (`growth`): design choice.
+GROWTH_KNEE = 2.0
+#: `growth(AMOUNT_MAX)`: the spreads at 10 are 30x their value at 1. Design choice.
+GROWTH_AT_MAX = 30.0
+#: The caps on a draw at any amount (design choices: a wreck, still playable): a key's detune
+#: (cents), the tips' and each strike's stiffness factor, the decay's and the felt's factors,
+#: each strike's hammer speed (dB: up only a little, the bass tines swing 10-14 mm at ff in a
+#: +-18 mm flux map).
+TUNING_MAX_CENTS = 200.0
+TIPS_MAX = 20.0
+DECAY_MAX = 20.0
+DAMPER_MAX = 20.0
+STRIKE_K_MAX = 10.0
+STRIKE_SPEED_MIN_DB = -20.0
+STRIKE_SPEED_MAX_DB = 1.5
+RELEASE_MAX = 20.0
 
 #: Per-key detune at tuning 1, cents rms. Measured (2026-11-22, scripts/rhodes_unit_spread.py):
 #: jRhodes3d's notes from E2 up, their fundamentals in the softer layers against equal
@@ -75,8 +95,9 @@ DECAY_SPREAD = 0.25
 #: knowledge (a Rhodes' dampers are notoriously uneven: some keys ring on for a few tenths of
 #: a second after release, others stop dead).
 DAMPER_SPREAD = 0.35
-#: The felt's factor's floor (a felt always damps). Numerical.
-DAMPER_MIN = 0.1
+#: The felt's factor's floor (a felt always damps a little: at 0.02 a wreck's worn felt lets a
+#: key ring on). Design choice.
+DAMPER_MIN = 0.02
 #: A damped mode's "own" decay: the least free decay within this fraction of its frequency.
 DAMPER_BAND = 0.15
 #: Each strike's contact stiffness at hammer 1: lognormal sigma. Provisional: model knowledge
@@ -145,15 +166,20 @@ def key_draws(imp: Imperfection | None, key: int, voicing_m: float) -> KeyDraws:
     if imp is None or imp.none():
         return KeyDraws(1.0, voicing_m, 1.0, 1.0, 1.0)
     z = noise.normals(noise.key(int(imp.seed), KEY_NAME, key), 0, 5)
-    tuning, voicing, tips, decay, dampers = (imp.part(p) for p in PARTS[:5])
-    ratio = 2.0 ** (tuning * TUNING_CENTS * float(z[0]) / 1200.0) if tuning > 0 else 1.0
+    tuning, voicing, tips, decay, dampers = (growth(imp.part(p)) for p in PARTS[:5])
+    ratio = 1.0
+    if tuning > 0:
+        cents = _clamp(tuning * TUNING_CENTS * float(z[0]), -TUNING_MAX_CENTS, TUNING_MAX_CENTS)
+        ratio = 2.0 ** (cents / 1200.0)
     v = voicing_m
     if voicing > 0:
         lo, hi = VOICING_RANGE_M
-        v = min(max(voicing_m + voicing * VOICING_M * float(z[1]), lo), hi)
-    k = math.exp(tips * TIPS_SPREAD * float(z[2])) if tips > 0 else 1.0
-    d = math.exp(decay * DECAY_SPREAD * float(z[3])) if decay > 0 else 1.0
-    g = max(math.exp(dampers * DAMPER_SPREAD * float(z[4])), DAMPER_MIN) if dampers > 0 else 1.0
+        v = _clamp(voicing_m + voicing * VOICING_M * float(z[1]), lo, hi)
+    k = _lognormal(tips * TIPS_SPREAD * float(z[2]), TIPS_MAX) if tips > 0 else 1.0
+    d = _lognormal(decay * DECAY_SPREAD * float(z[3]), DECAY_MAX) if decay > 0 else 1.0
+    g = 1.0
+    if dampers > 0:
+        g = _clamp(math.exp(dampers * DAMPER_SPREAD * float(z[4])), DAMPER_MIN, DAMPER_MAX)
     return KeyDraws(ratio, v, k, d, g)
 
 
@@ -161,13 +187,14 @@ def strike_draws(imp: Imperfection | None, key: int, count: int) -> tuple[float,
     """Key `key`'s `count`-th strike (from 0): its (stiffness factor, speed factor)."""
     if imp is None or imp.none():
         return 1.0, 1.0
-    a = imp.part("hammer")
+    a = growth(imp.part("hammer"))
     if a == 0:
         return 1.0, 1.0
     z = noise.normals(noise.key(int(imp.seed), STRIKE_NAME, key), 2 * count, 2)
+    speed_db = _clamp(a * STRIKE_SPEED_DB * float(z[1]), STRIKE_SPEED_MIN_DB, STRIKE_SPEED_MAX_DB)
     return (
-        math.exp(a * STRIKE_K_SPREAD * float(z[0])),
-        10.0 ** (a * STRIKE_SPEED_DB * float(z[1]) / 20.0),
+        _lognormal(a * STRIKE_K_SPREAD * float(z[0]), STRIKE_K_MAX),
+        10.0 ** (speed_db / 20.0),
     )
 
 
@@ -175,11 +202,29 @@ def release_draw(imp: Imperfection | None, key: int, count: int) -> float:
     """Key `key`'s `count`-th release (from 0): its felt factor."""
     if imp is None or imp.none():
         return 1.0
-    a = imp.part("release")
+    a = growth(imp.part("release"))
     if a == 0:
         return 1.0
     z = noise.normals(noise.key(int(imp.seed), RELEASE_NAME, key), count, 1)
-    return math.exp(a * RELEASE_SPREAD * float(z[0]))
+    return _lognormal(a * RELEASE_SPREAD * float(z[0]), RELEASE_MAX)
+
+
+def growth(a: float) -> float:
+    """A part's amount -> its spreads' factor: a to `GROWTH_KNEE`, then quadratic to
+    `GROWTH_AT_MAX` at `AMOUNT_MAX` (a + c (a - knee)^2: smooth at the knee)."""
+    if a <= GROWTH_KNEE:
+        return a
+    c = (GROWTH_AT_MAX - AMOUNT_MAX) / ((AMOUNT_MAX - GROWTH_KNEE) * (AMOUNT_MAX - GROWTH_KNEE))
+    return a + c * ((a - GROWTH_KNEE) * (a - GROWTH_KNEE))
+
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return min(max(x, lo), hi)
+
+
+def _lognormal(log_x: float, cap: float) -> float:
+    """exp(log_x) kept within [1 / cap, cap]."""
+    return _clamp(math.exp(log_x), 1.0 / cap, cap)
 
 
 def pairs(lam: np.ndarray) -> np.ndarray:

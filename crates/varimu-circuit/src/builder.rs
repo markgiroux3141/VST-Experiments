@@ -1069,6 +1069,8 @@ fn macro_of(kind: &str) -> Macro {
                     p("contact_rate_hz", Physical),
                 ];
                 v.extend(HARP_IMPERFECTION.iter().map(|k| opt(k, Physical)));
+                v.push(opt("sym_on", Physical));
+                v.push(opt("sym_amount", Physical));
                 v
             },
             false,
@@ -2361,7 +2363,8 @@ fn nova_keys_part(
     })])
 }
 
-/// A harp part's imperfection (`parts.HARP_IMPERFECTION`): optional, all or none, in
+/// A harp part's imperfection (`parts.HARP_IMPERFECTION`): optional (the seed and the amount
+/// together, the shares 1 when absent), in
 /// `circuitsim::ir::HarpImperfection`'s order.
 const HARP_IMPERFECTION: [&str; 9] = [
     "imp_seed",
@@ -2440,21 +2443,37 @@ fn harp_part(
         .map_err(|e| ctx.fail(&where_, e.0))?;
     let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
     let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
-    let given = HARP_IMPERFECTION.iter().filter(|k| !a[**k].is_null()).count();
+    let given = HARP_IMPERFECTION
+        .iter()
+        .filter(|k| !a[**k].is_null())
+        .count();
     let imperfection = if given == 0 {
         None
     } else {
-        let mut w = [0.0; 9];
-        for (x, k) in w.iter_mut().zip(HARP_IMPERFECTION) {
+        let mut w = [1.0; 9];
+        for (i, (x, k)) in w.iter_mut().zip(HARP_IMPERFECTION).enumerate() {
             if a[k].is_null() {
-                return Err(ctx.fail(
-                    &format!("{name}.{k}"),
-                    "the imperfection's values go all or none",
-                ));
+                if i < 2 {
+                    return Err(ctx.fail(
+                        &format!("{name}.{k}"),
+                        "an imperfection needs imp_seed and imp_amount",
+                    ));
+                }
+                continue;
             }
             *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
         }
-        let [seed, amount, tuning, voicing, tips, decay, dampers, hammer, release] = w;
+        let [
+            seed,
+            amount,
+            tuning,
+            voicing,
+            tips,
+            decay,
+            dampers,
+            hammer,
+            release,
+        ] = w;
         Some(circuitsim::ir::HarpImperfection {
             seed,
             amount,
@@ -2467,6 +2486,20 @@ fn harp_part(
             release,
         })
     };
+    let sym_on = if a["sym_on"].is_null() {
+        0.0
+    } else {
+        ctx.float(&format!("{name}.sym_on"), &a["sym_on"])?
+    };
+    let sympathetic = if sym_on > 0.5 {
+        Some(if a["sym_amount"].is_null() {
+            1.0
+        } else {
+            ctx.float(&format!("{name}.sym_amount"), &a["sym_amount"])?
+        })
+    } else {
+        None
+    };
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let (r_ohm, l_h) = (model.coils.r_ohm, model.coils.l_h);
     Ok(vec![
@@ -2477,6 +2510,7 @@ fn harp_part(
             contact_rate_hz,
             model: Box::new((*model).clone()),
             imperfection,
+            sympathetic,
         }),
         Element::Resistor(circuitsim::ir::Resistor {
             name: format!("R{upper}_coils"),

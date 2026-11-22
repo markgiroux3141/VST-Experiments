@@ -13,6 +13,13 @@
 //!
 //! **Rates.** The voices run at `k` internal samples per step; the internal outputs are
 //! decimated to the step rate by [`crate::partition::Decimator`]'s taps (none at k = 1).
+//!
+//! **Coupled media** ([`KeyVoice::coupled`]: the Rhodes harp's keys through their rail) render
+//! a chunk in two phases: every voice its own motion (asleep ones too, noting where their
+//! events land), then [`KeyVoice::couple`] on the calling thread over all of them, then every
+//! voice [`KeyVoice::finish`]es the chunk with what the coupling gave it. Each phase is a pass
+//! over the voices as above, so the result is still the same on any number of threads, and on
+//! any chunking (the coupling is causal sample by sample).
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -55,6 +62,23 @@ pub trait KeyVoice: Send + 'static {
     /// Stop sounding at once (asleep from now on), for another voice: a medium with a cap
     /// on its voices awake ([`Medium::set_max_awake`]). Nothing by default.
     fn silence(&mut self) {}
+    /// Whether the medium renders in two phases (the module docs): `render` then records the
+    /// voice's own motion and writes nothing, `finish` writes the outputs. False by default.
+    fn coupled(_ctx: &Self::Ctx) -> bool {
+        false
+    }
+    /// Coupled: between the phases, on the calling thread, every voice in order; the chunk's
+    /// internal samples `start .. start + n` (absolute).
+    fn couple(_ctx: &Self::Ctx, _voices: &[&Self], _start: usize, _n: usize) {}
+    /// Coupled: whether `finish` has anything to do this chunk (asleep and staying so: no).
+    fn finishing(&self, _ctx: &Self::Ctx) -> bool {
+        !self.asleep()
+    }
+    /// Coupled: add the chunk's outputs into `buf` (channel c's sample i at `c * n + i`);
+    /// false when it wrote nothing.
+    fn finish(&mut self, _buf: &mut [f64], _n: usize, _ctx: &Self::Ctx) -> bool {
+        false
+    }
 }
 
 /// A voice and the internal samples it rendered in the chunk (`silent`: none, asleep).
@@ -69,6 +93,8 @@ struct Slot<V> {
 #[derive(Debug, Default)]
 struct Job {
     round: u64,
+    /// The second phase of a coupled medium's chunk (`finish`).
+    finish: bool,
     n: usize,
     /// The internal sample the chunk starts at.
     start: usize,
@@ -112,7 +138,8 @@ impl<V: KeyVoice> Shared<V> {
         let mine = |ev: &NoteEvent| own(ev, note) || broadcast(ev);
         let touched = job.events.iter().any(|(_, ev)| own(ev, note))
             || (voice.wakes_on_broadcast() && job.events.iter().any(|(_, ev)| broadcast(ev)));
-        if voice.asleep() && !touched {
+        let coupled = V::coupled(&self.ctx);
+        if voice.asleep() && !touched && !coupled {
             // Asleep through the chunk: only every key's events move it.
             for (_, ev) in job.events.iter() {
                 if broadcast(ev) {
@@ -122,11 +149,13 @@ impl<V: KeyVoice> Shared<V> {
             *silent = true;
             return;
         }
-        *silent = false;
+        *silent = coupled;
         voice.chunk_start(job.start);
         let n = job.n;
-        buf.clear();
-        buf.resize(n * self.channels, 0.0);
+        if !coupled {
+            buf.clear();
+            buf.resize(n * self.channels, 0.0);
+        }
         let mut t = 0;
         for &(at, ev) in job.events.iter() {
             if !mine(&ev) {
@@ -139,6 +168,19 @@ impl<V: KeyVoice> Shared<V> {
         voice.render(buf, n, t, n, &self.ctx);
     }
 
+    /// A coupled medium's second phase for voice i.
+    fn finish_slot(&self, i: usize, job: &Job) {
+        let mut slot = self.slots[i].lock().expect("voice");
+        let Slot { voice, buf, silent } = &mut *slot;
+        if !voice.finishing(&self.ctx) {
+            *silent = true;
+            return;
+        }
+        buf.clear();
+        buf.resize(job.n * self.channels, 0.0);
+        *silent = !voice.finish(buf, job.n, &self.ctx);
+    }
+
     /// Take voices until none is left.
     fn take(&self, job: &Job) {
         loop {
@@ -146,7 +188,11 @@ impl<V: KeyVoice> Shared<V> {
             if i >= self.slots.len() {
                 return;
             }
-            self.render_slot(i, job);
+            if job.finish {
+                self.finish_slot(i, job);
+            } else {
+                self.render_slot(i, job);
+            }
             self.done.fetch_add(1, Ordering::AcqRel);
         }
     }
@@ -156,7 +202,7 @@ impl<V: KeyVoice> Shared<V> {
 fn worker<V: KeyVoice>(sh: Arc<Shared<V>>) {
     let mut seen = 0;
     loop {
-        let (round, n, start, events) = {
+        let (round, finish, n, start, events) = {
             let mut job = sh.job.lock().expect("job");
             while job.round == seen && !sh.stop.load(Ordering::Acquire) {
                 job = sh.wake.wait(job).expect("job");
@@ -165,11 +211,12 @@ fn worker<V: KeyVoice>(sh: Arc<Shared<V>>) {
                 return;
             }
             sh.active.fetch_add(1, Ordering::AcqRel);
-            (job.round, job.n, job.start, job.events.clone())
+            (job.round, job.finish, job.n, job.start, job.events.clone())
         };
         seen = round;
         sh.take(&Job {
             round,
+            finish,
             n,
             start,
             events,
@@ -459,39 +506,29 @@ impl<V: KeyVoice> Medium<V> {
             .filter(|e| matches!(e.1, NoteEvent::On { .. }))
             .count();
         let sh = &self.shared;
-        let job = Job {
+        let mut job = Job {
             round: 0,
+            finish: false,
             n,
             start: start * k,
             events: Arc::new(evs),
         };
         V::prepare(&sh.ctx, job.start, n, &job.events);
-        if self.threads.is_empty() || self.awake + struck <= self.inline_voices {
-            for i in 0..sh.slots.len() {
-                sh.render_slot(i, &job);
+        let inline = self.threads.is_empty() || self.awake + struck <= self.inline_voices;
+        self.pass(&job, inline);
+        if V::coupled(&sh.ctx) {
+            {
+                let guards: Vec<_> = sh.slots.iter().map(|s| s.lock().expect("voice")).collect();
+                let voices: Vec<&V> = guards.iter().map(|g| &g.voice).collect();
+                V::couple(&sh.ctx, &voices, job.start, n);
             }
-        } else {
-            // Published once no worker is inside the last job (one that woke late must not
-            // take from this one with the last one's events).
-            loop {
-                let mut j = sh.job.lock().expect("job");
-                if sh.active.load(Ordering::Acquire) == 0 {
-                    sh.next.store(0, Ordering::Release);
-                    sh.done.store(0, Ordering::Release);
-                    j.round += 1;
-                    j.n = n;
-                    j.start = job.start;
-                    j.events = job.events.clone();
-                    sh.wake.notify_all();
-                    break;
-                }
-                drop(j);
-                std::hint::spin_loop();
-            }
-            sh.take(&job);
-            while sh.done.load(Ordering::Acquire) < sh.slots.len() {
-                std::hint::spin_loop();
-            }
+            let busy = sh
+                .slots
+                .iter()
+                .filter(|s| s.lock().expect("voice").voice.finishing(&sh.ctx))
+                .count();
+            job.finish = true;
+            self.pass(&job, self.threads.is_empty() || busy <= self.inline_voices);
         }
         // The voices summed in order (the same on any number of threads).
         let c = self.channels;
@@ -537,6 +574,44 @@ impl<V: KeyVoice> Medium<V> {
             }
         }
         self.rendered = end;
+    }
+
+    /// One pass of `job` over the voices: on the calling thread alone (`inline`), or with the
+    /// workers.
+    fn pass(&self, job: &Job, inline: bool) {
+        let sh = &self.shared;
+        if inline {
+            for i in 0..sh.slots.len() {
+                if job.finish {
+                    sh.finish_slot(i, job);
+                } else {
+                    sh.render_slot(i, job);
+                }
+            }
+            return;
+        }
+        // Published once no worker is inside the last job (one that woke late must not
+        // take from this one with the last one's events).
+        loop {
+            let mut j = sh.job.lock().expect("job");
+            if sh.active.load(Ordering::Acquire) == 0 {
+                sh.next.store(0, Ordering::Release);
+                sh.done.store(0, Ordering::Release);
+                j.round += 1;
+                j.finish = job.finish;
+                j.n = job.n;
+                j.start = job.start;
+                j.events = job.events.clone();
+                sh.wake.notify_all();
+                break;
+            }
+            drop(j);
+            std::hint::spin_loop();
+        }
+        sh.take(job);
+        while sh.done.load(Ordering::Acquire) < sh.slots.len() {
+            std::hint::spin_loop();
+        }
     }
 
     /// Voices awake after the last chunk.

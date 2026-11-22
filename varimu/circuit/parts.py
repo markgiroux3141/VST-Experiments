@@ -1241,11 +1241,13 @@ def harp(
     rate_hz: float,
     contact_rate_hz: float,
     imperfection: dict[str, float] | None = None,
+    sympathetic: float | None = None,
 ) -> list[Element]:
     """A Rhodes harp (docs/RHODES_PLAN.md, RH3) into `out`: its EMF V<NAME> on <name>_e
     (circuitsim's harp medium), behind the coils' resistance R<NAME>_coils and inductance
     L<NAME>_coils (the compiled harp's `coils`: the pickups in their wiring). `imperfection`:
-    `HARP_IMPERFECTION`'s values (varimu.rhodes.imperfection), or None."""
+    `HARP_IMPERFECTION`'s values (varimu.rhodes.imperfection), or None; `sympathetic`: the
+    rail's coupling (varimu.rhodes.sympathetic), or None (off)."""
     n, upper = name.lower(), name.upper()
     coils = data["coils"]
     imp = None
@@ -1255,7 +1257,15 @@ def harp(
             *(float(imperfection[k]) for k in HARP_IMPERFECTION[1:]),
         )
     return [
-        Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data, imp),
+        Harp(
+            f"V{upper}",
+            f"{n}_e",
+            rate_hz,
+            contact_rate_hz,
+            data,
+            imp,
+            None if sympathetic is None else float(sympathetic),
+        ),
         Resistor(f"R{upper}_coils", f"{n}_e", f"{n}_r", float(coils["r_ohm"])),
         Inductor(f"L{upper}_coils", f"{n}_r", out, float(coils["l_h"])),
     ]
@@ -1425,7 +1435,8 @@ def nova_keys(
     ]
 
 
-#: A harp part's imperfection: optional, all or none, in `HarpImperfection`'s order.
+#: A harp part's imperfection, in `HarpImperfection`'s order: optional, the seed and the amount
+#: together, the shares 1 when absent.
 HARP_IMPERFECTION = (
     "imp_seed",
     "imp_amount",
