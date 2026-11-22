@@ -129,3 +129,60 @@ def test_the_zither_is_the_same_on_any_number_of_threads():
     a = circuitsim.invented_render(el, 96_000.0, 9600, chord, 0)
     b = circuitsim.invented_render(el, 96_000.0, 9600, chord, 3)
     assert np.array_equal(a, b)
+
+
+def test_the_rijke_organ_agrees_with_its_reference():
+    """Two pipes (one released while the pedal holds its heater, then the pedal up),
+    aftertouch, the gauze at a stop off the sketch's, the breath, at the stream's 96 kHz:
+    long enough for a pipe to start (its bloom) and to fall silent."""
+    from varimu.invented.keys import rijke
+
+    fs = 96_000.0
+    ref = kc.latest("RIJKE_ORGAN")
+    knobs = [0.6, 0.4, 0.5, 0.0]
+    n = int(2.5 * fs)
+    perf = [
+        (0, "on", 81, 110),
+        (int(0.2 * fs), "on", 76, 70),
+        (int(0.6 * fs), "pressure", 0, 90),
+        (int(0.9 * fs), "pedal", 0, 1),
+        (int(1.0 * fs), "off", 81, 0),
+        (int(1.4 * fs), "off", 76, 0),
+        (int(1.6 * fs), "pedal", 0, 0),
+    ]
+    kb = rijke.keyboard(kc.load(ref), fs, knobs)
+    kb = {k: v for k, v in kb.items() if k in (76, 81)}
+    want = common.play(kb, n, perf, lambda v: v.step())
+    el = element(ref, knobs)
+    el["rate_hz"] = fs
+    got = circuitsim.invented_render(json.dumps(el), fs, n, perf, 0)
+    assert np.sqrt(np.mean(want[int(0.8 * fs) :] ** 2)) > 0.05  # the pipes sing
+    assert np.array_equal(got, want)  # bit-exact
+
+
+def test_a_rijke_pipe_starts_late_and_holds_below_its_start():
+    """The subcritical Hopf point (the sketch's): a held pipe blooms ~0.3-1.5 s after its key;
+    with the heat then lowered (HEAT 0.5 -> 0.1: K 0.60 -> 0.36, below the start at ~0.40) it
+    sings on, while a pipe heated at 0.36 from the first never starts."""
+    from varimu.invented.keys import rijke
+
+    fs = 96_000.0
+    m = kc.load(kc.latest("RIJKE_ORGAN"))
+
+    def rms(y):
+        return np.array([np.sqrt(np.mean(y[i : i + 4800] ** 2)) for i in range(0, y.size, 4800)])
+
+    v = rijke.keyboard(m, fs, [0.5, 0.4667, 0.25, 0.0])[69]
+    v.on(1)
+    y = np.array([v.step() for _ in range(int(2.0 * fs))])
+    env = rms(y)
+    onset_s = np.argmax(env > 0.3 * env.max()) * 0.05
+    assert 0.3 < onset_s < 1.5
+    assert env[:4].max() < 0.01 * env.max()  # silent before it starts
+    v.set_knobs([0.1, 0.4667, 0.25, 0.0])
+    held = rms(np.array([v.step() for _ in range(int(2.0 * fs))]))
+    assert held[-5:].min() > 0.3 * env.max()  # it holds
+    cold = rijke.keyboard(m, fs, [0.1, 0.4667, 0.25, 0.0])[69]
+    cold.on(1)
+    never = rms(np.array([cold.step() for _ in range(int(3.0 * fs))]))
+    assert never.max() < 0.01 * env.max()  # it never starts

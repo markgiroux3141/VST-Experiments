@@ -192,4 +192,41 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
   and sympathetic strings (the sketch's "next if picked"); per-key variation (every string
   is nominal).
 
-**Next:** IL3, the Rijke Organ, then IL4-IL7 in the table's order.
+### Session 2, continued: IL3 built
+
+- **Built:** `varimu/invented/keys/rijke.py` (the reference), `invented.rs`'s `RijkeVoice`,
+  `RIJKE_ORGAN@1`, `config/circuits/rijke_organ.yaml`, the app's `rijke_organ`, its demo
+  (`melody_over_drone`: the sketch's legato melody over a D3).
+- **Agreement:** bit-exact with the reference on a performance long enough for two pipes to
+  start and fall silent (aftertouch, the pedal holding a released key's heater, then
+  lifting; GAUZE off the sketch's place). `test_a_rijke_pipe_starts_late_and_holds_below_its_start`:
+  a pipe blooms 0.3-1.5 s after its key, sings on with its heat lowered from K 0.60 to 0.36,
+  and a pipe heated at 0.36 from the first never starts.
+- **Live:** every key struck with the pedal down (16 pipes heated) 11 % load, worst block
+  14 %, 0 dropouts at 30 ms.
+- **Level:** full scale 6 V. A pipe at velocity 127 peaks 0.8 V on any key, at velocity 1
+  0.5 V; six at once at 127 4.3 V; the demo -11.2 dBFS peak.
+- **Found:** at 96 kHz the start (the subcritical Hopf point) is at K ~0.40, not the sketch's
+  ~0.55 at 48 kHz: the lag tau / dt rounds to a different number of samples, and the
+  breath's noise is now a one-pole (the sketch's: a 2nd-order Butterworth). Every key sounds
+  at HEAT >= 0.5 (K 0.6-1.2); at HEAT 0, soft keys (K 0.30-0.40) stay silent, as a weak
+  heater would.
+- **Decided (IL3):**
+  - **Pipes C2-C6** (2.6 m-0.16 m), the sketch's eight modes, King's law and constants; the
+    lag a delay line of round(tau / dt) samples at the stream's rate (C6 +13 cents, the
+    rounding; the rest within ~1 %).
+  - **Bores scaled as 1 / f** (area; the diameter halves every second octave), so every
+    pipe radiates alike: the outflow's derivative alone put C6 24 dB over C2. Organ builders'
+    normal scale halves the diameter at the 17th note, a little steeper.
+  - **Velocity is the heater's power** K 0.6-1.2 (the sketch's key 0.8), aftertouch adds up
+    to 0.4, the pedal holds released keys' heaters on (no damper: a pipe falls silent as its
+    gauze cools, ~0.7 s after the heat goes).
+  - **The panel:** HEAT (k0; the mod wheel) 0.5-1.5x, GAUZE (k1) the gauze's place 0.15-0.45
+    of the pipe (a stop of gauzes; 0.29 the default), BREATH (k2) the plume's turbulence 0-4x.
+  - **The sound:** the ends' outflow differentiated by a backward difference (the sketch's
+    `np.gradient`, a central one, can't stream), at 2e-4 V per unit at A3's bore (~0.5 V rms a
+    held pipe; a microphone, provisional).
+- **Not done yet for IL3:** the user's first play; the thermophone choir (I7's variant);
+  per-pipe variation.
+
+**Next:** IL4, the Aeolian Keyboard, then IL5-IL7 in the table's order.

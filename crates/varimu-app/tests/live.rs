@@ -742,6 +742,48 @@ fn the_buzz_zither_plays_from_note_events() {
     }
 }
 
+/// The Rijke Organ (docs/INVENTED_LIVE_PLAN.md IL3): its pipes are the invented-keys medium
+/// played by keys; its touch spans the heater's power (0.6-1.2); HEAT, GAUZE and BREATH are
+/// values (a turn plays on); a key held through `Live` blooms into sound.
+#[test]
+fn the_rijke_organ_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "rijke_organ").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, circuit.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["heat", "gauze", "breath"]);
+    let span = circuit.key_velocity_span_db(&v).unwrap().unwrap();
+    let lo: f64 = 0.6 + 0.6 / 127.0;
+    assert!((span - 20.0 * (1.2f64 / lo).log10()).abs() < 1e-9, "{span}");
+    let base = structure(&circuit.build(&v).unwrap());
+    for (k, x) in [("heat", 0.9), ("gauze", 0.1), ("breath", 0.8)] {
+        let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let mut live = Live::new(&vec![0.0; 48_000], v, circuit, s).unwrap();
+    assert!(live.has_keys());
+    let x = vec![0.0; 480];
+    let mut peak = 0.0f32;
+    // 1.5 s held (the bloom: a pipe starts ~0.4-1.3 s after its key)
+    for b in 0..150 {
+        let notes: Vec<(usize, NoteEvent)> = match b {
+            1 => vec![(
+                10,
+                NoteEvent::On {
+                    note: 72,
+                    velocity: 120,
+                },
+            )],
+            _ => vec![],
+        };
+        let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+        peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+    }
+    assert!(peak > 1e-2, "it sounds: {peak}");
+}
+
 /// The Nickel Organ (docs/NICKEL_ORGAN_DEVICE_PLAN.md): its keys are a medium played by keys;
 /// its touch spans the hammer's speed law (0.02-0.25 m/s: 21.9 dB); SUSTAIN and POLARIZE
 /// are values (a turn plays on); a key struck through `Live` sounds.

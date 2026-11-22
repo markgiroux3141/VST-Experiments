@@ -276,7 +276,10 @@ implicit jawari contact, velocity = the finger's force; the sustain pedal runs a
 four more strings, notes 0-3, woken by the pedal: keyed.rs's `KeyVoice::wakes_on_broadcast`),
 `BUZZ_ZITHER@1`, `config/circuits/buzz_zither.yaml`, the app's `buzz_zither` (mod wheel = JAWARI;
 16 bass strings 18 % load); the Touch sliders know the invented keys' laws
-(`invented::Model::velocity_span_db`). Next: IL3, the Rijke Organ.
+(`invented::Model::velocity_span_db`). **IL3 built (2026-11-21):** the Rijke Organ
+(`varimu/invented/keys/rijke.py`: eight Galerkin modes and King's law with a lag per pipe, bores
+scaled as 1 / f; velocity = heater power), `RIJKE_ORGAN@1`, `config/circuits/rijke_organ.yaml`,
+the app's `rijke_organ` (mod wheel = HEAT; 16 pipes 11 % load). Next: IL4, the Aeolian Keyboard.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

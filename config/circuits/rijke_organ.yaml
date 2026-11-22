@@ -1,0 +1,41 @@
+# The Rijke Organ as a device (docs/INVENTED_LIVE_PLAN.md IL3; docs/INVENTED_DEVICES.md I7):
+# vertical open pipes (C2-C6, 2.6 m-0.16 m, their bores scaled so every pipe radiates alike),
+# each sung by a nichrome gauze a quarter of the way up that its key heats (Rijke 1859;
+# Rayleigh's criterion). Key velocity is the heater's power, aftertouch adds to it, the pedal
+# holds released keys' heaters on. The gauze's thermal lag makes the attack a slow bloom and
+# the release a slow fade; the instability is subcritical, so a pipe starts suddenly and holds
+# below its start. The pipes are circuitsim's invented-keys medium (the component RIJKE_ORGAN:
+# crates/circuitsim/src/invented.rs, varimu/invented/keys/rijke.py the reference), heard by a
+# microphone broadside; the pipes sum onto `out`.
+#
+# The panel (they play on): HEAT (k0: the heaters' power 0.5-1.5x the key's), GAUZE (k1: the
+# gauze's place up the pipe 0.15-0.45 of its length, a stop of gauzes; 0.29 the sketch's),
+# BREATH (k2: the hot plume's turbulence 0-4x the sketch's).
+
+title: "Rijke Organ (pipes sung by heated gauzes, keyed)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 6.0, source: "measured: a pipe singing at velocity 127 peaks 0.8 V on any key (the bores' scaling), at velocity 1 0.5 V; six struck at once at 127 4.3 V; the demo (a melody over a drone) -11.2 dBFS peak (scripts/invented_live_render.py, docs/INVENTED_LIVE_PLAN.md)"}
+
+controls:
+  heat: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: HEAT, the heaters' power 0.5-1.5x the key's (1x at 0.5)"}
+  gauze: {value: 0.4667, min: 0.0, max: 1.0, unit: rotation, source: "design: GAUZE, the gauze's place 0.15-0.45 of the pipe (0.29, the sketch's and Balasubramanian & Sujith's, at 0.4667)"}
+  breath: {value: 0.25, min: 0.0, max: 1.0, unit: rotation, source: "design: BREATH, the plume's turbulence 0-4x the sketch's (1x at 0.25)"}
+
+values:
+  keys_model: {value: RIJKE_ORGAN@1, source: "config/components/rijke_organ/1.yaml (varimu/invented/keys/rijke.py's model from varimu/invented/rijke.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_rate_hz: {value: 96000.0, source: "numerical: each pipe stepped at the project's 96 kHz (its modes exactly, the heat's lag a delay line of round(tau / dt) samples)"}
+  keys_max_keys: {value: 16, source: "numerical: pipes sounding at once (another struck silences a released one, else the one struck longest ago)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 100.0e+3, source: "numerical: a DC path on the line (the microphone's load)"}
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the pipes: the microphone's sum on out (to ground), played by note events
+      KEYS: {invented_keys: [out], component: keys_model, rate_hz: keys_rate_hz, max_keys: keys_max_keys, k0: heat, k1: gauze, k2: breath}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

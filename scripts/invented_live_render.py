@@ -52,6 +52,12 @@ DEMOS = {
         ],
         12.0,
     ),
+    # the sketch's melody over a D3 drone (legato: each note overlaps the next by 0.3 s)
+    "rijke_organ": (
+        "melody_over_drone",
+        [(0.0, 9.0, "D3", 80)] + beats("D4:2 E4:1 F#4:1 A4:3 G4:1 F#4:2 E4:2 D4:4", 1.0, 0.5, 90, -0.3),
+        13.0,
+    ),
     # the tanpura's cam on the pedal (DRONE TONIC 0: Sa = C3), the sketch's melody over it
     "buzz_zither": (
         "melody_over_tanpura",

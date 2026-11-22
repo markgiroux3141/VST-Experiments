@@ -10,7 +10,8 @@
 //!
 //! Instruments: `rosin_wheel` (IL1, steel bars bowed by a rosined wheel:
 //! `varimu/invented/keys/rosin.py`), `buzz_zither` (IL2, plucked strings over jawari bridges
-//! and a tanpura on the pedal: `varimu/invented/keys/zither.py`).
+//! and a tanpura on the pedal: `varimu/invented/keys/zither.py`), `rijke_organ` (IL3, pipes
+//! sung by heated gauzes: `varimu/invented/keys/rijke.py`).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -114,6 +115,7 @@ fn knob(lo_hi: [f64; 2], k: f64) -> f64 {
 pub enum Model {
     Rosin(RosinModel),
     Zither(ZitherModel),
+    Rijke(RijkeModel),
 }
 
 impl Model {
@@ -136,6 +138,9 @@ impl Model {
             "buzz_zither" => Ok(Model::Zither(
                 serde_json::from_value(head).map_err(|e| format!("buzz_zither: {e}"))?,
             )),
+            "rijke_organ" => Ok(Model::Rijke(
+                serde_json::from_value(head).map_err(|e| format!("rijke_organ: {e}"))?,
+            )),
             other => Err(format!("no invented instrument {other:?}")),
         }
     }
@@ -153,6 +158,8 @@ impl Model {
             Model::Zither(m) => {
                 20.0 * (knob(m.force_range_n, 1.0) / knob(m.force_range_n, lo)).log10()
             }
+            // The heater's power (the level follows it weakly; the bloom's speed strongly).
+            Model::Rijke(m) => 20.0 * (knob(m.k_range, 1.0) / knob(m.k_range, lo)).log10(),
         }
     }
 
@@ -160,6 +167,7 @@ impl Model {
         match self {
             Model::Rosin(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Zither(m) => m.keys.iter().map(|k| k.note).collect(),
+            Model::Rijke(m) => m.keys.iter().map(|k| k.note).collect(),
         }
     }
 }
@@ -879,6 +887,216 @@ impl ZitherVoice {
     }
 }
 
+// --- IL3 the Rijke Organ ----------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RijkeKey {
+    pub note: u8,
+    pub f_hz: f64,
+    pub bore: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RijkeModel {
+    pub keys: Vec<RijkeKey>,
+    pub c_air_m_s: f64,
+    pub modes: usize,
+    pub tau: f64,
+    pub c1: f64,
+    pub c2: f64,
+    pub gauze_s: f64,
+    pub turbulence: f64,
+    pub k_range: [f64; 2],
+    pub k_pressure: f64,
+    pub k_ref: f64,
+    pub heat_range: [f64; 2],
+    pub gauze_range: [f64; 2],
+    pub breath_max: f64,
+    pub breath_hz: f64,
+    pub sleep_k: f64,
+    pub sleep_energy: f64,
+    pub mic_v: f64,
+    pub seed: u64,
+}
+
+/// One key's pipe (`rijke.Voice`, step for step).
+#[derive(Debug, Clone)]
+pub struct RijkeVoice {
+    m: Arc<Model>,
+    fs: f64,
+    p: Vec<[f64; 4]>,
+    g: Vec<[f64; 2]>,
+    buf: Vec<f64>,
+    at: usize,
+    eta: Vec<f64>,
+    deta: Vec<f64>,
+    ends: Vec<f64>,
+    sf: Vec<f64>,
+    cf: Vec<f64>,
+    prev: f64,
+    bore: f64,
+    ag: f64,
+    kg: f64,
+    na: f64,
+    norm: f64,
+    nz: f64,
+    gauss: Gauss,
+    down: bool,
+    pedal_down: bool,
+    held: bool,
+    velocity: f64,
+    aftertouch: f64,
+    awake: bool,
+    x_f: f64,
+    heat: f64,
+    breath: f64,
+}
+
+impl RijkeVoice {
+    fn new(model: &Arc<Model>, key: &RijkeKey, fs: f64, knobs: [f64; 4]) -> RijkeVoice {
+        let Model::Rijke(m) = &**model else {
+            unreachable!("a rijke voice on another model")
+        };
+        let pi = std::f64::consts::PI;
+        let f1 = key.f_hz;
+        let length = m.c_air_m_s / (2.0 * f1);
+        let dt = (m.c_air_m_s / length) / fs;
+        let n = m.modes;
+        let w1 = pi;
+        let mut p = Vec::with_capacity(n);
+        let mut g = Vec::with_capacity(n);
+        for j in 1..=n {
+            let w = j as f64 * pi;
+            let zeta = (m.c1 * w / w1 + m.c2 * (w1 / w).sqrt()) / (2.0 * pi);
+            let wd = w * (1.0 - zeta * zeta).sqrt();
+            let e = (-zeta * w * dt).exp();
+            let (cs, sn) = ((wd * dt).cos(), (wd * dt).sin());
+            let p00 = e * (cs + zeta * w / wd * sn);
+            let p01 = e * sn / wd;
+            let p10 = -e * w * w / wd * sn;
+            let p11 = e * (cs - zeta * w / wd * sn);
+            p.push([p00, p01, p10, p11]);
+            g.push([(1.0 - p00) / (w * w), -p10 / (w * w)]);
+        }
+        let lag = ((m.tau / dt + 0.5).floor() as usize).max(1);
+        let a = (-2.0 * pi * m.breath_hz / fs).exp();
+        let mut v = RijkeVoice {
+            m: model.clone(),
+            fs,
+            p,
+            g,
+            buf: vec![0.0; lag],
+            at: 0,
+            eta: vec![0.0; n],
+            deta: vec![0.0; n],
+            ends: (1..=n)
+                .map(|j| if j % 2 == 1 { -2.0 } else { 0.0 })
+                .collect(),
+            sf: vec![0.0; n],
+            cf: vec![0.0; n],
+            prev: 0.0,
+            bore: key.bore,
+            ag: (-1.0 / (m.gauze_s * fs)).exp(),
+            kg: 0.0,
+            na: a,
+            norm: ((1.0 + a) / (1.0 - a)).sqrt(),
+            nz: 0.0,
+            gauss: Gauss::new(key_seed(m.seed, key.note)),
+            down: false,
+            pedal_down: false,
+            held: false,
+            velocity: 0.0,
+            aftertouch: 0.0,
+            awake: false,
+            x_f: -1.0,
+            heat: 0.0,
+            breath: 0.0,
+        };
+        v.set_knobs(knobs);
+        v
+    }
+
+    fn set_knobs(&mut self, k: [f64; 4]) {
+        let model = self.m.clone();
+        let Model::Rijke(m) = &*model else {
+            unreachable!("a rijke voice on another model")
+        };
+        self.heat = knob(m.heat_range, k[0]);
+        let x_f = knob(m.gauze_range, k[1]);
+        if x_f != self.x_f {
+            self.x_f = x_f;
+            let pi = std::f64::consts::PI;
+            for (i, (s, c)) in self.sf.iter_mut().zip(self.cf.iter_mut()).enumerate() {
+                let j = (i + 1) as f64;
+                *s = (j * pi * x_f).sin();
+                *c = (j * pi * x_f).cos();
+            }
+        }
+        self.breath = m.breath_max * k[2];
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        match ev {
+            NoteEvent::On { velocity, .. } => {
+                self.down = true;
+                self.held = true;
+                self.velocity = velocity as f64 / 127.0;
+                self.awake = true;
+            }
+            NoteEvent::Off { .. } => {
+                self.down = false;
+                self.held = self.pedal_down;
+            }
+            NoteEvent::Pedal { down } => {
+                self.pedal_down = down;
+                self.held = self.down || (down && self.held);
+            }
+            NoteEvent::Pressure { value } => self.aftertouch = value as f64 / 127.0,
+        }
+    }
+
+    fn step(&mut self) -> f64 {
+        let model = self.m.clone();
+        let Model::Rijke(m) = &*model else {
+            unreachable!("a rijke voice on another model")
+        };
+        let pi = std::f64::consts::PI;
+        let mut k_in = 0.0;
+        if self.held {
+            k_in = self.heat * (knob(m.k_range, self.velocity) + m.k_pressure * self.aftertouch);
+        }
+        self.kg = (1.0 - self.ag) * k_in + self.ag * self.kg;
+        self.nz = self.na * self.nz + (1.0 - self.na) * self.gauss.sample();
+        let turb = m.turbulence * self.breath * self.nz * self.norm * self.kg / m.k_ref;
+        let uf_late = self.buf[self.at];
+        let q = self.kg * ((1.0 / 3.0 + uf_late).abs().sqrt() - (1.0f64 / 3.0).sqrt());
+        let mut uf = 0.0;
+        let mut out = 0.0;
+        let mut energy = 0.0;
+        for i in 0..self.eta.len() {
+            let jp = (i + 1) as f64 * pi;
+            let force = (-jp * q) * self.sf[i] + turb * self.sf[i];
+            let [p00, p01, p10, p11] = self.p[i];
+            let [g0, g1] = self.g[i];
+            let (e, de) = (self.eta[i], self.deta[i]);
+            let e2 = p00 * e + p01 * de + g0 * force;
+            self.deta[i] = p10 * e + p11 * de + g1 * force;
+            self.eta[i] = e2;
+            uf += self.cf[i] * e2;
+            out += self.ends[i] * e2;
+            energy += e2 * e2;
+        }
+        self.buf[self.at] = uf;
+        self.at = (self.at + 1) % self.buf.len();
+        let y = (out - self.prev) * self.fs;
+        self.prev = out;
+        if !self.held && self.kg < m.sleep_k && energy < m.sleep_energy {
+            self.awake = false;
+        }
+        m.mic_v * self.bore * y
+    }
+}
+
 // --- the keyboard -----------------------------------------------------------------------
 
 /// The panel every key reads, set between chunks ([`Medium::update`]).
@@ -906,6 +1124,7 @@ impl Knobs {
 pub enum Voice {
     Rosin(RosinVoice),
     Zither(ZitherVoice),
+    Rijke(RijkeVoice),
 }
 
 impl Voice {
@@ -913,6 +1132,7 @@ impl Voice {
         match self {
             Voice::Rosin(v) => v.awake,
             Voice::Zither(v) => v.awake,
+            Voice::Rijke(v) => v.awake,
         }
     }
 
@@ -920,6 +1140,7 @@ impl Voice {
         match self {
             Voice::Rosin(v) => v.set_knobs(k),
             Voice::Zither(v) => v.set_knobs(k),
+            Voice::Rijke(v) => v.set_knobs(k),
         }
     }
 
@@ -927,6 +1148,7 @@ impl Voice {
         match self {
             Voice::Rosin(v) => v.event(ev),
             Voice::Zither(v) => v.event(ev),
+            Voice::Rijke(v) => v.event(ev),
         }
     }
 
@@ -935,6 +1157,7 @@ impl Voice {
         match self {
             Voice::Rosin(v) => v.step(),
             Voice::Zither(v) => v.step(),
+            Voice::Rijke(v) => v.step(),
         }
     }
 }
@@ -980,6 +1203,11 @@ impl crate::keyed::KeyVoice for Voice {
                     v.awake = false;
                 }
             }
+            Voice::Rijke(v) => {
+                v.awake = false;
+                v.down = false;
+                v.held = false;
+            }
         }
     }
 }
@@ -1002,6 +1230,11 @@ pub fn voices(model: &Arc<Model>, fs: f64, knobs: [f64; 4]) -> Vec<(u8, Voice)> 
                 let v = ZitherVoice::new(model, fs, knobs, Some(k), None);
                 (k.note, Voice::Zither(v))
             }))
+            .collect(),
+        Model::Rijke(m) => m
+            .keys
+            .iter()
+            .map(|k| (k.note, Voice::Rijke(RijkeVoice::new(model, k, fs, knobs))))
             .collect(),
     }
 }

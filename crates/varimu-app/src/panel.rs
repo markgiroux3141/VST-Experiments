@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 47] = [
+pub const DEVICES: [Device; 48] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1497,6 +1497,37 @@ pub const DEVICES: [Device; 47] = [
         velocity: None,
         pitch: None,
         // The keys pluck the strings (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "rijke_organ",
+        label: "Rijke Organ",
+        short: "Rijke",
+        about: "An invented organ of pipes sung by heat: each key heats a gauze a quarter of \
+            the way up its pipe (velocity and aftertouch are the heater's power, the mod wheel \
+            HEAT); the gauze's thermal lag blooms the attack, and a pipe starts suddenly and \
+            holds below its start",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL3):
+        // each pipe eight Galerkin modes and King's law with a lag at 96 kHz.
+        circuit: "rijke_organ",
+        panel: Some(&["heat", "gauze", "breath"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("heat"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys heat the gauzes (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3126,6 +3157,7 @@ mod tests {
                         "nickel_organ",
                         "rosin_wheel",
                         "buzz_zither",
+                        "rijke_organ",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",
