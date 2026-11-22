@@ -49,10 +49,11 @@ WHEEL_RANGE_M_S = (0.1, 0.5)
 RESONATOR_MAX = 4.0
 RESONATOR_Q = 18.0
 TOUCH_RANGE = (0.5, 2.0)
-FELT_C_N_S_M = (
-    10.0  # the check felt's drag: provisional, design choice (LIMIT 0.75 holds WHEEL 1 at ~1.7 V)
-)
-LIMIT_V_M_S = (0.6, 0.08)  # the end velocity where the felt engages: LIMIT just on .. full
+# the check felt's drag: provisional, design choice (firm: 10 let hard-pressed bars through)
+FELT_C_N_S_M = 30.0
+# the end velocity where the felt engages, LIMIT just on .. full: held ~2.4 V .. ~0.22 V
+# (just on: above a bar's own level at the default panel, 1.6 V)
+LIMIT_V_M_S = (0.3, 0.03)
 FELT_WIDTH = 0.5  # the felt engages over this fraction of its gap beyond it
 SEED = 1
 

@@ -76,20 +76,39 @@ def test_the_rosin_wheel_agrees_with_its_reference(limit: float):
 
 
 def test_the_rosin_wheel_without_its_felt_is_version_1():
-    """ROSIN_WHEEL@2 at LIMIT 0 plays exactly as @1 (which has no felt: its k3 is unused)."""
+    """The latest ROSIN_WHEEL at LIMIT 0 plays exactly as @1 (no felt: its k3 is unused)."""
     knobs = [0.6, 0.5, 0.6, 0.0]
     n = int(0.9 * FS)
     a = circuitsim.invented_render(
         json.dumps(element("ROSIN_WHEEL@1", knobs)), FS, n, PERFORMANCE, 0
     )
     b = circuitsim.invented_render(
-        json.dumps(element("ROSIN_WHEEL@2", knobs)), FS, n, PERFORMANCE, 0
+        json.dumps(element(kc.latest("ROSIN_WHEEL"), knobs)), FS, n, PERFORMANCE, 0
     )
     assert np.array_equal(a, b)
     a1 = circuitsim.invented_render(
         json.dumps(element("ROSIN_WHEEL@1", knobs[:3] + [1.0])), FS, n, PERFORMANCE, 0
     )
     assert np.array_equal(a, a1)
+
+
+def test_limit_sets_a_ceiling_at_the_default_panel():
+    """LIMIT acts over its travel at the default panel, not only at extreme ones: a loud held
+    bar's level falls by ~6 dB per quarter turn from 0.5 on, alike on every key (ROSIN_WHEEL@2's
+    felt engaged above the default level, so it did nothing there)."""
+    ref = kc.latest("ROSIN_WHEEL")
+    fs, secs = 96_000.0, 4
+    for note in (36, 60, 84):
+        held = []
+        for limit in (0.0, 0.5, 1.0):
+            el = element(ref, [0.375, 0.5, 0.333, limit])
+            el["rate_hz"] = fs
+            y = circuitsim.invented_render(
+                json.dumps(el), fs, int(secs * fs), [(0, "on", note, 127)], 0
+            )
+            held.append(float(np.max(np.abs(y[-int(0.5 * fs) :]))))
+        assert 0.4 < held[1] / held[0] < 0.6, (note, held)
+        assert 0.1 < held[2] / held[0] < 0.2, (note, held)
 
 
 def test_limit_holds_a_held_bar():

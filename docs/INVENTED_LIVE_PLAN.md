@@ -530,3 +530,15 @@ scale, a chord far past it.
   aftertouch), was 5.2-5.4 V. At LIMIT 1 every held bar sits ~1 V.
 - **Not done:** a chord at the fastest WHEEL can still pass the full scale (bars add); the felt's
   rub has no sound of its own.
+- **Corrected the same day (`ROSIN_WHEEL@3`), after the user: "limit doesn't seem to do
+  anything... a loud note still swells a lot".** `@2`'s felt engaged just under a bar's own level
+  at the default panel (0.6-0.08 m/s; 1.57 V uncapped, 1.51 at 0.75), so most of the knob did
+  nothing there; tuned against the fastest WHEEL alone. And at 10 N s/m hard-pressed bars that
+  break into their second mode (G#3, A#3, C4, C5, ...) went past it: the same loudness swings the
+  end less in mode 2. Now 30 N s/m and 0.3-0.03 m/s: a ceiling that is the same on every key and
+  panel (held, one bar at 127: 1.50 V at 0.25, 0.78 at 0.5, 0.42 at 0.75, 0.22 at 1; the default
+  panel 1.57 V at 0, a fast WHEEL 2.6), reached sooner the lower it is (C4 at the default panel
+  1.6 s -> 1.1 s). LIMIT defaults to 0.25 (the default panel -0.4 dB; a fast WHEEL's runaway
+  halved). `test_limit_sets_a_ceiling_at_the_default_panel` checks it at the default panel.
+  LIMIT can't shorten the swell below its ceiling: the bar's growth time is its physics (~0.7 s,
+  Session 1's "Found"; lighter bars, a new component, would speak ~5x faster).

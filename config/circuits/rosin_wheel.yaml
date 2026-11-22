@@ -9,9 +9,9 @@
 # The panel (they play on): WHEEL (k0: the wheel's surface speed 0.1-0.5 m/s), RESONATOR (k1:
 # the tubes' gain 0-4), TOUCH (k2: the press 0.5-2x the key's force), LIMIT (k3: a check felt at
 # each bar's free end that a held bar's swing rubs past its gap: 0 none, as ROSIN_WHEEL@1; up,
-# closer. A held bar swells to a limit cycle that follows the wheel's speed: at the fastest
-# WHEEL one bar alone swelled for 5-10 s to ~5 V; LIMIT 0.75 holds it at ~1.7 V and costs the
-# default panel 0.4 dB).
+# closer: a ceiling on a held bar, the same on every key and panel, ~1.5 V at 0.25, 0.8 V at
+# 0.5, 0.4 V at 0.75, 0.2 V at 1. A held bar swells to a limit cycle that follows the wheel's
+# speed: at the fastest WHEEL one bar alone swelled for 5-10 s to ~5 V).
 
 title: "Rosin Wheel Organ (bowed steel bars, keyed)"
 input: in
@@ -25,10 +25,10 @@ controls:
   wheel: {value: 0.375, min: 0.0, max: 1.0, unit: rotation, source: "design: WHEEL, the wheel's surface speed 0.1-0.5 m/s (0.25 m/s, the sketch's, at 0.375)"}
   resonator: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: RESONATOR, the tubes' gain 0-4 (2, the sketch's, at 0.5)"}
   touch: {value: 0.333, min: 0.0, max: 1.0, unit: rotation, source: "design: TOUCH, the press 0.5-2x the key's force (1x at 0.333)"}
-  limit: {value: 0.75, min: 0.0, max: 1.0, unit: rotation, source: "design: LIMIT, the check felt's gap: it meets a bar whose free end swings faster than 0.6 m/s (just on) to 0.08 m/s (1), evenly in log; 0 = no felt (varimu/invented/keys/rosin.py). Held peaks (one bar, velocity 127, 12 s): WHEEL 1 / RESONATOR 1 5.2 V at 0, 3.0 V at 0.5, 1.7 V at 0.75, 1.0 V at 1; the default panel 1.6 V up to 0.5, 1.5 V at 0.75, 0.8 V at 1"}
+  limit: {value: 0.25, min: 0.0, max: 1.0, unit: rotation, source: "design: LIMIT, the check felt's gap: it meets a bar whose free end swings faster than 0.3 m/s (just on) to 0.03 m/s (1), evenly in log; 0 = no felt (varimu/invented/keys/rosin.py). Held levels (one bar at velocity 127, 5 s), the default panel: 1.57 V at 0, 1.50 at 0.25, 0.78 at 0.5, 0.42 at 0.75, 0.22 at 1; WHEEL 0.8: 2.6 V at 0, 1.3 at 0.25, 0.72 at 0.5. 0.25 by default: the default panel -0.4 dB, a fast WHEEL's runaway halved"}
 
 values:
-  keys_model: {value: ROSIN_WHEEL@2, source: "config/components/rosin_wheel/2.yaml (LIMIT's felt added to @1) (varimu/invented/keys/rosin.py's model from varimu/invented/friction.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_model: {value: ROSIN_WHEEL@3, source: "config/components/rosin_wheel/3.yaml (LIMIT's felt added to @1; @2's felt engaged too high to matter at the default panel) (varimu/invented/keys/rosin.py's model from varimu/invented/friction.py's values, compiled by scripts/compile_invented_keys.py)"}
   keys_rate_hz: {value: 96000.0, source: "numerical: each bar stepped at the project's 96 kHz (one trapezoidal step a sample)"}
   keys_max_keys: {value: 16, source: "numerical: bars sounding at once (a bar costs well under 1 % of a core; another struck silences a released one, else the one struck longest ago)"}
   r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
