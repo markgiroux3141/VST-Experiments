@@ -1537,7 +1537,7 @@ pub const DEVICES: [Device; 52] = [
         // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL1):
         // each bar a handful of modes and one friction contact at 96 kHz.
         circuit: "rosin_wheel",
-        panel: Some(&["wheel", "resonator", "touch"]),
+        panel: Some(&["wheel", "resonator", "touch", "limit"]),
         ahead_s: 0.25,
         quality: Quality::Draft2x,
         cores: None,

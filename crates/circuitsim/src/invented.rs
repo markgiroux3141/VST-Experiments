@@ -263,6 +263,15 @@ pub struct RosinModel {
     pub resonator_max: f64,
     pub resonator_q: f64,
     pub pickup_v_per_m_s: f64,
+    /// LIMIT's check felt (ROSIN_WHEEL@2 on; absent: no felt, k3 unused): its drag (N s/m),
+    /// the end velocity where it engages from LIMIT just on to full, the fraction of its gap
+    /// it engages over (`rosin.py`'s docs).
+    #[serde(default)]
+    pub felt_c_n_s_m: Option<f64>,
+    #[serde(default)]
+    pub limit_v_m_s: Option<[f64; 2]>,
+    #[serde(default)]
+    pub felt_width: Option<f64>,
     pub seed: u64,
 }
 
@@ -303,6 +312,9 @@ pub struct RosinVoice {
     wheel: f64,
     res_gain: f64,
     touch: f64,
+    f1: f64,
+    /// LIMIT's felt gap at the free end (m; 0: no felt).
+    gap: f64,
 }
 
 impl RosinVoice {
@@ -368,23 +380,35 @@ impl RosinVoice {
             wheel: 0.0,
             res_gain: 0.0,
             touch: 0.0,
+            f1: key.f_hz[0],
+            gap: 0.0,
         };
         v.set_knobs(knobs);
         v
     }
 
     fn set_knobs(&mut self, k: [f64; 4]) {
-        let (wheel, res, touch) = {
+        let f1 = self.f1;
+        let (wheel, res, touch, gap) = {
             let m = self.rm();
+            let gap = match (m.felt_c_n_s_m, m.limit_v_m_s) {
+                (Some(_), Some([lo, hi])) if k[3] > 0.0 => {
+                    let v_lim = lo * (hi / lo).powf(k[3].min(1.0));
+                    v_lim / (2.0 * std::f64::consts::PI * f1)
+                }
+                _ => 0.0,
+            };
             (
                 knob(m.wheel_range_m_s, k[0]),
                 m.resonator_max * k[1],
                 knob(m.touch_range, k[2]),
+                gap,
             )
         };
         self.wheel = wheel;
         self.res_gain = res;
         self.touch = touch;
+        self.gap = gap;
     }
 
     fn event(&mut self, ev: NoteEvent) {
@@ -437,16 +461,36 @@ impl RosinVoice {
         } else {
             &self.free
         };
+        // LIMIT's felt at the free end (mode shapes +-2, the pickup's): its drag from the
+        // step's start, held over the step (gf: the trapezoid's two ends).
+        let mut gf = 0.0;
+        if self.gap > 0.0 {
+            let (mut xf, mut vf) = (0.0, 0.0);
+            for (i, (&x, &v)) in self.x.iter().zip(&self.v).enumerate() {
+                let phi = if i % 2 == 0 { 2.0 } else { -2.0 };
+                xf += phi * x;
+                vf += phi * v;
+            }
+            let (c, width) = (m.felt_c_n_s_m.unwrap_or(0.0), m.felt_width.unwrap_or(1.0));
+            let e = ((xf.abs() - self.gap) / (width * self.gap)).clamp(0.0, 1.0);
+            gf = 2.0 * (-c * (e * e * (3.0 - 2.0 * e)) * vf);
+        }
         let mut vh = 0.0;
         let mut y_adm = 0.0;
-        for (((s, xn), vn), (&x, &v)) in steps
+        for (i, (((s, xn), vn), (&x, &v))) in steps
             .iter()
             .zip(self.xn.iter_mut())
             .zip(self.vn.iter_mut())
             .zip(self.x.iter().zip(&self.v))
+            .enumerate()
         {
             *xn = s[0] * x + s[1] * v;
             *vn = s[2] * x + s[3] * v;
+            if gf != 0.0 {
+                let phi = if i % 2 == 0 { 2.0 } else { -2.0 };
+                *xn += s[4] * (phi * gf);
+                *vn += s[5] * (phi * gf);
+            }
             vh += 2.0 * *vn;
             y_adm += 2.0 * (2.0 * s[5]);
         }

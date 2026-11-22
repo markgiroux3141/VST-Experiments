@@ -50,17 +50,64 @@ PERFORMANCE = [
 ]
 
 
-def test_the_rosin_wheel_agrees_with_its_reference():
+@pytest.mark.parametrize("limit", [0.0, 1.0])
+def test_the_rosin_wheel_agrees_with_its_reference(limit: float):
+    """LIMIT off, and LIMIT full: a bar pressed hard swells into its felt within the first
+    second (the output then differs from LIMIT off), released into its damper."""
     from varimu.invented.keys import rosin
 
     ref = kc.latest("ROSIN_WHEEL")
-    knobs = [0.375, 0.5, 0.333, 0.0]
-    n = int(0.9 * FS)
+    knobs = [0.375, 0.5, 1.0, limit]
+    perf = PERFORMANCE + [
+        (int(0.9 * FS), "on", 60, 127),
+        (int(0.9 * FS), "pressure", 0, 127),
+        (int(1.9 * FS), "off", 60, 0),
+    ]
+    n = int(2.1 * FS)
     kb = rosin.keyboard(kc.load(ref), FS, knobs)
-    want = common.play(kb, n, PERFORMANCE, lambda v: v.step())
-    got = circuitsim.invented_render(json.dumps(element(ref, knobs)), FS, n, PERFORMANCE, 0)
+    want = common.play(kb, n, perf, lambda v: v.step())
+    got = circuitsim.invented_render(json.dumps(element(ref, knobs)), FS, n, perf, 0)
     assert np.sqrt(np.mean(want**2)) > 1e-3  # it sounds
-    assert db(got - want, want) < -120
+    assert np.array_equal(got, want)  # bit-exact
+    if limit:
+        off = knobs[:3] + [0.0]
+        free = circuitsim.invented_render(json.dumps(element(ref, off)), FS, n, perf, 0)
+        assert db(got - free, free) > -20  # the felt acted
+
+
+def test_the_rosin_wheel_without_its_felt_is_version_1():
+    """ROSIN_WHEEL@2 at LIMIT 0 plays exactly as @1 (which has no felt: its k3 is unused)."""
+    knobs = [0.6, 0.5, 0.6, 0.0]
+    n = int(0.9 * FS)
+    a = circuitsim.invented_render(
+        json.dumps(element("ROSIN_WHEEL@1", knobs)), FS, n, PERFORMANCE, 0
+    )
+    b = circuitsim.invented_render(
+        json.dumps(element("ROSIN_WHEEL@2", knobs)), FS, n, PERFORMANCE, 0
+    )
+    assert np.array_equal(a, b)
+    a1 = circuitsim.invented_render(
+        json.dumps(element("ROSIN_WHEEL@1", knobs[:3] + [1.0])), FS, n, PERFORMANCE, 0
+    )
+    assert np.array_equal(a, a1)
+
+
+def test_limit_holds_a_held_bar():
+    """At the fastest WHEEL and full RESONATOR a bar held hard swells within seconds to ~5 V
+    (the stick-slip's limit cycle follows the wheel's speed); LIMIT's felt holds it: ~2 V
+    at 0.75, quieter the closer, every bar alike."""
+    ref = kc.latest("ROSIN_WHEEL")
+    fs, secs = 96_000.0, 5
+    for note in (36, 84):
+        held = []
+        for limit in (0.0, 0.75, 1.0):
+            el = element(ref, [1.0, 1.0, 1.0, limit])
+            el["rate_hz"] = fs
+            perf = [(0, "on", note, 127), (0, "pressure", 0, 127)]
+            y = circuitsim.invented_render(json.dumps(el), fs, int(secs * fs), perf, 0)
+            held.append(float(np.max(np.abs(y[-int(fs) :]))))
+        assert held[0] > 4.5, held
+        assert held[2] < held[1] < 2.5, held  # the full scale is 4 V
 
 
 def test_the_keys_are_the_same_on_any_number_of_threads():

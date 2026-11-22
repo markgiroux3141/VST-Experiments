@@ -12,8 +12,19 @@ sleeps SLEEP_S later. The pickup reads the far end's velocity through the bar's 
 wheel's eccentricity is a rotating phasor.
 
 The panel: k0 WHEEL (0-1: 0.1-0.5 m/s), k1 RESONATOR (0-1: the tube's gain 0-4), k2 TOUCH
-(0-1: the press 0.5-2x). Velocity sets the press force (FORCE_MIN_N-FORCE_MAX_N, ^1.5),
+(0-1: the press 0.5-2x), k3 LIMIT (0: off; else a check felt at each bar's free end, set
+closer as it turns up). Velocity sets the press force (FORCE_MIN_N-FORCE_MAX_N, ^1.5),
 aftertouch adds up to PRESSURE_GAIN of it, and the pedal holds released keys pressed.
+
+LIMIT (ROSIN_WHEEL@2 on; a model without `felt_c_n_s_m` has none): a held bar's stick-slip
+grows until its limit cycle, whose size follows the wheel's speed (at the fastest WHEEL one
+bar alone swells for 5-10 s past the full scale). The check felt rests a gap from the bar's
+free end; past the gap the bar rubs it (a viscous drag FELT_C on the end's velocity, engaging
+over a smoothstep across FELT_WIDTH of the gap), which caps the held swing. Each bar's gap is
+v_lim / (2 pi f1): voiced so every bar meets its felt at the same end velocity; LIMIT sets
+v_lim from LIMIT_V_M_S[0] (barely) to [1] (closest), evenly in log. The felt's force is
+explicit (from the step's start: stable while FELT_C < m / (2 n h), thousands of N s/m) and
+folded into the bar's free step before the wheel's contact is solved.
 """
 
 from __future__ import annotations
@@ -38,6 +49,11 @@ WHEEL_RANGE_M_S = (0.1, 0.5)
 RESONATOR_MAX = 4.0
 RESONATOR_Q = 18.0
 TOUCH_RANGE = (0.5, 2.0)
+FELT_C_N_S_M = (
+    10.0  # the check felt's drag: provisional, design choice (LIMIT 0.75 holds WHEEL 1 at ~1.7 V)
+)
+LIMIT_V_M_S = (0.6, 0.08)  # the end velocity where the felt engages: LIMIT just on .. full
+FELT_WIDTH = 0.5  # the felt engages over this fraction of its gap beyond it
 SEED = 1
 
 
@@ -76,6 +92,9 @@ def model() -> dict[str, Any]:
         "resonator_max": RESONATOR_MAX,
         "resonator_q": RESONATOR_Q,
         "pickup_v_per_m_s": PICKUP_V_PER_M_S,
+        "felt_c_n_s_m": FELT_C_N_S_M,
+        "limit_v_m_s": list(LIMIT_V_M_S),
+        "felt_width": FELT_WIDTH,
         "seed": SEED,
     }
 
@@ -98,6 +117,7 @@ class Voice:
         self.n = len(key["f_hz"])
         self.phi_pick = [2.0 if i % 2 == 0 else -2.0 for i in range(self.n)]
         self.bp = bandpass(key["f_hz"][0], m["resonator_q"], fs)
+        self.f1 = key["f_hz"][0]
         self.x = [0.0] * self.n
         self.v = [0.0] * self.n
         self.f_prev = 0.0
@@ -127,6 +147,12 @@ class Voice:
         self.wheel = knob(m["wheel_range_m_s"], k[0])
         self.res_gain = m["resonator_max"] * k[1]
         self.touch = knob(m["touch_range"], k[2])
+        # LIMIT: the check felt's gap (0: no felt)
+        self.gap = 0.0
+        if "felt_c_n_s_m" in m and k[3] > 0.0:
+            lo, hi = m["limit_v_m_s"]
+            v_lim = lo * (hi / lo) ** min(k[3], 1.0)
+            self.gap = v_lim / (2.0 * math.pi * self.f1)
 
     # events
     def asleep(self) -> bool:
@@ -178,6 +204,17 @@ class Voice:
         self.nz = self.na * self.nz + (1.0 - self.na) * self.gauss.next()
         rosin = 1.0 + m["rosin_noise"] * self.nz * self.norm
         steps = self.damped_steps if self.damped else self.free
+        # LIMIT's felt at the free end (mode shapes +-2, the pickup's): its drag from the
+        # step's start, held over the step (gf: the trapezoid's two ends)
+        gf = 0.0
+        if self.gap > 0.0:
+            xf = 0.0
+            vf = 0.0
+            for i in range(self.n):
+                xf += self.phi_pick[i] * self.x[i]
+                vf += self.phi_pick[i] * self.v[i]
+            e = min(max((abs(xf) - self.gap) / (m["felt_width"] * self.gap), 0.0), 1.0)
+            gf = 2.0 * (-m["felt_c_n_s_m"] * (e * e * (3.0 - 2.0 * e)) * vf)
         # the free step and the contact's admittance (mode shape 2 at the bowed end)
         xn = [0.0] * self.n
         vn = [0.0] * self.n
@@ -187,6 +224,9 @@ class Voice:
             s = steps[i]
             xn[i] = s[0] * self.x[i] + s[1] * self.v[i]
             vn[i] = s[2] * self.x[i] + s[3] * self.v[i]
+            if gf != 0.0:
+                xn[i] = xn[i] + s[4] * (self.phi_pick[i] * gf)
+                vn[i] = vn[i] + s[5] * (self.phi_pick[i] * gf)
             vh += 2.0 * vn[i]
             y_adm += 2.0 * (2.0 * s[5])
         f_prev = self.f_prev

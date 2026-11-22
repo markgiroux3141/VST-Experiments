@@ -660,9 +660,14 @@ fn the_rosin_wheel_plays_from_note_events() {
     let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
     let v = values(&knobs(dev, circuit.spec()));
     let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
-    assert_eq!(keys, ["wheel", "resonator", "touch"]);
+    assert_eq!(keys, ["wheel", "resonator", "touch", "limit"]);
     let base = structure(&circuit.build(&v).unwrap());
-    for (k, x) in [("wheel", 0.9), ("resonator", 0.1), ("touch", 0.8)] {
+    for (k, x) in [
+        ("wheel", 0.9),
+        ("resonator", 0.1),
+        ("touch", 0.8),
+        ("limit", 0.0),
+    ] {
         let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
         assert_eq!(base, turned, "{k} plays on");
     }

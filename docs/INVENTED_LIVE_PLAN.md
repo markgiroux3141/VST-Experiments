@@ -507,3 +507,26 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
   `two_arcs`); the level's evenness; the carbons' feed wander.
 
 **IL1-IL7 are all built.** Next: the user plays them.
+
+### After the user's first play (2026-11-21): the Rosin Wheel's LIMIT
+
+The user: "on certain settings, holding a note can result in out of control feedback." Measured
+(one bar held 12 s at velocity 127 over WHEEL / RESONATOR / TOUCH / aftertouch, five bars): no
+instability and no unbounded growth; the stick-slip's limit cycle follows the wheel's speed, and
+at a fast WHEEL the friction curve's slope is shallow, so a held bar swells exponentially for
+5-10 s and settles at 3.1 V (RESONATOR 0.5) to 5.2 V (RESONATOR 1): one bar past the 4 V full
+scale, a chord far past it.
+
+- **Built:** LIMIT (k3, the panel's fourth knob), a check felt at each bar's free end: past its
+  gap the bar rubs it (a drag of 10 N s/m on the end's velocity, engaging over a smoothstep across
+  half the gap), which caps the held swing without touching the swell below it. Each bar's gap is
+  v_lim / (2 pi f1) (every bar meets its felt at the same end velocity); LIMIT sets v_lim
+  0.6-0.08 m/s evenly in log; 0 = no felt. In `rosin.py` and `invented.rs` (bit-exact, the felt
+  engaged), `ROSIN_WHEEL@2` (its data adds the felt; `@1` reads without it and ignores k3), the
+  circuit pinned to `@2`, the app's panel. Tests: `tests/test_invented_keys.py`'s agreement at
+  LIMIT 0 and 1, `test_the_rosin_wheel_without_its_felt_is_version_1`, `test_limit_holds_a_held_bar`.
+- **Decided:** LIMIT defaults to 0.75: the default panel's held bar 1.6 -> 1.5 V (-0.4 dB);
+  at WHEEL 1 / RESONATOR 1 one held bar ~1.7 V (default touch) to ~2.1 V (pressed hard with
+  aftertouch), was 5.2-5.4 V. At LIMIT 1 every held bar sits ~1 V.
+- **Not done:** a chord at the fastest WHEEL can still pass the full scale (bars add); the felt's
+  rub has no sound of its own.
