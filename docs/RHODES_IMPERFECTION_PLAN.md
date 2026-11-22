@@ -26,7 +26,84 @@ keep each key's level and feel; the user plays it before anything is pinned) and
   strike or release, that key's count of them since the medium started: a MIDI take replays bit
   for bit, and changing one share moves only what it scales.
 
-## Built (2026-11-22): the knobs
+## Second round (2026-11-22, the user's: one knob, a wreck at the top, sympathy on a switch)
+
+After the first round the user found the seven share knobs "a little too chaotic" and asked for
+one global IMPERFECTION slider whose top "basically destroys the instrument", 0 the default
+instrument; and the sympathetic sound on an on / off switch (off the default, to save compute)
+with an amount that can go extreme.
+
+**One knob.** The panel shows IMPERFECTION (0-10, default 0) and UNIT # only; the shares stay in
+the IR (1 each; the builders take `imp_seed` and `imp_amount`, the shares optional) for tests and
+studies. Each part's spread is its value at 1 times `imperfection.growth(amount)`: linear to 2
+(0-2 exactly as the first round measured), then quadratic, 30x at 10, every draw held to a cap
+(design choices, labelled so in the module: detune +-200 cents, tips and each strike's stiffness
+1/20-20 and 1/10-10, decay and felt 1/20-20 (the felt's floor 0.02 now), each strike's speed
+-20 to +1.5 dB: the bass tines already swing 10-14 mm of the map's +-18 at ff). Measured
+(`rhodes_imperfection_demo.py --measure`, the harp alone, 73 keys at velocity 90, unit 1):
+
+| | 1 | 2 | 5 | 10 |
+|---|---|---|---|---|
+| level key to key, dB rms | 1.2 | 2.6 | 9.9 | 21.6 |
+| pitch, cents rms | 2.0 | 4.0 | 16.8 | 37.3 |
+| sustain (0.45 -> 1.35 s), dB rms | 2.7 | 6.0 | 59.7 | 190 (keys dead at once, others ringing on) |
+| release time, ln ratio rms | 0.44 | 0.80 | 1.46 | 1.76 |
+| attack brightness, rms | 6% | 14% | 34% | 63% |
+| a repeated C4, level / brightness | 0.40 dB / 3.4% | 0.78 / 7.6% | 2.2 / 23% | 4.0 / 32% |
+
+Rust against the reference at 10 (every part): within -100 dB, finite on the test's events
+(`tests/test_rhodes_imperfection.py`); the caps are tested over 73 keys and 50 strikes.
+
+**Sympathetic resonance, live** (`varimu/rhodes/sympathetic.py` the reference; circuitsim's
+`harp.rs` the port; the Suitcase's SYMPATHY switch, `sympathy`, off by default, and its amount,
+`sympathy_amount`, 1 the compiled rail, up to 30). The offline rail study's mechanism
+(`rail.py`), changed in three ways on the way to live, each found by measuring:
+
+1. **Two phases per chunk** (`keyed.rs`: a coupled medium): every voice renders its own motion
+   and records its grommets' force; the rail's modes step on the calling thread from all of
+   them; every voice whose felt is off then adds its modes' rail-driven motion (kept apart from
+   its own, carried through the damper's switches the same way) and reads the two through the
+   pickup. The same on any number of threads and any chunking (tested, `tests/harp.rs`; a switch
+   on a chunk's first sample was lost at first and only showed against the reference).
+2. **A key doesn't feel its own push.** One way, the self-term drives a key at its own resonance
+   for as long as it rings (two way it would be a small detuning and damping, not modelled):
+   it put the sympathetic part 13 dB under a pedalled chord.
+3. **Motion relative to the rail, pickups riding with it.** With the pickups still, the rail's
+   low modes (36 Hz) moved every block alike and all 73 pickups read the same bounce, in phase:
+   -15 dB under a pedalled chord, most of the "sympathy" (the keys' own rings summed only to
+   -31 dB). Now the rail drives each assembly by its acceleration (exact for the free assembly:
+   only its grommets resist a rigid translation, `K r = k_g g` to 1e-13) and a key moving with
+   the rail adds nothing. The rail (rail.py's plank at EI x4) and so amount 1 stay provisional.
+
+Measured (a pedalled C3-E3-G3-C4, all 73 keys, the harp alone): the rail's part 25.6 dB under the
+whole at amount 1 (the struck keys' share -45 to -51 dB each; the loudest unstruck key, D3,
+-38 dB; the unstruck keys together -34 dB), ~0 dB at 30. **The live tier's one approximation:**
+a key only ringing in sympathy is read through the pickup's small-signal gain while its tip's
+bound stays under 10 um (`harp.rs` `LINEAR_M`): -74 dB re the whole against the reference's
+whole-map readout on that chord (-51 dB re the rail's part); without it the port agreed within
+-118 dB. Amount 0 is off bit for bit; `MK1_HARP@3` is @2's data plus the rail's rows.
+
+**Cost.** The harp alone (`harp_bench`, all of it on the medium's threads): a pedalled chord
+0.05x real time off, ~0.29x on (every key wakes: 53 of the 69 unstruck keys ring between -40 and
+-60 dB re the loudest struck key, so no level cut-off saves much without losing the halo); every
+key struck 0.25x off, ~0.5-0.7x on. Live (`examples/play.rs --device rhodes_suitcase`): keys
+held without the pedal, on costs about what off does; with the pedal down (`--pedal`, new) see
+"Status" below.
+
+**Status (2026-11-22, second round):** built, tested and committed on the branch; renders in
+`reports/rhodes/imperfection/audio/` (`amount_{0,1,2,5,10}_unit_1.wav`, `sympathy_{0,1,5,30}.wav`
+and their `_harp` / `_rail_part` files; the README there says what to listen for). In the
+sympathy phrase's harp EMF the rail's part is -24 to -33 dB re the whole with the pedal down at 1
+(-44 dB with it up), -10 to -19 at 5, about 0 at 30. **Live with the pedal down it doesn't keep
+up yet:** `play.rs --device rhodes_suitcase --hold-bass 4 --from 48 --restrike 2 --pedal --mute
+--buffer 0.05`, an idle machine, twice each: off 91-92% load, 0-1 dropouts; SYMPATHY 1 121-127%,
+~300 dropouts in 12 s (was ~140% before the small-signal readout and the vectorized steps). The
+medium's chunks run partly on the circuit's own thread. Options (the user's): a longer buffer,
+SYMPATHY for renders only (a take recorded off, rendered on), or more work on the medium
+(rendering it ahead on threads of its own, a batched filter bank for the keys only ringing in
+sympathy); without the pedal (held keys only) on costs about what off does.
+
+## Built (2026-11-22): the knobs (the first round; the panel since: the section above)
 
 `varimu/rhodes/imperfection.py` is the reference (its docstring has the physics and every
 constant's source), through `varimu/rhodes/harp.py`'s voices (`harp.render(...,
