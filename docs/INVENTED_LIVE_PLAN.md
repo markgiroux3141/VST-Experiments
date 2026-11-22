@@ -585,3 +585,5 @@ scale, a chord far past it.
     `test_even_holds_one_level_and_keeps_the_rosin`, `test_even_tames_the_runaway_and_lets_the_release_decay`.
   - **Open:** the onset accent (a non-peak-biased follower, if the user hears it as a bump); the
     AVC's law is a radio AVC's in principle, its circuit not modelled.
+  - **The user played EVEN (2026-11-22): "that works".** Still open from above: the onset accent
+    and a big chord's level, if they bother the user.
