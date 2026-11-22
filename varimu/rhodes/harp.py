@@ -119,7 +119,8 @@ class Voice:
             _time_scale(self.damp, d.ratio)
         if d.stiffness != 1.0:
             self.k = replace(
-                self.k, hammer=replace(self.k.hammer, stiffness=self.k.hammer.stiffness * d.stiffness)
+                self.k,
+                hammer=replace(self.k.hammer, stiffness=self.k.hammer.stiffness * d.stiffness),
             )
         self.strikes = self.releases = 0
         f_free = _Forms.of(self.free)

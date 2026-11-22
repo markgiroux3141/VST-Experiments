@@ -181,13 +181,16 @@ def contact(
     advance,
     g0: np.ndarray,
     g1: np.ndarray,
+    rows: list[np.ndarray] | None = None,
+    rows_out: list[np.ndarray] | None = None,
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], tuple[int, float, int]]:
     """The hammer thrown at the tine from the state x (the tine may be moving: a key
     struck again): `n_out * every` steps of h with the contact solved inside each. The
     hammer starts at the strike point, moving up at `hammer_speed_m_s`. Returns the end
     state, the tip's (displacement, velocity, arc, arc rate) every `every` steps (n_out of
     each, the start excluded) and (the first contact's steps, the largest force, the
-    contacts)."""
+    contacts). `rows` (optional): more output rows over the state, their real parts at the
+    same samples appended to `rows_out` (one array each)."""
     hm = k.hammer
     # the strike point's instantaneous responses to F_{n+1}
     gd = float(np.real(sysm.c_strike @ g1))
@@ -201,6 +204,7 @@ def contact(
     tip_v = np.zeros(n_out + 1)
     arc = np.zeros(n_out + 1)
     arc_v = np.zeros(n_out + 1)
+    extra = [np.zeros(n_out + 1) for _ in (rows or [])]
     contact_steps, strikes, in_contact, first_done = 0, 0, False, False
     f_max = 0.0
     for i in range(n_win):
@@ -257,6 +261,10 @@ def contact(
             tip_v[j] = np.real(sysm.c_tip_v @ x)
             arc[j] = 0.5 * sysm.w @ (q * q)
             arc_v[j] = sysm.w @ (q * qd)
+            for row, e in zip(rows or [], extra, strict=True):
+                e[j] = np.real(row @ x)
+    if rows_out is not None:
+        rows_out.extend(e[1:] for e in extra)
     return x, (tip[1:], tip_v[1:], arc[1:], arc_v[1:]), (contact_steps, f_max, strikes)
 
 

@@ -684,7 +684,10 @@ impl Voice {
     fn new(k: &HarpKey, dt: f64, s: usize, imp: Option<Imp>, voicing: f64) -> Voice {
         let d = imp.map_or(KeyDraws::identity(voicing), |i| i.key(k.key, voicing));
         let (free, damped) = if d.ratio != 1.0 {
-            (time_scaled(&k.free, d.ratio), time_scaled(&k.damped, d.ratio))
+            (
+                time_scaled(&k.free, d.ratio),
+                time_scaled(&k.damped, d.ratio),
+            )
         } else {
             (k.free.clone(), k.damped.clone())
         };
@@ -815,7 +818,9 @@ impl Voice {
                 self.switch(false);
                 self.asleep = false;
                 // this strike's hammer (`imperfection.strike_draws`)
-                let (ks, vs) = self.imp.map_or((1.0, 1.0), |i| i.strike(self.key, self.strikes));
+                let (ks, vs) = self
+                    .imp
+                    .map_or((1.0, 1.0), |i| i.strike(self.key, self.strikes));
                 self.strikes += 1;
                 let cs = &self.contact_step;
                 let y0: f64 = (0..self.free.modes)
@@ -1172,7 +1177,11 @@ impl Imp {
 
     fn key(&self, key: usize, voicing: f64) -> KeyDraws {
         let mut z = [0.0; 5];
-        crate::noise::normals(crate::noise::key(self.seed, KEY_NAME, key as u32), 0, &mut z);
+        crate::noise::normals(
+            crate::noise::key(self.seed, KEY_NAME, key as u32),
+            0,
+            &mut z,
+        );
         let [tuning, voicing_a, tips, decay, dampers, _, _] = self.parts;
         let ratio = if tuning > 0.0 {
             2f64.powf(tuning * TUNING_CENTS * z[0] / 1200.0)
@@ -1336,13 +1345,7 @@ impl crate::keyed::KeyVoice for Voice {
     }
 
     fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &HarpCtx) {
-        Voice::render(
-            self,
-            &mut buf[from..to],
-            &ctx.flux,
-            ctx.s,
-            ctx.sleep,
-        );
+        Voice::render(self, &mut buf[from..to], &ctx.flux, ctx.s, ctx.sleep);
     }
 }
 

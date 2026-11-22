@@ -108,8 +108,13 @@ def main() -> None:
         "residuals": resid.round(3).tolist(),
         "interval_90": interval(sd, resid.size - 3),
     }
-    print(f"tuning: rms {tuning['rms_about_mean_cents']:.2f} c (E2 up {tuning['rms_about_mean_cents_from_e2']:.2f}, 90% {tuning['interval_90'][0]:.2f}-{tuning['interval_90'][1]:.2f})")
-    print(f"decay: ln Q residual rms {sd:.3f} (90% {decay['interval_90'][0]:.3f}-{decay['interval_90'][1]:.3f})")
+    lo, hi = tuning["interval_90"]
+    print(
+        f"tuning: rms {tuning['rms_about_mean_cents']:.2f} c"
+        f" (E2 up {tuning['rms_about_mean_cents_from_e2']:.2f}, 90% {lo:.2f}-{hi:.2f})"
+    )
+    lo, hi = decay["interval_90"]
+    print(f"decay: ln Q residual rms {sd:.3f} (90% {lo:.3f}-{hi:.3f})")
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "unit_spread.json").write_text(
         json.dumps({"tuning": tuning, "decay": decay}, indent=1), encoding="utf-8"

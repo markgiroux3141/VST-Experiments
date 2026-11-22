@@ -19,6 +19,7 @@ of its own (soft and hard chords, a bass line, the pedal; the MIDI written besid
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import time
 from pathlib import Path
@@ -124,6 +125,10 @@ def main() -> None:
             "contact_rate_hz": el.contact_rate_hz,
             "model": el.model,
         }
+        if el.imperfection is not None:  # an imperfect instrument (varimu/rhodes/imperfection.py)
+            element["imperfection"] = {
+                k: float(v) for k, v in dataclasses.asdict(el.imperfection).items()
+            }
         n = int(round(duration * fs)) + 1
         steps = [(round(t * fs), k, nt, v) for t, k, nt, v in notes]
         emf, _, _ = circuitsim.harp_render(json.dumps(element), fs, n, steps)
