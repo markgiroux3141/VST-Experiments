@@ -561,3 +561,27 @@ scale, a chord far past it.
   **Open:** at LIMIT 0.25 a held four-note chord peaks +2.2 dBFS (each bar ~1 V from the start, all
   at once; LIMIT 0.5 -3.1 dBFS): the full scale (4 V) or the even mode's levels may want a change,
   the user's call after playing it.
+- **Replaced the same day by EVEN (`ROSIN_WHEEL@5`), after the user: "if I bump that up even a
+  little bit, it's a loud almost pure tone ... it almost sounds like it's playing the note at the
+  max volume of a swell".** Exactly that: the mallet aimed at the wheel's speed (the free limit
+  cycle) whenever the felt sat above it, so a little LIMIT started every note at the swell's end.
+  And measured on the reference (the contact's state and the energy off the harmonics, per 0.5 s):
+  **the scratch is the growing bar's.** While the stick-slip builds, the rosin's grip drives every
+  mode, the inharmonic ones too (off-harmonic -1 to -12 dB at C4); at its limit cycle the free bar
+  is a clean tone too (-47 dB), and a bar clamped at any fixed swing (the felt as a ceiling, the
+  mallet) locks into one (-32 dB even at 0.066 V, against -4 dB swelling through 0.055 V). Only a
+  very quiet bar stays scratchy, and how quiet depends on the bar (one level for all choked the bass
+  to rosin noise, -0 dB, and left the treble clean).
+  - **Built:** EVEN (k3, the control still `limit`, the panel's label EVEN: takes saved with it
+    load): the felt per bar at 0.008 m/s x (f1 / 261.6 Hz)^-0.6 x 2.0 (just on) .. 1.2 (full),
+    no mallet, and each key's pickup with an automatic volume control (a 3 ms / 0.25 s mean-square
+    follower, gain = 0.6 V / rms, at most +66 dB, frozen when the key lets go). Reference and Rust
+    bit-exact with it on.
+  - **Measured** (C2-C6, velocities 60 / 127, three panels): one level for every key, velocity and
+    panel (~0.44 V rms), +-1-3 dB while held, up within 0.1 s (an accent of +3 dB typical, +7 at
+    most, over its first ~50 ms: the follower settles under its target once it has seen peaks),
+    the scratch kept (-6 to -29 dB off the harmonics held, the free limit cycle -44 to -60), peaks
+    <= 2.9 V (the free bar at the extreme panel 5.2 V), the release decaying as before.
+    `test_even_holds_one_level_and_keeps_the_rosin`, `test_even_tames_the_runaway_and_lets_the_release_decay`.
+  - **Open:** the onset accent (a non-peak-biased follower, if the user hears it as a bump); the
+    AVC's law is a radio AVC's in principle, its circuit not modelled.

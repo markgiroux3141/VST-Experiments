@@ -3083,8 +3083,10 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 62] = [
+const LABELS: [(&str, &str); 63] = [
     ("range", "Range (AUTO: by key)"),
+    // The Rosin Wheel's k3 (its key stays `limit`: takes saved with it still load).
+    ("limit", "EVEN (0: the free swell)"),
     ("speakers", "Output: SPEAKERS (off: AUX OUT)"),
     ("osc_range", "Range (0 LO, 1 32', 2 16', 3 8', 4 4', 5 2')"),
     ("drive", "Drive (console line amp)"),

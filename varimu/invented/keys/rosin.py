@@ -12,9 +12,22 @@ sleeps SLEEP_S later. The pickup reads the far end's velocity through the bar's 
 wheel's eccentricity is a rotating phasor.
 
 The panel: k0 WHEEL (0-1: 0.1-0.5 m/s), k1 RESONATOR (0-1: the tube's gain 0-4), k2 TOUCH
-(0-1: the press 0.5-2x), k3 LIMIT (0: off; else a check felt at each bar's free end, set
-closer as it turns up). Velocity sets the press force (FORCE_MIN_N-FORCE_MAX_N, ^1.5),
-aftertouch adds up to PRESSURE_GAIN of it, and the pedal holds released keys pressed.
+(0-1: the press 0.5-2x), k3 EVEN (the control `limit`; 0: off, the free swelling bar).
+Velocity sets the press force (FORCE_MIN_N-FORCE_MAX_N, ^1.5), aftertouch adds up to
+PRESSURE_GAIN of it, and the pedal holds released keys pressed.
+
+EVEN (ROSIN_WHEEL@5; the user: keep the rosin-on-glass scratch, an even level, a sooner start).
+The scratch is the growing bar's: while the stick-slip builds, the rosin's grip drives every mode,
+the inharmonic ones too; at its limit cycle (or held there by anything that clamps it: @2-@4's
+felt and mallet) the bar locks into one clean tone (measured: off-harmonic -1 to -12 dB while it
+swells, -47 dB at its limit). So EVEN holds the bar quiet, where the rosin is heard: the check
+felt below set per bar at v(f1) = EVEN_V_REF (f1 / EVEN_REF_HZ)^EVEN_F_EXP x a factor from
+EVEN_RANGE[0] (just on: nearer the clean side) to [1] (1: rough), evenly in log (one level for
+every bar choked the bass to rosin noise and left the treble clean). And each key's pickup has an
+automatic volume control (AVC, the 1930s radio's: here its law alone, gain = target / rms of a
+fast-attack, slow-release mean-square follower, at most AVC_MAX_DB; frozen when the key lets
+go, so the damped tail decays as it would): the quiet, scratchy bar at a constant level from
+~25 ms on, the rosin's flutter kept (slower than its release, none of it is levelled).
 
 LIMIT (ROSIN_WHEEL@2 on; a model without `felt_c_n_s_m` has none): a held bar's stick-slip
 grows until its limit cycle, whose size follows the wheel's speed (at the fastest WHEEL one
@@ -26,12 +39,10 @@ v_lim from LIMIT_V_M_S[0] (barely) to [1] (closest), evenly in log. The felt's f
 explicit (from the step's start: stable while FELT_C < m / (2 n h), thousands of N s/m) and
 folded into the bar's free step before the wheel's contact is solved.
 
-With LIMIT on, the key also throws the bar to that level (ROSIN_WHEEL@4 on: `mallet_level`): a
-felt mallet at the free end pushes it once as the key goes down, a raised-cosine force lasting
-MALLET_PERIODS of the fundamental (one period: the fundamental takes half the push's impulse,
-mode 2 ~30 dB less), sized so the fundamental's end velocity starts at the lower of the wheel's
-speed (the free limit cycle's) and MALLET_LEVEL x LIMIT's engaging velocity (under the felt's
-ceiling): no swell, the note on within ~a period and the press's attack, held even by the felt.
+@4 (no longer saved by model()): with LIMIT on, the key also threw the bar to that level
+(`mallet_level`, `mallet_periods`): a felt mallet's raised-cosine push at the free end lasting a
+period of the fundamental, sized to start the bar at its held level. It sounded like the end of a
+swell: a loud, clean tone (the user's verdict), which is why @5 replaced it with EVEN.
 """
 
 from __future__ import annotations
@@ -60,12 +71,20 @@ TOUCH_RANGE = (0.5, 2.0)
 FELT_C_N_S_M = 30.0
 # the end velocity where the felt engages, LIMIT just on .. full: held ~2.4 V .. ~0.22 V
 # (just on: above a bar's own level at the default panel, 1.6 V)
-LIMIT_V_M_S = (0.3, 0.03)
+LIMIT_V_M_S = (0.3, 0.03)  # @2-@4's LIMIT (a ceiling); @5 has EVEN's per-bar level instead
 FELT_WIDTH = 0.5  # the felt engages over this fraction of its gap beyond it
-# the mallet's start, relative to LIMIT's engaging velocity: design choice (the felt holds a
-# bar at ~1.2-1.4x it, so the note starts just under its held level)
-MALLET_LEVEL = 1.2
-MALLET_PERIODS = 1.0  # the push lasts this many periods of the fundamental: design choice
+# EVEN's felt per bar: design choice, measured (scripts' prototypes, docs/INVENTED_LIVE_PLAN.md):
+# off-harmonic -10 to -30 dB, the free swell's, at a factor ~1.4; -1 to -3 dB (rosin noise, no
+# pitch) for a hard press at 0.7: the range stops short of that
+EVEN_V_REF_M_S = 0.008
+EVEN_REF_HZ = 261.63
+EVEN_F_EXP = -0.6
+EVEN_RANGE = (2.0, 1.2)
+# the pickup's AVC: design choice (on within ~25 ms, the rosin's flutter faster than its release)
+AVC_TARGET_V = 0.6
+AVC_ATTACK_S = 0.003
+AVC_RELEASE_S = 0.25
+AVC_MAX_DB = 66.0
 SEED = 1
 
 
@@ -105,10 +124,15 @@ def model() -> dict[str, Any]:
         "resonator_q": RESONATOR_Q,
         "pickup_v_per_m_s": PICKUP_V_PER_M_S,
         "felt_c_n_s_m": FELT_C_N_S_M,
-        "limit_v_m_s": list(LIMIT_V_M_S),
         "felt_width": FELT_WIDTH,
-        "mallet_level": MALLET_LEVEL,
-        "mallet_periods": MALLET_PERIODS,
+        "even_v_ref_m_s": EVEN_V_REF_M_S,
+        "even_ref_hz": EVEN_REF_HZ,
+        "even_f_exp": EVEN_F_EXP,
+        "even_range": list(EVEN_RANGE),
+        "avc_target_v": AVC_TARGET_V,
+        "avc_attack_s": AVC_ATTACK_S,
+        "avc_release_s": AVC_RELEASE_S,
+        "avc_max_db": AVC_MAX_DB,
         "seed": SEED,
     }
 
@@ -139,6 +163,14 @@ class Voice:
         self.pulse_n = 0
         self.pulse_i = 0
         self.pulse_a = 0.0
+        # EVEN's AVC: on, its follower's coefficients, its mean square and gain
+        self.avc = False
+        self.avc_ms = 0.0
+        self.avc_g = 1.0
+        if "avc_target_v" in m:
+            self.avc_aa = math.exp(-1.0 / (m["avc_attack_s"] * fs))
+            self.avc_ar = math.exp(-1.0 / (m["avc_release_s"] * fs))
+            self.avc_gmax = 10.0 ** (m["avc_max_db"] / 20.0)
         self.x = [0.0] * self.n
         self.v = [0.0] * self.n
         self.f_prev = 0.0
@@ -171,9 +203,20 @@ class Voice:
         # LIMIT: the check felt's gap (0: no felt)
         self.gap = 0.0
         self.v_lim = 0.0
+        self.avc = False
         if "felt_c_n_s_m" in m and k[3] > 0.0:
-            lo, hi = m["limit_v_m_s"]
-            self.v_lim = lo * (hi / lo) ** min(k[3], 1.0)
+            kk = min(k[3], 1.0)
+            if "even_v_ref_m_s" in m:
+                r0, r1 = m["even_range"]
+                self.v_lim = (
+                    m["even_v_ref_m_s"]
+                    * (self.f1 / m["even_ref_hz"]) ** m["even_f_exp"]
+                    * (r0 * (r1 / r0) ** kk)
+                )
+                self.avc = True
+            else:
+                lo, hi = m["limit_v_m_s"]
+                self.v_lim = lo * (hi / lo) ** kk
             self.gap = self.v_lim / (2.0 * math.pi * self.f1)
 
     # events
@@ -298,7 +341,16 @@ class Voice:
             self.quiet += 1
             if self.quiet >= self.sleep_n:
                 self.awake = False
-        return m["pickup_v_per_m_s"] * (pick + self.res_gain * y)
+        out = m["pickup_v_per_m_s"] * (pick + self.res_gain * y)
+        if self.avc:
+            # the pickup's AVC (its gain frozen once the key lets go)
+            x2 = out * out
+            a = self.avc_aa if x2 > self.avc_ms else self.avc_ar
+            self.avc_ms = a * self.avc_ms + (1.0 - a) * x2
+            if held:
+                self.avc_g = min(m["avc_target_v"] / math.sqrt(self.avc_ms + 1e-30), self.avc_gmax)
+            out = out * self.avc_g
+        return out
 
 
 def keyboard(m: dict[str, Any], fs: float, knobs: list[float]) -> dict[int, Voice]:

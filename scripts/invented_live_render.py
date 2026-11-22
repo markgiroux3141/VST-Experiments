@@ -5,7 +5,7 @@ circuit's full scale (unnormalized, so the level is the device's)
 -> reports/invented/<name>/live_<take>.wav.
 
 A gated device (GATED: the Arc Organ, whose keys work a gate and set the key's condenser in
-place), and a take that turns knobs off their defaults (the Rosin Wheel's LIMIT), render through
+place), and a take that turns knobs off their defaults (the Rosin Wheel's EVEN), render through
 the app's own take renderer (varimu-app's `midi_render` example: the
 Performer, the keyed value landing a block after its key, as Play), at the device's host rate.
 
@@ -113,11 +113,11 @@ ARC_MELODY = beats(ARC_TUNE, 0.5, 0.45, 100, 0.06)
 ARC_COMPASS = "E2:1 B2:1 E3:1 A3:1 E4:1 A4:1 E5:1 A5:1 C6:2"
 ARC_PHRASE = beats("A3:1 C4:1 E4:2 D4:1 C4:1 A3:2", 0.4, 0.4, 100, 0.06)
 GATED = {
-    # LIMIT on: the mallet throws each bar to the felt's level, notes even and early (the
-    # melody_and_chord demo above is the free, swelling bar)
+    # EVEN (the control `limit`) on: every note at one level from ~0.1 s, the rosin's scratch
+    # kept (the melody_and_chord demo above is the free, swelling bar)
     "rosin_wheel": [
-        ("melody_and_chord_limit_0.5", DEMOS["rosin_wheel"][1], 12.0, {"limit": 0.5}),
-        ("melody_and_chord_limit_0.25", DEMOS["rosin_wheel"][1], 12.0, {"limit": 0.25}),
+        ("melody_and_chord_even_0.5", DEMOS["rosin_wheel"][1], 12.0, {"limit": 0.5}),
+        ("melody_and_chord_even_1", DEMOS["rosin_wheel"][1], 12.0, {"limit": 1.0}),
     ],
     "arc_organ": [
         # the sketch's melody at the panel's defaults (5 A, SPEAK full, 2 mm)

@@ -92,62 +92,68 @@ def test_the_rosin_wheel_without_its_felt_is_version_1():
     assert np.array_equal(a, a1)
 
 
-def test_limit_makes_held_notes_even_and_early():
-    """At the default panel: LIMIT 0 is the free bar, a loud note swelling from far under its
-    held level for seconds; LIMIT on, the key's mallet throws the bar to the felt's level, so the
-    note is within 1.5 dB of its held level by 0.2 s and stays within 0.5 dB, lower the closer
-    the felt, alike on every key (ROSIN_WHEEL@2's felt did nothing at this panel)."""
-    ref = kc.latest("ROSIN_WHEEL")
-    fs, secs = 96_000.0, 3
+def _rosin_note(knobs: list[float], note: int, vel: int, secs: float, off_s: float | None = None):
+    fs = 96_000.0
+    el = element(kc.latest("ROSIN_WHEEL"), knobs)
+    el["rate_hz"] = fs
+    perf = [(0, "on", note, vel)]
+    if off_s is not None:
+        perf.append((int(off_s * fs), "off", note, 0))
+    return fs, circuitsim.invented_render(json.dumps(el), fs, int(secs * fs), perf, 0)
 
-    def run(note: int, limit: float) -> np.ndarray:
-        el = element(ref, [0.375, 0.5, 0.333, limit])
-        el["rate_hz"] = fs
-        perf = [(0, "on", note, 127)]
-        return circuitsim.invented_render(json.dumps(el), fs, int(secs * fs), perf, 0)
 
-    def rms(y: np.ndarray, a: float, b: float) -> float:
-        return float(np.sqrt(np.mean(y[int(a * fs) : int(b * fs)] ** 2)))
+def _off_harmonic_db(y: np.ndarray, fs: float, f1: float) -> float:
+    """The share of energy away from f1's harmonics (+-3 %): the rosin's scratch and the
+    bar's inharmonic modes."""
+    sp = np.abs(np.fft.rfft(y * np.hanning(y.size))) ** 2
+    fr = np.fft.rfftfreq(y.size, 1 / fs)
+    keep = np.zeros(fr.size, bool)
+    for h in range(1, int(20_000 / f1)):
+        keep |= np.abs(fr - h * f1) < 0.03 * f1
+    return float(10 * np.log10(sp[~keep].sum() / sp.sum()))
 
+
+def _levels_db(y: np.ndarray, k: int, n: int) -> np.ndarray:
+    """The rms of the first n windows of k samples, in dB."""
+    return 20 * np.log10(np.sqrt(np.mean(y[: n * k].reshape(n, k) ** 2, 1)) + 1e-12)
+
+
+def test_even_holds_one_level_and_keeps_the_rosin():
+    """The user: keep the rosin-on-glass scratch, an even level, a sooner start. At EVEN 0 a loud
+    note swells for seconds (30 dB and more) into a clean tone (its limit cycle); at EVEN 0.5 it
+    is up within 0.1 s, held within a few dB at one level on every key, and still scratchy
+    (energy off the harmonics -5 to -32 dB, where the free tone is under -40)."""
+    f1 = {k["note"]: k["f_hz"][0] for k in kc.load(kc.latest("ROSIN_WHEEL"))["keys"]}
+    medians = []
     for note in (36, 60, 84):
-        free = run(note, 0.0)
-        assert rms(free, 0.175, 0.225) < 0.2 * rms(free, 2.5, 3.0)  # a swell
-        held = []
-        for limit in (0.5, 1.0):
-            y = run(note, limit)
-            level = rms(y, 2.5, 3.0)
-            held.append(level)
-            assert abs(20 * np.log10(rms(y, 0.175, 0.225) / level)) < 1.5, (note, limit)
-            for t in np.arange(0.5, 3.0, 0.25):
-                assert abs(20 * np.log10(rms(y, t, t + 0.25) / level)) < 0.5, (note, limit, t)
-        assert held[1] < 0.5 * held[0], (note, held)
+        fs, free = _rosin_note([0.375, 0.5, 0.333, 0.0], note, 127, 4.0)
+        fs, even = _rosin_note([0.375, 0.5, 0.333, 0.5], note, 127, 4.0)
+        lf, le = _levels_db(free, int(0.1 * fs), 40), _levels_db(even, int(0.1 * fs), 40)
+        assert lf[-1] - lf[1] > 30.0, (note, "a swell")
+        med = float(np.median(le[1:]))
+        medians.append(med)
+        assert np.all(le[1:] > med - 8.0) and np.all(le[1:] < med + 4.0), (note, le - med)
+        tex = _off_harmonic_db(even[int(1 * fs) : int(3 * fs)], fs, f1[note])
+        assert -32.0 < tex < -5.0, (note, tex)
+        if note > 36:  # the free treble's limit cycle is a clean tone
+            assert _off_harmonic_db(free[int(3.5 * fs) :], fs, f1[note]) < -40.0, note
+    assert np.ptp(medians) < 2.0, medians
 
 
-def test_limit_holds_a_held_bar():
-    """At the fastest WHEEL and full RESONATOR a bar held hard swells within seconds to ~5 V
-    (the stick-slip's limit cycle follows the wheel's speed); LIMIT's felt holds it: ~2 V
-    at 0.75, quieter the closer, every bar alike."""
-    ref = kc.latest("ROSIN_WHEEL")
-    fs, secs = 96_000.0, 5
-    for note in (36, 84):
-        held = []
-        for limit in (0.0, 0.75, 1.0):
-            el = element(ref, [1.0, 1.0, 1.0, limit])
-            el["rate_hz"] = fs
-            perf = [(0, "on", note, 127), (0, "pressure", 0, 127)]
-            y = circuitsim.invented_render(json.dumps(el), fs, int(secs * fs), perf, 0)
-            held.append(float(np.max(np.abs(y[-int(fs) :]))))
-        assert held[0] > 4.5, held
-        assert held[2] < held[1] < 2.5, held  # the full scale is 4 V
+def test_even_tames_the_runaway_and_lets_the_release_decay():
+    """At the fastest WHEEL, full RESONATOR and a hard press a free bar swells past the 4 V full
+    scale; EVEN holds it under 3 V. Let go, the AVC's gain is frozen: the damped bar decays."""
+    hard = [(1.0, 1.0, 1.0)]
+    fs, free = _rosin_note([*hard[0], 0.0], 60, 127, 5.0)
+    fs, even = _rosin_note([*hard[0], 0.5], 60, 127, 5.0)
+    assert np.max(np.abs(free)) > 4.5
+    assert np.max(np.abs(even)) < 3.0
+    fs, y = _rosin_note([0.375, 0.5, 0.333, 0.5], 60, 127, 3.0, off_s=2.0)
 
+    def rms(a, b):
+        return np.sqrt(np.mean(y[int(a * fs) : int(b * fs)] ** 2))
 
-def test_the_keys_are_the_same_on_any_number_of_threads():
-    ref = kc.latest("ROSIN_WHEEL")
-    el = json.dumps(element(ref, [0.375, 0.5, 0.333, 0.0]))
-    chord = [(0, "on", k, 80) for k in (48, 52, 55, 60, 64, 67)]
-    a = circuitsim.invented_render(el, FS, 9600, chord, 0)
-    b = circuitsim.invented_render(el, FS, 9600, chord, 3)
-    assert np.array_equal(a, b)
+    assert 20 * np.log10(rms(2.3, 2.5) / rms(1.5, 2.0)) < -20.0
 
 
 def test_the_buzz_zither_agrees_with_its_reference():

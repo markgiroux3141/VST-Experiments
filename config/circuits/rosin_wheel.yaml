@@ -7,13 +7,12 @@
 # pickup at its far end through its tuned tube; the pickups sum onto `out`.
 #
 # The panel (they play on): WHEEL (k0: the wheel's surface speed 0.1-0.5 m/s), RESONATOR (k1:
-# the tubes' gain 0-4), TOUCH (k2: the press 0.5-2x the key's force), LIMIT (k3: a check felt at
-# each bar's free end that a held bar's swing rubs past its gap: 0 none, as ROSIN_WHEEL@1; up,
-# closer. With the felt on, the key's felt mallet also throws the bar to that level as it goes
-# down: no swell, the note within ~1 dB of its level by 0.1-0.2 s and even while held (the rosin's
-# texture plays on), ~1.0 V at 0.25, 0.5 V at 0.5, 0.15 V at 1, the same on every key and panel.
-# At 0 the free bar swells to a limit cycle that follows the wheel's speed, over seconds: at the
-# fastest WHEEL one bar alone swelled for 5-10 s to ~5 V).
+# the tubes' gain 0-4), TOUCH (k2: the press 0.5-2x the key's force), EVEN (k3, the control
+# `limit`): 0 = the free bar, which swells over seconds to a loud, clean limit cycle (at the
+# fastest WHEEL one bar alone to ~5 V). Up, every note at one even level from ~0.1 s on with the
+# rosin's scratch kept: a check felt holds the bar quiet, where the rosin's grip drives all its
+# modes (a bar clamped near its full swing locks into a clean tone), and each key's pickup has an
+# automatic volume control (frozen when the key lets go); further up, rougher. ROSIN_WHEEL@5.
 
 title: "Rosin Wheel Organ (bowed steel bars, keyed)"
 input: in
@@ -27,10 +26,10 @@ controls:
   wheel: {value: 0.375, min: 0.0, max: 1.0, unit: rotation, source: "design: WHEEL, the wheel's surface speed 0.1-0.5 m/s (0.25 m/s, the sketch's, at 0.375)"}
   resonator: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: RESONATOR, the tubes' gain 0-4 (2, the sketch's, at 0.5)"}
   touch: {value: 0.333, min: 0.0, max: 1.0, unit: rotation, source: "design: TOUCH, the press 0.5-2x the key's force (1x at 0.333)"}
-  limit: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "design: LIMIT, the check felt's gap and the mallet that throws the bar to it: the felt meets a bar whose free end swings faster than 0.3 m/s (just on) to 0.03 m/s (1), evenly in log; 0 = no felt and no mallet, the free swelling bar (the default: the instrument as first played). On, notes come on within ~1 dB of their held level by 0.1-0.2 s (was 1.5-3.4 s) and hold within +-0.3 dB: ~1.0 V at 0.25, 0.5 V at 0.5, 0.15 V at 1 (one bar, velocities 50-127, three panels; varimu/invented/keys/rosin.py)"}
+  limit: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "design: EVEN (the panel's label), the check felt per bar and the pickups' AVC (varimu/invented/keys/rosin.py): 0 = off, the free swelling bar (the instrument as first played). Up: one level for every key, velocity and panel (~0.44 V rms, +-1-3 dB while held; peaks <= 2.9 V where the free bar reached 5.2 V), up within ~0.1 s (a +3 dB accent in its first ~50 ms), the scratch kept (off-harmonic -6 to -29 dB held; the free bar's limit cycle -44 to -60); toward 1 rougher (a hard press -7 to -19 dB)"}
 
 values:
-  keys_model: {value: ROSIN_WHEEL@4, source: "config/components/rosin_wheel/4.yaml (LIMIT's felt and mallet added to @1; @3 the felt alone, @2's felt engaged too high to matter at the default panel) (varimu/invented/keys/rosin.py's model from varimu/invented/friction.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_model: {value: ROSIN_WHEEL@5, source: "config/components/rosin_wheel/5.yaml (EVEN: the felt per bar and the pickups' AVC; @2-@4 the felt as a ceiling and a mallet, which locked the bar into a clean tone; varimu/invented/keys/rosin.py's model from varimu/invented/friction.py's values, compiled by scripts/compile_invented_keys.py)"}
   keys_rate_hz: {value: 96000.0, source: "numerical: each bar stepped at the project's 96 kHz (one trapezoidal step a sample)"}
   keys_max_keys: {value: 16, source: "numerical: bars sounding at once (a bar costs well under 1 % of a core; another struck silences a released one, else the one struck longest ago)"}
   r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}

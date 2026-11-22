@@ -279,6 +279,25 @@ pub struct RosinModel {
     pub mallet_level: Option<f64>,
     #[serde(default)]
     pub mallet_periods: Option<f64>,
+    /// EVEN (ROSIN_WHEEL@5 on; `rosin.py`'s docs): the felt per bar at
+    /// `even_v_ref_m_s` (f1 / `even_ref_hz`)^`even_f_exp` x a factor from `even_range`, and
+    /// each key's pickup AVC.
+    #[serde(default)]
+    pub even_v_ref_m_s: Option<f64>,
+    #[serde(default)]
+    pub even_ref_hz: Option<f64>,
+    #[serde(default)]
+    pub even_f_exp: Option<f64>,
+    #[serde(default)]
+    pub even_range: Option<[f64; 2]>,
+    #[serde(default)]
+    pub avc_target_v: Option<f64>,
+    #[serde(default)]
+    pub avc_attack_s: Option<f64>,
+    #[serde(default)]
+    pub avc_release_s: Option<f64>,
+    #[serde(default)]
+    pub avc_max_db: Option<f64>,
     pub seed: u64,
 }
 
@@ -329,6 +348,13 @@ pub struct RosinVoice {
     pulse_n: usize,
     pulse_i: usize,
     pulse_a: f64,
+    /// EVEN's AVC: on, its follower's coefficients and ceiling, its mean square and gain.
+    avc: bool,
+    avc_aa: f64,
+    avc_ar: f64,
+    avc_gmax: f64,
+    avc_ms: f64,
+    avc_g: f64,
 }
 
 impl RosinVoice {
@@ -357,6 +383,14 @@ impl RosinVoice {
             .map(|(&f, &q)| modal_step(f, q.min(m.q_damped), h, key.mass_kg))
             .collect();
         let n = key.f_hz.len();
+        let (avc_aa, avc_ar, avc_gmax) = match (m.avc_attack_s, m.avc_release_s, m.avc_max_db) {
+            (Some(att), Some(rel), Some(db)) => (
+                (-1.0 / (att * fs)).exp(),
+                (-1.0 / (rel * fs)).exp(),
+                10f64.powf(db / 20.0),
+            ),
+            _ => (0.0, 0.0, 1.0),
+        };
         let w = 2.0 * std::f64::consts::PI * m.wheel_hz * h;
         let a = (-2.0 * std::f64::consts::PI * m.noise_hz * h).exp();
         let mut v = RosinVoice {
@@ -402,6 +436,12 @@ impl RosinVoice {
             pulse_n: 0,
             pulse_i: 0,
             pulse_a: 0.0,
+            avc: false,
+            avc_aa,
+            avc_ar,
+            avc_gmax,
+            avc_ms: 0.0,
+            avc_g: 1.0,
         };
         v.set_knobs(knobs);
         v
@@ -409,14 +449,24 @@ impl RosinVoice {
 
     fn set_knobs(&mut self, k: [f64; 4]) {
         let f1 = self.f1;
-        let (wheel, res, touch, gap, v_lim) = {
+        let (wheel, res, touch, gap, v_lim, avc) = {
             let m = self.rm();
-            let (gap, v_lim) = match (m.felt_c_n_s_m, m.limit_v_m_s) {
-                (Some(_), Some([lo, hi])) if k[3] > 0.0 => {
-                    let v_lim = lo * (hi / lo).powf(k[3].min(1.0));
-                    (v_lim / (2.0 * std::f64::consts::PI * f1), v_lim)
+            let kk = k[3].min(1.0);
+            let even = match (m.even_v_ref_m_s, m.even_ref_hz, m.even_f_exp, m.even_range) {
+                (Some(v_ref), Some(ref_hz), Some(exp), Some([r0, r1])) => {
+                    Some(v_ref * (f1 / ref_hz).powf(exp) * (r0 * (r1 / r0).powf(kk)))
                 }
-                _ => (0.0, 0.0),
+                _ => None,
+            };
+            let (v_lim, avc) = match (m.felt_c_n_s_m, even, m.limit_v_m_s) {
+                (Some(_), Some(v), _) if k[3] > 0.0 => (v, true),
+                (Some(_), None, Some([lo, hi])) if k[3] > 0.0 => (lo * (hi / lo).powf(kk), false),
+                _ => (0.0, false),
+            };
+            let gap = if v_lim > 0.0 {
+                v_lim / (2.0 * std::f64::consts::PI * f1)
+            } else {
+                0.0
             };
             (
                 knob(m.wheel_range_m_s, k[0]),
@@ -424,6 +474,7 @@ impl RosinVoice {
                 knob(m.touch_range, k[2]),
                 gap,
                 v_lim,
+                avc,
             )
         };
         self.wheel = wheel;
@@ -431,6 +482,7 @@ impl RosinVoice {
         self.touch = touch;
         self.gap = gap;
         self.v_lim = v_lim;
+        self.avc = avc;
     }
 
     fn event(&mut self, ev: NoteEvent) {
@@ -581,7 +633,23 @@ impl RosinVoice {
                 self.awake = false;
             }
         }
-        m.pickup_v_per_m_s * (pick + self.res_gain * y)
+        let mut out = m.pickup_v_per_m_s * (pick + self.res_gain * y);
+        if self.avc {
+            // The pickup's AVC (its gain frozen once the key lets go).
+            let x2 = out * out;
+            let a = if x2 > self.avc_ms {
+                self.avc_aa
+            } else {
+                self.avc_ar
+            };
+            self.avc_ms = a * self.avc_ms + (1.0 - a) * x2;
+            if held {
+                let target = m.avc_target_v.unwrap_or(1.0);
+                self.avc_g = (target / (self.avc_ms + 1e-30).sqrt()).min(self.avc_gmax);
+            }
+            out *= self.avc_g;
+        }
+        out
     }
 }
 

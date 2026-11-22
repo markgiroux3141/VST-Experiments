@@ -269,9 +269,9 @@ it stopped). **IL0 + IL1 built (2026-11-21):** one generic IR element / part `in
 `max_keys`, panel `k0`-`k3` that play on), circuitsim's `invented.rs` on `keyed.rs`, references
 in `varimu/invented/keys/` (bit-exact with the Rust: `tests/test_invented_keys.py`), components
 by `scripts/compile_invented_keys.py` (`ROSIN_WHEEL@1`), `config/circuits/rosin_wheel.yaml`, the
-app's `rosin_wheel` (mod wheel = WHEEL; 16 bars 13-17 % worst block; since 2026-11-21 LIMIT, a check felt
-and a mallet: held notes even and on within ~0.2 s, 0 = the free swelling bar, `ROSIN_WHEEL@4`: the plan's
-"the Rosin Wheel's LIMIT"), demo renders through the
+app's `rosin_wheel` (mod wheel = WHEEL; 16 bars 13-17 % worst block; since 2026-11-21 EVEN (control `limit`): a
+felt holding each bar quiet, where the rosin scratches, and a per-key pickup AVC: one even level from ~0.1 s,
+0 = the free swelling bar, `ROSIN_WHEEL@5`: the plan's "the Rosin Wheel's LIMIT"; a clamped bar is a clean tone), demo renders through the
 circuit by `scripts/invented_live_render.py`. **IL2 built (2026-11-21):** the Buzz Zither
 (`varimu/invented/keys/zither.py`: an FD string per key on the stream's 96 kHz grid with the
 implicit jawari contact, velocity = the finger's force; the sustain pedal runs a tanpura cam on
