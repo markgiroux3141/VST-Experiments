@@ -272,6 +272,13 @@ pub struct RosinModel {
     pub limit_v_m_s: Option<[f64; 2]>,
     #[serde(default)]
     pub felt_width: Option<f64>,
+    /// LIMIT's mallet (ROSIN_WHEEL@4 on; absent: none): the bar thrown at key-down to this
+    /// many times LIMIT's engaging velocity (at most the wheel's speed), the push lasting
+    /// `mallet_periods` of the fundamental.
+    #[serde(default)]
+    pub mallet_level: Option<f64>,
+    #[serde(default)]
+    pub mallet_periods: Option<f64>,
     pub seed: u64,
 }
 
@@ -313,8 +320,15 @@ pub struct RosinVoice {
     res_gain: f64,
     touch: f64,
     f1: f64,
-    /// LIMIT's felt gap at the free end (m; 0: no felt).
+    mass: f64,
+    fs: f64,
+    /// LIMIT's felt gap at the free end (m; 0: no felt), and the velocity it engages at.
     gap: f64,
+    v_lim: f64,
+    /// The mallet's push: its length (samples), the samples done, its peak force (N).
+    pulse_n: usize,
+    pulse_i: usize,
+    pulse_a: f64,
 }
 
 impl RosinVoice {
@@ -381,7 +395,13 @@ impl RosinVoice {
             res_gain: 0.0,
             touch: 0.0,
             f1: key.f_hz[0],
+            mass: key.mass_kg,
+            fs,
             gap: 0.0,
+            v_lim: 0.0,
+            pulse_n: 0,
+            pulse_i: 0,
+            pulse_a: 0.0,
         };
         v.set_knobs(knobs);
         v
@@ -389,26 +409,28 @@ impl RosinVoice {
 
     fn set_knobs(&mut self, k: [f64; 4]) {
         let f1 = self.f1;
-        let (wheel, res, touch, gap) = {
+        let (wheel, res, touch, gap, v_lim) = {
             let m = self.rm();
-            let gap = match (m.felt_c_n_s_m, m.limit_v_m_s) {
+            let (gap, v_lim) = match (m.felt_c_n_s_m, m.limit_v_m_s) {
                 (Some(_), Some([lo, hi])) if k[3] > 0.0 => {
                     let v_lim = lo * (hi / lo).powf(k[3].min(1.0));
-                    v_lim / (2.0 * std::f64::consts::PI * f1)
+                    (v_lim / (2.0 * std::f64::consts::PI * f1), v_lim)
                 }
-                _ => 0.0,
+                _ => (0.0, 0.0),
             };
             (
                 knob(m.wheel_range_m_s, k[0]),
                 m.resonator_max * k[1],
                 knob(m.touch_range, k[2]),
                 gap,
+                v_lim,
             )
         };
         self.wheel = wheel;
         self.res_gain = res;
         self.touch = touch;
         self.gap = gap;
+        self.v_lim = v_lim;
     }
 
     fn event(&mut self, ev: NoteEvent) {
@@ -419,6 +441,17 @@ impl RosinVoice {
                 self.awake = true;
                 self.damped = false;
                 self.quiet = 0;
+                let mallet = match &*self.m {
+                    Model::Rosin(m) => m.mallet_level.zip(m.mallet_periods),
+                    _ => None,
+                };
+                if let (true, Some((level, periods))) = (self.gap > 0.0, mallet) {
+                    let v_t = self.wheel.min(level * self.v_lim);
+                    let t = periods / self.f1;
+                    self.pulse_n = ((t * self.fs + 0.5) as usize).max(1);
+                    self.pulse_i = 0;
+                    self.pulse_a = v_t * self.mass / t;
+                }
             }
             NoteEvent::Off { .. } => self.down = false,
             NoteEvent::Pedal { down } => self.pedal_down = down,
@@ -474,6 +507,14 @@ impl RosinVoice {
             let (c, width) = (m.felt_c_n_s_m.unwrap_or(0.0), m.felt_width.unwrap_or(1.0));
             let e = ((xf.abs() - self.gap) / (width * self.gap)).clamp(0.0, 1.0);
             gf = 2.0 * (-c * (e * e * (3.0 - 2.0 * e)) * vf);
+            if self.pulse_i < self.pulse_n {
+                // The mallet: its force at the step's two ends.
+                let w = 2.0 * std::f64::consts::PI / self.pulse_n as f64;
+                let f_a = 0.5 * self.pulse_a * (1.0 - (w * self.pulse_i as f64).cos());
+                let f_b = 0.5 * self.pulse_a * (1.0 - (w * (self.pulse_i + 1) as f64).cos());
+                gf += f_a + f_b;
+                self.pulse_i += 1;
+            }
         }
         let mut vh = 0.0;
         let mut y_adm = 0.0;

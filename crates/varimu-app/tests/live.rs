@@ -666,7 +666,7 @@ fn the_rosin_wheel_plays_from_note_events() {
         ("wheel", 0.9),
         ("resonator", 0.1),
         ("touch", 0.8),
-        ("limit", 0.0),
+        ("limit", 0.5),
     ] {
         let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
         assert_eq!(base, turned, "{k} plays on");

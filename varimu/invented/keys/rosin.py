@@ -25,6 +25,13 @@ v_lim / (2 pi f1): voiced so every bar meets its felt at the same end velocity; 
 v_lim from LIMIT_V_M_S[0] (barely) to [1] (closest), evenly in log. The felt's force is
 explicit (from the step's start: stable while FELT_C < m / (2 n h), thousands of N s/m) and
 folded into the bar's free step before the wheel's contact is solved.
+
+With LIMIT on, the key also throws the bar to that level (ROSIN_WHEEL@4 on: `mallet_level`): a
+felt mallet at the free end pushes it once as the key goes down, a raised-cosine force lasting
+MALLET_PERIODS of the fundamental (one period: the fundamental takes half the push's impulse,
+mode 2 ~30 dB less), sized so the fundamental's end velocity starts at the lower of the wheel's
+speed (the free limit cycle's) and MALLET_LEVEL x LIMIT's engaging velocity (under the felt's
+ceiling): no swell, the note on within ~a period and the press's attack, held even by the felt.
 """
 
 from __future__ import annotations
@@ -55,6 +62,10 @@ FELT_C_N_S_M = 30.0
 # (just on: above a bar's own level at the default panel, 1.6 V)
 LIMIT_V_M_S = (0.3, 0.03)
 FELT_WIDTH = 0.5  # the felt engages over this fraction of its gap beyond it
+# the mallet's start, relative to LIMIT's engaging velocity: design choice (the felt holds a
+# bar at ~1.2-1.4x it, so the note starts just under its held level)
+MALLET_LEVEL = 1.2
+MALLET_PERIODS = 1.0  # the push lasts this many periods of the fundamental: design choice
 SEED = 1
 
 
@@ -96,6 +107,8 @@ def model() -> dict[str, Any]:
         "felt_c_n_s_m": FELT_C_N_S_M,
         "limit_v_m_s": list(LIMIT_V_M_S),
         "felt_width": FELT_WIDTH,
+        "mallet_level": MALLET_LEVEL,
+        "mallet_periods": MALLET_PERIODS,
         "seed": SEED,
     }
 
@@ -119,6 +132,13 @@ class Voice:
         self.phi_pick = [2.0 if i % 2 == 0 else -2.0 for i in range(self.n)]
         self.bp = bandpass(key["f_hz"][0], m["resonator_q"], fs)
         self.f1 = key["f_hz"][0]
+        self.mass = key["mass_kg"]
+        self.fs = fs
+        self.v_lim = 0.0
+        # the mallet's push: samples left of pulse_n, its peak force
+        self.pulse_n = 0
+        self.pulse_i = 0
+        self.pulse_a = 0.0
         self.x = [0.0] * self.n
         self.v = [0.0] * self.n
         self.f_prev = 0.0
@@ -150,10 +170,11 @@ class Voice:
         self.touch = knob(m["touch_range"], k[2])
         # LIMIT: the check felt's gap (0: no felt)
         self.gap = 0.0
+        self.v_lim = 0.0
         if "felt_c_n_s_m" in m and k[3] > 0.0:
             lo, hi = m["limit_v_m_s"]
-            v_lim = lo * (hi / lo) ** min(k[3], 1.0)
-            self.gap = v_lim / (2.0 * math.pi * self.f1)
+            self.v_lim = lo * (hi / lo) ** min(k[3], 1.0)
+            self.gap = self.v_lim / (2.0 * math.pi * self.f1)
 
     # events
     def asleep(self) -> bool:
@@ -165,6 +186,12 @@ class Voice:
         self.awake = True
         self.damped = False
         self.quiet = 0
+        if self.gap > 0.0 and "mallet_level" in self.m:
+            v_t = min(self.wheel, self.m["mallet_level"] * self.v_lim)
+            t = self.m["mallet_periods"] / self.f1
+            self.pulse_n = max(int(t * self.fs + 0.5), 1)
+            self.pulse_i = 0
+            self.pulse_a = v_t * self.mass / t
 
     def off(self) -> None:
         self.down = False
@@ -216,6 +243,13 @@ class Voice:
                 vf += self.phi_pick[i] * self.v[i]
             e = min(max((abs(xf) - self.gap) / (m["felt_width"] * self.gap), 0.0), 1.0)
             gf = 2.0 * (-m["felt_c_n_s_m"] * (e * e * (3.0 - 2.0 * e)) * vf)
+            if self.pulse_i < self.pulse_n:
+                # the mallet: its force at the step's two ends
+                w = 2.0 * math.pi / self.pulse_n
+                f_a = 0.5 * self.pulse_a * (1.0 - math.cos(w * self.pulse_i))
+                f_b = 0.5 * self.pulse_a * (1.0 - math.cos(w * (self.pulse_i + 1)))
+                gf = gf + (f_a + f_b)
+                self.pulse_i += 1
         # the free step and the contact's admittance (mode shape 2 at the bowed end)
         xn = [0.0] * self.n
         vn = [0.0] * self.n

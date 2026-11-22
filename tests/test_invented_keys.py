@@ -92,23 +92,35 @@ def test_the_rosin_wheel_without_its_felt_is_version_1():
     assert np.array_equal(a, a1)
 
 
-def test_limit_sets_a_ceiling_at_the_default_panel():
-    """LIMIT acts over its travel at the default panel, not only at extreme ones: a loud held
-    bar's level falls by ~6 dB per quarter turn from 0.5 on, alike on every key (ROSIN_WHEEL@2's
-    felt engaged above the default level, so it did nothing there)."""
+def test_limit_makes_held_notes_even_and_early():
+    """At the default panel: LIMIT 0 is the free bar, a loud note swelling from far under its
+    held level for seconds; LIMIT on, the key's mallet throws the bar to the felt's level, so the
+    note is within 1.5 dB of its held level by 0.2 s and stays within 0.5 dB, lower the closer
+    the felt, alike on every key (ROSIN_WHEEL@2's felt did nothing at this panel)."""
     ref = kc.latest("ROSIN_WHEEL")
-    fs, secs = 96_000.0, 4
+    fs, secs = 96_000.0, 3
+
+    def run(note: int, limit: float) -> np.ndarray:
+        el = element(ref, [0.375, 0.5, 0.333, limit])
+        el["rate_hz"] = fs
+        perf = [(0, "on", note, 127)]
+        return circuitsim.invented_render(json.dumps(el), fs, int(secs * fs), perf, 0)
+
+    def rms(y: np.ndarray, a: float, b: float) -> float:
+        return float(np.sqrt(np.mean(y[int(a * fs) : int(b * fs)] ** 2)))
+
     for note in (36, 60, 84):
+        free = run(note, 0.0)
+        assert rms(free, 0.175, 0.225) < 0.2 * rms(free, 2.5, 3.0)  # a swell
         held = []
-        for limit in (0.0, 0.5, 1.0):
-            el = element(ref, [0.375, 0.5, 0.333, limit])
-            el["rate_hz"] = fs
-            y = circuitsim.invented_render(
-                json.dumps(el), fs, int(secs * fs), [(0, "on", note, 127)], 0
-            )
-            held.append(float(np.max(np.abs(y[-int(0.5 * fs) :]))))
-        assert 0.4 < held[1] / held[0] < 0.6, (note, held)
-        assert 0.1 < held[2] / held[0] < 0.2, (note, held)
+        for limit in (0.5, 1.0):
+            y = run(note, limit)
+            level = rms(y, 2.5, 3.0)
+            held.append(level)
+            assert abs(20 * np.log10(rms(y, 0.175, 0.225) / level)) < 1.5, (note, limit)
+            for t in np.arange(0.5, 3.0, 0.25):
+                assert abs(20 * np.log10(rms(y, t, t + 0.25) / level)) < 0.5, (note, limit, t)
+        assert held[1] < 0.5 * held[0], (note, held)
 
 
 def test_limit_holds_a_held_bar():

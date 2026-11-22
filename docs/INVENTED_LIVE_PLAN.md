@@ -542,3 +542,19 @@ scale, a chord far past it.
   halved). `test_limit_sets_a_ceiling_at_the_default_panel` checks it at the default panel.
   LIMIT can't shorten the swell below its ceiling: the bar's growth time is its physics (~0.7 s,
   Session 1's "Found"; lighter bars, a new component, would speak ~5x faster).
+- **Even notes, a fast attack (`ROSIN_WHEEL@4`, the user the same day: "an option for just even
+  volume throughout and faster attack ... keep the variation of the sound as it plays").** The
+  swell is the stick-slip growing from a bar at rest (25-35 dB at ~0.5-0.7 s a time constant), so
+  a ceiling can't shorten it. With LIMIT on, the key's felt mallet now throws the bar to the felt's
+  level as it goes down: a raised-cosine push at the free end lasting one period of the
+  fundamental (half its impulse into the fundamental, mode 2 ~30 dB less: no click), sized so the
+  fundamental starts at the lower of the wheel's speed and 1.2x LIMIT's engaging velocity; the
+  stick-slip carries on from there (the rosin's texture unchanged) and the felt holds it. Measured
+  (velocities 50 and 127, C2-C6, three panels): within ~1 dB of the held level by 0.2 s (the
+  treble by 0.05-0.1 s; the bass -3 dB at 0.1 s: the press's 80 ms attack and its long period),
+  then within +-0.3 dB; was 1.5-3.4 s to arrive. Started this way a bar settles lower than when it
+  swells up (~1.0 V at LIMIT 0.25, 0.5 V at 0.5, 0.15 V at 1). **Decided:** the mallet comes with
+  the felt (one mechanism: the stop sets the level, the key throws the bar to it), so LIMIT 0 is
+  the free swelling bar and LIMIT's default is 0 again (the instrument as first played).
+  `test_limit_makes_held_notes_even_and_early`; demos `reports/invented/rosin_wheel/
+  live_melody_and_chord_limit_*.wav` through the app's take renderer.
