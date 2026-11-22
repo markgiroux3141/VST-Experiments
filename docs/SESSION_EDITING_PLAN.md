@@ -187,6 +187,15 @@ found SE5-SE6's editing behind keys and right-click menus, so the first item is 
   slices leave (pulling audio in would double the next hit); Blade and Erase on MIDI clips
   act as on audio clips (Reverse / Varispeed of one makes audio from what it plays).
 
+**After the user's try of the roll (2026-11-22):** an edit wasn't heard on play (a device
+without a proxy kept playing its last render until Render, SE1). The roll's header now has
+**render edits** (on at first): once the edits pause for 0.6 s (`ROLL_RENDER_PAUSE`) the
+edited take's draft renders behind (`SessionView::poll_roll_render`; the sampler's renders
+already followed every edit), meanwhile the proxy or the last render plays. And **snap**
+(on at first; off when the session's snap is Off): unticked, drawing, moving, resizing and
+a cursor click go where the pointer is, Alt inverting it either way; quantize and the arrow
+nudges keep the grid.
+
 ### Open
 
 - SE8 as a whole: the user's first try.

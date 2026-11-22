@@ -7,7 +7,8 @@
 //!
 //! **Tools** (the header's buttons, or 1 / 2 / 3 over the roll):
 //! - **Select**: a click selects a note (Shift adds to the selection) and plays it; a drag on
-//!   a note moves the selection (by the grid; Alt: freely; up and down by semitones; Shift:
+//!   a note moves the selection (by the grid, or freely with "snap" off; Alt inverts it; up
+//!   and down by semitones; Shift:
 //!   copies it, the copies left behind), a drag on a note's right end (its last few pixels,
 //!   on a note wide enough to have one: the cursor says so) resizes it, a drag on empty
 //!   space selects what it covers, a click on empty space puts the session's cursor there,
@@ -40,8 +41,9 @@
 //! jump, double-click to fit the take).
 //!
 //! Every gesture is one edit: when it ends the roll hands back the notes, and the Session
-//! view saves them as the take's next revision (one undo step; the take renders again
-//! behind, `crate::session_view`).
+//! view saves them as the take's next revision (one undo step). With "render edits" (on at
+//! first) the revision renders on its device behind once the edits pause, so playing hears
+//! it; until then it plays the proxy or its last render (`crate::session_view`).
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -184,6 +186,12 @@ pub struct Roll {
     /// Quantize strength (0-1), and whether quantize moves the ends too.
     strength: f64,
     quantize_ends: bool,
+    /// Snap off (the header's "snap" unticked): drawing, moving, resizing and the cursor go
+    /// where the pointer is; Alt inverts it either way. Quantize and nudges keep the grid.
+    free: bool,
+    /// Each edit renders the take's revision on its device behind (the header's "render
+    /// edits"), so playing hears it; off, it waits for Render (SE1).
+    render_edits: bool,
     tool: Tool,
     /// Previews on (the header's toggle), the notes sounding briefly and when they stop,
     /// the note a move is sounding.
@@ -235,6 +243,8 @@ impl Roll {
             division: 4,
             strength: 1.0,
             quantize_ends: false,
+            free: false,
+            render_edits: true,
             tool: Tool::Select,
             preview: true,
             brief: Vec::new(),
@@ -257,6 +267,16 @@ impl Roll {
     /// Its grid: `d` steps a beat.
     pub fn set_division(&mut self, d: u32) {
         self.division = d.max(1);
+    }
+
+    /// Snapping off (`true`: notes go where the pointer is) or on.
+    pub fn set_free(&mut self, free: bool) {
+        self.free = free;
+    }
+
+    /// Whether its edits render behind as they land (the header's "render edits").
+    pub fn renders_edits(&self) -> bool {
+        self.render_edits
     }
 
     /// Its edit was saved as revision `rev`.
@@ -827,6 +847,23 @@ impl Roll {
         };
         let (shift, alt, command) =
             ui.input(|i| (i.modifiers.shift, i.modifiers.alt, i.modifiers.command));
+        // Where the pointer puts things: the grid line (a drawn note's start: the line at or
+        // before it), or anywhere when snapping is off (Alt inverts it).
+        let free = self.free != alt;
+        let on_grid = |pos: i64| {
+            if free {
+                pos
+            } else {
+                snap(place, division, pos)
+            }
+        };
+        let start_at = |pos: i64| {
+            if free {
+                pos
+            } else {
+                snap(place, division, pos - (step / 2.0) as i64)
+            }
+        };
         if let Some(p) = resp.hover_pos()
             && grid_rect.contains(p)
         {
@@ -874,10 +911,7 @@ impl Roll {
                         self.gesture = Some(Gesture::Erase);
                     }
                     (Tool::Draw, None) => {
-                        let start = sample(
-                            place,
-                            snap(place, division, pos_of(p.x) - (step / 2.0) as i64),
-                        );
+                        let start = sample(place, start_at(pos_of(p.x)));
                         let note = key_of(p.y).clamp(0.0, 127.0) as u8;
                         self.notes.push(Note {
                             start,
@@ -926,9 +960,13 @@ impl Roll {
             match self.gesture.clone() {
                 Some(Gesture::Draw(i)) => {
                     let start = self.notes[i].start;
-                    let end_pos = snap(place, division, pos_of(p.x));
-                    self.notes[i].end =
-                        sample(place, end_pos).max(start + step.round().max(1.0) as u64);
+                    let end_pos = on_grid(pos_of(p.x));
+                    let min_len = if free {
+                        (step / 4.0).max(1.0) as u64
+                    } else {
+                        step.round().max(1.0) as u64
+                    };
+                    self.notes[i].end = sample(place, end_pos).max(start + min_len);
                 }
                 Some(Gesture::Erase) => {
                     if let Some((i, _)) = hit(p, &self.notes) {
@@ -938,7 +976,8 @@ impl Roll {
                 Some(Gesture::Move { from, press }) => {
                     let dpos = pos_of(p.x) - pos_of(press.x);
                     let dkey = ((press.y - p.y) / key_h).round() as i64;
-                    // The first selected note's start lands on the grid (Alt: anywhere).
+                    // The first selected note's start lands on the grid (snap off, or Alt:
+                    // anywhere).
                     let lead = self
                         .selected
                         .iter()
@@ -946,11 +985,7 @@ impl Roll {
                         .map(|&i| from[i].start)
                         .unwrap_or(0);
                     let lead_pos = timeline(place, lead) + dpos;
-                    let target = if alt {
-                        lead_pos
-                    } else {
-                        snap(place, division, lead_pos)
-                    };
+                    let target = on_grid(lead_pos);
                     let shift_s = target - timeline(place, lead);
                     for &i in &self.selected {
                         let n = from[i];
@@ -976,12 +1011,7 @@ impl Roll {
                     let dpos = pos_of(p.x) - pos_of(press.x);
                     for &i in &self.selected {
                         let n = from[i];
-                        let end_pos = timeline(place, n.end) + dpos;
-                        let end_pos = if alt {
-                            end_pos
-                        } else {
-                            snap(place, division, end_pos)
-                        };
+                        let end_pos = on_grid(timeline(place, n.end) + dpos);
                         let end = sample(place, end_pos).max(n.start + (step as u64 / 4).max(1));
                         self.notes[i].end = end;
                     }
@@ -1072,10 +1102,7 @@ impl Roll {
                 }
                 (Tool::Erase, None) => {}
                 (Tool::Draw, None) => {
-                    let start = sample(
-                        place,
-                        snap(place, division, pos_of(p.x) - (step / 2.0) as i64),
-                    );
+                    let start = sample(place, start_at(pos_of(p.x)));
                     let note = key_of(p.y).clamp(0.0, 127.0) as u8;
                     let n = Note {
                         start,
@@ -1101,12 +1128,7 @@ impl Roll {
                     self.selected.clear();
                     // A click on empty space puts the session's cursor there (paste lands
                     // there, Space plays from it).
-                    let pos = if alt {
-                        pos_of(p.x)
-                    } else {
-                        snap(place, division, pos_of(p.x))
-                    };
-                    out.push(Out::Cursor(pos.max(0)));
+                    out.push(Out::Cursor(on_grid(pos_of(p.x)).max(0)));
                 }
                 (Tool::Select, None) => {}
             }
@@ -1117,8 +1139,7 @@ impl Roll {
             && grid_rect.contains(p)
             && hit(p, &self.notes).is_none()
         {
-            let pos = snap(place, division, pos_of(p.x) - (step / 2.0) as i64);
-            let start = sample(place, pos);
+            let start = sample(place, start_at(pos_of(p.x)));
             let note = key_of(p.y).clamp(0.0, 127.0) as u8;
             let n = Note {
                 start,
@@ -1301,6 +1322,18 @@ impl Roll {
                         ui.selectable_value(&mut self.division, d, l);
                     }
                 });
+            let mut snap_on = !self.free;
+            if ui
+                .checkbox(&mut snap_on, RichText::new("snap").small())
+                .on_hover_text(
+                    "Drawn, moved and resized notes land on the grid; unticked they go where \
+                     the pointer is (Alt inverts it while dragging). Quantize and the arrow \
+                     nudges keep the grid",
+                )
+                .changed()
+            {
+                self.free = !snap_on;
+            }
             ui.label(RichText::new("strength").small().color(theme::MUTED));
             ui.add(
                 egui::DragValue::new(&mut self.strength)
@@ -1327,6 +1360,12 @@ impl Roll {
             }
             ui.checkbox(&mut self.quantize_ends, RichText::new("ends").small())
                 .on_hover_text("Quantize moves each note's end to the grid too (else its length is kept)");
+            ui.checkbox(&mut self.render_edits, RichText::new("render edits").small())
+                .on_hover_text(
+                    "Each edit renders the take on its device behind (a draft, at the quality \
+                     it was played at) once the edits pause, so playing hears it; meanwhile it \
+                     plays the proxy or its last render. Unticked: only Render renders",
+                );
             ui.checkbox(&mut self.follow, RichText::new("follow").small())
                 .on_hover_text("The view follows the playhead while it runs");
             ui.checkbox(&mut self.show_ghosts, RichText::new("ghosts").small())

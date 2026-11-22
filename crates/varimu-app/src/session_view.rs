@@ -97,7 +97,9 @@
 //! what renders. Double-click an event take (or its context menu) for the piano roll
 //! (`crate::piano_roll`): each edit is a new revision of the take, one undo step, and
 //! **nothing renders until asked** (SE1): the roll's Render, the take's menu, Render edits
-//! (n) in the session line, Ctrl+R. Until then an edited take plays its revision through
+//! (n) in the session line, Ctrl+R, or the roll's "render edits" (on at first: a draft
+//! renders behind once its edits pause for `ROLL_RENDER_PAUSE`, so playing hears the
+//! edit). Until then an edited take plays its revision through
 //! the device's proxy where it has one (made offline at once, `proxy::render_performance`;
 //! decision 1), else its last render, stale. Render at production is on demand too (the
 //! take's context menu, the roll's ⤓ PROD, or ⤓ Production for every event take); a
@@ -175,6 +177,9 @@ use crate::theme;
 
 /// How long a calibration plays the click (s).
 const CALIBRATE_S: f64 = 8.0;
+/// How long the piano roll's edits pause before the edited take renders (its "render
+/// edits"): a run of nudges or transposes renders once.
+const ROLL_RENDER_PAUSE: Duration = Duration::from_millis(600);
 /// The channel strips' width and a track's height (px).
 const STRIP_W: f32 = 250.0;
 const TRACK_H: f32 = 124.0;
@@ -603,6 +608,9 @@ pub struct SessionView {
     tried: HashSet<(String, u32, Quality, bool)>,
     take_errors: HashMap<(String, u32, Quality), String>,
     roll: Option<Roll>,
+    /// A piano-roll edit's render, due once the edits pause (the take, when): the roll's
+    /// "render edits", so playing hears the edit.
+    roll_render: Option<(String, Instant)>,
     /// The Play view's device has a proxy (set every frame: the strips offer it).
     proxy_available: bool,
     /// Event takes to bounce to audio once their production render lands (take, revision).
@@ -890,6 +898,7 @@ impl SessionView {
             tried: HashSet::new(),
             take_errors: HashMap::new(),
             roll: None,
+            roll_render: None,
             proxy_available: false,
             bounces: HashSet::new(),
             export: None,
@@ -8737,6 +8746,7 @@ impl SessionView {
     /// edit is in progress.
     fn poll_take_renders(&mut self, ctx: &egui::Context, recording: bool, live: bool) {
         self.poll_proxies(ctx);
+        self.poll_roll_render(ctx);
         let mut i = 0;
         while i < self.take_jobs.len() {
             if !self.take_jobs[i].job.is_finished() {
@@ -8851,6 +8861,41 @@ impl SessionView {
                 wanted: render,
                 job,
             });
+        }
+    }
+
+    /// A piano-roll edit's draft render asked for once the edits have paused for
+    /// [`ROLL_RENDER_PAUSE`] and no gesture is in progress (a render of a revision edited
+    /// again meanwhile is cancelled anyway: `poll_take_renders`).
+    fn poll_roll_render(&mut self, ctx: &egui::Context) {
+        let Some((id, due)) = self.roll_render.clone() else {
+            return;
+        };
+        let now = Instant::now();
+        if now < due || self.roll.as_ref().is_some_and(Roll::busy) {
+            ctx.request_repaint_after(
+                due.saturating_duration_since(now)
+                    .max(Duration::from_millis(50)),
+            );
+            return;
+        }
+        self.roll_render = None;
+        let found = self
+            .session
+            .tracks
+            .iter()
+            .enumerate()
+            .find_map(|(t, track)| {
+                track
+                    .takes
+                    .iter()
+                    .position(|k| k.id == id)
+                    .filter(|&k| track.takes[k].needs_render(track.drafts))
+                    .map(|k| (t, k))
+            });
+        if let Some((t, k)) = found {
+            self.request_render(t, k, false);
+            ctx.request_repaint_after(Duration::from_millis(50));
         }
     }
 
@@ -9090,9 +9135,15 @@ impl SessionView {
     fn open_roll(&mut self, t: usize, k: usize) {
         if let Some(place) = self.roll_place(t, k, None) {
             let mut r = Roll::new(t, &place);
-            // Its grid starts at the session's snap (it edits notes: finer as it likes).
-            if let Some(d) = self.session.transport.snap.per_beat() {
-                r.set_division(d);
+            // Its grid starts at the session's snap (it edits notes: finer as it likes), and
+            // snapping off when the session's is.
+            match self.session.transport.snap {
+                Snap::Off => r.set_free(true),
+                snap => {
+                    if let Some(d) = snap.per_beat() {
+                        r.set_division(d);
+                    }
+                }
             }
             self.roll = Some(r);
         }
@@ -9143,8 +9194,17 @@ impl SessionView {
                         .map(|r| r.control);
                     match self.session.revise(t, k, perf.edited(&notes, range)) {
                         Ok(rev) => {
+                            let mut render = false;
                             if let Some(r) = &mut self.roll {
                                 r.saved_as(rev);
+                                render = r.renders_edits();
+                            }
+                            // Heard when played: its draft renders once the edits pause
+                            // (the sampler's renders already follow every edit by
+                            // themselves: `poll_take_renders`' lookups).
+                            if render && perf.device != varimu_app::sampler::DEVICE_ID {
+                                self.roll_render =
+                                    Some((id.clone(), Instant::now() + ROLL_RENDER_PAUSE));
                             }
                             self.saved = true;
                         }
@@ -10640,7 +10700,17 @@ mod tests {
         let peak = k.sound(false).0.iter().fold(0.0f32, |m, x| m.max(x.abs()));
         assert!(peak > 1e-3, "the stand-in sounds ({peak})");
         assert_eq!(v.renders_missing(), vec![(0, 0)]);
-        // Asked: one render, at the quality it was played at.
+        // The roll's "render edits": nothing while the edits haven't paused, then the
+        // edited take's draft is asked for.
+        let id = v.session.tracks[0].takes[0].id.clone();
+        v.roll_render = Some((id.clone(), Instant::now() + Duration::from_secs(3600)));
+        v.poll_roll_render(&ctx);
+        assert_eq!(v.renders_missing(), vec![(0, 0)]);
+        v.roll_render = Some((id, Instant::now()));
+        v.poll_roll_render(&ctx);
+        assert!(v.roll_render.is_none());
+        assert!(v.renders_missing().is_empty());
+        // Asked (again: a no-op): one render, at the quality it was played at.
         v.request_render(0, 0, false);
         assert!(v.renders_missing().is_empty());
         v.poll_take_renders(&ctx, false, false);
