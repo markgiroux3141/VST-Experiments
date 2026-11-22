@@ -77,6 +77,9 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
    string). Shared pieces are in `common.py` (`Gauss`, `key_seed`, `bandpass`, `modal_step`,
    `play`). A voice that the pedal or pressure must wake (the zither's tanpura) says so with
    `KeyVoice::wakes_on_broadcast` in the Rust; keyed.rs skips asleep voices otherwise.
+   **Check evenness first:** play C2, A3 and C6 at velocity 127 and 1 through the
+   reference before compiling. Every sketch so far was 20-30 dB uneven across the keyboard,
+   and each needed a physical voicing (IL2-IL5's "Decided").
 2. **Register it** in `varimu/invented/keys/compile.py`'s `models()` (component name ->
    `model`), then run `uv run python scripts/compile_invented_keys.py` to save `NAME@1`.
 3. **Rust:** in `crates/circuitsim/src/invented.rs`, add:
@@ -306,3 +309,15 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
 
 **Next:** IL6, the Siren Organ (global state: the shaft and the bellows), then IL7, the Arc
 Organ (a new device kind).
+
+**IL6's open design (for the next session to decide and record):** the keyed voices are
+independent, but the siren's motor speed and bellows pressure depend on every open key (the
+sketch's sag). Options:
+- (a) The shared state in the medium's context (`Knobs`'s neighbour), advanced by
+  `invented::Medium` once per chunk from what the voices published in the last one (each
+  voice's air draw, summed in note order): a chunk late (<= 256 steps, 2.7 ms at 96 kHz,
+  far faster than a shaft or a bellows moves). Deterministic on any number of threads.
+  The reference does the same per chunk. Recommended.
+- (b) One voice for the whole instrument (every key's ring in it): exact coupling, but one
+  thread for all keys and no sleeping per key.
+- (c) Drop the coupling live (each key its own motor): loses the sag the sketch was about.
