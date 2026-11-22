@@ -1,0 +1,119 @@
+# The Arc Organ (docs/INVENTED_LIVE_PLAN.md IL7; docs/INVENTED_DEVICES.md I13): Duddell's singing
+# arc played from a keyboard. A carbon arc (CARBON_ARC@1: Mayr's arc on Ayrton's static law,
+# varimu/devices/arc.py) burns on 110 V DC through a ballast and a choke; its negative resistance
+# sustains a tank (a 4 mH variometer and the key's condenser) across the carbons; the arc is its own
+# loudspeaker (its power differentiated into the pressure 1 m away: a thermophone), so `out` is
+# pascals at 1 m. Monophonic: a duet is two arcs.
+#
+# The keys (decided, the plan's IL7 "Decided"): one heavy key contact (ARC_KEY@1) closes the
+# tank; open, the tank lies on the quench resistance (200 ohm: the tank can't sing, and its
+# condenser rests at the arc's voltage). The key's condenser is a value (`key_f`) the keyboard
+# sets in place, a key waiting with its gate up until it has landed (the app's
+# panel::KeyedValue, the Performer). The gate works the contact through the key's one-way
+# dashpot (an electrical analog of a mechanism: a diode charges `kg` at once as the key goes
+# down; it falls through R_DASH as the key rises, the contact opening over the fall: the
+# release).
+#
+# The panel: CURRENT (the ballast rheostat: 3.3-9 A, 5 A at 0.5), SPEAK (the tank's added
+# resistance, 0.9 ohm at 0 to none at 1: near the arc's threshold a note builds slowly as a pure
+# sine; the mod wheel), ARC GAP (the carbons' gap 1-4 mm: the arc's voltage and its pull on the
+# pitch), HISS (the arc's turbulence: a white noise on its conductance's growth, an audio taper,
+# the sketch's 5 A hiss at 0.5, its 9 A hissing arc near the top), TUNE (the tank coil is a
+# variometer, two 1.6 mH coils in series whose coupling the rotor sets: 0.02 to 0.5, 0.25 at
+# rest, the tank 3.26-4.8 mH, 4 mH at rest: about +1.8 / -1.6 semitones; turned up, the tank
+# grows and the pitch falls).
+#
+# Each key's condenser is the factory trim on this circuit at the panel's defaults
+# (scripts/arc_organ_trim.py --write -> config/arc_organ_trims.yaml and the app's table); other
+# currents, gaps and SPEAK settings pull the keyboard off pitch (the arc's own pull: 3 A ~1.3
+# semitones flat, 9 A ~1.2 sharp), and TUNE brings it back (the bass, pulled more, stays off by
+# its own amount). tests/test_arc_organ.py.
+
+title: "Arc Organ (Duddell's singing arc, keyed)"
+input: in
+cv_inputs:
+  gate: gate
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the arc makes its own sound)"}
+  output_volts_peak: {value: 4.0, source: "measured: pascals at 1 m (the arc's own sound): the demos through the app's take renderer at draft-2x peak 1.9-2.1 Pa (scripts/invented_live_render.py --only arc_organ: the compass -5.6 dBFS, the 5 A melody -6.4, the 3 A and low-SPEAK phrases -10, the 9 A phrase -14; the idle hiss ~-48 dBFS rms)"}
+
+controls:
+  current: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: CURRENT, the ballast rheostat (linear, reversed: 17.13 ohm at 0, 7.04 ohm at 1): ~3.3 A at 0, 5 A at 0.5, 9 A at 1 on a 2 mm gap (the sketch's 3-9 A)"}
+  speak: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "design: SPEAK, a rheostat in the tank (linear, reversed: 0.9 ohm at 0, none at 1; the tank 0.4-1.3 ohm, the sketch's 0.4 / 1.1 / 1.25 ohm takes)"}
+  arc_gap_mm: {value: 2.0, min: 1.0, max: 4.0, unit: mm, source: "design: ARC GAP, the carbons' gap (the sketch's 2 mm; the feed screw's travel 1-4 mm)"}
+  tune: {value: 0.25, min: 0.02, max: 0.5, unit: coupling, source: "design: TUNE, the variometer's rotor: the coupling k of its two coils (the rotor's angle), the tank 2 x 1.6 mH x (1 + k): 4 mH at rest (0.25), 3.26-4.8 mH"}
+  hiss: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "design: HISS, the arc's turbulence (an audio-taper rheostat on a noise: the sketch's hiss 0.012 at 0.5, 0.12 at 1, its 5 A and 9 A arcs)"}
+
+values:
+  supply_v: {value: 110.0, source: "provisional: model knowledge (Edison DC mains), the sketch's"}
+  ballast_min_ohm: {value: 7.037, source: "derived: (110 V - Ayrton's V at 9 A on 2 mm, 46.67 V) / 9 A: CURRENT's top"}
+  ballast_rheostat_ohm: {value: 10.096, source: "derived: twice (12.085 - 7.037) ohm, so CURRENT 0.5 is the sketch's 5 A ballast, 12.085 ohm ((110 - 49.576 V) / 5 A)"}
+  choke_h: {value: 0.1, source: "design: the ballast choke (the sketch's)"}
+  shunt_f: {value: 0.5e-6, source: "design: a mica condenser across the carbons (the sketch's)"}
+  tank_half_h: {value: 1.6e-3, source: "design: each of the variometer's two coils: the tank 2 x 1.6 mH x 1.25 = 4 mH with TUNE at rest (the sketch's tank coil; Duddell used mH coils and uF condensers)"}
+  tank_ohm: {value: 0.4, source: "provisional: design choice (the tank coil's resistance, the sketch's)"}
+  speak_rheostat_ohm: {value: 0.9, source: "design: SPEAK's rheostat (the sketch's SPEAK takes reach 1.3 ohm in the tank)"}
+  quench_ohm: {value: 200.0, source: "design: the quench resistance across the key contact (the sketch's QUENCH_OHM): the open tank can't sing, and its condenser rests at the arc's voltage through it"}
+  key_f: {value: 28.75681e-6, source: "derived: the key's condenser, set by the keyboard from the factory trim (config/arc_organ_trims.yaml, scripts/arc_organ_trim.py); A4's at rest"}
+  arc_model: {value: CARBON_ARC@1, source: "config/components/carbon_arc/1.yaml"}
+  key_contact: {value: ARC_KEY@1, source: "config/components/arc_key/1.yaml"}
+  dashpot_diode: {value: SI_RECTIFIER@1, source: "numerical: the dashpot's one-way valve as a diode (the key goes down at once, rises against the dashpot)"}
+  r_charge_ohm: {value: 10.0, source: "numerical: the key's stroke into the dashpot (0.1 ms)"}
+  c_dash_f: {value: 10.0e-6, source: "numerical: the dashpot's analog (1 V = 1 V of the gate's 10)"}
+  r_dash_ohm: {value: 2000.0, source: "design: the dashpot's leak, 20 ms with c_dash_f (the release; the sketch's 30 ms quench ramp)"}
+  gate_off_v: {value: 0.0, source: "design: the gate with the key up"}
+  gate_on_v: {value: 10.0, source: "design: the gate with the key down (the dashpot's analog charged to ~9.4 V through the diode)"}
+  c_state_f: {value: 1.0, source: "numerical: the arc's state node (ln g, 1 V = 1 neper)"}
+  r_state_ohm: {value: 1.0e+9, source: "numerical: a leak on the state node, its DC path for Newton's first iterate (arc_test.yaml's)"}
+  hiss_psd_a2_hz: {value: 1.0e-6, source: "numerical: the hiss's white current into its rheostat (1 V^2/Hz across the full 1 kOhm)"}
+  hiss_rheostat_ohm: {value: 1000.0, source: "numerical: the HISS rheostat's track"}
+  hiss_taper_mid: {value: 0.1, source: "design: HISS's audio taper (a tenth of the track at half rotation)"}
+  hiss_gm_s: {value: 17.4, source: "calibrated: HISS at 0.5 (the sketch's hiss 0.012) puts the idle arc 22 dB under an A4 note at 5 A, the sketch's (varimu.invented.arc.sing: -22.0 dB; the white equivalent of its flutter, (h / tau)^2 over the 6 kHz filter's 6.66 kHz noise bandwidth, gave 49 S and -13 dB)"}
+  r_power_ohm: {value: 1.0, source: "numerical: the power readout's load (V(w) = the arc's power, 1 V = 1 W)"}
+  c_thermo_f: {value: 1.0e-6, source: "numerical: the thermophone differentiator's condenser"}
+  r_thermo_ohm: {value: 0.27063, source: "derived: (gamma - 1) / (4 pi r c^2) at 1 m, gamma 1.4, c 343 m/s (varimu.devices.arc.thermophone_rc_s: 2.7063e-7 s), over c_thermo_f: out in pascals"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+
+devices:
+  ARC: {device: arc_model, gap_mm: arc_gap_mm}
+  KEY: {device: key_contact}
+  DPOT: {device: dashpot_diode}
+
+sections:
+  - title: arc
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      VS: {V: [sup, "0"], v: supply_v}
+      RB: {R: [sup, b1], r: ballast_min_ohm, tolerance: none}
+      RCUR: {rheostat: [b1, bal], r: ballast_rheostat_ohm, at: current, reverse: 1, tolerance: none}
+      LCH: {L: [bal, arc], l: choke_h}
+      XARC: {device: [arc, s, w, "0"], model: ARC}
+      CS: {C: [s, "0"], c: c_state_f}
+      RS: {R: [s, "0"], r: r_state_ohm, tolerance: none}
+      CSH: {C: [arc, "0"], c: shunt_f}
+      # the hiss: a white noise on the arc's conductance's growth, through HISS
+      INH: {noise_source: [hn, "0"], psd_a2_hz: hiss_psd_a2_hz}
+      RHISS: {rheostat: [hn, "0"], r: hiss_rheostat_ohm, at: hiss, taper_mid: hiss_taper_mid, tolerance: none}
+      GHISS: {G: [s, "0", hn, "0"], gm: hiss_gm_s}
+      # the thermophone
+      RW: {R: [w, "0"], r: r_power_ohm, tolerance: none}
+      CD: {C: [w, out], c: c_thermo_f}
+      RD: {R: [out, "0"], r: r_thermo_ohm, tolerance: none}
+  - title: tank
+    parts:
+      LT1: {L: [arc, t0], l: tank_half_h}
+      LT2: {L: [t0, t1], l: tank_half_h}
+      KT: {K: [LT1, LT2], k: tune}
+      RT: {R: [t1, t2], r: tank_ohm, tolerance: none}
+      RSPK: {rheostat: [t2, t3], r: speak_rheostat_ohm, at: speak, reverse: 1, tolerance: none}
+      XKEY: {device: [t3, t4, kg, "0"], model: KEY}
+      RQ: {R: [t3, t4], r: quench_ohm, tolerance: none}
+      CK: {C: [t4, "0"], c: key_f}
+  - title: key
+    parts:
+      DDP: {device: [gate, kc], model: DPOT}
+      RCH: {R: [kc, kg], r: r_charge_ohm, tolerance: none}
+      CDP: {C: [kg, "0"], c: c_dash_f}
+      RDP: {R: [kg, "0"], r: r_dash_ohm, tolerance: none}

@@ -29,6 +29,7 @@
 //! Rooms (docs/ROOM_LOOP_PLAN.md): `room` (a scene of sources and placed mics, rendered
 //! into session tracks).
 
+pub mod arc_organ_trims;
 pub mod audio;
 pub mod clav_proxy;
 pub mod components;

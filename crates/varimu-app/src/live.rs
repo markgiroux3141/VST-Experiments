@@ -949,6 +949,54 @@ impl Live {
         self.shared.error.lock().expect("error").clone()
     }
 
+    /// Apply the builds that are ready (knob changes, a restart to fade in) at the next
+    /// block's start, now: [`Live::values`] then has them before the block is made (a keyed
+    /// value, [`crate::panel::KeyedValue`], landing a block earlier). [`Live::process_with`]
+    /// does it anyway.
+    pub fn land(&mut self) -> Result<(), String> {
+        let at = self.processed;
+        let mut ready: Vec<Ready> = std::mem::take(&mut self.pending);
+        while let Ok(r) = self.ready.try_recv() {
+            ready.push(r);
+        }
+        for r in ready {
+            match r {
+                Ready::Update(ir, values) => {
+                    // The builder compares with the last structure it built (live.py
+                    // with the one playing), so an update is for the newest: a stream
+                    // waiting to fade in has it, the one playing may not.
+                    let target = match &mut self.fade {
+                        Some(new) => &mut new.stream,
+                        None => &mut self.run.stream,
+                    };
+                    target
+                        .update(&live_probes(&ir))
+                        .map_err(|e| e.to_string())?;
+                    if let Some(log) = &mut self.log {
+                        log.push(Knob {
+                            at,
+                            values: values.clone(),
+                            restart: None,
+                        });
+                    }
+                    self.values = values;
+                }
+                Ready::Restart(run, values, settled) => {
+                    self.fade = Some(run);
+                    if let Some(log) = &mut self.log {
+                        log.push(Knob {
+                            at,
+                            values: values.clone(),
+                            restart: Some(settled),
+                        });
+                    }
+                    self.values = values;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The next `n` samples of the loop through the circuit.
     pub fn next_block(&mut self, n: usize) -> Result<(Vec<f32>, Meter), String> {
         if self.looped.is_empty() {
@@ -1063,47 +1111,8 @@ impl Live {
             *self.shared.c0.lock().expect("c0") = self.controls.clone();
         }
         let ctl_refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
-        let at = self.processed;
+        self.land()?;
         self.processed += x.len() as u64;
-        let mut ready: Vec<Ready> = std::mem::take(&mut self.pending);
-        while let Ok(r) = self.ready.try_recv() {
-            ready.push(r);
-        }
-        for r in ready {
-            match r {
-                Ready::Update(ir, values) => {
-                    // The builder compares with the last structure it built (live.py
-                    // with the one playing), so an update is for the newest: a stream
-                    // waiting to fade in has it, the one playing may not.
-                    let target = match &mut self.fade {
-                        Some(new) => &mut new.stream,
-                        None => &mut self.run.stream,
-                    };
-                    target
-                        .update(&live_probes(&ir))
-                        .map_err(|e| e.to_string())?;
-                    if let Some(log) = &mut self.log {
-                        log.push(Knob {
-                            at,
-                            values: values.clone(),
-                            restart: None,
-                        });
-                    }
-                    self.values = values;
-                }
-                Ready::Restart(run, values, settled) => {
-                    self.fade = Some(run);
-                    if let Some(log) = &mut self.log {
-                        log.push(Knob {
-                            at,
-                            values: values.clone(),
-                            restart: Some(settled),
-                        });
-                    }
-                    self.values = values;
-                }
-            }
-        }
         let scaled: Vec<f64>;
         let x = if self.gain == 1.0 {
             x

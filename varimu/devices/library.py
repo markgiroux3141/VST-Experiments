@@ -4285,6 +4285,30 @@ def build_key_break() -> dict[str, Any]:
     return d
 
 
+def build_arc_key() -> dict[str, Any]:
+    """The Arc Organ's key contact (docs/INVENTED_LIVE_PLAN.md IL7): a heavy copper brush on
+    a bar closing the singing tank (amperes at a few volts: the tank's whole resistance is
+    under the arc's -1.3 ohm, so the contact must be milliohms). Worked by the key's
+    one-way dashpot (the circuit's `kg` node, 0-10 V): closed from 8 V up, open below 1 V, so
+    the release spans the dashpot's fall."""
+    return {
+        "name": "ARC_KEY",
+        "kind": "contact",
+        "source": "provisional: model knowledge (a knife switch's or brush contact's "
+        "resistance; slate insulation); the thresholds a design choice on the dashpot's 0-10 V",
+        "contact": {
+            "r_on_ohm": 2.0e-3,
+            "r_off_ohm": 1.0e9,
+            "v_open_v": 1.0,
+            "v_closed_v": 8.0,
+            "source": "provisional: model knowledge (copper knife switches and laminated "
+            "brushes of the period carry tens of amperes at ~1 mOhm; a slate panel's insulation "
+            ">= 1e9 ohm). Thresholds: design (the key's dashpot falls from ~9.4 V: closed down to "
+            "8 V, open from 1 V, the release over the fall between)",
+        },
+    }
+
+
 def _triode_from_columns(name: str, key: str, use: str) -> dict[str, Any]:
     """A Koren triode fit to a sheet's class-A1 columns (Ip, gm, rp at each), log least
     squares, all five parameters free."""
@@ -4598,6 +4622,7 @@ BUILDERS = {
     "F1": build_f1,
     "PZM_CAPSULE": build_pzm_capsule,
     "KEY_BREAK": build_key_break,
+    "ARC_KEY": build_arc_key,
     "REED_CONTACT": build_reed_contact,
     "REED_DRIVE": build_reed_drive,
     "6J5G": build_6j5g,

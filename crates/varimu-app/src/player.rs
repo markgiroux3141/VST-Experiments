@@ -1785,13 +1785,16 @@ fn work(
                 _ => None,
             });
             let low = range.is_some_and(|r| r.is_low(&values));
-            Some(Performer::new(
-                feeds.clone(),
-                playing_now(shared, *wave),
-                s.host(),
-                START_NOTE,
-                low,
-            ))
+            Some(
+                Performer::new(
+                    feeds.clone(),
+                    playing_now(shared, *wave),
+                    s.host(),
+                    START_NOTE,
+                    low,
+                )
+                .with_asked_key_in(&values),
+            )
         }
         _ => None,
     };
@@ -2005,13 +2008,9 @@ fn work(
             // a block late at most), through the performer (`crate::performance`).
             let mut performer = performer.expect("a performer for keys");
             let (mut circuit_now, s) = keys_circuit.expect("the keys' circuit");
-            let range = performer.range();
-            // The panel's values (a range switch's position is the keys').
+            // The panel's values (a range switch's position and a keyed value are the keys':
+            // `Performer::positioned`).
             let mut panel_values = live.values.clone();
-            let with_range = |panel: &Values, low: bool| match range {
-                Some(r) => r.with_position(panel, low),
-                None => panel.clone(),
-            };
             let notes = live.has_keys();
             let mut last_block = Instant::now();
             keys.take_events();
@@ -2024,7 +2023,7 @@ fn work(
             while !shared.stop.load(Ordering::Relaxed) {
                 if let Some(v) = shared.wanted.lock().expect("wanted").take() {
                     panel_values = v;
-                    let v = with_range(&panel_values, performer.asked_low());
+                    let v = performer.positioned(&panel_values);
                     match shared.circuit.lock().expect("circuit").take() {
                         Some(c) => {
                             circuit_now = c.clone();
@@ -2042,14 +2041,15 @@ fn work(
                 if let Some(device) = asked
                     && fresh.is_none()
                 {
-                    let values = with_range(&panel_values, performer.asked_low());
+                    let values = performer.positioned(&panel_values);
                     let p = Performer::new(
                         feeds.clone(),
                         playing_now(shared, wave),
                         rate,
                         performer.last_note(),
                         performer.asked_low(),
-                    );
+                    )
+                    .with_asked_key_in(&values);
                     let perf = Performance {
                         device,
                         quality: s.quality,
@@ -2144,10 +2144,16 @@ fn work(
                 if !carried.is_empty() {
                     events.splice(0..0, std::mem::take(&mut carried));
                 }
-                let low_applied = range.map(|r| r.is_low(&live.values));
-                let b = performer.block(BLOCK, &events, low_applied);
-                if let Some(want) = b.range {
-                    live.set(with_range(&panel_values, want));
+                // A keyed value (the Arc Organ's condenser) is looked at after the builds ready
+                // now have landed: a key from silence sounds a block sooner. (The range switch
+                // keeps its old timing: its recorded takes replay as heard.)
+                if performer.keyed().is_some() {
+                    live.land()?;
+                }
+                let (low_applied, key_applied) = performer.applied(&live.values);
+                let b = performer.block_keyed(BLOCK, &events, low_applied, key_applied);
+                if b.range.is_some() || b.key.is_some() {
+                    live.set(performer.positioned(&panel_values));
                 }
                 let at = live.processed();
                 if let Some(l) = &log {

@@ -427,3 +427,83 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
      this circuit (`scripts/arc_organ_trim.py`: the sketch's trim was against its own
      numerics; the arc pulls ~7 % flat).
   3. The app device, its load and level, a demo (the recipe's steps 6-7), the done-when.
+
+### Session 4 (2026-11-21): IL7, the Arc Organ, built
+
+- **Built:**
+  - `config/circuits/arc_organ.yaml`: the arc on 110 V through the CURRENT rheostat and the
+    choke, the mica shunt, the tank (TUNE's variometer, SPEAK's rheostat, the key contact
+    `ARC_KEY@1` across the 200 ohm quench resistance, the key's condenser `key_f`), the key's
+    one-way dashpot on the gate, the hiss, the thermophone readout.
+  - `ARC_KEY@1` (`library.build_arc_key`): a contact of 2 mOhm closed (the tank's whole
+    resistance must stay under the arc's -1.3 ohm), closed above 8 V, open below 1 V.
+  - The factory trim `scripts/arc_organ_trim.py [--survey | --write | --check]` ->
+    `config/arc_organ_trims.yaml` (the record) and `crates/varimu-app/src/arc_organ_trims.rs`
+    (the app's table): each key within 1.5 cents at the panel's defaults; `--check` hashes the
+    circuit file without `key_f`, the full scale and comments.
+  - The app: `panel::KeyedValue` (a value per key riding on the gate: `with_note`, `note_in`),
+    `panel::KEYED_VALUES` (by device id, like `WHEEL_REVERSED`: no new `Device` field),
+    `Feed::KeyedGate`; the Performer's `block_keyed`, `applied`, `positioned`,
+    `with_asked_key_in` and `Block::key`; `Live::land` (the builds ready now applied before
+    the block is made); the player's keys worker and `take_render` use them. The device
+    `arc_organ` (draft-2x, mod wheel SPEAK).
+  - Tests: `tests/test_arc_organ.py` (the trim current and in the app; E2 / A4 / C6 in tune;
+    the contact gates the tank; TUNE both ways), `crates/varimu-app/tests/live.rs`'s
+    `the_arc_organ_switches_its_condensers_in_place` (the player's loop: a key from silence
+    waits for its condenser, then sings within 3 cents; legato keeps the gate down; a key off
+    the compass is silent; nothing restarts).
+  - Demos: `scripts/invented_live_render.py`'s `GATED` renders through varimu-app's
+    `midi_render` example (the take renderer: the Performer and the keyed condensers as Play):
+    melody, melody legato, the phrase at 3 / 5 / 9 A and at a low SPEAK, the compass ->
+    `reports/invented/arc_organ/live_*.wav`.
+- **Decided (IL7):**
+  - **(d), measured first:** the key's condenser is a value updated in place. A key's build
+    takes 0.34 ms, so it lands at the next block: from silence a key waits at most one block
+    (10 ms at 48 kHz; 7.9 ms for a key 100 samples into its block). Only a device with a keyed
+    value lands its ready builds before the Performer looks (`Live::land`); the range switch
+    keeps its old timing, so the tube synth's recorded AUTO takes replay as heard.
+  - **Legato switches the condenser on the singing arc** (Duddell's way): the gate stays down
+    and the new condenser takes over when it lands (the sketch quenched every change).
+    Multi-trigger's 1 ms lift can't open the contact through the dashpot.
+  - **The compass E2-C6** (MIDI 40-84, 45 keys; keys outside it are silent): `--survey` finds
+    the pitch following the condenser from 600 uF (73.5 Hz) to 2.5 uF (1521 Hz); at 1.8 uF and
+    less the arc no longer sings (its rms 27 dB down).
+  - **The contact and the release:** the open tank lies on the quench resistance (its condenser
+    resting at the arc's voltage, so a key closes without a kick); the gate charges the key's
+    dashpot through a diode (an electrical analog of a one-way mechanism) and it falls over 20 ms
+    as the key rises: the note is gone into the hiss within 60 ms.
+  - **The hiss:** a white `noise_source` across the HISS rheostat (an audio taper) drives the
+    arc's state node through a `G` part: noise on the growth of ln g. Its gain calibrated to the
+    sketch's idle hiss at 5 A, 22 dB under an A4 note (the white equivalent of the sketch's
+    flutter came out 9 dB louder). The hiss also seeds the attack: a note builds in 50-70 ms
+    (to -6 dB; ~110 ms from numerical noise alone). The carbons' feed wander (the sketch's gap
+    +-0.25 mm at 0.3 Hz) is not modelled: the gap is a device parameter.
+  - **TUNE, a variometer** (two 1.6 mH coils in series, their coupling 0.02-0.5, 0.25 at rest:
+    the tank 3.26-4.8 mH; at A4 +158 / -136 cents). CURRENT and ARC GAP pull the keyboard
+    (the arc's physics; at A4 3 A -41 cents, 9 A +85, gaps 1.2-3 mm +-10; an A3 phrase at 3 A
+    and 9 A sits ~1.3 semitones flat / ~1.2 sharp), so the player retunes as with any
+    instrument; the keys stay trimmed at TUNE's rest. A negative coupling isn't an IR value,
+    hence the centred rotor: turned up the tank grows and the pitch falls.
+  - **Velocity and aftertouch do nothing** (an organ's key is a switch). The mod wheel is SPEAK.
+  - **Draft-2x** (the trim was measured at the draft's 96 kHz; the thermophone's d/dt makes the
+    strikes bright). Full scale 4 Pa.
+- **Found:**
+  - The arc's pull grows toward the bass: 4.5 % at the top, 15 % at G3, 28 % at E2.
+  - The level rises ~16 dB from E2 (0.08 Pa rms) to C6 (0.5 Pa): the thermophone's pressure
+    goes as dP/dt. Not voiced (option for the user: a resonator per register, or leave it as
+    the arc's own).
+  - At 9 A, and at SPEAK 0, the arc barely sustains the tank (rms 18-21 dB down, a quiet
+    near-sine): Ayrton's negative resistance (c + d l) / I^2 shrinks with the current. The
+    "9 A hissing" demo is mostly hiss.
+  - The bass's pitch wanders +-10 cents under the hiss (the halves of a 1.2 s hold).
+- **Live:** a key held 18 % load (worst block 31 %); the sounding key changing 8 times a
+  second (each change a build and an in-place update) worst block 52 %; 0 dropouts at 30 ms;
+  0 restarts. Offline the circuit runs 0.2-0.25x real time.
+- **Done-when:** plays from a MIDI keyboard path (Performer, gate, keyed value) without
+  dropouts; its tests; the demos through the app's take renderer. (The -120 dB medium
+  agreement doesn't apply: the arc is a device kind, checked against SPICE and the fixtures in
+  step 1.)
+- **Not done yet for IL7:** the user's first play; a duet (two arcs, the sketch's
+  `two_arcs`); the level's evenness; the carbons' feed wander.
+
+**IL1-IL7 are all built.** Next: the user plays them.

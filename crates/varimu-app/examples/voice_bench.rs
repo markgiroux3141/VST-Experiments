@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     let feeds = key_feeds(dev, circuit.spec())?;
     let level = |f: &Feed, down: bool| -> f64 {
         match f {
-            Feed::Gate(up, dn) => {
+            Feed::Gate(up, dn) | Feed::KeyedGate(up, dn, _) => {
                 if down {
                     *dn
                 } else {

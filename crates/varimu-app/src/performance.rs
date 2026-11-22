@@ -32,7 +32,7 @@ use varimu_circuit::yaml::Value;
 
 use crate::live::Values;
 use crate::midi::{TestOsc, Wave};
-use crate::panel::{Feed, RangeMode, RangeSwitch};
+use crate::panel::{Feed, KeyedValue, RangeMode, RangeSwitch};
 use crate::print::{json_value, value_json};
 use crate::settings::Quality;
 
@@ -399,8 +399,8 @@ pub fn feed_volts(
     vel_db: f64,
 ) -> f64 {
     match (f, sounding) {
-        (Feed::Gate(_, down), Some(_)) => *down,
-        (Feed::Gate(up, _) | Feed::VelocityGate(up, _), None) => *up,
+        (Feed::Gate(_, down) | Feed::KeyedGate(_, down, _), Some(_)) => *down,
+        (Feed::Gate(up, _) | Feed::VelocityGate(up, _) | Feed::KeyedGate(up, ..), None) => *up,
         (Feed::VelocityGate(_, t), Some((_, vel))) => crate::panel::velocity_volts(t, vel, vel_db),
         (Feed::Pitch(p), _) => p.volts_in(TestOsc::note_hz(last_note), low),
         (Feed::Key(k), _) => k.volts(last_note),
@@ -425,6 +425,9 @@ pub struct Block {
     pub notes: Vec<(usize, NoteEvent)>,
     /// The range switch asked to move in this block (LOW: true).
     pub range: Option<bool>,
+    /// A keyed value ([`crate::panel::KeyedValue`]) asked to move in this block: the key
+    /// whose value it should hold.
+    pub key: Option<u8>,
 }
 
 /// The keyboard logic (see the module docs), sample-accurate.
@@ -432,6 +435,8 @@ pub struct Block {
 pub struct Performer {
     feeds: Vec<Feed>,
     range: Option<RangeSwitch>,
+    keyed: Option<KeyedValue>,
+    asked_key: Option<u8>,
     own_oscillator: bool,
     osc: TestOsc,
     playing: Playing,
@@ -458,6 +463,10 @@ impl Performer {
             Feed::Pitch(p) => p.range,
             _ => None,
         });
+        let keyed = feeds.iter().find_map(|f| match f {
+            Feed::KeyedGate(_, _, k) => Some(*k),
+            _ => None,
+        });
         let own_oscillator =
             playing.wave == Wave::Off || feeds.iter().any(|f| matches!(f, Feed::Pitch(..)));
         let mut osc = TestOsc::new(rate as f64);
@@ -465,6 +474,8 @@ impl Performer {
         osc.steady = feeds.iter().any(Feed::is_gate);
         Performer {
             range,
+            keyed,
+            asked_key: None,
             own_oscillator,
             osc,
             playing,
@@ -487,6 +498,45 @@ impl Performer {
     /// The range switch the feeds' pitch has, if any.
     pub fn range(&self) -> Option<RangeSwitch> {
         self.range
+    }
+
+    /// The value the feeds' gate sets per key, if any.
+    pub fn keyed(&self) -> Option<KeyedValue> {
+        self.keyed
+    }
+
+    /// The key whose value was last asked for (None: none yet).
+    pub fn asked_key(&self) -> Option<u8> {
+        self.asked_key
+    }
+
+    /// Start with the keyed value asked at the key whose value `values` hold (where a stream
+    /// starts: a performance's values).
+    pub fn with_asked_key_in(mut self, values: &Values) -> Performer {
+        self.asked_key = self.keyed.and_then(|k| k.note_in(values));
+        self
+    }
+
+    /// `panel` with the range switch where it was last asked and the keyed value at the key
+    /// last asked: the values the device should have.
+    pub fn positioned(&self, panel: &Values) -> Values {
+        let v = match self.range {
+            Some(r) => r.with_position(panel, self.asked_low),
+            None => panel.clone(),
+        };
+        match self.keyed {
+            Some(k) => k.with_note(&v, self.asked_key),
+            None => v,
+        }
+    }
+
+    /// Where the device's values have the switches: the range switch at LOW (None without
+    /// one) and the keyed value's key (None: no key's, or no keyed value).
+    pub fn applied(&self, values: &Values) -> (Option<bool>, Option<u8>) {
+        (
+            self.range.map(|r| r.is_low(values)),
+            self.keyed.and_then(|k| k.note_in(values)),
+        )
     }
 
     /// The control inputs with no key held (where a stream starts).
@@ -543,11 +593,24 @@ impl Performer {
     /// last sample) and the range switch where the device has it now (`low_applied`: LOW
     /// true; None without one).
     pub fn block(&mut self, n: usize, events: &[(usize, Ev)], low_applied: Option<bool>) -> Block {
+        self.block_keyed(n, events, low_applied, None)
+    }
+
+    /// [`Performer::block`] with the key whose value the device holds now (`key_applied`,
+    /// for a gate with a keyed value: [`Performer::applied`]).
+    pub fn block_keyed(
+        &mut self,
+        n: usize,
+        events: &[(usize, Ev)],
+        low_applied: Option<bool>,
+        key_applied: Option<u8>,
+    ) -> Block {
         let mut out = Block {
             audio: vec![0.0; n],
             controls: vec![vec![0.0; n]; self.feeds.len()],
             notes: Vec::new(),
             range: None,
+            key: None,
         };
         let mut i = 0;
         let mut s = 0;
@@ -575,6 +638,22 @@ impl Performer {
                 // A key waits (gate up, the last pitch held) until the switch has moved.
                 if want != low {
                     sounding = None;
+                }
+            }
+            if let (Some(k), Some((note, _))) = (self.keyed, sounding) {
+                if k.of(note).is_none() {
+                    // Outside the compass: no condenser, no sound.
+                    sounding = None;
+                } else {
+                    if self.asked_key != Some(note) {
+                        self.asked_key = Some(note);
+                        out.key = Some(note);
+                    }
+                    // From silence a key waits (gate up) until its value has landed; legato
+                    // the gate stays down and the new value takes over when it lands.
+                    if key_applied != Some(note) && !self.was_sounding {
+                        sounding = None;
+                    }
                 }
             }
             if let Some((note, _)) = sounding {

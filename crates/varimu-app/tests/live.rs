@@ -293,7 +293,7 @@ fn the_synth_follows_its_keys_after_a_restart() {
         feeds
             .iter()
             .map(|f| match f {
-                Feed::Gate(up, down) => {
+                Feed::Gate(up, down) | Feed::KeyedGate(up, down, _) => {
                     if note.is_some() {
                         *down
                     } else {
@@ -369,7 +369,7 @@ fn the_synth_range_switch_updates_in_place() {
     let held: Vec<f64> = feeds
         .iter()
         .map(|f| match f {
-            Feed::Gate(_, down) => *down,
+            Feed::Gate(_, down) | Feed::KeyedGate(_, down, _) => *down,
             Feed::Pitch(_) => -15.0,
             Feed::Key(k) => k.volts(70), // -15 V's pitch: ~474 Hz
             Feed::VelocityGate(_, t) => varimu_app::panel::velocity_volts(t, 127, 0.0),
@@ -426,7 +426,7 @@ fn the_synth_powers_on_from_cold() {
         feeds
             .iter()
             .map(|f| match f {
-                Feed::Gate(_, down) => *down,
+                Feed::Gate(_, down) | Feed::KeyedGate(_, down, _) => *down,
                 Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((note as f64 - 69.0) / 12.0)),
                 Feed::Key(k) => k.volts(note),
                 Feed::VelocityGate(_, t) => varimu_app::panel::velocity_volts(t, 127, 0.0),
@@ -964,4 +964,168 @@ fn the_nickel_organ_plays_from_note_events() {
         peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
     }
     assert!(peak > 1e-3, "it sounds: {peak}");
+}
+
+/// The strongest frequency within +-`span` cents of `f` (1-cent steps, Goertzel on the last
+/// second of `y` at `rate`).
+fn pitch_near(y: &[f32], rate: f64, f: f64, span: i32) -> f64 {
+    let y = &y[y.len() - rate as usize..];
+    let mut best = (0.0, f);
+    for c in -span..=span {
+        let fc = f * 2f64.powf(c as f64 / 1200.0);
+        let w = 2.0 * std::f64::consts::PI * fc / rate;
+        let (mut s1, mut s2) = (0.0, 0.0);
+        for &x in y {
+            let s0 = x as f64 + 2.0 * w.cos() * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        let p = s1 * s1 + s2 * s2 - 2.0 * w.cos() * s1 * s2;
+        if p > best.0 {
+            best = (p, fc);
+        }
+    }
+    best.1
+}
+
+/// The Arc Organ (docs/INVENTED_LIVE_PLAN.md IL7): CURRENT, SPEAK, ARC GAP, TUNE, HISS and the key's
+/// condenser are values (a turn plays on); a key from silence waits with its gate up until
+/// its condenser has landed, then sings its note (the factory trim); legato the gate stays down
+/// while the next condenser lands; a key outside the compass doesn't sound.
+#[test]
+fn the_arc_organ_switches_its_condensers_in_place() {
+    use varimu_app::panel::Feed;
+    use varimu_app::performance::{Ev, Performer, Playing, START_NOTE};
+    let dev = DEVICES.iter().find(|d| d.id == "arc_organ").unwrap();
+    let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
+    let c = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, c.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["current", "speak", "arc_gap_mm", "tune", "hiss"]);
+    let kv = dev.keyed_value().unwrap();
+    let base = structure(&c.build(&v).unwrap());
+    for (k, x) in [
+        ("current", 0.9),
+        ("speak", 0.3),
+        ("arc_gap_mm", 3.0),
+        ("tune", 0.1),
+        ("hiss", 0.9),
+    ] {
+        let turned = structure(&c.build(&set(&v, k, Value::Float(x))).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let keyed = kv.with_note(&v, Some(45));
+    let t0 = Instant::now();
+    let built = c.build(&keyed).unwrap();
+    println!("a key's build: {:.2} ms", t0.elapsed().as_secs_f64() * 1e3);
+    assert_eq!(base, structure(&built), "a key plays on");
+    assert_eq!(kv.note_in(&keyed), Some(45));
+    let feeds = varimu_app::panel::key_feeds(dev, c.spec()).unwrap();
+    assert!(matches!(feeds[..], [Feed::KeyedGate(0.0, 10.0, _)]));
+    let mut performer = Performer::new(feeds, Playing::default(), s.host(), START_NOTE, false)
+        .with_asked_key_in(&v);
+    assert_eq!(
+        performer.asked_key(),
+        kv.note_in(&v),
+        "it rests on A4's condenser"
+    );
+    let mut live =
+        Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &performer.resting()).unwrap();
+    let (rate, block) = (live.rate as f64, 480);
+    // The player's loop: land what's ready, make the block, ask for the key's value.
+    // What was played: the gate's volts and the output.
+    let mut rec: (Vec<f64>, Vec<f32>) = (Vec::new(), Vec::new());
+    let run = |live: &mut Live,
+               p: &mut Performer,
+               rec: &mut (Vec<f64>, Vec<f32>),
+               events: &[(usize, Ev)],
+               wait: bool| {
+        live.land().unwrap();
+        let (low, key) = p.applied(&live.values);
+        let b = p.block_keyed(block, events, low, key);
+        if b.range.is_some() || b.key.is_some() {
+            live.set(p.positioned(&v));
+        }
+        if wait {
+            // Offline the build may take longer than a block: give it the time a real-time
+            // block would.
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        rec.0.extend_from_slice(&b.controls[0]);
+        let refs: Vec<&[f64]> = b.controls.iter().map(Vec::as_slice).collect();
+        rec.1
+            .extend(live.process_with(&vec![0.0; block], &refs).unwrap().0);
+    };
+    let on = |note| Ev::On {
+        note,
+        velocity: 100,
+    };
+    // A3 from silence.
+    run(&mut live, &mut performer, &mut rec, &[(100, on(57))], true);
+    let mut waited = 0;
+    while kv.note_in(&live.values) != Some(57) {
+        assert!(waited < 100, "the condenser never landed");
+        run(&mut live, &mut performer, &mut rec, &[], true);
+        waited += 1;
+    }
+    let first_down = rec.0.iter().position(|&g| g > 5.0).unwrap_or(rec.0.len());
+    assert!(
+        first_down >= 100,
+        "the key sounded before its condenser landed"
+    );
+    println!(
+        "A3 from silence: its gate down {:.1} ms after the key",
+        (first_down - 100) as f64 / rate * 1e3
+    );
+    for _ in 0..(1.5 * rate / block as f64) as usize {
+        run(&mut live, &mut performer, &mut rec, &[], false);
+    }
+    let a3 = pitch_near(&rec.1, rate, 220.0, 60);
+    // Legato to A4: the gate never lifts.
+    let mark = rec.0.len();
+    run(
+        &mut live,
+        &mut performer,
+        &mut rec,
+        &[(0, on(69)), (1, Ev::Off { note: 57 })],
+        true,
+    );
+    while kv.note_in(&live.values) != Some(69) {
+        run(&mut live, &mut performer, &mut rec, &[], true);
+    }
+    for _ in 0..(1.5 * rate / block as f64) as usize {
+        run(&mut live, &mut performer, &mut rec, &[], false);
+    }
+    // Multi-trigger lifts it for its 1 ms (RETRIGGER_GAP_S), too short to open the contact
+    // through the 20 ms dashpot; the condenser's wait lifts it no further.
+    let lifted = rec.0[mark..].iter().filter(|&&g| g < 5.0).count();
+    let gap = (varimu_app::performance::RETRIGGER_GAP_S * rate).round() as usize;
+    assert!(lifted <= gap, "legato lifted the gate {lifted} samples");
+    let a4 = pitch_near(&rec.1, rate, 440.0, 60);
+    println!("A3 {a3:.1} Hz, A4 {a4:.1} Hz");
+    let cents = |f: f64, t: f64| 1200.0 * (f / t).log2();
+    assert!(cents(a3, 220.0).abs() < 15.0, "A3 at {a3}");
+    assert!(cents(a4, 440.0).abs() < 15.0, "A4 at {a4}");
+    // Up, then a key below the compass: silent.
+    run(
+        &mut live,
+        &mut performer,
+        &mut rec,
+        &[(0, Ev::Off { note: 69 })],
+        false,
+    );
+    for _ in 0..30 {
+        run(&mut live, &mut performer, &mut rec, &[], false);
+    }
+    let mark = rec.0.len();
+    run(&mut live, &mut performer, &mut rec, &[(0, on(30))], true);
+    for _ in 0..20 {
+        run(&mut live, &mut performer, &mut rec, &[], true);
+    }
+    assert!(
+        rec.0[mark..].iter().all(|&g| g == 0.0),
+        "a key off the compass sounded"
+    );
+    assert_eq!(kv.note_in(&live.values), Some(69));
+    assert_eq!(live.restarts, 0);
 }

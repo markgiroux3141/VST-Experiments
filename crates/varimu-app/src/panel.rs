@@ -326,6 +326,66 @@ impl KeyString {
     }
 }
 
+/// A circuit value a keyboard's keys set, one per key, riding on the keys' gate: the Arc
+/// Organ's condenser (docs/INVENTED_LIVE_PLAN.md IL7: the key's contact closes the tank, its
+/// condenser is the key's). A key asks for its value, which lands in place at a block (a
+/// value change, built in the background: [`crate::live::Live::set`]); from silence the key
+/// waits, its gate up, until it has landed; legato, the sounding key keeps the gate down and
+/// the new value takes over when it lands (Duddell switched condensers on a singing arc).
+/// Keys outside the table don't sound. Event takes replay it bit for bit (the knob log has
+/// where each value landed).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KeyedValue {
+    /// The circuit's value (a key of its `values`).
+    pub value: &'static str,
+    /// The lowest key (MIDI) with a value.
+    pub first_note: u8,
+    /// Each key's value from `first_note` up.
+    pub table: &'static [f64],
+}
+
+impl KeyedValue {
+    /// Key `note`'s value (None outside the table).
+    pub fn of(&self, note: u8) -> Option<f64> {
+        let i = note.checked_sub(self.first_note)? as usize;
+        self.table.get(i).copied()
+    }
+
+    /// `values` with key `note`'s value (`values` as they are outside the table).
+    pub fn with_note(&self, values: &Values, note: Option<u8>) -> Values {
+        let Some(x) = note.and_then(|n| self.of(n)) else {
+            return values.clone();
+        };
+        let mut v: Values = values
+            .iter()
+            .filter(|(k, _)| k != self.value)
+            .cloned()
+            .collect();
+        v.push((self.value.to_string(), Value::Float(x)));
+        v
+    }
+
+    /// The key whose value `values` hold (None: no key's).
+    pub fn note_in(&self, values: &Values) -> Option<u8> {
+        let x = values
+            .iter()
+            .find(|(k, _)| k == self.value)
+            .and_then(|(_, v)| v.as_f64())?;
+        let i = self.table.iter().position(|&t| t == x)?;
+        Some(self.first_note + i as u8)
+    }
+}
+
+/// The devices whose keys set a value ([`KeyedValue`]), by id.
+pub const KEYED_VALUES: &[(&str, KeyedValue)] = &[(
+    "arc_organ",
+    KeyedValue {
+        value: "key_f",
+        first_note: crate::arc_organ_trims::ARC_ORGAN_FIRST_NOTE,
+        table: crate::arc_organ_trims::ARC_ORGAN_CONDENSERS,
+    },
+)];
+
 /// What feeds one of a circuit's control inputs while a keyboard plays it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Feed {
@@ -341,20 +401,36 @@ pub enum Feed {
     /// The keyboard's aftertouch (channel or key pressure): 0 V at rest, the circuit
     /// file's `<name>_full_v` pressed fully.
     Pressure(f64),
+    /// The keys' gate, (key up, key down) volts, with the value each key sets
+    /// ([`KeyedValue`]: the Arc Organ's condenser).
+    KeyedGate(f64, f64, KeyedValue),
 }
 
 impl Feed {
     /// Whether it is the keys' gate.
     pub fn is_gate(&self) -> bool {
-        matches!(self, Feed::Gate(..) | Feed::VelocityGate(..))
+        matches!(
+            self,
+            Feed::Gate(..) | Feed::VelocityGate(..) | Feed::KeyedGate(..)
+        )
     }
 
     /// A gate's key-up volts (None for other feeds).
     pub fn gate_up(&self) -> Option<f64> {
         match self {
-            Feed::Gate(up, _) | Feed::VelocityGate(up, _) => Some(*up),
+            Feed::Gate(up, _) | Feed::VelocityGate(up, _) | Feed::KeyedGate(up, ..) => Some(*up),
             _ => None,
         }
+    }
+}
+
+impl Device {
+    /// The value its keys set, if any ([`KEYED_VALUES`]).
+    pub fn keyed_value(&self) -> Option<KeyedValue> {
+        KEYED_VALUES
+            .iter()
+            .find(|(id, _)| *id == self.id)
+            .map(|(_, k)| *k)
     }
 }
 
@@ -422,9 +498,10 @@ pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, Strin
         .map(|(name, _)| {
             if device.gate == Some(name.as_str()) {
                 let (up, down) = gate_levels(spec, name)?;
-                Ok(match device.velocity {
-                    Some(t) => Feed::VelocityGate(up, t),
-                    None => Feed::Gate(up, down),
+                Ok(match (device.velocity, device.keyed_value()) {
+                    (_, Some(k)) => Feed::KeyedGate(up, down, k),
+                    (Some(t), None) => Feed::VelocityGate(up, t),
+                    (None, None) => Feed::Gate(up, down),
                 })
             } else if let Some(p) = [device.pitch, device.pitch2]
                 .into_iter()
@@ -626,7 +703,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 51] = [
+pub const DEVICES: [Device; 52] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1616,6 +1693,37 @@ pub const DEVICES: [Device; 51] = [
         velocity: None,
         pitch: None,
         // The keys open the valves (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "arc_organ",
+        label: "Arc Organ",
+        short: "Arc",
+        about: "An invented organ on Duddell's singing arc: a carbon arc on 110 V DC whose \
+            negative resistance sustains a tank across it, a condenser per key; the arc is its \
+            own loudspeaker (its heat swings the air). Monophonic, raw and whistling; CURRENT \
+            and ARC GAP pull its pitch, SPEAK (the mod wheel) from a slow pure sine to bright",
+        group: Group::Instruments,
+        // A circuit (docs/INVENTED_LIVE_PLAN.md IL7): the arc device kind, its tank closed by
+        // the key's contact, the key's condenser a value updated in place
+        // (panel::KEYED_VALUES).
+        circuit: "arc_organ",
+        panel: Some(&["current", "speak", "arc_gap_mm", "tune", "hiss"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("speak"),
+        gate: Some("gate"),
+        velocity: None,
+        pitch: None,
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3249,6 +3357,7 @@ mod tests {
                         "aeolian_keyboard",
                         "bubble_organ",
                         "siren_organ",
+                        "arc_organ",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

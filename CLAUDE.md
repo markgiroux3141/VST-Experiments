@@ -295,8 +295,18 @@ block). **IL7 step 1 built (2026-11-21):** the device kind **`arc`** (pins (a, s
 Ayrton's law, ln g a state node on 1 F with a 1 GOhm leak, its power out of w for the thermophone's
 sound; `varimu/devices/arc.py`, SPICE, circuitsim `devices/arc.rs`, both builders with a per-instance
 `gap_mm`), `CARBON_ARC@1`, `config/circuits/arc_test.yaml` (Duddell's arc on one condenser sings at
-423 Hz, 0.34x real time at draft), `tests/test_arc.py`. Next: the keys switching the condensers live
-(INVENTED_LIVE_PLAN.md "Next for IL7": option (d) recommended), the Arc Organ's circuit, the app device.
+423 Hz, 0.34x real time at draft), `tests/test_arc.py`. **IL7 built (2026-11-21, the plan's "Session 4"):** the
+Arc Organ `config/circuits/arc_organ.yaml` (CURRENT ballast rheostat, SPEAK in the tank, ARC GAP, TUNE a
+variometer, HISS a noise on the arc's state; the key contact `ARC_KEY@1` across a 200 ohm quench, a one-way
+dashpot on the gate), each key's condenser trimmed by `scripts/arc_organ_trim.py [--survey | --write |
+--check]` -> `config/arc_organ_trims.yaml` + `crates/varimu-app/src/arc_organ_trims.rs` (E2-C6). A key's
+condenser is a value updated in place: `panel::KeyedValue` / `KEYED_VALUES` (by device id), `Feed::KeyedGate`,
+the Performer's `block_keyed` / `positioned` / `applied`, `Live::land` (a keyed device lands ready builds
+before the block: a key from silence waits <= one 10 ms block; legato switches the condenser on the singing
+arc). The app's `arc_organ` (draft-2x, mod wheel SPEAK; 18 % load held, worst 52 % at 8 key changes a
+second); `tests/test_arc_organ.py`, live.rs's `the_arc_organ_switches_its_condensers_in_place`; demos
+through varimu-app's `midi_render` (`invented_live_render.py`'s `GATED`). IL1-IL7 all built; next: the
+user plays them.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

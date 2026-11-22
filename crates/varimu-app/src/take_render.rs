@@ -31,7 +31,7 @@ use std::thread::JoinHandle;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::live::{Circuit, Live, Values};
+use crate::live::{Circuit, Live};
 use crate::panel::{self, Device};
 use crate::performance::{Ev, Performance, Performer};
 use crate::player::BLOCK;
@@ -118,12 +118,8 @@ pub fn render(
     let p = perf.at_rate(host);
     let exact = perf.knobs_applied && s.quality == perf.quality && host == perf.rate;
     let feeds = panel::key_feeds(prep.device, prep.circuit.spec())?;
-    let mut performer = Performer::new(feeds, p.playing, host, p.start_note, p.start_low);
-    let range = performer.range();
-    let with_range = |panel: &Values, low: bool| match range {
-        Some(r) => r.with_position(panel, low),
-        None => panel.clone(),
-    };
+    let mut performer = Performer::new(feeds, p.playing, host, p.start_note, p.start_low)
+        .with_asked_key_in(&p.values);
     let c0 = performer.resting();
     let mut live =
         Live::with_controls(&[], p.values.clone(), prep.circuit.clone(), s, p.gain, &c0)?;
@@ -150,7 +146,7 @@ pub fn render(
                 live.apply_now(knob.values.clone(), last_input, knob.restart.clone())?;
             } else {
                 panel_values = knob.values.clone();
-                let v = with_range(&panel_values, performer.asked_low());
+                let v = performer.positioned(&panel_values);
                 live.apply_now(v, last_input, None)?;
             }
             k += 1;
@@ -161,16 +157,20 @@ pub fn render(
             events.push((at.saturating_sub(pos as u64) as usize, ev));
             e += 1;
         }
-        let low_applied = range.map(|r| r.is_low(&live.values));
-        let b = performer.block(n, &events, low_applied);
+        // As the player: a keyed value is looked at after what is ready has landed.
+        if performer.keyed().is_some() {
+            live.land()?;
+        }
+        let (low_applied, key_applied) = performer.applied(&live.values);
+        let b = performer.block_keyed(n, &events, low_applied, key_applied);
         let refs: Vec<&[f64]> = b.controls.iter().map(Vec::as_slice).collect();
         let notes = if keys { b.notes } else { Vec::new() };
         let (y, _) = live.process_notes(&b.audio, &refs, &notes)?;
         last_input = b.audio.last().copied().unwrap_or(0.0) * p.gain;
         // The range switch asked to move: built now, it lands at the next block (live it
         // lands when its build is ready, which the knob log has).
-        if !exact && let Some(want) = b.range {
-            live.apply_now(with_range(&panel_values, want), last_input, None)?;
+        if !exact && (b.range.is_some() || b.key.is_some()) {
+            live.apply_now(performer.positioned(&panel_values), last_input, None)?;
         }
         // A stereo device's take keeps both channels (as the player keeps them).
         out.extend_from_slice(&y);
@@ -416,6 +416,7 @@ fn sampler_take(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::live::Values;
     use crate::midi::Wave;
     use crate::performance::{Ev, Playing, START_NOTE};
     use varimu_circuit::yaml::Value;

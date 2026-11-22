@@ -4,6 +4,10 @@ by note events through circuitsim (`fast.run_transient(notes=)`), the output at 
 circuit's full scale (unnormalized, so the level is the device's)
 -> reports/invented/<name>/live_<take>.wav.
 
+A gated device (GATED: the Arc Organ, whose keys work a gate and set the key's condenser in
+place) renders through the app's own take renderer (varimu-app's `midi_render` example: the
+Performer, the keyed value landing a block after its key, as Play), at the device's host rate.
+
     uv run --extra fast python scripts/invented_live_render.py [--only NAME] [--quality draft]
 """
 
@@ -102,6 +106,74 @@ DEMOS = {
 }
 
 
+# Gated devices: (take, [(start_s, dur_s, note name, velocity)], seconds, {knob: value})
+ARC_TUNE = "E4:1 G4:1 A4:2 G4:1 E4:1 D4:2 C4:1 D4:1 E4:3"  # the sketch's (I13)
+ARC_MELODY = beats(ARC_TUNE, 0.5, 0.45, 100, 0.06)
+ARC_COMPASS = "E2:1 B2:1 E3:1 A3:1 E4:1 A4:1 E5:1 A5:1 C6:2"
+ARC_PHRASE = beats("A3:1 C4:1 E4:2 D4:1 C4:1 A3:2", 0.4, 0.4, 100, 0.06)
+GATED = {
+    "arc_organ": [
+        # the sketch's melody at the panel's defaults (5 A, SPEAK full, 2 mm)
+        ("melody", ARC_MELODY, 7.0, {}),
+        # the same melody legato (each key overlapping the next: the condensers switched on
+        # the singing arc)
+        ("melody_legato", beats(ARC_TUNE, 0.5, 0.45, 100, -0.05), 7.0, {}),
+        # the sketch's phrase at three currents (CURRENT 0, 0.5, 1: ~3.3, 5, 9 A) and HISS up
+        ("phrase_3A", ARC_PHRASE, 4.2, {"current": 0.0}),
+        ("phrase_5A", ARC_PHRASE, 4.2, {}),
+        ("phrase_9A_hissing", ARC_PHRASE, 4.2, {"current": 1.0, "hiss": 0.9}),
+        # SPEAK near the arc's threshold: notes build slowly as pure sines
+        ("phrase_speak_low", ARC_PHRASE, 4.2, {"speak": 0.25}),
+        # down the compass, E2 to C6 by fifths and fourths
+        ("compass", beats(ARC_COMPASS, 0.3, 0.5, 100, 0.08), 6.5, {}),
+    ],
+}
+
+
+def render_gated(name: str, quality: str) -> None:
+    """GATED's takes through varimu-app's midi_render example."""
+    import json
+    import subprocess
+    import tempfile
+
+    import soundfile as sf
+
+    root = Path(__file__).resolve().parents[1]
+    q = {"draft": "draft-2x", "production": "production"}.get(quality, quality)
+    for take, phrase, seconds, sets in GATED[name]:
+        notes = sorted((s, s + d, note(nm), v) for s, d, nm, v in phrase)
+        with tempfile.TemporaryDirectory() as tmp:
+            part = Path(tmp) / "part.json"
+            part.write_text(json.dumps({"notes": notes, "end_s": seconds}))
+            OUT.joinpath(name).mkdir(parents=True, exist_ok=True)
+            path = OUT / name / f"live_{take}.wav"
+            cmd = [
+                "cargo",
+                "run",
+                "--release",
+                "-q",
+                "-p",
+                "varimu-app",
+                "--example",
+                "midi_render",
+                "--",
+                "--device",
+                name,
+                "--notes",
+                str(part),
+                "--out",
+                str(path),
+                "--quality",
+                q,
+            ]
+            for k, x in sets.items():
+                cmd += ["--set", f"{k}={x}"]
+            subprocess.run(cmd, check=True, cwd=root)
+        y, _ = sf.read(path)
+        peak = 20 * np.log10(max(np.max(np.abs(y)), 1e-12))
+        print(f"{name}: {path.name}, peak {peak:+.1f} dBFS ({q})")
+
+
 def main() -> None:
     import dataclasses
 
@@ -115,6 +187,9 @@ def main() -> None:
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--quality", default="production")
     args = ap.parse_args()
+    for name in GATED:
+        if not args.only or name in args.only:
+            render_gated(name, args.quality)
     for name, (take, phrase, seconds, *rest) in DEMOS.items():
         if args.only and name not in args.only:
             continue
