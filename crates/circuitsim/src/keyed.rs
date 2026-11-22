@@ -38,6 +38,10 @@ pub trait KeyVoice: Send + 'static {
     fn wakes_on_broadcast(&self) -> bool {
         false
     }
+    /// The internal sample a chunk starts at, before an awake (or woken) voice renders it:
+    /// for voices that read the absolute time (the Aeolian Keyboard's shared chest). Nothing
+    /// by default.
+    fn chunk_start(&mut self, _start: usize) {}
     /// An event at the current sample: its key's, or every key's (the pedal, pressure).
     fn event(&mut self, ev: NoteEvent, ctx: &Self::Ctx);
     /// Add internal samples `from..to` of its outputs into `buf`: channel c's sample i at
@@ -61,6 +65,8 @@ struct Slot<V> {
 struct Job {
     round: u64,
     n: usize,
+    /// The internal sample the chunk starts at.
+    start: usize,
     events: Arc<Vec<(usize, NoteEvent)>>,
 }
 
@@ -112,6 +118,7 @@ impl<V: KeyVoice> Shared<V> {
             return;
         }
         *silent = false;
+        voice.chunk_start(job.start);
         let n = job.n;
         buf.clear();
         buf.resize(n * self.channels, 0.0);
@@ -144,7 +151,7 @@ impl<V: KeyVoice> Shared<V> {
 fn worker<V: KeyVoice>(sh: Arc<Shared<V>>) {
     let mut seen = 0;
     loop {
-        let (round, n, events) = {
+        let (round, n, start, events) = {
             let mut job = sh.job.lock().expect("job");
             while job.round == seen && !sh.stop.load(Ordering::Acquire) {
                 job = sh.wake.wait(job).expect("job");
@@ -153,10 +160,15 @@ fn worker<V: KeyVoice>(sh: Arc<Shared<V>>) {
                 return;
             }
             sh.active.fetch_add(1, Ordering::AcqRel);
-            (job.round, job.n, job.events.clone())
+            (job.round, job.n, job.start, job.events.clone())
         };
         seen = round;
-        sh.take(&Job { round, n, events });
+        sh.take(&Job {
+            round,
+            n,
+            start,
+            events,
+        });
         sh.active.fetch_sub(1, Ordering::AcqRel);
     }
 }
@@ -445,6 +457,7 @@ impl<V: KeyVoice> Medium<V> {
         let job = Job {
             round: 0,
             n,
+            start: start * k,
             events: Arc::new(evs),
         };
         if self.threads.is_empty() || self.awake + struck <= self.inline_voices {
@@ -461,6 +474,7 @@ impl<V: KeyVoice> Medium<V> {
                     sh.done.store(0, Ordering::Release);
                     j.round += 1;
                     j.n = n;
+                    j.start = job.start;
                     j.events = job.events.clone();
                     sh.wake.notify_all();
                     break;

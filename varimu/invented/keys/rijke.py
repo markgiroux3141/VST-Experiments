@@ -165,7 +165,9 @@ class Voice:
         m = self.m
         k_in = 0.0
         if self.held:
-            k_in = self.heat * (knob(m["k_range"], self.velocity) + m["k_pressure"] * self.aftertouch)
+            k_in = self.heat * (
+                knob(m["k_range"], self.velocity) + m["k_pressure"] * self.aftertouch
+            )
         self.kg = (1.0 - self.ag) * k_in + self.ag * self.kg
         self.nz = self.na * self.nz + (1.0 - self.na) * self.gauss.next()
         turb = m["turbulence"] * self.breath * self.nz * self.norm * self.kg / m["k_ref"]

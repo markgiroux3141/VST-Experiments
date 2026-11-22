@@ -1,0 +1,39 @@
+# The Aeolian Keyboard as a device (docs/INVENTED_LIVE_PLAN.md IL4; docs/INVENTED_DEVICES.md
+# I12): gut strings (C2-C6, all 0.7 m) over a wind chest, sung by vortex shedding. A key opens
+# the slot under its string (velocity is how far: the jet's width along the string; aftertouch
+# opens it further; the pedal holds released keys' slots open), and its felt damper falls once
+# the slot is shut. Each string's diameter is voiced so that the nominal wind (2.5 m/s) speaks
+# its 4th harmonic, so WIND walks the keyboard up and down the harmonic series together. The
+# strings are circuitsim's invented-keys medium (the component AEOLIAN_KEYBOARD:
+# crates/circuitsim/src/invented.rs, varimu/invented/keys/aeolian.py the reference), read by
+# a piezo under the bridge; the keys sum onto `out`.
+#
+# The panel (they play on): WIND (k0: the chest's speed 1.0-5.0 m/s; 2.5 at 0.375), GUST (k1:
+# the blower's gusts 0-0.25 of the speed, shared by every string; the sketch's 0.06 at 0.24).
+
+title: "Aeolian Keyboard (gut strings sung by the wind, keyed)"
+input: in
+probes: [out]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the keys drive the line)"}
+  output_volts_peak: {value: 10.0, source: "measured: a string at velocity 127 and the nominal wind peaks 1.5-3.2 V (its lock-in), rms ~0.4-0.6 V; up to 5.5 V at WIND 5 m/s; six struck at once at 127 12 V at the lock-in; the demo -6.3 dBFS peak (scripts/invented_live_render.py, docs/INVENTED_LIVE_PLAN.md)"}
+
+controls:
+  wind: {value: 0.375, min: 0.0, max: 1.0, unit: rotation, source: "design: WIND, the chest's speed 1.0-5.0 m/s (2.5 m/s, the nominal, at 0.375)"}
+  gust: {value: 0.24, min: 0.0, max: 1.0, unit: rotation, source: "design: GUST, the chest's gusts 0-0.25 of its speed (0.06, the sketch's, at 0.24)"}
+
+values:
+  keys_model: {value: AEOLIAN_KEYBOARD@1, source: "config/components/aeolian_keyboard/1.yaml (varimu/invented/keys/aeolian.py's model from varimu/invented/aeolian.py's values, compiled by scripts/compile_invented_keys.py)"}
+  keys_rate_hz: {value: 96000.0, source: "numerical: each string stepped at the project's 96 kHz (its modes exactly, the wakes by semi-implicit Euler)"}
+  keys_max_keys: {value: 12, source: "numerical: strings sounding at once (another struck silences a released one, else the one struck longest ago; 12, not 16: a string with its six wakes is the costliest invented voice, docs/INVENTED_LIVE_PLAN.md IL4)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  r_line_ohm: {value: 100.0e+3, source: "numerical: a DC path on the line (the piezo's load)"}
+
+sections:
+  - title: keys
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the strings: the bridge piezo's sum on out (to ground), played by note events
+      KEYS: {invented_keys: [out], component: keys_model, rate_hz: keys_rate_hz, max_keys: keys_max_keys, k0: wind, k1: gust}
+      RLINE: {R: [out, "0"], r: r_line_ohm, tolerance: none}

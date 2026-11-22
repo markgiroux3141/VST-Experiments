@@ -229,4 +229,48 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
 - **Not done yet for IL3:** the user's first play; the thermophone choir (I7's variant);
   per-pipe variation.
 
-**Next:** IL4, the Aeolian Keyboard, then IL5-IL7 in the table's order.
+### Session 2, continued: IL4 built
+
+- **Built:** `varimu/invented/keys/aeolian.py` (the reference), `invented.rs`'s
+  `AeolianVoice` and `Chest`, `AEOLIAN_KEYBOARD@1`, `config/circuits/aeolian_keyboard.yaml`,
+  the app's `aeolian_keyboard`, its demo (`melody_over_drone`: the sketch's melody over A2 +
+  E3 at the nominal wind).
+- **Shared:** `keyed.rs`'s `KeyVoice::chunk_start` (the internal sample a chunk starts at,
+  given to a voice before it renders; default nothing: other media unchanged), and the
+  reference's `common.play` sets `voice.now` before each step. A voice struck mid-chunk sets
+  its clock from the chunk's start plus its render's offset.
+- **Agreement:** bit-exact with the reference (two strings, one struck mid-chunk; aftertouch;
+  the pedal; the chest's gusts), and the same on 0 and 3 worker threads.
+  `test_the_wind_picks_the_harmonic`: 2.5 m/s speaks the 4th harmonic, 3.6 m/s the 6th (the
+  sketch's finding; 1.5 m/s here speaks the 2nd, the sketch's the 3rd).
+- **Live:** the costliest invented voice so far. 12 strings in the bass (the cap) 29 % load,
+  worst block 41 %, 0 dropouts at 50 ms; with the cap at 16, 16 bass strings ran 36 %, worst
+  block 52 % at 30 ms, and bursts of six strikes peaked at 93 % (the medium rendering ahead
+  for every newly woken string at once).
+- **Level:** full scale 10 V. A string at velocity 127 and the nominal wind peaks 1.5-3.2 V
+  at its lock-in (rms ~0.4-0.6 V), up to 5.5 V at 5 m/s; six at once 12 V at the lock-in; the
+  demo -6.3 dBFS peak.
+- **Decided (IL4):**
+  - **Strings C2-C6**, all 0.7 m, diameters voiced so 2.5 m/s speaks the 4th harmonic
+    (1.9 mm at C2, 0.12 mm at C6; the treble finer than real gut).
+  - **Modes to the 40th harmonic** below 14.4 kHz (the sketch's 63 at 48 kHz: ~35 % of the
+    cost, the wind locks to the 2nd-8th), and **each segment's turbulence drawn every 8th
+    sample** (a one-pole at fs / 8, held: the Gaussians were a large share of the cost).
+  - **The wake substepped where omega h > 0.5**: C6 at 5 m/s with full gusts diverged
+    (omega h ~1 at ~9 m/s on a 0.12 mm string); one step everywhere else.
+  - **The chest's gust is shared:** a smooth noise of absolute time (value noise on a seeded
+    Gaussian lattice every half period of 1.5 Hz, smoothstep between), so a chord wavers
+    together; each segment's 30 Hz turbulence is the key's own.
+  - **Velocity is the slot's opening** 0.3-1 (the jet's width along the string, i.e. the
+    lift: the chest's pressure sets the jet's speed through any opening, so velocity is
+    loudness, not pitch); aftertouch opens it the rest of the way; the pedal holds released
+    keys' slots open; the felt damper (Q 30) falls once a slot is shut, the voice sleeps 1 s
+    later.
+  - **The bridge piezo voiced per string as f1 / 220 Hz** (the lift goes as the diameter,
+    1 / f1: unvoiced, the treble fell ~6 dB an octave), 300 V/N at A3.
+  - **The panel:** WIND (k0; the mod wheel) 1.0-5.0 m/s, GUST (k1) the blower's gusts 0-0.25.
+  - **The cap at 12 strings**, not 16.
+- **Not done yet for IL4:** the user's first play; a second slot height per key (the
+  sketch's "choose the harmonic per key"); the soundboard as modes.
+
+**Next:** IL5, the Bubble Organ, then IL6-IL7 in the table's order.

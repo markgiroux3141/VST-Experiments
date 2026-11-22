@@ -2,16 +2,17 @@
 (varimu.invented.jawari) per key, played by note events, as circuitsim's invented.rs plays
 it.
 
-Per key: a finite-difference string (the plain wave equation with the loss sigma0 +
-sigma1 from two decay times, Bilbao's scheme), fixed at both ends, over a parabolic bridge
-along its first BRIDGE_M; the contact is a one-sided penalty solved implicitly at each
-bridge point (rigid in effect). The grid follows the stream's rate: h = c k / COURANT, so
-every string has ~0.98 fs / (2 f0) points (C3 at 96 kHz: 359, the sketch's own grid). A key
-down plucks its string with a force F (the finger's rounded triangle, A = F p (L - p) / (T L),
+Per key: a finite-difference string (the plain wave equation with the loss sigma0 + sigma1
+from two decay times, Bilbao's scheme), fixed at both ends, over a parabolic bridge along
+its first BRIDGE_M; the contact is a one-sided penalty solved implicitly at each bridge
+point (rigid in effect). The grid follows the stream's rate: h = c k / COURANT, so every
+string has ~0.98 fs / (2 f0) points (C3 at 96 kHz: 359, the sketch's own grid). A key down
+plucks its string with a force F (the finger's rounded triangle, A = F p (L - p) / (T L),
 replaces the string's state: a ringing string is caught and plucked again; the bridge then
-feels ~F (1 - p / L) on every string, long or short); a key up drops the felt damper (sigma0 x DAMPER) and
-the voice sleeps SLEEP_S later. The soundboard reads the force on the bridge (the end's
-tension plus every contact force) through the gourd and top's four body resonances.
+feels ~F (1 - p / L) on every string, long or short); a key up drops the felt damper (sigma0
+x DAMPER) and the voice sleeps SLEEP_S later. The soundboard reads the force on the bridge
+(the end's tension plus every contact force) through the gourd and top's four body
+resonances.
 
 The tanpura: four more strings (Pa, Sa, Sa, low Sa), plucked in turn by a cam while the
 sustain pedal is down (one every DRONE_GAP_S), damped by the cam's felt when it lifts.
@@ -69,9 +70,7 @@ def hz(note: int) -> float:
 
 def model() -> dict[str, Any]:
     """The keyboard's data, as the component saves it and invented.rs reads it."""
-    keys = [
-        {"note": n, "f_hz": hz(n), "length_m": length_m(hz(n))} for n in range(LOW, HIGH + 1)
-    ]
+    keys = [{"note": n, "f_hz": hz(n), "length_m": length_m(hz(n))} for n in range(LOW, HIGH + 1)]
     drone_hz = [[hz(SA_NOTE + o + s) for s in range(DRONE_STEPS + 1)] for o in DRONE_OFFSETS]
     return {
         "instrument": KIND,
@@ -194,9 +193,7 @@ class String:
         u, u1 = self.u, self.u1
         lap = np.zeros(self.nx + 1)
         lap[1:-1] = (u[2:] - 2.0 * u[1:-1]) + u[:-2]
-        un = self.a0 * (
-            ((2.0 * u - self.c1 * u1) + self.lam2 * lap) + self.bs * (lap - self.lapp)
-        )
+        un = self.a0 * (((2.0 * u - self.c1 * u1) + self.lam2 * lap) + self.bs * (lap - self.lapp))
         un[0] = 0.0
         un[-1] = 0.0
         contact = 0.0

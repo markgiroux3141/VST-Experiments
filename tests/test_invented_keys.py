@@ -186,3 +186,62 @@ def test_a_rijke_pipe_starts_late_and_holds_below_its_start():
     cold.on(1)
     never = rms(np.array([cold.step() for _ in range(int(3.0 * fs))]))
     assert never.max() < 0.01 * env.max()  # it never starts
+
+
+def test_the_aeolian_keyboard_agrees_with_its_reference():
+    """Two strings (one released, its slot shutting and damper falling), aftertouch, the
+    pedal, the chest's gust (absolute time: the second string opens later, mid-chunk), at the
+    stream's 96 kHz."""
+    from varimu.invented.keys import aeolian
+
+    fs = 96_000.0
+    ref = kc.latest("AEOLIAN_KEYBOARD")
+    knobs = [0.45, 0.6, 0.0, 0.0]
+    n = int(0.6 * fs)
+    perf = [
+        (0, "on", 57, 100),
+        (int(0.1 * fs) + 37, "on", 64, 50),
+        (int(0.2 * fs), "pressure", 0, 80),
+        (int(0.3 * fs), "pedal", 0, 1),
+        (int(0.35 * fs), "off", 57, 0),
+        (int(0.4 * fs), "pedal", 0, 0),
+        (int(0.45 * fs), "off", 64, 0),
+    ]
+    kb = aeolian.keyboard(kc.load(ref), fs, knobs)
+    kb = {k: v for k, v in kb.items() if k in (57, 64)}
+    want = common.play(kb, n, perf, lambda v: v.step())
+    el = element(ref, knobs)
+    el["rate_hz"] = fs
+    got = circuitsim.invented_render(json.dumps(el), fs, n, perf, 0)
+    assert np.sqrt(np.mean(want**2)) > 1e-3  # it sounds
+    assert np.array_equal(got, want)  # bit-exact
+
+
+def test_the_wind_picks_the_harmonic():
+    """At the nominal 2.5 m/s every string speaks its 4th harmonic; at 3.6 m/s its 6th (the
+    sketch's finding at 110 Hz)."""
+    from varimu.invented.keys import aeolian
+
+    fs = 96_000.0
+    m = kc.load(kc.latest("AEOLIAN_KEYBOARD"))
+    for wind_k, want in ((0.375, 4), (0.65, 6)):
+        kb = {45: aeolian.keyboard(m, fs, [wind_k, 0.24, 0.0, 0.0])[45]}
+        y = common.play(kb, int(1.5 * fs), [(0, "on", 45, 100)], lambda v: v.step())
+        seg = y[int(0.8 * fs) :]
+        sp = np.abs(np.fft.rfft(seg * np.hanning(seg.size)))
+        f = np.fft.rfftfreq(seg.size, 1 / fs)
+        assert round(f[np.argmax(sp)] / 110.0) == want
+
+
+def test_the_aeolian_keyboard_is_the_same_on_any_number_of_threads():
+    """Its voices read the absolute time (the chest's gust) on whichever thread renders them."""
+    ref = kc.latest("AEOLIAN_KEYBOARD")
+    el = element(ref, [0.375, 1.0, 0.0, 0.0])
+    el["rate_hz"] = 96_000.0
+    el = json.dumps(el)
+    chord = [(0, "on", 45, 100), (700, "on", 52, 90)] + [
+        (1000 + k, "on", k, 80) for k in (57, 60, 64, 69)
+    ]
+    a = circuitsim.invented_render(el, 96_000.0, 19200, chord, 0)
+    b = circuitsim.invented_render(el, 96_000.0, 19200, chord, 3)
+    assert np.array_equal(a, b)

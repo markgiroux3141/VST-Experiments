@@ -25,9 +25,14 @@ DATA_SUFFIX = ".keys.json"
 
 def models() -> dict[str, Any]:
     """Component name -> the function giving its data (one per instrument)."""
-    from varimu.invented.keys import rijke, rosin, zither
+    from varimu.invented.keys import aeolian, rijke, rosin, zither
 
-    return {"ROSIN_WHEEL": rosin.model, "BUZZ_ZITHER": zither.model, "RIJKE_ORGAN": rijke.model}
+    return {
+        "ROSIN_WHEEL": rosin.model,
+        "BUZZ_ZITHER": zither.model,
+        "RIJKE_ORGAN": rijke.model,
+        "AEOLIAN_KEYBOARD": aeolian.model,
+    }
 
 
 def dump(data: dict[str, Any]) -> str:

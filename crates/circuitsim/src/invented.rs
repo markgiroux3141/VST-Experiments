@@ -11,7 +11,8 @@
 //! Instruments: `rosin_wheel` (IL1, steel bars bowed by a rosined wheel:
 //! `varimu/invented/keys/rosin.py`), `buzz_zither` (IL2, plucked strings over jawari bridges
 //! and a tanpura on the pedal: `varimu/invented/keys/zither.py`), `rijke_organ` (IL3, pipes
-//! sung by heated gauzes: `varimu/invented/keys/rijke.py`).
+//! sung by heated gauzes: `varimu/invented/keys/rijke.py`), `aeolian_keyboard` (IL4, gut
+//! strings sung by the wind: `varimu/invented/keys/aeolian.py`).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -116,6 +117,7 @@ pub enum Model {
     Rosin(RosinModel),
     Zither(ZitherModel),
     Rijke(RijkeModel),
+    Aeolian(AeolianModel),
 }
 
 impl Model {
@@ -141,6 +143,9 @@ impl Model {
             "rijke_organ" => Ok(Model::Rijke(
                 serde_json::from_value(head).map_err(|e| format!("rijke_organ: {e}"))?,
             )),
+            "aeolian_keyboard" => Ok(Model::Aeolian(
+                serde_json::from_value(head).map_err(|e| format!("aeolian_keyboard: {e}"))?,
+            )),
             other => Err(format!("no invented instrument {other:?}")),
         }
     }
@@ -160,6 +165,8 @@ impl Model {
             }
             // The heater's power (the level follows it weakly; the bloom's speed strongly).
             Model::Rijke(m) => 20.0 * (knob(m.k_range, 1.0) / knob(m.k_range, lo)).log10(),
+            // The slot's opening: the jet's width, so the lift.
+            Model::Aeolian(m) => 20.0 * (1.0 / knob([m.open_min, 1.0], lo)).log10(),
         }
     }
 
@@ -168,6 +175,7 @@ impl Model {
             Model::Rosin(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Zither(m) => m.keys.iter().map(|k| k.note).collect(),
             Model::Rijke(m) => m.keys.iter().map(|k| k.note).collect(),
+            Model::Aeolian(m) => m.keys.iter().map(|k| k.note).collect(),
         }
     }
 }
@@ -1097,6 +1105,368 @@ impl RijkeVoice {
     }
 }
 
+// --- IL4 the Aeolian Keyboard -----------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AeolianKey {
+    pub note: u8,
+    pub f_hz: f64,
+    pub d_m: f64,
+    pub voicing: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AeolianModel {
+    pub keys: Vec<AeolianKey>,
+    pub rho_air: f64,
+    pub st: f64,
+    pub cl0: f64,
+    pub a_wake: f64,
+    pub eps_wake: f64,
+    pub rho_gut: f64,
+    pub length_m: f64,
+    pub q_string: f64,
+    pub inharm_b: f64,
+    pub segments: usize,
+    pub f_top_hz: f64,
+    pub max_harmonic: usize,
+    pub attack_s: f64,
+    pub release_s: f64,
+    pub open_min: f64,
+    pub pressure_open: f64,
+    pub q_damped: f64,
+    pub sleep_s: f64,
+    pub wind_range_m_s: [f64; 2],
+    pub gust_range: [f64; 2],
+    pub gust_hz: f64,
+    pub turb: f64,
+    pub turb_hz: f64,
+    pub turb_every: usize,
+    pub q0: f64,
+    pub omh_max: f64,
+    pub v_per_n: f64,
+    pub seed: u64,
+}
+
+/// The chest's gust lattice: a Gaussian per index (`aeolian.lattice`).
+fn gust_lattice(seed: u64, i: u64) -> f64 {
+    let mut g = Gauss::new(seed ^ i.wrapping_mul(0xD1B54A32D192ED03));
+    let (u, v) = (g.uniform(), g.uniform());
+    (-2.0 * u.ln()).sqrt() * (2.0 * std::f64::consts::PI * v).cos()
+}
+
+/// The chest's gust at absolute sample t, shared by every string (`aeolian.Chest`).
+#[derive(Debug, Clone)]
+struct Chest {
+    seed: u64,
+    per: f64,
+    i: i64,
+    a: f64,
+    b: f64,
+}
+
+impl Chest {
+    fn at(&mut self, t: usize) -> f64 {
+        let x = t as f64 / self.per;
+        let i = x.floor();
+        if i as i64 != self.i {
+            self.i = i as i64;
+            self.a = gust_lattice(self.seed, i as u64);
+            self.b = gust_lattice(self.seed, i as u64 + 1);
+        }
+        let s = x - i;
+        let s = s * s * (3.0 - 2.0 * s);
+        self.a + (self.b - self.a) * s
+    }
+}
+
+/// Per mode [p00, p01, p10, p11, g0, g1, zeta]: the exact damped step, the force held
+/// (`aeolian.tables`).
+fn aeolian_tables(
+    m: &AeolianModel,
+    f: &[f64],
+    f1: f64,
+    h: f64,
+    mass: f64,
+    q_cap: f64,
+) -> Vec<[f64; 7]> {
+    f.iter()
+        .map(|&fk| {
+            let w = 2.0 * std::f64::consts::PI * fk;
+            let zeta = 1.0 / (2.0 * m.q_string) * (fk / f1).sqrt().sqrt();
+            let zeta = zeta.max(1.0 / (2.0 * q_cap));
+            let wd = w * (1.0 - zeta * zeta).sqrt();
+            let e = (-zeta * w * h).exp();
+            let (cs, sn) = ((wd * h).cos(), (wd * h).sin());
+            let p00 = e * (cs + zeta * w / wd * sn);
+            let p01 = e * sn / wd;
+            let p10 = -e * w * w / wd * sn;
+            let p11 = e * (cs - zeta * w / wd * sn);
+            [
+                p00,
+                p01,
+                p10,
+                p11,
+                (1.0 - p00) / (w * w) / mass,
+                -p10 / (w * w) / mass,
+                zeta,
+            ]
+        })
+        .collect()
+}
+
+/// One key's string (`aeolian.Voice`, step for step).
+#[derive(Debug, Clone)]
+pub struct AeolianVoice {
+    m: Arc<Model>,
+    h: f64,
+    d: f64,
+    voicing: f64,
+    free: Vec<[f64; 7]>,
+    damped_t: Vec<[f64; 7]>,
+    seg_len: f64,
+    /// shape[s][k], segments x modes
+    shape: Vec<Vec<f64>>,
+    slope: Vec<f64>,
+    w: Vec<f64>,
+    w2: Vec<f64>,
+    mass: f64,
+    x: Vec<f64>,
+    v: Vec<f64>,
+    force: Vec<f64>,
+    acc: Vec<f64>,
+    gauss: Gauss,
+    q: Vec<f64>,
+    p: Vec<f64>,
+    nz: Vec<f64>,
+    lift: Vec<f64>,
+    om: Vec<f64>,
+    na: f64,
+    norm: f64,
+    tick: usize,
+    chest: Chest,
+    slot: f64,
+    down: bool,
+    pedal_down: bool,
+    held: bool,
+    velocity: f64,
+    aftertouch: f64,
+    damped: bool,
+    quiet: usize,
+    awake: bool,
+    sleep_n: usize,
+    /// The internal sample the chunk being rendered starts at, and the next step's.
+    chunk0: usize,
+    now: usize,
+    wind: f64,
+    gust: f64,
+}
+
+impl AeolianVoice {
+    fn new(model: &Arc<Model>, key: &AeolianKey, fs: f64, knobs: [f64; 4]) -> AeolianVoice {
+        let Model::Aeolian(m) = &**model else {
+            unreachable!("an aeolian voice on another model")
+        };
+        let pi = std::f64::consts::PI;
+        let h = 1.0 / fs;
+        let (f1, d, length) = (key.f_hz, key.d_m, m.length_m);
+        let mu = m.rho_gut * pi * d * d / 4.0;
+        let tension = (2.0 * length * f1) * (2.0 * length * f1) * mu;
+        let mut f = Vec::new();
+        for k in 1..=m.max_harmonic {
+            let kf = k as f64;
+            let fk = kf * f1 * (1.0 + m.inharm_b * kf * kf).sqrt();
+            if fk < m.f_top_hz {
+                f.push(fk);
+            }
+        }
+        let nk = f.len();
+        let mass = mu * length / 2.0;
+        let ns = m.segments;
+        let shape: Vec<Vec<f64>> = (0..ns)
+            .map(|s| {
+                let z = (0.15 + s as f64 * (0.7 / (ns - 1) as f64)) * length;
+                (0..nk)
+                    .map(|k| (z * (k + 1) as f64 * pi / length).sin())
+                    .collect()
+            })
+            .collect();
+        let w: Vec<f64> = f.iter().map(|&fk| 2.0 * pi * fk).collect();
+        let mut gauss = Gauss::new(key_seed(m.seed, key.note));
+        let q: Vec<f64> = (0..ns).map(|_| m.q0 * gauss.sample()).collect();
+        let a = (-2.0 * pi * m.turb_hz * m.turb_every as f64 / fs).exp();
+        let mut v = AeolianVoice {
+            m: model.clone(),
+            h,
+            d,
+            voicing: key.voicing,
+            free: aeolian_tables(m, &f, f1, h, mass, 1e300),
+            damped_t: aeolian_tables(m, &f, f1, h, mass, m.q_damped),
+            seg_len: 0.7 * length / ns as f64,
+            shape,
+            slope: (0..nk)
+                .map(|k| tension * (k + 1) as f64 * pi / length)
+                .collect(),
+            w2: w.iter().map(|w| w * w).collect(),
+            w,
+            mass,
+            x: vec![0.0; nk],
+            v: vec![0.0; nk],
+            force: vec![0.0; nk],
+            acc: vec![0.0; nk],
+            gauss,
+            q,
+            p: vec![0.0; ns],
+            nz: vec![0.0; ns],
+            lift: vec![0.0; ns],
+            om: vec![0.0; ns],
+            na: a,
+            norm: ((1.0 + a) / (1.0 - a)).sqrt(),
+            tick: 0,
+            chest: Chest {
+                seed: m.seed,
+                per: fs / (2.0 * m.gust_hz),
+                i: -1,
+                a: 0.0,
+                b: 0.0,
+            },
+            slot: 0.0,
+            down: false,
+            pedal_down: false,
+            held: false,
+            velocity: 0.0,
+            aftertouch: 0.0,
+            damped: true,
+            quiet: 0,
+            awake: false,
+            sleep_n: (m.sleep_s * fs) as usize,
+            chunk0: 0,
+            now: 0,
+            wind: 0.0,
+            gust: 0.0,
+        };
+        v.set_knobs(knobs);
+        v
+    }
+
+    fn set_knobs(&mut self, k: [f64; 4]) {
+        let Model::Aeolian(m) = &*self.m else {
+            unreachable!("an aeolian voice on another model")
+        };
+        let (wind, gust) = (knob(m.wind_range_m_s, k[0]), knob(m.gust_range, k[1]));
+        self.wind = wind;
+        self.gust = gust;
+    }
+
+    fn event(&mut self, ev: NoteEvent) {
+        match ev {
+            NoteEvent::On { velocity, .. } => {
+                self.down = true;
+                self.held = true;
+                self.velocity = velocity as f64 / 127.0;
+                self.awake = true;
+                self.damped = false;
+                self.quiet = 0;
+            }
+            NoteEvent::Off { .. } => {
+                self.down = false;
+                self.held = self.pedal_down;
+            }
+            NoteEvent::Pedal { down } => {
+                self.pedal_down = down;
+                self.held = self.down || (down && self.held);
+            }
+            NoteEvent::Pressure { value } => self.aftertouch = value as f64 / 127.0,
+        }
+    }
+
+    // The modes' and segments' arrays are indexed together, in the reference's order.
+    #[allow(clippy::needless_range_loop)]
+    fn step(&mut self) -> f64 {
+        let model = self.m.clone();
+        let Model::Aeolian(m) = &*model else {
+            unreachable!("an aeolian voice on another model")
+        };
+        let pi = std::f64::consts::PI;
+        if self.held {
+            self.slot = (self.slot + self.h / m.attack_s).min(1.0);
+        } else {
+            self.slot = (self.slot - self.h / m.release_s).max(0.0);
+            if self.slot == 0.0 && !self.damped {
+                self.damped = true;
+                self.quiet = 0;
+            }
+        }
+        let sl = self.slot;
+        let shape_s = sl * sl * (3.0 - 2.0 * sl);
+        let o_v = knob([m.open_min, 1.0], self.velocity);
+        let opening = o_v + (1.0 - o_v) * m.pressure_open * self.aftertouch;
+        let chest = 1.0 + self.gust * self.chest.at(self.now);
+        self.now += 1;
+        let u0 = self.wind * chest * shape_s;
+        let draw = self.tick == 0;
+        self.tick = (self.tick + 1) % m.turb_every;
+        for s in 0..self.q.len() {
+            if draw {
+                self.nz[s] = self.na * self.nz[s] + (1.0 - self.na) * self.gauss.sample();
+            }
+            let u = u0 * (1.0 + m.turb * self.nz[s] * self.norm);
+            self.om[s] = 2.0 * pi * m.st * u / self.d;
+            self.lift[s] =
+                0.25 * m.rho_air * u * u * self.d * m.cl0 * self.q[s] * self.seg_len * opening;
+        }
+        let t = if self.damped {
+            &self.damped_t
+        } else {
+            &self.free
+        };
+        let nk = self.x.len();
+        for k in 0..nk {
+            self.force[k] = 0.0;
+        }
+        for (row, &l) in self.shape.iter().zip(&self.lift) {
+            for (f, &sh) in self.force.iter_mut().zip(row) {
+                *f += sh * l;
+            }
+        }
+        for k in 0..nk {
+            self.acc[k] = (self.force[k] / self.mass - 2.0 * t[k][6] * self.w[k] * self.v[k])
+                - self.w2[k] * self.x[k];
+        }
+        for s in 0..self.q.len() {
+            let mut yacc = 0.0;
+            for (&sh, &a) in self.shape[s].iter().zip(&self.acc) {
+                yacc += sh * a;
+            }
+            let (mut q, mut p, o) = (self.q[s], self.p[s], self.om[s]);
+            let nsub = ((o * self.h / m.omh_max).ceil() as usize).max(1);
+            let hs = self.h / nsub as f64;
+            let drive = m.a_wake / self.d * yacc;
+            for _ in 0..nsub {
+                p += hs * ((-m.eps_wake * o * (q * q - 1.0) * p - o * o * q) + drive);
+                q += hs * p;
+            }
+            self.p[s] = p;
+            self.q[s] = q;
+        }
+        let mut out = 0.0;
+        for k in 0..nk {
+            let (x, v, f) = (self.x[k], self.v[k], self.force[k]);
+            let r = &t[k];
+            self.x[k] = (r[0] * x + r[1] * v) + r[4] * f;
+            self.v[k] = (r[2] * x + r[3] * v) + r[5] * f;
+            out += self.slope[k] * self.x[k];
+        }
+        if self.damped {
+            self.quiet += 1;
+            if self.quiet >= self.sleep_n {
+                self.awake = false;
+            }
+        }
+        m.v_per_n * self.voicing * out
+    }
+}
+
 // --- the keyboard -----------------------------------------------------------------------
 
 /// The panel every key reads, set between chunks ([`Medium::update`]).
@@ -1125,6 +1495,7 @@ pub enum Voice {
     Rosin(RosinVoice),
     Zither(ZitherVoice),
     Rijke(RijkeVoice),
+    Aeolian(AeolianVoice),
 }
 
 impl Voice {
@@ -1133,6 +1504,7 @@ impl Voice {
             Voice::Rosin(v) => v.awake,
             Voice::Zither(v) => v.awake,
             Voice::Rijke(v) => v.awake,
+            Voice::Aeolian(v) => v.awake,
         }
     }
 
@@ -1141,6 +1513,7 @@ impl Voice {
             Voice::Rosin(v) => v.set_knobs(k),
             Voice::Zither(v) => v.set_knobs(k),
             Voice::Rijke(v) => v.set_knobs(k),
+            Voice::Aeolian(v) => v.set_knobs(k),
         }
     }
 
@@ -1149,6 +1522,7 @@ impl Voice {
             Voice::Rosin(v) => v.event(ev),
             Voice::Zither(v) => v.event(ev),
             Voice::Rijke(v) => v.event(ev),
+            Voice::Aeolian(v) => v.event(ev),
         }
     }
 
@@ -1158,6 +1532,7 @@ impl Voice {
             Voice::Rosin(v) => v.step(),
             Voice::Zither(v) => v.step(),
             Voice::Rijke(v) => v.step(),
+            Voice::Aeolian(v) => v.step(),
         }
     }
 }
@@ -1173,6 +1548,12 @@ impl crate::keyed::KeyVoice for Voice {
         matches!(self, Voice::Zither(v) if v.drone.is_some())
     }
 
+    fn chunk_start(&mut self, start: usize) {
+        if let Voice::Aeolian(v) = self {
+            v.chunk0 = start;
+        }
+    }
+
     fn event(&mut self, ev: NoteEvent, _ctx: &Knobs) {
         Voice::event(self, ev);
     }
@@ -1182,6 +1563,9 @@ impl crate::keyed::KeyVoice for Voice {
             return;
         }
         self.set_knobs(ctx.get());
+        if let Voice::Aeolian(v) = self {
+            v.now = v.chunk0 + from;
+        }
         for o in buf[from..to].iter_mut() {
             if !self.awake() {
                 break;
@@ -1204,6 +1588,11 @@ impl crate::keyed::KeyVoice for Voice {
                 }
             }
             Voice::Rijke(v) => {
+                v.awake = false;
+                v.down = false;
+                v.held = false;
+            }
+            Voice::Aeolian(v) => {
                 v.awake = false;
                 v.down = false;
                 v.held = false;
@@ -1235,6 +1624,16 @@ pub fn voices(model: &Arc<Model>, fs: f64, knobs: [f64; 4]) -> Vec<(u8, Voice)> 
             .keys
             .iter()
             .map(|k| (k.note, Voice::Rijke(RijkeVoice::new(model, k, fs, knobs))))
+            .collect(),
+        Model::Aeolian(m) => m
+            .keys
+            .iter()
+            .map(|k| {
+                (
+                    k.note,
+                    Voice::Aeolian(AeolianVoice::new(model, k, fs, knobs)),
+                )
+            })
             .collect(),
     }
 }

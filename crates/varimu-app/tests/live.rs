@@ -784,6 +784,47 @@ fn the_rijke_organ_plays_from_note_events() {
     assert!(peak > 1e-2, "it sounds: {peak}");
 }
 
+/// The Aeolian Keyboard (docs/INVENTED_LIVE_PLAN.md IL4): its strings are the invented-keys
+/// medium played by keys; its touch spans the slot's opening (0.3-1); WIND and GUST are
+/// values (a turn plays on); a key held through `Live` sings.
+#[test]
+fn the_aeolian_keyboard_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "aeolian_keyboard").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v = values(&knobs(dev, circuit.spec()));
+    let keys: Vec<&str> = v.iter().map(|(k, _)| k.as_str()).collect();
+    assert_eq!(keys, ["wind", "gust"]);
+    let span = circuit.key_velocity_span_db(&v).unwrap().unwrap();
+    let lo: f64 = 0.3 + 0.7 / 127.0;
+    assert!((span - 20.0 * (1.0f64 / lo).log10()).abs() < 1e-9, "{span}");
+    let base = structure(&circuit.build(&v).unwrap());
+    for (k, x) in [("wind", 0.9), ("gust", 0.1)] {
+        let turned = structure(&circuit.build(&set(&v, k, Value::Float(x))).unwrap());
+        assert_eq!(base, turned, "{k} plays on");
+    }
+    let mut live = Live::new(&vec![0.0; 48_000], v, circuit, s).unwrap();
+    assert!(live.has_keys());
+    let x = vec![0.0; 480];
+    let mut peak = 0.0f32;
+    for b in 0..60 {
+        let notes: Vec<(usize, NoteEvent)> = match b {
+            1 => vec![(
+                10,
+                NoteEvent::On {
+                    note: 57,
+                    velocity: 100,
+                },
+            )],
+            _ => vec![],
+        };
+        let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+        peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+    }
+    assert!(peak > 1e-3, "it sounds: {peak}");
+}
+
 /// The Nickel Organ (docs/NICKEL_ORGAN_DEVICE_PLAN.md): its keys are a medium played by keys;
 /// its touch spans the hammer's speed law (0.02-0.25 m/s: 21.9 dB); SUSTAIN and POLARIZE
 /// are values (a turn plays on); a key struck through `Live` sounds.

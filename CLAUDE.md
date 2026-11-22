@@ -279,7 +279,11 @@ four more strings, notes 0-3, woken by the pedal: keyed.rs's `KeyVoice::wakes_on
 (`invented::Model::velocity_span_db`). **IL3 built (2026-11-21):** the Rijke Organ
 (`varimu/invented/keys/rijke.py`: eight Galerkin modes and King's law with a lag per pipe, bores
 scaled as 1 / f; velocity = heater power), `RIJKE_ORGAN@1`, `config/circuits/rijke_organ.yaml`,
-the app's `rijke_organ` (mod wheel = HEAT; 16 pipes 11 % load). Next: IL4, the Aeolian Keyboard.
+the app's `rijke_organ` (mod wheel = HEAT; 16 pipes 11 % load). **IL4 built (2026-11-21):** the
+Aeolian Keyboard (`varimu/invented/keys/aeolian.py`: 40 string modes and six wake oscillators per
+key, the chest's gust shared through absolute time: keyed.rs's `KeyVoice::chunk_start`; velocity =
+the slot's opening), `AEOLIAN_KEYBOARD@1`, `config/circuits/aeolian_keyboard.yaml`, the app's
+`aeolian_keyboard` (mod wheel = WIND; capped at 12 strings, 29 % load). Next: IL5, the Bubble Organ.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

@@ -626,7 +626,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 48] = [
+pub const DEVICES: [Device; 49] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1528,6 +1528,36 @@ pub const DEVICES: [Device; 48] = [
         velocity: None,
         pitch: None,
         // The keys heat the gauzes (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        live_circuit: None,
+    },
+    Device {
+        id: "aeolian_keyboard",
+        label: "Aeolian Keyboard",
+        short: "Aeolian",
+        about: "An invented keyboard of gut strings sung by the wind: each key opens a slot under \
+            its string over a wind chest (velocity is the opening, the mod wheel the wind's speed, \
+            which picks the harmonic the strings lock to)",
+        group: Group::Instruments,
+        // The keys are circuitsim's invented-keys medium (docs/INVENTED_LIVE_PLAN.md IL4):
+        // each string's modes and six wake oscillators along its slot at 96 kHz.
+        circuit: "aeolian_keyboard",
+        panel: Some(&["wind", "gust"]),
+        ahead_s: 0.25,
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("wind"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys open the slots (note events, `Live::process_notes`): no test oscillator.
         own_oscillator: true,
         key: None,
         pitch2: None,
@@ -3158,6 +3188,7 @@ mod tests {
                         "rosin_wheel",
                         "buzz_zither",
                         "rijke_organ",
+                        "aeolian_keyboard",
                         "victorian_voice",
                         "minimoog_filter_board",
                         "minimoog_vco",

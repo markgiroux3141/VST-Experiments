@@ -83,7 +83,8 @@ def play(
     """keyed.rs's loop in the plain: for each step, the events landing there (on / off to
     the key's voice, pedal / pressure to every voice), then every awake voice's sample
     (voice.asleep(), voice.on(vel), voice.off(), voice.pedal(down), voice.pressure(v)),
-    summed in note order."""
+    summed in note order. A voice with a `now` attribute is told the sample before each step
+    (keyed.rs's `KeyVoice::chunk_start`: the Aeolian Keyboard's shared chest)."""
     evs = sorted(events, key=lambda e: e[0])
     out = np.zeros(n)
     order = sorted(voices)
@@ -106,6 +107,8 @@ def play(
         for note in order:
             v = voices[note]
             if not v.asleep():
+                if hasattr(v, "now"):
+                    v.now = p
                 acc += sample(v)
         out[p] = acc
     return out
