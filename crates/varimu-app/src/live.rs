@@ -441,7 +441,23 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Spring(p) => ("Spring", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
-            Element::Harp(h) => ("Harp", &h.name, vec![&h.out]),
+            // An imperfect Rhodes is another instrument too
+            // (docs/RHODES_IMPERFECTION_PLAN.md): its knobs restart the stream.
+            Element::Harp(h) => {
+                worn = match &h.imperfection {
+                    Some(i) => format!(
+                        "{} {:?}",
+                        h.name,
+                        [
+                            i.seed, i.amount, i.tuning, i.voicing, i.tips, i.decay, i.dampers,
+                            i.hammer, i.release,
+                        ]
+                        .map(f64::to_bits)
+                    ),
+                    None => h.name.clone(),
+                };
+                ("Harp", &worn, vec![&h.out])
+            }
             Element::WurliReeds(w) => ("WurliReeds", &w.name, vec![&w.plate, &w.out]),
             Element::ClavStrings(c) => {
                 worn = match &c.wear {
@@ -1312,6 +1328,28 @@ mod tests {
         // host rate) on top.
         let lag = chain_lag(2, 1, 48_000);
         assert!((15..=30).contains(&lag), "{lag}");
+    }
+
+    /// The Rhodes' imperfection knobs (docs/RHODES_IMPERFECTION_PLAN.md) are another
+    /// instrument: they change the live structure (the stream restarts), a preamp knob doesn't.
+    #[test]
+    fn the_rhodes_imperfection_restarts_the_stream() {
+        use super::{Circuit, structure};
+        use crate::settings::{Quality, Settings};
+        use varimu_circuit::yaml::Value;
+
+        let config = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let d = crate::print::find_device("rhodes_suitcase").unwrap();
+        let s = d.play_settings(&Settings::load(&config, Quality::Draft2x).unwrap());
+        let c = Circuit::load(&config, d.circuit, s.cores().unwrap()).unwrap();
+        let build = |k: &str, v: f64| {
+            let values = vec![(k.to_string(), Value::Float(v))];
+            structure(&c.build(&values).unwrap())
+        };
+        let base = build("volume", 0.7);
+        assert!(base == build("volume", 0.5));
+        assert!(base != build("imp_amount", 0.0));
+        assert!(base != build("imp_hammer", 0.5));
     }
 
     /// A keyed 670 (KEY EXT) live: a bass tone, then kicks on its key input from 0.4 s, as
