@@ -558,3 +558,6 @@ scale, a chord far past it.
   the free swelling bar and LIMIT's default is 0 again (the instrument as first played).
   `test_limit_makes_held_notes_even_and_early`; demos `reports/invented/rosin_wheel/
   live_melody_and_chord_limit_*.wav` through the app's take renderer.
+  **Open:** at LIMIT 0.25 a held four-note chord peaks +2.2 dBFS (each bar ~1 V from the start, all
+  at once; LIMIT 0.5 -3.1 dBFS): the full scale (4 V) or the even mode's levels may want a change,
+  the user's call after playing it.
