@@ -291,7 +291,12 @@ the app's `bubble_organ` (mod wheel = FLOW). **IL6 built (2026-11-21):** the Sir
 A; the motor and bellows shared, stepped per chunk before the keys from the events alone:
 keyed.rs's `KeyVoice::prepare`, `invented::Shaft`; exact, not a chunk late), `SIREN_ORGAN@1`,
 `config/circuits/siren_organ.yaml`, the app's `siren_organ` (mod wheel = SPEED; 24 rings 21 % worst
-block). Next: IL7, the Arc Organ.
+block). **IL7 step 1 built (2026-11-21):** the device kind **`arc`** (pins (a, s, w, b): Mayr's arc on
+Ayrton's law, ln g a state node on 1 F with a 1 GOhm leak, its power out of w for the thermophone's
+sound; `varimu/devices/arc.py`, SPICE, circuitsim `devices/arc.rs`, both builders with a per-instance
+`gap_mm`), `CARBON_ARC@1`, `config/circuits/arc_test.yaml` (Duddell's arc on one condenser sings at
+423 Hz, 0.34x real time at draft), `tests/test_arc.py`. Next: the keys switching the condensers live
+(INVENTED_LIVE_PLAN.md "Next for IL7": option (d) recommended), the Arc Organ's circuit, the app device.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

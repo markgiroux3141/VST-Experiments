@@ -375,3 +375,55 @@ and 0 when absent). It senses nothing and drives `out` a sample late, like `nick
   plays no knob changes; the sketch's `speed_glide_reed` is the reference); per-ring variation.
 
 **Next:** IL7, the Arc Organ (a new device kind).
+
+### Session 3, continued: IL7 step 1, the arc as a device kind
+
+- **Built (ae49b3e):** a device kind **`arc`** (pins (a, s, w, b)): Mayr's arc whose steady
+  state is Ayrton's law (`varimu/devices/arc.py`, the reference: d ln g / dt = (v i / P(i) - 1)
+  / tau, P(i) = (a + b l) |i| + (c + d l), the sketch's strike, cap and floor), its ln g a state
+  node on a 1 F capacitor (the lamp's pattern), its power out of pin w (1 A = 1 W). SPICE
+  (`subckt`, `test_spice_agreement.py::test_arc_agrees` at two gaps), circuitsim
+  (`devices/arc.rs`; `tests/devices.rs` on the fixtures' currents and Jacobians), both builders
+  bit for bit (a per-instance `gap_mm`, as a photocell's `lux`; `agreement.rs`), the component
+  `CARBON_ARC@1` (`library.build_carbon_arc`, `varimu fit-devices --only CARBON_ARC`), and
+  `config/circuits/arc_test.yaml`: Duddell's arc on one condenser (110 V, a ballast for 5 A,
+  0.1 H choke, 0.5 uF mica, the 4 mH tank with A4's 30.5 uF), `tests/test_arc.py`.
+- **Found:** it starts on Ayrton's curve (49.576 V at 5 A) and sings at 423 Hz (the LC's 456,
+  pulled ~7 % flat; draft and production agree, 423.3 Hz both, rms within 0.5 dB), 0.27 Pa rms
+  at 1 m, peaks ~3-5 Pa (spiky: the strike); a tank of 2 ohm (past the arc's -1.31) never
+  starts. 0.34x real time at draft, 0.68x at production (the whole circuit, no keys).
+- **Decided (IL7 so far):**
+  - **The sound is the arc's own** (a thermophone): its power on 1 ohm, differentiated by a
+    C-R with RC = (gamma - 1) / (4 pi r c^2) (`arc.thermophone_rc_s`), so `out` is pascals at
+    1 m. The readout is a third port of the device (nothing depends on its voltage).
+  - **A 1 GOhm leak on the state node** (numerical; documented in arc.py): at 0 V the growth
+    doesn't depend on the state, so Newton's first DC iterate from rest was singular.
+  - Numerics in the model: |i| smoothed at 1 mA, the strike ramped over 5 V, the floor and the
+    cap restored at 1e7 per neper; Newton limited to 1 neper and 10 V a step.
+- **Next for IL7 (open, for the next session to decide and record):**
+  1. **How the keys switch the condensers live.** The app reaches a circuit through control
+     inputs (`panel::Feed`: gate, pitch, a key string, pressure); a value (a knob) changes in
+     place only after a background build, at a block (the tube synth's RANGE AUTO: a key waits
+     until the switch has moved). Options:
+     - (a) a `contact` per key on its own gate input: exact, but ~49 more DK ports and 49 new
+       feeds (per-key gates don't exist);
+     - (b) a binary-coded bank (~12-14 contacts on bit feeds, a new `Feed`): fewer ports, a
+       keyboard encoder's glitches between codes;
+     - (c) a new engine element, a condenser bank whose value follows a control input (the DK
+       responses rebuilt at a key's sample): exact, engine work;
+     - (d) **recommended to try first:** the gate (sample-exact, `Feed::Gate`) works one
+       `contact` device that closes the tank at SPEAK and opens it onto the quench resistance
+       (the sketch's 200 ohm; the contact's own transition and an RC on the gate line as the
+       sketch's 30 ms release), and the key's condenser is a value updated in place, asked by
+       the Performer when the sounding key changes, the key waiting with its gate up until it
+       has landed (RangeSwitch's pattern: `performance.rs`, `panel::RangeSwitch`; event takes
+       replay it bit for bit). Measure the latency first (a small circuit builds in ~ms; the
+       update lands at the next block).
+  2. **The circuit** `config/circuits/arc_organ.yaml`: CURRENT (the ballast as a rheostat,
+     3-9 A), SPEAK (the tank's resistance), ARC GAP (the instance's `gap_mm`: check whether a
+     device parameter updates in place or restarts the stream), the hiss (the sketch's flutter:
+     a `noise_source` into the state node, or the carbons' feed wandering the gap ~0.3 Hz),
+     a condenser per key (C2-C6 or a smaller compass: Duddell's was about two octaves) trimmed on
+     this circuit (`scripts/arc_organ_trim.py`: the sketch's trim was against its own
+     numerics; the arc pulls ~7 % flat).
+  3. The app device, its load and level, a demo (the recipe's steps 6-7), the done-when.
