@@ -790,6 +790,18 @@ meanwhile): [docs/SUITCASE_REALTIME_PLAN.md](docs/SUITCASE_REALTIME_PLAN.md), no
 error); `scripts/rhodes_suitcase_notes.py` writes a jRhodes-style single-note set,
 `scripts/suitcase_bands.py` the band table. Next: the user listens; the plan's options (the
 vibrato's last dB, the 4-16 kHz deficit, the cabinet's back).
+**Imperfection and sympathy** ([docs/RHODES_IMPERFECTION_PLAN.md](docs/RHODES_IMPERFECTION_PLAN.md),
+2026-11-22, merged after the user's review; its "Second round" has the numbers): the Suitcase's
+IMPERFECTION (`imp_amount` 0-10, default 0 = the compiled harp bit for bit; 1 a real Mark I with
+spreads measured on jRhodes3d, 2 neglected, 10 a wreck: `varimu/rhodes/imperfection.py`, per-key
+and per-strike draws by unit and count) and UNIT # (`imp_unit`); SYMPATHY (`sympathy`, off by
+default; `sympathy_amount` 1-30): the keys ringing through the tone bar rail
+(`varimu/rhodes/sympathetic.py`, circuitsim's harp as a coupled keyed medium: `keyed.rs`'s two
+phases; `MK1_HARP@3` = @2 + the rail's rows; motion relative to the rail, a key's own push left
+out). Live with the pedal down SYMPATHY overloads (121-127% load at 50 ms): the user renders it.
+`varimu/rhodes/rail.py` is the first, offline rail study (superseded). Tests
+`tests/test_rhodes_{imperfection,sympathetic}.py`; `examples/play.rs --pedal`, `harp_bench`'s
+`SYMPATHY` / `CHORD` / `WORKERS`.
 **Touch** (2026-11-04, RHODES_PLAN.md "Touch"): a
 keyboard's Sensitivity (`curve`: the dB line bent into an ease-out, (1 - x)^p, p 1-5) and
 Range as `midi::Touch`, applied to velocities as they
