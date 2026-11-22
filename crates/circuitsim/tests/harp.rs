@@ -21,6 +21,7 @@ fn harp(rate_hz: f64) -> Option<Harp> {
         rate_hz,
         contact_rate_hz: 384_000.0,
         model: Box::new(model),
+        imperfection: None,
     })
 }
 
@@ -55,6 +56,29 @@ fn the_threads_dont_change_a_sample() {
     let three = play(&el, 3, 6000);
     assert_eq!(one, three);
     assert!(one.iter().any(|v| v.abs() > 1e-3), "it sounds");
+}
+
+/// An imperfect instrument (docs/RHODES_IMPERFECTION_PLAN.md): its draws are per voice, so
+/// the threads don't change a sample either, and it is another sound.
+#[test]
+fn an_imperfect_harp_is_the_same_on_any_threads() {
+    let Some(mut el) = harp(96_000.0) else { return };
+    let perfect = play(&el, 0, 6000);
+    el.imperfection = Some(circuitsim::ir::HarpImperfection {
+        seed: 3.0,
+        amount: 1.0,
+        tuning: 1.0,
+        voicing: 1.0,
+        tips: 1.0,
+        decay: 1.0,
+        dampers: 1.0,
+        hammer: 1.0,
+        release: 1.0,
+    });
+    let one = play(&el, 0, 6000);
+    let three = play(&el, 3, 6000);
+    assert_eq!(one, three);
+    assert_ne!(one, perfect);
 }
 
 #[test]

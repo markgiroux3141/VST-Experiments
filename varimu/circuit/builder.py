@@ -92,7 +92,10 @@ Macro parts (connection; params, * = required):
                 one: kind ep_harp, varimu.rhodes.compile), rate_hz* and contact_rate_hz*
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
                 EMF behind its coils' resistance and inductance into out, its keys played
-                by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp)
+                by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp).
+                Optional, all or none: imp_seed, imp_amount, imp_tuning, imp_voicing,
+                imp_tips, imp_decay, imp_dampers, imp_hammer, imp_release (an imperfect
+                instrument: varimu.rhodes.imperfection)
     wurli_reeds [plate]; component* (a reeds component version, NAME@N, or a parameter
                 naming one: kind ep_reeds, varimu.wurlitzer.compile), rate_hz* and
                 contact_rate_hz* (numerics: the voices' and the hammer's contact's rate
@@ -1074,7 +1077,12 @@ def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
         data = harp_compile.load_data(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
+    given = [k for k in parts.HARP_IMPERFECTION if a[k] is not None]
+    if given and len(given) < len(parts.HARP_IMPERFECTION):
+        missing = sorted(set(parts.HARP_IMPERFECTION) - set(given))
+        raise ctx.fail(f"{name}.{missing[0]}", "the imperfection's values go all or none")
+    imp = {k: a[k] for k in parts.HARP_IMPERFECTION} if given else None
+    return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"], imp)
 
 
 def _wurli_reeds(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1472,7 +1480,16 @@ for _name, _macro in {
         {"component": Param("raw"), "stereo": Param("number", 1.0)},
         optional_nodes=1,
     ),
-    "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
+    "harp": Macro(
+        _harp,
+        1,
+        {
+            "component": Param("raw"),
+            "rate_hz": _P,
+            "contact_rate_hz": _P,
+            **{k: Param("physical", None) for k in parts.HARP_IMPERFECTION},
+        },
+    ),
     "wurli_reeds": Macro(
         _wurli_reeds, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}
     ),

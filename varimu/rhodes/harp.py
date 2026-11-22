@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from scipy import optimize, signal
 
+from varimu.rhodes import imperfection as imp_
 from varimu.rhodes import key as ky
 from varimu.rhodes import pickup as pk
 from varimu.rhodes import spec
@@ -102,20 +103,37 @@ class Voice:
     step_oversample: int = 4
     weight: float = 1.0
     voicing_m: float | None = None
+    imperfection: imp_.Imperfection | None = None
     n: int = 0  # the sample (of `out`) the state is at
     contacts: list = field(default_factory=list)
 
     def __post_init__(self):
         self.free = ky._System(self.k, "modes")
         self.damp = ky._System(self.k, "modes", self.k.damped)
-        self.forms = {id(self.free): _Forms.of(self.free), id(self.damp): _Forms.of(self.damp)}
+        voicing = self.k.pickup.voicing_m if self.voicing_m is None else self.voicing_m
+        # the instrument's imperfection (varimu/rhodes/imperfection.py)
+        d = imp_.key_draws(self.imperfection, self.k.n, voicing)
+        self.draws = d
+        if d.ratio != 1.0:
+            _time_scale(self.free, d.ratio)
+            _time_scale(self.damp, d.ratio)
+        if d.stiffness != 1.0:
+            self.k = replace(
+                self.k, hammer=replace(self.k.hammer, stiffness=self.k.hammer.stiffness * d.stiffness)
+            )
+        self.strikes = self.releases = 0
+        f_free = _Forms.of(self.free)
+        f_free.lam = imp_.decayed(self.free.lam, d.decay)
+        f_damp = _Forms.of(self.damp)
+        f_damp.lam = imp_.damped(self.damp.lam, self.free.lam, d.damper)
+        self.forms = {id(self.free): f_free, id(self.damp): f_damp}
         self.h = 1.0 / (self.fs_hz * self.step_oversample)
         self.every = self.step_oversample // self.oversample
         self.stepper = ky.stepper(self.free, self.h, True)
         self.sys = self.damp
         self.z = np.zeros(self.damp.lam.size, complex)
         self.asleep = True
-        self.voicing = self.k.pickup.voicing_m if self.voicing_m is None else self.voicing_m
+        self.voicing = d.voicing_m
 
     def _emf(self, tip, tip_v, arc, arc_v) -> np.ndarray:
         lo, hi = self.flux.y_range_m
@@ -131,6 +149,17 @@ class Voice:
         return f.rot
 
     def _switch(self, sysm: ky._System) -> None:
+        if sysm is self.damp and self.sys is not self.damp and self.strikes > 0:
+            # a release (of a key struck before): the felt lands as it does this time
+            # (imperfection.release_draw)
+            g = self.draws.damper * imp_.release_draw(self.imperfection, self.k.n, self.releases)
+            self.releases += 1
+            f = self.forms[id(self.damp)]
+            lam = imp_.damped(self.damp.lam, self.free.lam, g)
+            if not np.array_equal(lam, f.lam):
+                f.lam = lam
+                if hasattr(f, "rot"):
+                    del f.rot
         if sysm is not self.sys:
             if not self.asleep:
                 x = self.sys.to_phys @ self.z
@@ -175,8 +204,15 @@ class Voice:
         if n_out <= 0:
             return
         adv, g0, g1 = self.stepper
+        # this strike's hammer (imperfection.strike_draws)
+        ks, vs = imp_.strike_draws(self.imperfection, self.k.n, self.strikes)
+        self.strikes += 1
+        k = self.k
+        if ks != 1.0:
+            k = replace(k, hammer=replace(k.hammer, stiffness=k.hammer.stiffness * ks))
+        speed_m_s = speed_m_s * vs
         self.z, outs, stats = ky.contact(
-            self.free, self.k, self.z, speed_m_s, self.h, self.every, n_out, adv, g0, g1
+            self.free, k, self.z, speed_m_s, self.h, self.every, n_out, adv, g0, g1
         )
         self.out[n + 1 : n + 1 + n_out] += self.weight * self._emf(*outs)
         self.contacts.append((n, speed_m_s, *stats))
@@ -185,6 +221,18 @@ class Voice:
     def damper(self, n: int, on: bool) -> None:
         self.advance_to(n)
         self._switch(self.damp if on else self.free)
+
+
+def _time_scale(s: ky._System, r: float) -> None:
+    """The system's tone generator retuned by r (imperfection's tuning: its stiffness by
+    r^2, the mass kept): eigenvalues times r, the force's input over r, the velocity rows
+    times r (the maps to the physical state are kept: both systems scale alike)."""
+    s.lam = s.lam * r
+    s.a = np.diag(s.lam)
+    s.b = s.b * (1.0 / r)
+    s.c_strike_v = s.c_strike_v * r
+    s.c_tip_v = s.c_tip_v * r
+    s.qd_map = s.qd_map * r
 
 
 def _velocity_cache(name: str) -> str:
@@ -244,10 +292,11 @@ def render(
     name: str = "mk1",
     progress: bool = False,
     step_oversample: int = 4,
+    imperfection: imp_.Imperfection | None = None,
 ) -> Render:
     """The harp's open-circuit EMF for the events (MIDI notes 28-100: the 73 keys). The
     voices run at `oversample` x fs_hz, the hammer's contact at `step_oversample` x fs_hz
-    (a multiple of `oversample`)."""
+    (a multiple of `oversample`). `imperfection`: the instrument's (None: as compiled)."""
     flux = pk.flux_map(spec.key(49, name).pickup, workers=6)
     ff = ff_speed_m_s(name, flux)
     n_total = int(round(duration_s * fs_hz * oversample)) + 1
@@ -280,6 +329,7 @@ def render(
                 oversample,
                 step_oversample,
                 weight=1.0 / group_size(kn),
+                imperfection=imperfection,
             )
             if progress:
                 print(f"harp: key {kn} ({len(voices)} voices)", flush=True)

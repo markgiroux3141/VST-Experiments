@@ -27,6 +27,12 @@
 //! ([`Medium::known_until`]), in chunks, voice by voice, on [`crate::keyed`]'s machinery
 //! (shared with the Clavinet's strings). An event lands at the sample it is queued for, or
 //! at the first sample not yet rendered if it comes too late.
+//!
+//! **Imperfection** (docs/RHODES_IMPERFECTION_PLAN.md; `varimu/rhodes/imperfection.py` is the
+//! reference and has every constant's source): the IR element's optional
+//! [`crate::ir::HarpImperfection`] retunes, revoices, rehardens and re-damps each key once,
+//! where the voices are built, and varies each strike's hammer and each release's felt by
+//! draws keyed on that key's count of them, so a take replays bit for bit.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -535,7 +541,9 @@ struct Sys {
 }
 
 impl Sys {
-    fn new(s: &HarpSystem, dt: f64) -> Sys {
+    /// The system at step dt; `rot` its modes' eigenvalues for the free rotation (None: its
+    /// own; the imperfection's decays: the outputs keep the system's).
+    fn new(s: &HarpSystem, dt: f64, rot: Option<&[C64]>) -> Sys {
         let modes = s.modes;
         let m = modes.div_ceil(LANES) * LANES;
         let pad = |v: Vec<f64>| {
@@ -564,7 +572,7 @@ impl Sys {
         Sys {
             m,
             modes,
-            rot: split(&|j| lam(j).scale(dt).exp()),
+            rot: split(&|j| rot.map_or(lam(j), |r| r[j]).scale(dt).exp()),
             tip: split(&|j| s.tip.get(j)),
             tip_v: split(&|j| s.tip_v.get(j)),
             arc,
@@ -625,6 +633,8 @@ struct Contact {
     f_prev: f64,
     /// Internal samples left in the window.
     left: usize,
+    /// This strike's contact stiffness (the key's, times the strike's draw).
+    stiffness: f64,
 }
 
 /// One key over the timeline.
@@ -649,20 +659,52 @@ struct Voice {
     span: usize,
     /// Scratch: a contact step's free part.
     xf: Vec<C64>,
+    /// The tip's height over the pole (the model's voicing, or the imperfection's).
+    voicing: f64,
+    /// The key (88-key numbering) and the imperfection's (None: as compiled).
+    key: usize,
+    imp: Option<Imp>,
+    /// Strikes and releases so far (their draws' counts).
+    strikes: u64,
+    releases: u64,
+    /// The key's felt factor, its systems as tuned (the damped one rebuilt per release) and
+    /// the voice's internal step.
+    damper: f64,
+    damped_src: HarpSystem,
+    free_lam: Vec<C64>,
+    dt: f64,
+    /// Step the hammer's whole window (the free modes' decay changed: the window steps the
+    /// compiled decays, so ending it early would move the result).
+    full_window: bool,
 }
 
 const GRAVITY_M_S2: f64 = 9.81;
 
 impl Voice {
-    fn new(k: &HarpKey, dt: f64, s: usize) -> Voice {
-        let damped = Sys::new(&k.damped, dt);
-        let m = damped.m.max(Sys::new(&k.free, dt).m);
+    fn new(k: &HarpKey, dt: f64, s: usize, imp: Option<Imp>, voicing: f64) -> Voice {
+        let d = imp.map_or(KeyDraws::identity(voicing), |i| i.key(k.key, voicing));
+        let (free, damped) = if d.ratio != 1.0 {
+            (time_scaled(&k.free, d.ratio), time_scaled(&k.damped, d.ratio))
+        } else {
+            (k.free.clone(), k.damped.clone())
+        };
+        let lam_f: Vec<C64> = (0..free.modes).map(|j| free.lam.get(j)).collect();
+        let lam_d: Vec<C64> = (0..damped.modes).map(|j| damped.lam.get(j)).collect();
+        let rot_f = decayed(&lam_f, d.decay);
+        let rot_d = damped_lam(&lam_d, &lam_f, d.damper);
+        let damped_sys = Sys::new(&damped, dt, Some(&rot_d));
+        let free_sys = Sys::new(&free, dt, Some(&rot_f));
+        let m = damped_sys.m.max(free_sys.m);
+        let mut hammer = k.hammer.clone();
+        if d.stiffness != 1.0 {
+            hammer.stiffness *= d.stiffness;
+        }
         Voice {
             weight: k.weight,
-            hammer: k.hammer.clone(),
-            free: Sys::new(&k.free, dt),
-            damped,
-            contact_step: ContactStep::new(&k.free, dt / s as f64),
+            hammer,
+            free: free_sys,
+            damped: damped_sys,
+            contact_step: ContactStep::new(&free, dt / s as f64),
             to_damped: k.to_damped.clone(),
             to_free: k.to_free.clone(),
             z: (vec![0.0; m], vec![0.0; m]),
@@ -673,7 +715,34 @@ impl Voice {
             pedal: false,
             since_check: 0,
             span: 0,
-            xf: vec![C64(0.0, 0.0); k.free.modes],
+            xf: vec![C64(0.0, 0.0); free.modes],
+            voicing: d.voicing,
+            key: k.key,
+            imp,
+            strikes: 0,
+            releases: 0,
+            damper: d.damper,
+            damped_src: damped,
+            free_lam: lam_f,
+            dt,
+            full_window: d.decay != 1.0,
+        }
+    }
+
+    /// A release: the felt lands as it does this time (`imperfection.release_draw`), the
+    /// damped system's rotation rebuilt when that moves it.
+    fn release(&mut self) {
+        let g = self.damper * self.imp.map_or(1.0, |i| i.release(self.key, self.releases));
+        self.releases += 1;
+        if self.imp.is_none() {
+            return;
+        }
+        let src = &self.damped_src;
+        let lam_d: Vec<C64> = (0..src.modes).map(|j| src.lam.get(j)).collect();
+        let rot = damped_lam(&lam_d, &self.free_lam, g);
+        let sys = Sys::new(src, self.dt, Some(&rot));
+        if sys.rot != self.damped.rot {
+            self.damped = sys;
         }
     }
 
@@ -690,6 +759,10 @@ impl Voice {
     fn switch(&mut self, damped: bool) {
         if damped == self.on_damped {
             return;
+        }
+        // a release of a key struck before (the pedal moves every voice's damper)
+        if damped && self.strikes > 0 {
+            self.release();
         }
         if !self.asleep {
             let (t, from, to) = if damped {
@@ -741,15 +814,19 @@ impl Voice {
                 }
                 self.switch(false);
                 self.asleep = false;
+                // this strike's hammer (`imperfection.strike_draws`)
+                let (ks, vs) = self.imp.map_or((1.0, 1.0), |i| i.strike(self.key, self.strikes));
+                self.strikes += 1;
                 let cs = &self.contact_step;
                 let y0: f64 = (0..self.free.modes)
                     .map(|j| cs.strike[j].mul(C64(self.z.0[j], self.z.1[j])).0)
                     .sum();
                 self.contact = Some(Contact {
                     z: y0,
-                    v: speed,
+                    v: speed * vs,
                     f_prev: 0.0,
                     left: window.max(1),
+                    stiffness: self.hammer.stiffness * ks,
                 });
             }
             NoteEvent::Off { .. } => {
@@ -802,10 +879,10 @@ impl Voice {
                         (f, 1.0)
                     } else {
                         let hc = 1.0 + hm.hysteresis_s_m * dd;
-                        let r = f - hm.stiffness * d.powf(hm.exponent) * hc.max(0.0);
+                        let r = f - c.stiffness * d.powf(hm.exponent) * hc.max(0.0);
                         let mut dr = 1.0;
                         if hc > 0.0 {
-                            dr += hm.stiffness
+                            dr += c.stiffness
                                 * (hm.exponent * d.powf(hm.exponent - 1.0) * cd * hc
                                     + d.powf(hm.exponent) * hm.hysteresis_s_m * cv);
                         }
@@ -832,7 +909,7 @@ impl Voice {
         // (its modes' amplitudes summed; they only decay). The rest of the window would
         // step the free motion only: end it now (the result is the window's; a pending
         // damper can't be, the key being down).
-        if c.f_prev == 0.0 && c.v <= 0.0 && c.left > 0 {
+        if c.f_prev == 0.0 && c.v <= 0.0 && c.left > 0 && !self.full_window {
             let reach: f64 = (0..n)
                 .map(|j| cs.strike[j].norm() * self.z.0[j].hypot(self.z.1[j]))
                 .sum();
@@ -866,7 +943,8 @@ impl Voice {
     }
 
     /// Add `out.len()` internal samples of this voice's weighted EMF into `out`.
-    fn render(&mut self, out: &mut [f64], flux: &FluxPoly, voicing: f64, s: usize, sleep: f64) {
+    fn render(&mut self, out: &mut [f64], flux: &FluxPoly, s: usize, sleep: f64) {
+        let voicing = self.voicing;
         let mut i = 0;
         while i < out.len() && !self.asleep {
             if self.contact.is_some() {
@@ -1002,13 +1080,239 @@ fn free_run_impl(
     }
 }
 
+// --- Imperfection (`varimu.rhodes.imperfection`: the constants' sources are there) -----
+
+/// The largest part amount (2: beyond a realistic instrument).
+pub const AMOUNT_MAX: f64 = 2.0;
+const TUNING_CENTS: f64 = 2.1;
+const VOICING_M: f64 = 0.3e-3;
+const VOICING_RANGE_M: (f64, f64) = (0.5e-3, 3.5e-3);
+const TIPS_SPREAD: f64 = 0.2;
+const DECAY_SPREAD: f64 = 0.25;
+const DAMPER_SPREAD: f64 = 0.35;
+const DAMPER_MIN: f64 = 0.1;
+const DAMPER_BAND: f64 = 0.15;
+const STRIKE_K_SPREAD: f64 = 0.08;
+const STRIKE_SPEED_DB: f64 = 0.4;
+const RELEASE_SPREAD: f64 = 0.25;
+const PAIR: f64 = 1e-12;
+const KEY_NAME: &str = "rhodes.imperfection";
+const STRIKE_NAME: &str = "rhodes.imperfection.strike";
+const RELEASE_NAME: &str = "rhodes.imperfection.release";
+
+/// The IR's checks of an imperfection (`imperfection.check`).
+pub fn check_imperfection(i: &crate::ir::HarpImperfection) -> Result<(), String> {
+    if !(i.seed.is_finite() && i.seed >= 0.0 && i.seed < 9_007_199_254_740_992.0)
+        || i.seed.fract() != 0.0
+    {
+        return Err(format!("seed {}: a whole number in [0, 2^53)", i.seed));
+    }
+    for (name, v) in [
+        ("amount", i.amount),
+        ("tuning", i.tuning),
+        ("voicing", i.voicing),
+        ("tips", i.tips),
+        ("decay", i.decay),
+        ("dampers", i.dampers),
+        ("hammer", i.hammer),
+        ("release", i.release),
+    ] {
+        if !(v.is_finite() && (0.0..=AMOUNT_MAX).contains(&v)) {
+            return Err(format!("{name} = {v}: in [0, {AMOUNT_MAX}]"));
+        }
+    }
+    Ok(())
+}
+
+/// An imperfection's seed and parts' amounts (tuning, voicing, tips, decay, dampers,
+/// hammer, release), each the amount times its share, at most [`AMOUNT_MAX`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Imp {
+    seed: u64,
+    parts: [f64; 7],
+}
+
+/// One key's per-instrument values (`imperfection.KeyDraws`).
+#[derive(Debug, Clone, Copy)]
+struct KeyDraws {
+    ratio: f64,
+    voicing: f64,
+    stiffness: f64,
+    decay: f64,
+    damper: f64,
+}
+
+impl KeyDraws {
+    fn identity(voicing: f64) -> KeyDraws {
+        KeyDraws {
+            ratio: 1.0,
+            voicing,
+            stiffness: 1.0,
+            decay: 1.0,
+            damper: 1.0,
+        }
+    }
+}
+
+impl Imp {
+    /// None when every part's amount is 0 (the compiled harp exactly).
+    fn new(i: &crate::ir::HarpImperfection) -> Option<Imp> {
+        let parts = [
+            i.tuning, i.voicing, i.tips, i.decay, i.dampers, i.hammer, i.release,
+        ]
+        .map(|share| (i.amount * share).min(AMOUNT_MAX));
+        if parts.iter().all(|&a| a == 0.0) {
+            return None;
+        }
+        Some(Imp {
+            seed: i.seed as u64,
+            parts,
+        })
+    }
+
+    fn key(&self, key: usize, voicing: f64) -> KeyDraws {
+        let mut z = [0.0; 5];
+        crate::noise::normals(crate::noise::key(self.seed, KEY_NAME, key as u32), 0, &mut z);
+        let [tuning, voicing_a, tips, decay, dampers, _, _] = self.parts;
+        let ratio = if tuning > 0.0 {
+            2f64.powf(tuning * TUNING_CENTS * z[0] / 1200.0)
+        } else {
+            1.0
+        };
+        let v = if voicing_a > 0.0 {
+            (voicing + voicing_a * VOICING_M * z[1]).clamp(VOICING_RANGE_M.0, VOICING_RANGE_M.1)
+        } else {
+            voicing
+        };
+        let k = if tips > 0.0 {
+            (tips * TIPS_SPREAD * z[2]).exp()
+        } else {
+            1.0
+        };
+        let d = if decay > 0.0 {
+            (decay * DECAY_SPREAD * z[3]).exp()
+        } else {
+            1.0
+        };
+        let g = if dampers > 0.0 {
+            (dampers * DAMPER_SPREAD * z[4]).exp().max(DAMPER_MIN)
+        } else {
+            1.0
+        };
+        KeyDraws {
+            ratio,
+            voicing: v,
+            stiffness: k,
+            decay: d,
+            damper: g,
+        }
+    }
+
+    /// The key's `count`-th strike: (stiffness factor, speed factor).
+    fn strike(&self, key: usize, count: u64) -> (f64, f64) {
+        let a = self.parts[5];
+        if a == 0.0 {
+            return (1.0, 1.0);
+        }
+        let mut z = [0.0; 2];
+        let k = crate::noise::key(self.seed, STRIKE_NAME, key as u32);
+        crate::noise::normals(k, 2 * count, &mut z);
+        (
+            (a * STRIKE_K_SPREAD * z[0]).exp(),
+            10f64.powf(a * STRIKE_SPEED_DB * z[1] / 20.0),
+        )
+    }
+
+    /// The key's `count`-th release: its felt factor.
+    fn release(&self, key: usize, count: u64) -> f64 {
+        let a = self.parts[6];
+        if a == 0.0 {
+            return 1.0;
+        }
+        let mut z = [0.0; 1];
+        let k = crate::noise::key(self.seed, RELEASE_NAME, key as u32);
+        crate::noise::normals(k, count, &mut z);
+        (a * RELEASE_SPREAD * z[0]).exp()
+    }
+}
+
+fn is_pair(l: C64) -> bool {
+    l.1.abs() > PAIR * l.norm()
+}
+
+/// The oscillating modes' decay rates times `factor` (`imperfection.decayed`).
+fn decayed(lam: &[C64], factor: f64) -> Vec<C64> {
+    lam.iter()
+        .map(|&l| {
+            if factor != 1.0 && is_pair(l) {
+                C64(l.0 * factor, l.1)
+            } else {
+                l
+            }
+        })
+        .collect()
+}
+
+/// The damped modes with `factor` of their decay above the free tine's own
+/// (`imperfection.damped`).
+fn damped_lam(lam_d: &[C64], lam_f: &[C64], factor: f64) -> Vec<C64> {
+    if factor == 1.0 {
+        return lam_d.to_vec();
+    }
+    let free: Vec<(f64, f64)> = lam_f
+        .iter()
+        .filter(|l| is_pair(**l))
+        .map(|l| (l.1.abs(), -l.0))
+        .collect();
+    if free.is_empty() {
+        return lam_d.to_vec();
+    }
+    let floor_all = free.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    lam_d
+        .iter()
+        .map(|&l| {
+            if !is_pair(l) {
+                return l;
+            }
+            let f = l.1.abs();
+            let floor = free
+                .iter()
+                .filter(|p| (p.0 - f).abs() <= DAMPER_BAND * f)
+                .map(|p| p.1)
+                .fold(f64::INFINITY, f64::min);
+            let floor = if floor.is_finite() { floor } else { floor_all };
+            let s = -l.0;
+            if s > floor {
+                C64(-(floor + (s - floor) * factor), l.1)
+            } else {
+                l
+            }
+        })
+        .collect()
+}
+
+/// A system retuned by r (`harp._time_scale`): eigenvalues times r, the force's input over
+/// r, the velocity rows times r.
+fn time_scaled(s: &HarpSystem, r: f64) -> HarpSystem {
+    let scale = |c: &Complexes, by: f64| Complexes {
+        re: c.re.iter().map(|x| x * by).collect(),
+        im: c.im.iter().map(|x| x * by).collect(),
+    };
+    HarpSystem {
+        lam: scale(&s.lam, r),
+        b: scale(&s.b, 1.0 / r),
+        strike_v: scale(&s.strike_v, r),
+        tip_v: scale(&s.tip_v, r),
+        ..s.clone()
+    }
+}
+
 // --- The medium -------------------------------------------------------------------
 
 /// What every harp voice reads.
 #[derive(Debug)]
 pub struct HarpCtx {
     flux: FluxPoly,
-    voicing: f64,
     sleep: f64,
     s: usize,
     window: usize,
@@ -1036,7 +1340,6 @@ impl crate::keyed::KeyVoice for Voice {
             self,
             &mut buf[from..to],
             &ctx.flux,
-            ctx.voicing,
             ctx.s,
             ctx.sleep,
         );
@@ -1077,14 +1380,14 @@ impl Medium {
             .max(1.0) as usize;
         let dt = 1.0 / (fs * k as f64);
         let model = &el.model;
+        let imp = el.imperfection.as_ref().and_then(Imp::new);
         let voices = model
             .keys
             .iter()
-            .map(|key| (key.note as u8, Voice::new(key, dt, s)))
+            .map(|key| (key.note as u8, Voice::new(key, dt, s, imp, model.voicing_m)))
             .collect();
         let ctx = HarpCtx {
             flux: FluxPoly::new(&model.flux),
-            voicing: model.voicing_m,
             sleep: model.sleep_m,
             s,
             window: (model.contact_window_s * fs * k as f64).round() as usize,
@@ -1148,6 +1451,7 @@ impl Medium {
     /// Whether `el` keeps this medium playing (the same model and rates).
     pub fn same(&self, el: &crate::ir::Harp) -> bool {
         el.model == self.harp.model
+            && el.imperfection == self.harp.imperfection
             && el.rate_hz == self.harp.rate_hz
             && el.contact_rate_hz == self.harp.contact_rate_hz
     }

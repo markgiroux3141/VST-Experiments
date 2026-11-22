@@ -44,6 +44,7 @@ from varimu.circuit.ir import (
     DeviceModel,
     Element,
     Harp,
+    HarpImperfection,
     Inductor,
     InventedKeys,
     NickelKeys,
@@ -1233,14 +1234,28 @@ def spring_tank(
     return els
 
 
-def harp(name: str, out: str, data: dict, rate_hz: float, contact_rate_hz: float) -> list[Element]:
+def harp(
+    name: str,
+    out: str,
+    data: dict,
+    rate_hz: float,
+    contact_rate_hz: float,
+    imperfection: dict[str, float] | None = None,
+) -> list[Element]:
     """A Rhodes harp (docs/RHODES_PLAN.md, RH3) into `out`: its EMF V<NAME> on <name>_e
     (circuitsim's harp medium), behind the coils' resistance R<NAME>_coils and inductance
-    L<NAME>_coils (the compiled harp's `coils`: the pickups in their wiring)."""
+    L<NAME>_coils (the compiled harp's `coils`: the pickups in their wiring). `imperfection`:
+    `HARP_IMPERFECTION`'s values (varimu.rhodes.imperfection), or None."""
     n, upper = name.lower(), name.upper()
     coils = data["coils"]
+    imp = None
+    if imperfection is not None:
+        imp = HarpImperfection(
+            int(imperfection["imp_seed"]),
+            *(float(imperfection[k]) for k in HARP_IMPERFECTION[1:]),
+        )
     return [
-        Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data),
+        Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data, imp),
         Resistor(f"R{upper}_coils", f"{n}_e", f"{n}_r", float(coils["r_ohm"])),
         Inductor(f"L{upper}_coils", f"{n}_r", out, float(coils["l_h"])),
     ]
@@ -1409,6 +1424,19 @@ def nova_keys(
         )
     ]
 
+
+#: A harp part's imperfection: optional, all or none, in `HarpImperfection`'s order.
+HARP_IMPERFECTION = (
+    "imp_seed",
+    "imp_amount",
+    "imp_tuning",
+    "imp_voicing",
+    "imp_tips",
+    "imp_decay",
+    "imp_dampers",
+    "imp_hammer",
+    "imp_release",
+)
 
 #: A Clavinet strings part's wear: optional, all or none, in `ClavWear`'s order.
 CLAV_WEAR = (

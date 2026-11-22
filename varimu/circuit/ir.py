@@ -412,6 +412,7 @@ class Harp:
     (the harp senses nothing). The voices run at the least whole multiple of the step rate
     at or above `rate_hz`, the hammer's contact at `contact_rate_hz`. `model` is the
     compiled harp (a component version of kind ep_harp: varimu.rhodes.compile's data).
+    `imperfection` (None: as compiled) makes it an imperfect instrument (`HarpImperfection`).
     SPICE has no harp: ngspice sees `out` held at 0 V."""
 
     name: str
@@ -419,6 +420,24 @@ class Harp:
     rate_hz: float
     contact_rate_hz: float
     model: dict = dataclasses.field(hash=False, repr=False)
+    imperfection: HarpImperfection | None = None
+
+
+@dataclass(frozen=True)
+class HarpImperfection:
+    """An imperfect Rhodes (docs/RHODES_IMPERFECTION_PLAN.md; varimu.rhodes.imperfection is
+    the reference, circuitsim's harp.rs the port): the unit `seed` (a whole number), the
+    `amount` and each part's share of it, every one in [0, 2]."""
+
+    seed: int
+    amount: float
+    tuning: float
+    voicing: float
+    tips: float
+    decay: float
+    dampers: float
+    hammer: float
+    release: float
 
 
 @dataclass(frozen=True)
@@ -1660,6 +1679,7 @@ _OMITTED_WHEN_NONE = {
     (EdgeEvents, "follows"),
     (EdgeEvents, "follow_gain"),
     (ClavStrings, "wear"),
+    (Harp, "imperfection"),
     (Section, "substeps"),
     (Section, "decimate"),
     (Section, "owns"),
@@ -1770,6 +1790,13 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         return _fields(
             cls, d, tagged=True, wear=lambda w: _fields(ClavWear, w, tagged=False, seed=_count)
         )
+    if cls is Harp:
+        return _fields(
+            cls,
+            d,
+            tagged=True,
+            imperfection=lambda w: _fields(HarpImperfection, w, tagged=False, seed=_count),
+        )
     if cls is NovaKeys:
         return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
     if cls in (NickelKeys, InventedKeys):
@@ -1862,6 +1889,13 @@ def _validate_harp(el: Harp, input_node: str) -> None:
         raise IRError(f"{el.name}.model: a compiled harp (format 1) with keys")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickups drive {el.out} (ground or the input)")
+    if el.imperfection is not None:
+        from varimu.rhodes import imperfection as rhodes_imp
+
+        try:
+            rhodes_imp.check(rhodes_imp.Imperfection(**dataclasses.asdict(el.imperfection)))
+        except ValueError as err:
+            raise IRError(f"{el.name}.imperfection: {err}") from err
 
 
 def _validate_wurli_reeds(el: WurliReeds, input_node: str) -> None:

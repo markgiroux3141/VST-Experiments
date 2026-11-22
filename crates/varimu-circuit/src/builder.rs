@@ -1062,11 +1062,15 @@ fn macro_of(kind: &str) -> Macro {
         ),
         "harp" => (
             Some(1),
-            vec![
-                p("component", Raw),
-                p("rate_hz", Physical),
-                p("contact_rate_hz", Physical),
-            ],
+            {
+                let mut v = vec![
+                    p("component", Raw),
+                    p("rate_hz", Physical),
+                    p("contact_rate_hz", Physical),
+                ];
+                v.extend(HARP_IMPERFECTION.iter().map(|k| opt(k, Physical)));
+                v
+            },
             false,
         ),
         "wurli_reeds" => (
@@ -2357,6 +2361,20 @@ fn nova_keys_part(
     })])
 }
 
+/// A harp part's imperfection (`parts.HARP_IMPERFECTION`): optional, all or none, in
+/// `circuitsim::ir::HarpImperfection`'s order.
+const HARP_IMPERFECTION: [&str; 9] = [
+    "imp_seed",
+    "imp_amount",
+    "imp_tuning",
+    "imp_voicing",
+    "imp_tips",
+    "imp_decay",
+    "imp_dampers",
+    "imp_hammer",
+    "imp_release",
+];
+
 /// A Clavinet strings part's wear (`parts.CLAV_WEAR`): optional, all or none, in
 /// `circuitsim::ir::ClavWear`'s order.
 const CLAV_WEAR: [&str; 7] = [
@@ -2422,6 +2440,33 @@ fn harp_part(
         .map_err(|e| ctx.fail(&where_, e.0))?;
     let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
     let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
+    let given = HARP_IMPERFECTION.iter().filter(|k| !a[**k].is_null()).count();
+    let imperfection = if given == 0 {
+        None
+    } else {
+        let mut w = [0.0; 9];
+        for (x, k) in w.iter_mut().zip(HARP_IMPERFECTION) {
+            if a[k].is_null() {
+                return Err(ctx.fail(
+                    &format!("{name}.{k}"),
+                    "the imperfection's values go all or none",
+                ));
+            }
+            *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
+        }
+        let [seed, amount, tuning, voicing, tips, decay, dampers, hammer, release] = w;
+        Some(circuitsim::ir::HarpImperfection {
+            seed,
+            amount,
+            tuning,
+            voicing,
+            tips,
+            decay,
+            dampers,
+            hammer,
+            release,
+        })
+    };
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let (r_ohm, l_h) = (model.coils.r_ohm, model.coils.l_h);
     Ok(vec![
@@ -2431,6 +2476,7 @@ fn harp_part(
             rate_hz,
             contact_rate_hz,
             model: Box::new((*model).clone()),
+            imperfection,
         }),
         Element::Resistor(circuitsim::ir::Resistor {
             name: format!("R{upper}_coils"),

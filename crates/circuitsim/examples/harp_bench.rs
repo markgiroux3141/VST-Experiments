@@ -30,6 +30,7 @@ fn main() {
         rate_hz: rate,
         contact_rate_hz: 384_000.0,
         model: Box::new(model),
+        imperfection: None,
     };
     let mut m = Medium::new(&el, fs);
     m.queue(1, NoteEvent::Pedal { down: true });

@@ -459,6 +459,27 @@ pub struct Harp {
     pub rate_hz: f64,
     pub contact_rate_hz: f64,
     pub model: Box<crate::harp::HarpModel>,
+    /// An imperfect instrument ([`HarpImperfection`]); absent: as compiled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imperfection: Option<HarpImperfection>,
+}
+
+/// An imperfect Rhodes (docs/RHODES_IMPERFECTION_PLAN.md; `varimu.rhodes.imperfection` is
+/// the reference, [`crate::harp`]'s voices the port): the unit `seed` (a whole number, as the
+/// JSON's floats carry it), the `amount` and each part's share of it (a part's amount is
+/// amount x share, at most [`crate::harp::AMOUNT_MAX`]), every one in [0, 2].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarpImperfection {
+    pub seed: f64,
+    pub amount: f64,
+    pub tuning: f64,
+    pub voicing: f64,
+    pub tips: f64,
+    pub decay: f64,
+    pub dampers: f64,
+    pub hammer: f64,
+    pub release: f64,
 }
 
 /// The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4; `crate::wurli`;
@@ -2053,6 +2074,10 @@ impl CircuitIr {
                     positive(&format!("{name}.contact_rate_hz"), e.contact_rate_hz)?;
                     if let Err(m) = e.model.check() {
                         return err(format!("{name}: {m}"));
+                    }
+                    if let Some(i) = &e.imperfection {
+                        crate::harp::check_imperfection(i)
+                            .map_err(|m| IrError(format!("{name}.imperfection: {m}")))?;
                     }
                     if e.out == GROUND || e.out == self.input_node {
                         return err(format!(
