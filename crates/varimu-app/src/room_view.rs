@@ -514,13 +514,22 @@ impl RoomView {
         for (i, m) in self.scene.mics.iter().enumerate() {
             let on = self.sel == Some(Sel::Mic(i));
             let chain = room::chain(&m.chain).map_or(m.chain.as_str(), |c| c.label.as_str());
-            let text = format!(
-                "◉ {}  ·  {}  ·  pan {:+.2}{}",
-                m.name,
-                chain,
-                m.pan,
-                mic_badges(m)
-            );
+            let text = match &m.head {
+                Some(h) => format!(
+                    "◎ {}  ·  head {}  ·  {}  ·  stereo{}",
+                    m.name,
+                    h,
+                    chain,
+                    mic_badges(m)
+                ),
+                None => format!(
+                    "◉ {}  ·  {}  ·  pan {:+.2}{}",
+                    m.name,
+                    chain,
+                    m.pan,
+                    mic_badges(m)
+                ),
+            };
             if ui
                 .selectable_label(on, RichText::new(text).color(MIC_COLOR))
                 .clicked()
@@ -560,6 +569,27 @@ impl RoomView {
         });
         if let Some(c) = chains.get(self.add_chain) {
             ui.label(RichText::new(&c.use_note).small().color(theme::FAINT));
+        }
+        if let Some(hc) = room::default_head_chain()
+            && ui
+                .button("+ Head")
+                .on_hover_text(
+                    "A virtual head (docs/BINAURAL_PLAN.md): two ears simulated from a real \
+                     head's 3D shape, rendered as one stereo track for headphones (left ear \
+                     left). Sounds keep their direction, behind you included. It faces the \
+                     first source.",
+                )
+                .clicked()
+        {
+            let name = self.scene.free_name("Head");
+            let mut pos = centroid(&self.scene);
+            pos[2] = 1.2;
+            let mut m = RoomMic::new_head(&name, room::HEADS[0].0, &hc.id, pos, 0.0);
+            if let Some(s) = self.scene.sources.first() {
+                m.aim_at(s.pos[0], s.pos[1]);
+            }
+            self.scene.mics.push(m);
+            self.sel = Some(Sel::Mic(self.scene.mics.len() - 1));
         }
         ui.separator();
 
@@ -1117,23 +1147,54 @@ impl RoomView {
         let flat_roof = self.scene.roof.kind == "flat";
         let mut delete = false;
         let m = &mut self.scene.mics[i];
+        let is_head = m.head.is_some();
         ui.label(
-            RichText::new(format!("MIC {}", m.name))
-                .strong()
-                .color(MIC_COLOR),
+            RichText::new(format!(
+                "{} {}",
+                if is_head { "HEAD" } else { "MIC" },
+                m.name
+            ))
+            .strong()
+            .color(MIC_COLOR),
         );
         ui.horizontal(|ui| {
             ui.label("Name");
             ui.text_edit_singleline(&mut m.name);
         });
+        if let Some(h) = &mut m.head {
+            ui.horizontal(|ui| {
+                ui.label("Head");
+                egui::ComboBox::from_id_salt(("room_mic_head", i))
+                    .selected_text(room::head_label(h).to_string())
+                    .show_ui(ui, |ui| {
+                        for (n, l) in room::HEADS {
+                            ui.selectable_value(h, n.to_string(), *l);
+                        }
+                    })
+                    .response
+                    .on_hover_text(
+                        "Whose ears: real people's heads (HUTUBS) simulated from their 3D \
+                         scans (docs/BINAURAL_PLAN.md). A head that isn't simulated yet \
+                         takes ~2 minutes of GPU the first time.",
+                    );
+            });
+            ui.label(
+                RichText::new(
+                    "One stereo track, left ear hard left: listen on headphones. Its chain \
+                     is each ear's: an omni capsule in the blocked ear canal.",
+                )
+                .small()
+                .color(theme::FAINT),
+            );
+        }
         ui.horizontal(|ui| {
-            ui.label("Chain");
+            ui.label(if is_head { "Ears' chain" } else { "Chain" });
             let cur = room::chain(&m.chain).map_or(m.chain.clone(), |c| c.label.clone());
             let mut picked = None;
             egui::ComboBox::from_id_salt("room_mic_chain")
                 .selected_text(cur)
                 .show_ui(ui, |ui| {
-                    for c in room::chains() {
+                    for c in room::chains().iter().filter(|c| !is_head || c.pressure()) {
                         if ui
                             .selectable_label(m.chain == c.id, &c.label)
                             .on_hover_text(&c.use_note)
@@ -1174,38 +1235,45 @@ impl RoomView {
         }
         position_fields(ui, &mut m.pos, dims);
         ui.horizontal(|ui| {
-            ui.label("Aim");
+            ui.label(if is_head { "Facing" } else { "Aim" });
             ui.add(
                 egui::DragValue::new(&mut m.azimuth_deg)
                     .range(-180.0..=180.0)
                     .speed(1.0)
                     .suffix("°"),
             );
-            ui.label("tilt");
-            ui.add(
-                egui::DragValue::new(&mut m.elevation_deg)
-                    .range(-90.0..=90.0)
-                    .speed(1.0)
-                    .suffix("°"),
-            );
+            if !is_head {
+                ui.label("tilt");
+                ui.add(
+                    egui::DragValue::new(&mut m.elevation_deg)
+                        .range(-90.0..=90.0)
+                        .speed(1.0)
+                        .suffix("°"),
+                );
+            }
         });
         ui.horizontal_wrapped(|ui| {
             for &(k, side, at) in &points {
+                let verb = if is_head { "Face" } else { "Aim at" };
                 let label = match side {
-                    Some(c) => format!("Aim at {} {c}", sources[k].name),
-                    None => format!("Aim at {}", sources[k].name),
+                    Some(c) => format!("{verb} {} {c}", sources[k].name),
+                    None => format!("{verb} {}", sources[k].name),
                 };
                 if ui.small_button(label).clicked() {
                     m.aim_at(at[0], at[1]);
-                    let d = ((at[0] - m.pos[0]).powi(2) + (at[1] - m.pos[1]).powi(2)).sqrt();
-                    m.elevation_deg = (at[2] - m.pos[2]).atan2(d).to_degrees();
+                    if !is_head {
+                        let d = ((at[0] - m.pos[0]).powi(2) + (at[1] - m.pos[1]).powi(2)).sqrt();
+                        m.elevation_deg = (at[2] - m.pos[2]).atan2(d).to_degrees();
+                    }
                 }
             }
         });
-        ui.horizontal(|ui| {
-            ui.label("Pan");
-            ui.add(egui::Slider::new(&mut m.pan, -1.0..=1.0).step_by(0.05));
-        });
+        if !is_head {
+            ui.horizontal(|ui| {
+                ui.label("Pan");
+                ui.add(egui::Slider::new(&mut m.pan, -1.0..=1.0).step_by(0.05));
+            });
+        }
         // Bleed: which sources it records (scene.py's `hears`), how (`passes`), the room.
         if !sources.is_empty() {
             ui.horizontal(|ui| {
@@ -1284,7 +1352,8 @@ impl RoomView {
                 });
             }
         }
-        ui.horizontal(|ui| {
+        if !is_head {
+            ui.horizontal(|ui| {
             ui.label("On a surface");
             let shown = m.surface.clone().unwrap_or_else(|| "no".into());
             egui::ComboBox::from_id_salt(("mic_surface", i))
@@ -1305,6 +1374,7 @@ impl RoomView {
                     "A boundary mic (a PZM): placed on that surface, 1 mm inside, aimed into                      the room when it renders; the surface's reflection arrives with the                      direct sound (+6 dB, no comb). Wall N starts at the plan's corner N.",
                 );
         });
+        }
         ui.horizontal(|ui| {
             ui.checkbox(&mut m.noise, "Noise").on_hover_text(
                 "The chain's own noise (device builder B5): Johnson noise of its resistors \
@@ -1370,7 +1440,10 @@ impl RoomView {
                 .color(theme::MUTED),
             );
         }
-        if ui.button("Delete mic").clicked() {
+        if ui
+            .button(if is_head { "Delete head" } else { "Delete mic" })
+            .clicked()
+        {
             delete = true;
         }
         if delete {
@@ -1649,7 +1722,37 @@ impl RoomView {
         let r = self.running.take().unwrap();
         match result.and_then(|rendered| {
             let mut tracks = Vec::new();
+            let mut heads = Vec::new();
             for m in &rendered.mics {
+                if let Some((head, ear)) = &m.head {
+                    // A head's ears: one stereo track (below), left ear left.
+                    if ear == "left" {
+                        let right = rendered
+                            .mics
+                            .iter()
+                            .find(|o| {
+                                o.head
+                                    .as_ref()
+                                    .is_some_and(|(h, e)| h == head && e == "right")
+                            })
+                            .ok_or_else(|| format!("head {head}: no right ear in the render"))?;
+                        let l = audio::load(&m.file, r.rate)?;
+                        let rr = audio::load(&right.file, r.rate)?;
+                        let from = json!({
+                            "take": format!("room {}", self.scene.name),
+                            "room": {"scene": r.scene, "head": head, "render": rendered.json},
+                        });
+                        heads.push((
+                            format!("{} · {}", self.scene.name, head),
+                            0.0,
+                            l.iter().map(|&v| v as f32).collect::<Vec<f32>>(),
+                            Some(rr.iter().map(|&v| v as f32).collect::<Vec<f32>>()),
+                            r.position,
+                            from,
+                        ));
+                    }
+                    continue;
+                }
                 let x = audio::load(&m.file, r.rate)?;
                 let from = json!({
                     "take": format!("room {}", self.scene.name),
@@ -1670,8 +1773,13 @@ impl RoomView {
                     .collect();
                 self.rt60 = Some(format!("RT60 (s) {}", s.join("  ")));
             }
-            let n = tracks.len();
-            sv.add_audio_tracks(tracks)?;
+            let mut all: Vec<_> = tracks
+                .into_iter()
+                .map(|(name, pan, x, position, from)| (name, pan, x, None, position, from))
+                .collect();
+            all.extend(heads);
+            let n = all.len();
+            sv.add_audio_tracks_lr(all)?;
             Ok(n)
         }) {
             Ok(n) => self.status = format!("added {n} tracks to the session"),
@@ -2204,6 +2312,39 @@ impl RoomView {
             let c = to_s(m.pos[0], m.pos[1]);
             let on = self.sel == Some(Sel::Mic(i));
             let az = (m.azimuth_deg as f32).to_radians();
+            if m.head.is_some() {
+                // A head seen from above: the skull, the nose where it faces, an ear a side.
+                let col = if on {
+                    MIC_COLOR
+                } else {
+                    MIC_COLOR.gamma_multiply(0.55)
+                };
+                let r = (0.09 * k).max(9.0);
+                let dir = |a: f32| Vec2::new(a.cos(), -a.sin());
+                let half_pi = std::f32::consts::FRAC_PI_2;
+                painter.circle_filled(c, r, MIC_COLOR.gamma_multiply(0.12));
+                painter.circle_stroke(c, r, Stroke::new(2.0, col));
+                let nose = vec![
+                    c + dir(az) * (r * 1.45),
+                    c + dir(az + 0.35) * r * 0.95,
+                    c + dir(az - 0.35) * r * 0.95,
+                ];
+                painter.add(egui::Shape::convex_polygon(nose, col, Stroke::NONE));
+                for side in [1.0f32, -1.0] {
+                    painter.circle_filled(c + dir(az + side * half_pi) * r, r * 0.32, col);
+                }
+                if on {
+                    painter.circle_stroke(c, r + 5.0, Stroke::new(2.0, theme::INK));
+                }
+                painter.text(
+                    c + Vec2::new(r + 4.0, r + 4.0),
+                    egui::Align2::LEFT_CENTER,
+                    format!("{}{}", m.name, mic_badges(m)),
+                    font.clone(),
+                    col,
+                );
+                continue;
+            }
             let r0 = 0.6 * k.clamp(40.0, 90.0);
             // The figure's magnitude, scaled so an omni draws smaller than a cardioid (0.55
             // of its reach); a lobe of each sign is its own outline (figure-8 family).

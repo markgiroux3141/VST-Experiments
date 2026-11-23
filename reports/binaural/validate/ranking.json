@@ -1,0 +1,413 @@
+{
+ "corr_sim_vs_measured_contrast": 0.628,
+ "median_contrast_sim_db": 7.71,
+ "median_contrast_measured_db": 7.22,
+ "by_sim_contrast": [
+  {
+   "subject": "pp4",
+   "contrast_sim_db": 11.38,
+   "contrast_measured_db": 9.52,
+   "lsd_vs_measured_db": 4.63,
+   "lsd_vs_bem_db": 1.57
+  },
+  {
+   "subject": "pp69",
+   "contrast_sim_db": 10.57,
+   "contrast_measured_db": 9.24,
+   "lsd_vs_measured_db": 4.39,
+   "lsd_vs_bem_db": 1.68
+  },
+  {
+   "subject": "pp77",
+   "contrast_sim_db": 10.16,
+   "contrast_measured_db": 7.92,
+   "lsd_vs_measured_db": 3.92,
+   "lsd_vs_bem_db": 1.65
+  },
+  {
+   "subject": "pp81",
+   "contrast_sim_db": 10.0,
+   "contrast_measured_db": 7.57,
+   "lsd_vs_measured_db": 4.38,
+   "lsd_vs_bem_db": 1.8
+  },
+  {
+   "subject": "pp8",
+   "contrast_sim_db": 9.84,
+   "contrast_measured_db": 8.54,
+   "lsd_vs_measured_db": 3.88,
+   "lsd_vs_bem_db": 1.87
+  },
+  {
+   "subject": "pp67",
+   "contrast_sim_db": 9.5,
+   "contrast_measured_db": 9.34,
+   "lsd_vs_measured_db": 4.16,
+   "lsd_vs_bem_db": 1.38
+  },
+  {
+   "subject": "pp30",
+   "contrast_sim_db": 9.32,
+   "contrast_measured_db": 8.08,
+   "lsd_vs_measured_db": 4.38,
+   "lsd_vs_bem_db": 1.2
+  },
+  {
+   "subject": "pp33",
+   "contrast_sim_db": 9.24,
+   "contrast_measured_db": 8.14,
+   "lsd_vs_measured_db": 5.3,
+   "lsd_vs_bem_db": 1.42
+  },
+  {
+   "subject": "pp68",
+   "contrast_sim_db": 9.18,
+   "contrast_measured_db": 7.1,
+   "lsd_vs_measured_db": 4.23,
+   "lsd_vs_bem_db": 1.37
+  },
+  {
+   "subject": "pp82",
+   "contrast_sim_db": 8.99,
+   "contrast_measured_db": 9.88,
+   "lsd_vs_measured_db": 4.02,
+   "lsd_vs_bem_db": 1.44
+  },
+  {
+   "subject": "pp49",
+   "contrast_sim_db": 8.94,
+   "contrast_measured_db": 8.34,
+   "lsd_vs_measured_db": 4.28,
+   "lsd_vs_bem_db": 1.09
+  },
+  {
+   "subject": "pp20",
+   "contrast_sim_db": 8.73,
+   "contrast_measured_db": 8.04,
+   "lsd_vs_measured_db": 4.28,
+   "lsd_vs_bem_db": 1.49
+  },
+  {
+   "subject": "pp46",
+   "contrast_sim_db": 8.59,
+   "contrast_measured_db": 8.82,
+   "lsd_vs_measured_db": 4.38,
+   "lsd_vs_bem_db": 1.86
+  },
+  {
+   "subject": "pp55",
+   "contrast_sim_db": 8.59,
+   "contrast_measured_db": 7.39,
+   "lsd_vs_measured_db": 3.93,
+   "lsd_vs_bem_db": 1.58
+  },
+  {
+   "subject": "pp11",
+   "contrast_sim_db": 8.54,
+   "contrast_measured_db": 5.75,
+   "lsd_vs_measured_db": 4.14,
+   "lsd_vs_bem_db": 1.33
+  },
+  {
+   "subject": "pp16",
+   "contrast_sim_db": 8.53,
+   "contrast_measured_db": 7.97,
+   "lsd_vs_measured_db": 4.57,
+   "lsd_vs_bem_db": 1.29
+  },
+  {
+   "subject": "pp91",
+   "contrast_sim_db": 8.4,
+   "contrast_measured_db": 7.97,
+   "lsd_vs_measured_db": 4.28,
+   "lsd_vs_bem_db": 1.7
+  },
+  {
+   "subject": "pp31",
+   "contrast_sim_db": 8.31,
+   "contrast_measured_db": 6.98,
+   "lsd_vs_measured_db": 4.2,
+   "lsd_vs_bem_db": 1.62
+  },
+  {
+   "subject": "pp29",
+   "contrast_sim_db": 8.29,
+   "contrast_measured_db": 6.88,
+   "lsd_vs_measured_db": 4.1,
+   "lsd_vs_bem_db": 1.22
+  },
+  {
+   "subject": "pp57",
+   "contrast_sim_db": 8.28,
+   "contrast_measured_db": 8.12,
+   "lsd_vs_measured_db": 4.35,
+   "lsd_vs_bem_db": 1.75
+  },
+  {
+   "subject": "pp71",
+   "contrast_sim_db": 8.26,
+   "contrast_measured_db": 7.89,
+   "lsd_vs_measured_db": 4.64,
+   "lsd_vs_bem_db": 2.08
+  },
+  {
+   "subject": "pp66",
+   "contrast_sim_db": 8.24,
+   "contrast_measured_db": 6.65,
+   "lsd_vs_measured_db": 4.1,
+   "lsd_vs_bem_db": 1.47
+  },
+  {
+   "subject": "pp48",
+   "contrast_sim_db": 8.23,
+   "contrast_measured_db": 11.52,
+   "lsd_vs_measured_db": 5.0,
+   "lsd_vs_bem_db": 1.4
+  },
+  {
+   "subject": "pp19",
+   "contrast_sim_db": 8.18,
+   "contrast_measured_db": 8.07,
+   "lsd_vs_measured_db": 4.46,
+   "lsd_vs_bem_db": 1.48
+  },
+  {
+   "subject": "pp95",
+   "contrast_sim_db": 8.18,
+   "contrast_measured_db": 9.19,
+   "lsd_vs_measured_db": 4.38,
+   "lsd_vs_bem_db": 1.61
+  },
+  {
+   "subject": "pp12",
+   "contrast_sim_db": 8.1,
+   "contrast_measured_db": 8.45,
+   "lsd_vs_measured_db": 4.18,
+   "lsd_vs_bem_db": 1.13
+  },
+  {
+   "subject": "pp59",
+   "contrast_sim_db": 7.94,
+   "contrast_measured_db": 7.36,
+   "lsd_vs_measured_db": 3.97,
+   "lsd_vs_bem_db": 1.42
+  },
+  {
+   "subject": "pp32",
+   "contrast_sim_db": 7.93,
+   "contrast_measured_db": 7.25,
+   "lsd_vs_measured_db": 4.2,
+   "lsd_vs_bem_db": 1.41
+  },
+  {
+   "subject": "pp63",
+   "contrast_sim_db": 7.78,
+   "contrast_measured_db": 6.93,
+   "lsd_vs_measured_db": 4.2,
+   "lsd_vs_bem_db": 1.53
+  },
+  {
+   "subject": "pp41",
+   "contrast_sim_db": 7.65,
+   "contrast_measured_db": 7.46,
+   "lsd_vs_measured_db": 4.54,
+   "lsd_vs_bem_db": 1.28
+  },
+  {
+   "subject": "pp45",
+   "contrast_sim_db": 7.61,
+   "contrast_measured_db": 6.78,
+   "lsd_vs_measured_db": 4.04,
+   "lsd_vs_bem_db": 1.45
+  },
+  {
+   "subject": "pp78",
+   "contrast_sim_db": 7.57,
+   "contrast_measured_db": 4.49,
+   "lsd_vs_measured_db": 4.5,
+   "lsd_vs_bem_db": 1.91
+  },
+  {
+   "subject": "pp73",
+   "contrast_sim_db": 7.49,
+   "contrast_measured_db": 7.8,
+   "lsd_vs_measured_db": 4.81,
+   "lsd_vs_bem_db": 1.5
+  },
+  {
+   "subject": "pp3",
+   "contrast_sim_db": 7.29,
+   "contrast_measured_db": 6.63,
+   "lsd_vs_measured_db": 5.42,
+   "lsd_vs_bem_db": 1.3
+  },
+  {
+   "subject": "pp70",
+   "contrast_sim_db": 7.25,
+   "contrast_measured_db": 6.89,
+   "lsd_vs_measured_db": 4.32,
+   "lsd_vs_bem_db": 1.52
+  },
+  {
+   "subject": "pp72",
+   "contrast_sim_db": 7.21,
+   "contrast_measured_db": 6.08,
+   "lsd_vs_measured_db": 4.09,
+   "lsd_vs_bem_db": 1.48
+  },
+  {
+   "subject": "pp22",
+   "contrast_sim_db": 7.19,
+   "contrast_measured_db": 7.08,
+   "lsd_vs_measured_db": 4.74,
+   "lsd_vs_bem_db": 1.59
+  },
+  {
+   "subject": "pp88",
+   "contrast_sim_db": 7.19,
+   "contrast_measured_db": 6.88,
+   "lsd_vs_measured_db": 4.69,
+   "lsd_vs_bem_db": 1.59
+  },
+  {
+   "subject": "pp89",
+   "contrast_sim_db": 7.18,
+   "contrast_measured_db": 8.04,
+   "lsd_vs_measured_db": 4.32,
+   "lsd_vs_bem_db": 1.47
+  },
+  {
+   "subject": "pp9",
+   "contrast_sim_db": 7.14,
+   "contrast_measured_db": 7.03,
+   "lsd_vs_measured_db": 3.77,
+   "lsd_vs_bem_db": 1.22
+  },
+  {
+   "subject": "pp80",
+   "contrast_sim_db": 7.12,
+   "contrast_measured_db": 5.7,
+   "lsd_vs_measured_db": 4.19,
+   "lsd_vs_bem_db": 1.38
+  },
+  {
+   "subject": "pp62",
+   "contrast_sim_db": 7.07,
+   "contrast_measured_db": 6.53,
+   "lsd_vs_measured_db": 4.45,
+   "lsd_vs_bem_db": 1.23
+  },
+  {
+   "subject": "pp47",
+   "contrast_sim_db": 6.98,
+   "contrast_measured_db": 6.33,
+   "lsd_vs_measured_db": 4.44,
+   "lsd_vs_bem_db": 1.24
+  },
+  {
+   "subject": "pp76",
+   "contrast_sim_db": 6.95,
+   "contrast_measured_db": 7.19,
+   "lsd_vs_measured_db": 3.69,
+   "lsd_vs_bem_db": 1.3
+  },
+  {
+   "subject": "pp10",
+   "contrast_sim_db": 6.9,
+   "contrast_measured_db": 7.52,
+   "lsd_vs_measured_db": 4.59,
+   "lsd_vs_bem_db": 1.24
+  },
+  {
+   "subject": "pp21",
+   "contrast_sim_db": 6.9,
+   "contrast_measured_db": 6.56,
+   "lsd_vs_measured_db": 3.82,
+   "lsd_vs_bem_db": 1.52
+  },
+  {
+   "subject": "pp60",
+   "contrast_sim_db": 6.68,
+   "contrast_measured_db": 6.45,
+   "lsd_vs_measured_db": 3.92,
+   "lsd_vs_bem_db": 1.3
+  },
+  {
+   "subject": "pp90",
+   "contrast_sim_db": 6.54,
+   "contrast_measured_db": 6.29,
+   "lsd_vs_measured_db": 3.79,
+   "lsd_vs_bem_db": 1.22
+  },
+  {
+   "subject": "pp2",
+   "contrast_sim_db": 6.42,
+   "contrast_measured_db": 5.57,
+   "lsd_vs_measured_db": 4.48,
+   "lsd_vs_bem_db": 1.27
+  },
+  {
+   "subject": "pp1",
+   "contrast_sim_db": 6.41,
+   "contrast_measured_db": 6.58,
+   "lsd_vs_measured_db": 2.85,
+   "lsd_vs_bem_db": 1.33
+  },
+  {
+   "subject": "pp96",
+   "contrast_sim_db": 6.41,
+   "contrast_measured_db": 6.51,
+   "lsd_vs_measured_db": 2.94,
+   "lsd_vs_bem_db": 1.33
+  },
+  {
+   "subject": "pp40",
+   "contrast_sim_db": 6.22,
+   "contrast_measured_db": 5.92,
+   "lsd_vs_measured_db": 3.92,
+   "lsd_vs_bem_db": 1.25
+  },
+  {
+   "subject": "pp61",
+   "contrast_sim_db": 6.19,
+   "contrast_measured_db": 7.62,
+   "lsd_vs_measured_db": 4.26,
+   "lsd_vs_bem_db": 1.85
+  },
+  {
+   "subject": "pp44",
+   "contrast_sim_db": 6.13,
+   "contrast_measured_db": 6.22,
+   "lsd_vs_measured_db": 4.26,
+   "lsd_vs_bem_db": 1.38
+  },
+  {
+   "subject": "pp58",
+   "contrast_sim_db": 6.02,
+   "contrast_measured_db": 7.81,
+   "lsd_vs_measured_db": 3.98,
+   "lsd_vs_bem_db": 1.15
+  },
+  {
+   "subject": "pp23",
+   "contrast_sim_db": 6.01,
+   "contrast_measured_db": 6.43,
+   "lsd_vs_measured_db": 4.28,
+   "lsd_vs_bem_db": 1.47
+  },
+  {
+   "subject": "pp6",
+   "contrast_sim_db": 5.59,
+   "contrast_measured_db": 5.68,
+   "lsd_vs_measured_db": 4.1,
+   "lsd_vs_bem_db": 1.12
+  },
+  {
+   "subject": "pp5",
+   "contrast_sim_db": 3.68,
+   "contrast_measured_db": 5.44,
+   "lsd_vs_measured_db": 4.79,
+   "lsd_vs_bem_db": 1.27
+  }
+ ]
+}

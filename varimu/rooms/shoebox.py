@@ -101,6 +101,19 @@ def aim_vector(azimuth_deg: float, elevation_deg: float = 0.0) -> np.ndarray:
     return np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
 
 
+def _entries(
+    m: Mic, v: np.ndarray, r: np.ndarray, unit: bool = False
+) -> tuple[np.ndarray, np.ndarray]:
+    """A mic's entries for arrivals from vectors v (toward where each comes from; of length
+    r, or unit vectors when `unit`) at distances r: a capsule's table by the angle to its
+    aim; a table that depends on the whole direction (`directional`: a virtual head's ear,
+    varimu.binaural.room) by the direction itself."""
+    if getattr(m.table, "directional", False):
+        return m.table.at_dirs(v if unit else v / r[:, None], r)
+    cos_t = np.clip(v @ m.aim if unit else (v @ m.aim) / r, -1, 1)
+    return m.table.at(np.arccos(cos_t), r)
+
+
 def fibonacci_sphere(n: int) -> np.ndarray:
     """n unit vectors spread evenly over the sphere."""
     i = np.arange(n) + 0.5
@@ -380,8 +393,7 @@ def responses(
             e_amp = band_amp if d_src is None else band_amp * d_band
             early[mi] = (e_amp[in_win] ** 2).sum(0) / win
             band_amp = band_amp * (1 - fade)[:, None]
-            cos_t = np.clip((d @ m.aim) / r, -1, 1)
-            e_front, e_rear = m.table.at(np.arccos(cos_t), r)
+            e_front, e_rear = _entries(m, d, r)
             smooth = (band_amp @ bw) * 10 ** (-air[None, :] * r[:, None] / 20)
             if d_src is not None:
                 smooth = smooth * d_src
@@ -394,8 +406,7 @@ def responses(
             for k, dp in enumerate(dpaths):
                 dv = (dp.arrive_m if dp.arrive_m is not None else dp.apex_m) - m.position_m
                 rr = float(np.linalg.norm(dv))
-                th = np.arccos(np.clip((dv @ m.aim) / rr, -1, 1))
-                ef, er = m.table.at(np.array([th]), np.array([rr]))
+                ef, er = _entries(m, dv[None, :], np.array([rr]))
                 fade_d = 1 - np.clip((dp.n0 - (n_ism - win)) / win, 0, 1)
                 sm = (np.exp(dp.log_beta) @ bw) * 10 ** (-air * dp.path_m / 20) * fade_d
                 if src_dir is not None:
@@ -490,8 +501,7 @@ def responses(
     view_step = Step(log, "tail at the mics", "tail_view", [len(tails) * n_log] * nm)
     for mi, m in enumerate(mics) if tails else ():
         view_step.start(mi, f"mic {mi + 1}, {len(tails)} sources' fields")
-        cos_t = np.clip(dirs @ m.aim, -1, 1)
-        e_front, e_rear = m.table.at(np.arccos(cos_t), np.full(len(dirs), np.inf))
+        e_front, e_rear = _entries(m, dirs, np.full(len(dirs), np.inf), unit=True)
         idx, w, _, _ = grids[id(m.table)]
         lead_s = (dirs @ (m.position_m - centre)) / c  # u . x / c early
         # e^{2 pi j f lead} on the FFT's evenly spaced bins: powers of one step (a running

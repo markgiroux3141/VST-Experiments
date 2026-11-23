@@ -1116,6 +1116,31 @@ stereo source miked a side at a time (`hears: [rhodes.L]`; the panel ticks L / R
 `Scene::mic_per_side`: a mirrored pair 0.3 m in front of the speakers, each hearing its side, panned hard) keeps its image. Open: the user listens (reports/rooms/LISTEN.md); the Room view's new controls were seen drawn
 (a scratch `APPDATA` and session: the app opens the user's last session otherwise), not driven.
 
+**The virtual head** ([docs/BINAURAL_PLAN.md](docs/BINAURAL_PLAN.md), 2026-11-22, a spike, the
+user's idea: a dummy head as a stereo "mic" in the Room view, ears simulated from a head's 3D
+shape, the user's call over a dataset or a sphere): `varimu/binaural/` (outside the render cache
+key; the `binaural` extra = h5py for SOFA). HRTFs by reciprocity on the GPU: crates/roomsim
+`fdtd::head` (the wave solver's scheme with a rigid voxelized body, a sponge, pressure-only
+receivers, cell codes a byte each: 811^3 cells at 1 mm, ~32 s an ear on the 3080; f64 CPU
+reference), records gated before the grid's faces answer, a separable SH transform on a Gauss
+grid at 18.5 cm extrapolated to any distance (`sphere.py`), normalized by a no-head run
+(`hrtf.py`, cached in cache/binaural/). Checked against the exact rigid sphere (`analytic.py`:
+ear side <= 0.3 dB to 20 kHz, the far ear's shadow 2-4 dB too loud above 10 kHz, staircase) and
+against reality: HUTUBS (data/hrtf/hutubs/README.md, CC BY: 58 head meshes with the same people's
+measured HRTFs) FABIAN 2.85 dB / 36 us ITD from its measurement, HUTUBS' own BEM 2.93 dB / 41 us
+(`scripts/binaural_validate.py [--subject all]` -> reports/binaural/validate/). All 58 heads: ours vs measured 4.27 dB / 59 us (the scans, BEM the same), the
+heads' front / back cue ranked as reality ranks it (r 0.63, `scripts/binaural_rank.py`); pinna-scaled
+variants `<subj>-pinna<SSS>` by `scripts/binaural_variants.py` (looked up by `hrtf.cached_head`). The user's
+head: `pp4-pinna130`. **B7 built: the head in the Room view** ("+ Head": a scene mic's `head: NAME`,
+`varimu/binaural/heads.py`, expanded into ears `<name>.L` / `.R` through a pressure (omni) chain each,
+rendered as one stereo track; `varimu_app::room::RoomMic::head`). Renders
+(`render.py`: diffuse-field EQ, `SphereHead` the control, `SofaHead` a measured set;
+`scripts/binaural_demo.py`, `scripts/binaural_room.py`: the ears as two mics of the room engine,
+`room.HeadEar` a `directional` table: shoebox.py's `_entries` passes it each arrival's direction,
+capsules unchanged) -> reports/binaural/listen/ (guide reports/binaural/LISTEN.md); a blind front /
+back test `scripts/binaural_listen.py`; `variants.py` (pinnae scaled, a front / back cue contrast:
+sphere 0, heads 3.7-11.4 dB). Tests `tests/test_binaural.py`. Open: the user listens; B5-B8.
+
 Stereo ([docs/STEREO_PLAN.md](docs/STEREO_PLAN.md), 2026-11-07; **ST1-ST5 built 2026-11-08**,
 the plan's "Status (2026-11-08)"): a stereo device's take keeps both channels (a 2-channel
 `draft.wav`; `Take::right`, `Track::lane_lr` / `playing_lr`, `MixClip::right`; a lane with a

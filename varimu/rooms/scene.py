@@ -68,9 +68,22 @@ JSON):
         hum: false                   # optional: true = the stray mains field's hum at the
                                      # chain's `hum` block field (varimu.devices.hum), or a
                                      # field in T rms (1e-7 a quiet room, 1e-6 near equipment)
+      - name: Head
+        head: pp4-pinna130           # a virtual head (docs/BINAURAL_PLAN.md B7): its two ears
+        chain: omni_clean            # through a pressure (omni) chain each, the capsule flush
+        position_m: [3.0, 2.5, 1.2]  # in the blocked ear canal; the centre between the ears
+        aim: {azimuth_deg: 90}       # where its nose points (elevation ignored: upright)
     settings:{quality: production, ism_s: 0.08, seed: 0, tail_s: null,
                wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
+
+A head mic (`head: NAME`, varimu.binaural.heads: sphere, ppN, ppN-pinnaSSS, ppN_measured) is
+expanded at load into two mics `<name>.L` and `<name>.R`, panned hard, both at its centre:
+each ear's entry is its HRTF from each arrival's direction (and distance, within 2 m:
+varimu.binaural.room.HeadEar) instead of a capsule's table, the same pressure at both of
+the chain's entries, so its chain must be a pressure mic's (its pattern a fixed omni in
+config/chains.yaml). The ears keep everything else a mic has (hears, passes, noise, hum,
+free_field); render.json says which head and ear each print is (`head`, `ear`).
 
 A stereo source is expanded at load into two mono sources, `<name>.L` and `<name>.R`, each a
 source of its own from then on (responses, solos, prints): the room is linear, so a pair at
@@ -178,6 +191,11 @@ class MicSpec:
     free_field: bool = False
     noise: bool = False  # the chain's noise sources on (a seed per print: `print_seed`)
     hum: bool | float = False  # the stray field's hum: True at the chain's field, or T rms
+    # an ear of a virtual head: the head's name (varimu.binaural.heads), "left" | "right",
+    # and the head mic's own name (its two ears are `<head_of>.L` / `.R`)
+    head: str | None = None
+    ear: str | None = None
+    head_of: str | None = None
 
 
 @dataclass
@@ -267,22 +285,38 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         passes = str(m.get("passes", "together"))
         if passes not in ("together", "separate"):
             raise ValueError(f"mic {m['name']}: passes is together or separate, not {passes!r}")
-        mics.append(
-            MicSpec(
-                m["name"],
-                m["chain"],
-                pos,
-                float(aim.get("azimuth_deg", 0.0)),
-                float(aim.get("elevation_deg", 0.0)),
-                {k: float(v) for k, v in (m.get("set") or {}).items()},
-                float(m.get("pan", 0.0)),
-                _hears(m, sources),
-                passes,
-                bool(m.get("free_field", False)),
-                bool(m.get("noise", False)),
-                _hum_setting(m),
-            )
+        spec = MicSpec(
+            m["name"],
+            m["chain"],
+            pos,
+            float(aim.get("azimuth_deg", 0.0)),
+            float(aim.get("elevation_deg", 0.0)),
+            {k: float(v) for k, v in (m.get("set") or {}).items()},
+            float(m.get("pan", 0.0)),
+            _hears(m, sources),
+            passes,
+            bool(m.get("free_field", False)),
+            bool(m.get("noise", False)),
+            _hum_setting(m),
         )
+        if m.get("head") is None:
+            mics.append(spec)
+            continue
+        if m.get("surface") is not None:
+            raise ValueError(f"mic {m['name']}: a head isn't a boundary mic (no surface)")
+        _check_pressure_chain(m["name"], m["chain"])
+        for ear, tag, pan in (("left", "L", -1.0), ("right", "R", 1.0)):
+            mics.append(
+                dataclasses.replace(
+                    spec,
+                    name=f"{m['name']}.{tag}",
+                    elevation_deg=0.0,
+                    pan=pan,
+                    head=str(m["head"]),
+                    ear=ear,
+                    head_of=m["name"],
+                )
+            )
     st = d.get("settings") or {}
     names = [s.name for s in sources] + [m.name for m in mics]
     if len(set(names)) != len(names):
@@ -299,6 +333,21 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         str(r.get("source", "")),
         None if not st.get("wave_crossover_hz") else float(st["wave_crossover_hz"]),
     )
+
+
+def _check_pressure_chain(mic: str, chain: str) -> None:
+    """A head's ears take pressure capsules: the chain's mic is a fixed omni."""
+    from varimu import chains
+
+    try:
+        c = chains.load().chain(chain)
+    except KeyError:
+        return  # a circuit file outside the list: its builder decides
+    if c.mic.pattern != "omni":
+        raise ValueError(
+            f"mic {mic}: a head's ears need a pressure (omni) mic's chain, not {chain} "
+            f"({c.mic.label}, {c.mic.pattern})"
+        )
 
 
 def _hum_setting(m: dict) -> bool | float:
@@ -493,6 +542,29 @@ def mic_pressures(
     return p, kinds, n
 
 
+HEAD_CLEAR_M = 0.2  # a source nearer a head's centre is in it (the HRTFs' sphere is 0.185 m)
+
+
+def _head_mics(name: str, position_m: np.ndarray, facing_deg: float, fs: int) -> list[Mic]:
+    """A head's two ears as the room engine's mics, their tables topped at the room's
+    Nyquist frequency."""
+    from varimu.binaural.heads import load
+    from varimu.binaural.room import HeadEar
+
+    head = load(name)
+    g = head.diffuse_field_eq() if hasattr(head, "diffuse_field_eq") else None
+    if g is None:
+        from varimu.binaural.render import diffuse_field_eq
+
+        g = diffuse_field_eq(head)
+    fwd = aim_vector(facing_deg, 0.0)
+    out = []
+    for ear in ("left", "right"):
+        t = HeadEar(head, ear, fwd, fs=fs, eq=g)
+        out.append(Mic(np.asarray(position_m, float), t.axis, t))
+    return out
+
+
 def scene_responses(
     scene: Scene, fs: int, log: Callable[[str], None] | None = None
 ) -> tuple[np.ndarray, list[str]]:
@@ -501,10 +573,15 @@ def scene_responses(
     from varimu.rooms.directivity import from_spec
     from varimu.rooms.progress import fmt_s
 
-    tables, kinds = {}, []
+    tables, kinds, heads = {}, [], {}
     mics = []
     for mi, m in enumerate(scene.mics):
         for s in scene.sources:
+            if m.head is not None and np.linalg.norm(m.position_m - s.position_m) < HEAD_CLEAR_M:
+                raise ValueError(
+                    f"source {s.name} is within {HEAD_CLEAR_M} m of head {m.head_of}'s "
+                    "centre (inside or touching the head)"
+                )
             if np.linalg.norm(m.position_m - s.position_m) < MIN_DISTANCE_M:
                 raise ValueError(f"mic {m.name} is closer than {MIN_DISTANCE_M} m to {s.name}")
             dv = from_spec(s.directivity)
@@ -514,6 +591,15 @@ def scene_responses(
                 )
                 if np.linalg.norm(m.position_m - centre) < dv.centre_offset_m:
                     raise ValueError(f"mic {m.name} is inside {s.name}'s body (its cabinet / head)")
+        if m.head is not None:
+            if m.head_of not in heads:
+                if log:
+                    log(f"head {m.head_of}: {m.head} (cached HRTFs, or simulated the first time)")
+                heads[m.head_of] = _head_mics(m.head, m.position_m, m.azimuth_deg, fs)
+            ear = heads[m.head_of][0 if m.ear == "left" else 1]
+            kinds.append(ear.table.kind)
+            mics.append(ear)
+            continue
         geom = _capsule_geometry(m.chain, m.set)
         key = json.dumps(geom, sort_keys=True, default=str)
         if key not in tables:
@@ -713,6 +799,9 @@ def _responses_key(
     }
     hsh.update(json.dumps(data, sort_keys=True, default=str).encode())
     for t in {id(m.table): m.table for m in mics}.values():
+        if getattr(t, "directional", False):  # a head's ear (absent: keys as before)
+            hsh.update(t.key_bytes())
+            continue
         for a in (t.f_hz, t.theta_rad, t.inv_r, t.front, t.rear):
             hsh.update(np.ascontiguousarray(a).tobytes())
     return hsh.hexdigest()[:32]
@@ -959,6 +1048,8 @@ def render(
             "noise": m.noise,
             "hum": m.hum,
         }
+        if m.head is not None:
+            entry.update(head=m.head_of, head_model=m.head, ear=m.ear)
         result["mics"].append(entry)
         solos = {si: outs[(mi, si)] for si in heard[mi] if (mi, si) in outs}
         for si, ys in solos.items():

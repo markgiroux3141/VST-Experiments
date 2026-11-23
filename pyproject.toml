@@ -26,6 +26,7 @@ listen = [
 ]     # Phase 5
 ml = ["torch"]                                    # Phases 6, 7, 10; spike/neural_core
 optimize = ["botorch", "cma", "ribs"]             # Phase 8
+binaural = ["h5py"]                               # docs/BINAURAL_PLAN.md: SOFA (HDF5) HRIR files
 fast = ["circuitsim", "roomsim"]                  # Rust simulator (docs/CIRCUIT_SIM_PLAN.md), the room on the GPU (crates/roomsim); needs cargo
 
 [tool.uv.sources]

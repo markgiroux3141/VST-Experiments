@@ -24,6 +24,8 @@
 //! values one cell apart, per cell), at fractional grid coordinates: (p, dp/dx, dp/dy,
 //! dp/dz). Record n is p^n (record 0 = 0).
 
+pub mod head;
+
 use bytemuck::{Pod, Zeroable};
 
 use crate::gpu::Gpu;

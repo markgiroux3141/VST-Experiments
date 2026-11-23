@@ -660,7 +660,7 @@ type Decoded = (PathBuf, Result<(Vec<f32>, Option<Vec<f32>>, f64), String>);
 
 /// A new audio track: its name, pan, its take's samples (left or mono, a stereo take's
 /// right), timeline position and what it came from.
-type NewAudioTrack = (String, f64, Vec<f32>, Option<Vec<f32>>, i64, Value);
+pub type NewAudioTrack = (String, f64, Vec<f32>, Option<Vec<f32>>, i64, Value);
 
 /// How Import… normalizes: not at all, each file's loudest stretch to the target, or one
 /// gain for all the files picked together, from their sum (stems keep their balance).
@@ -953,23 +953,10 @@ impl SessionView {
         &self.session
     }
 
-    /// New audio tracks (name, pan, samples at the session's rate, timeline position, what
-    /// they came from: a room's render, an imported file), each its rendered take; the
-    /// next frame of this view makes them one undo step.
-    pub fn add_audio_tracks(
-        &mut self,
-        tracks: Vec<(String, f64, Vec<f32>, i64, Value)>,
-    ) -> Result<(), String> {
-        self.add_audio_tracks_lr(
-            tracks
-                .into_iter()
-                .map(|(name, pan, x, position, from)| (name, pan, x, None, position, from))
-                .collect(),
-        )
-    }
-
-    /// [`Self::add_audio_tracks`] whose takes may be stereo (left, then `Some(right)`).
-    fn add_audio_tracks_lr(&mut self, tracks: Vec<NewAudioTrack>) -> Result<(), String> {
+    /// New audio tracks (name, pan, samples at the session's rate, the right channel's for a
+    /// stereo take, timeline position, what they came from: a room's render, an imported
+    /// file), each its rendered take; the next frame of this view makes them one undo step.
+    pub fn add_audio_tracks_lr(&mut self, tracks: Vec<NewAudioTrack>) -> Result<(), String> {
         self.saved = true;
         for (name, pan, samples, right, position, from) in tracks {
             let mut t = Track::new(&name);

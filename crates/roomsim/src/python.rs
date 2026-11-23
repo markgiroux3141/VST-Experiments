@@ -187,5 +187,6 @@ fn roomsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ray_trace, m)?)?;
     m.add_function(wrap_pyfunction!(image_spectra, m)?)?;
     crate::fdtd::python::register(m)?;
+    crate::fdtd::head::python::register(m)?;
     Ok(())
 }

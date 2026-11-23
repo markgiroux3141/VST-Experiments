@@ -52,6 +52,12 @@ pub struct Chain {
 }
 
 impl Chain {
+    /// A pressure mic's chain (its pattern a fixed omni): what a head's ears take
+    /// (varimu/rooms/scene.py's check).
+    pub fn pressure(&self) -> bool {
+        self.pattern == MicPattern::Fixed(Pattern::OMNI)
+    }
+
     /// The mic's pattern at these settings (a setting not in `set` at its default).
     pub fn pattern(&self, set: &BTreeMap<String, f64>) -> Pattern {
         match &self.pattern {
@@ -431,6 +437,9 @@ impl Pattern {
 /// Nearest a mic may be to a source (the entry tables' nearest distance).
 pub const MIN_DISTANCE_M: f64 = 0.1;
 
+/// Nearest a source may be to a head's centre (varimu/rooms/scene.py's HEAD_CLEAR_M).
+pub const HEAD_CLEAR_M: f64 = 0.2;
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct RoomSource {
     pub name: String,
@@ -792,6 +801,37 @@ pub struct RoomMic {
     /// The stray mains field's hum (scene.py's `hum`, varimu/devices/hum.py): the field in T
     /// rms, 0 off.
     pub hum_t: f64,
+    /// A virtual head (docs/BINAURAL_PLAN.md B7; scene.py's `head`, one of [`HEADS`]): its
+    /// two ears through the chain (a pressure mic's: [`Chain::pressure`]), rendered as one
+    /// stereo track, left ear left. `azimuth_deg` is where its nose points; it stays upright.
+    pub head: Option<String>,
+}
+
+/// The heads a head mic offers (varimu/binaural/heads.py's names), the first the default
+/// (the user's pick of 2026-11-22), with what each is.
+pub const HEADS: &[(&str, &str)] = &[
+    ("pp4-pinna130", "pp4, ears 1.3x (your pick)"),
+    ("pp4", "pp4 (strongest front / back cues)"),
+    ("pp4-pinna080", "pp4, ears 0.8x"),
+    ("pp69", "pp69 (strong front / back cues)"),
+    ("pp5", "pp5 (weakest front / back cues)"),
+    ("pp1", "FABIAN (pp1, a dummy head)"),
+    ("pp1_measured", "FABIAN, measured HRTFs"),
+    ("sphere", "sphere (no ears: the control)"),
+];
+
+/// A head's label in [`HEADS`], or its name.
+pub fn head_label(name: &str) -> &str {
+    HEADS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or(name, |(_, l)| l)
+}
+
+/// The chain a new head gets: the neutral omni into the clean preamp when it is there, else
+/// the first pressure chain.
+pub fn default_head_chain() -> Option<&'static Chain> {
+    chain("omni_clean").or_else(|| chains().iter().find(|c| c.pressure()))
 }
 
 /// The Room view's hum fields (T rms) and their names: the makers' reference field, near
@@ -827,7 +867,21 @@ impl RoomMic {
             surface: None,
             noise: false,
             hum_t: 0.0,
+            head: None,
         }
+    }
+
+    /// A virtual head through `chain_id`, its nose toward `azimuth_deg`.
+    pub fn new_head(
+        name: &str,
+        head: &str,
+        chain_id: &str,
+        pos: [f64; 3],
+        azimuth_deg: f64,
+    ) -> RoomMic {
+        let mut m = RoomMic::new(name, chain_id, pos, azimuth_deg);
+        m.head = Some(head.to_string());
+        m
     }
 
     /// Whether it records the source called `name` (either side of a stereo source).
@@ -1237,7 +1291,7 @@ impl Scene {
                 "azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg, "pan": m.pan,
                 "hears": m.hears, "separate_passes": m.separate_passes,
                 "free_field": m.free_field, "surface": m.surface,
-                "noise": m.noise, "hum_t": m.hum_t,
+                "noise": m.noise, "hum_t": m.hum_t, "head": m.head,
             })).collect::<Vec<_>>(),
         })
     }
@@ -1344,6 +1398,7 @@ impl Scene {
                             surface: m["surface"].as_str().map(str::to_string),
                             noise: m["noise"].as_bool().unwrap_or(false),
                             hum_t: f(m, "hum_t", 0.0),
+                            head: m["head"].as_str().map(str::to_string),
                         })
                         .collect()
                 })
@@ -1440,6 +1495,10 @@ impl Scene {
                 if m.hum_t > 0.0 {
                     v["hum"] = json!(m.hum_t);
                 }
+                if let Some(h) = &m.head {
+                    v["head"] = json!(h);
+                    v.as_object_mut().unwrap().remove("surface");
+                }
                 v
             }).collect::<Vec<_>>(),
             "settings": {"quality": self.quality, "seed": 0,
@@ -1518,6 +1577,21 @@ impl Scene {
             }
             if chain(&m.chain).is_none() {
                 out.push(format!("{}: unknown chain {}", m.name, m.chain));
+            }
+            if m.head.is_some() {
+                if chain(&m.chain).is_some_and(|c| !c.pressure()) {
+                    out.push(format!(
+                        "{}: a head's ears need an omni (pressure) chain",
+                        m.name
+                    ));
+                }
+                if let Some(s) = self
+                    .sources
+                    .iter()
+                    .find(|s| dist3(&m.pos, &s.pos) < HEAD_CLEAR_M)
+                {
+                    out.push(format!("{} is inside {}'s head", s.name, m.name));
+                }
             }
             if !self.sources.is_empty() && !self.sources.iter().any(|s| m.hears_source(&s.name)) {
                 out.push(format!("{} hears no source", m.name));
@@ -1633,6 +1707,8 @@ pub struct MicPrint {
     pub pan: f64,
     pub file: PathBuf,
     pub rms_dbfs: f64,
+    /// An ear of a head mic: the head mic's name and "left" | "right".
+    pub head: Option<(String, String)>,
 }
 
 /// A render's result (its render.json).
@@ -1655,6 +1731,10 @@ pub fn read_render(dir: &Path) -> Result<Rendered, String> {
             pan: f(m, "pan", 0.0),
             file: dir.join(st(m, "file", "")),
             rms_dbfs: f(m, "rms_dbfs", f64::NAN),
+            head: match (m["head"].as_str(), m["ear"].as_str()) {
+                (Some(h), Some(e)) => Some((h.to_string(), e.to_string())),
+                _ => None,
+            },
         })
         .collect();
     Ok(Rendered { mics, json: v })
@@ -1774,7 +1854,15 @@ impl RenderJob {
     ) -> Result<RenderJob, String> {
         let mut cmd = Command::new("uv");
         cmd.current_dir(repo)
-            .args(["run", "--extra", "fast", "python", "scripts/room_print.py"])
+            .args([
+                "run",
+                "--extra",
+                "fast",
+                "--extra",
+                "binaural",
+                "python",
+                "scripts/room_print.py",
+            ])
             .arg(scene)
             .arg("--out")
             .arg(out_dir)
@@ -2034,6 +2122,39 @@ mod tests {
         // a second pair gets fresh names
         let [l2, _] = s.mic_per_side(0, "u47_v76", 0.5);
         assert_ne!(s.mics[l2].name, "A L");
+    }
+
+    /// A virtual head (docs/BINAURAL_PLAN.md B7): `head` in the render's scene only for a
+    /// head (never with a surface), kept by the app's state; its ears want a pressure chain;
+    /// a source in its head is a problem.
+    #[test]
+    fn a_head_mic() {
+        let mut s = scene();
+        assert!(
+            s.render_json(&BTreeMap::new())["mics"][0]
+                .get("head")
+                .is_none()
+        );
+        assert!(chain("omni_clean").is_some_and(Chain::pressure));
+        assert!(!chain("u47_v76").unwrap().pressure());
+        let hc = default_head_chain().unwrap();
+        let mut h = RoomMic::new_head("Head 1", HEADS[0].0, &hc.id, [3.0, 2.5, 1.2], 180.0);
+        h.surface = Some("floor".into());
+        s.mics.push(h);
+        let m = &s.render_json(&BTreeMap::new())["mics"][1];
+        assert_eq!(m["head"].as_str(), Some("pp4-pinna130"));
+        assert!(m.get("surface").is_none());
+        let back = Scene::from_state(&s.state());
+        assert_eq!(back.mics[1].head.as_deref(), Some("pp4-pinna130"));
+        assert!(back.mics[0].head.is_none());
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        s.mics[1].chain = "u47_v76".into();
+        s.sources[0].pos = [3.1, 2.5, 1.2];
+        let p = s.problems().join("; ");
+        assert!(
+            p.contains("omni (pressure) chain") && p.contains("inside Head 1's head"),
+            "{p}"
+        );
     }
 
     /// A boundary mic (CHAINS_PLAN.md WP26): `surface` in the render's scene only when set, kept
