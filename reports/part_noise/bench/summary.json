@@ -1,0 +1,328 @@
+{
+  "seed": 0,
+  "rate_hz": 96000.0,
+  "seconds": 8.0,
+  "same_gain_db": {
+    "barkhausen": -50.51988935143006,
+    "hiss": 50.639470976044954,
+    "pot": 13.122766202319642
+  },
+  "lufs_matched": -23.0,
+  "parts": {
+    "johnson_100k": {
+      "title": "100k, no current: Johnson noise only (every 100k alike)",
+      "group": "hiss",
+      "values": {
+        "r_ohm": {
+          "value": 100000.0,
+          "source": "the bench's resistor"
+        },
+        "t_k": {
+          "value": 296.0,
+          "source": "a bench at 23 C, IEC 60068-1's standard atmosphere"
+        }
+      },
+      "rms_uv_20hz_20khz": 5.473587433533016,
+      "peak_uv": 27.26537708269944,
+      "re_johnson_100k_db": 0.0,
+      "same_gain_dbfs_rms": -54.595087828503075,
+      "lowered_matched_db": 0.0
+    },
+    "metal_film_100k_100v": {
+      "title": "metal film 100k, 100 V DC across it",
+      "group": "hiss",
+      "values": {
+        "r_ohm": {
+          "value": 100000.0,
+          "source": "the bench's resistor"
+        },
+        "dc_v": {
+          "value": 100.0,
+          "source": "provisional: model knowledge (a 100k plate load with ~100 V across it: a 12AX7 stage at ~1 mA, the 5F1's and most of the project's tube stages)"
+        },
+        "noise_index_db": {
+          "value": -25.0,
+          "source": "provisional: model knowledge (the ranges usually quoted from Motchenbacher & Connelly, Low-Noise Electronic System Design, Wiley 1993, resistor excess noise: carbon composition 0.1-3 uV/V per decade (-20..+10 dB), carbon film 0.05-0.3, metal film 0.02-0.2, wirewound 0.01-0.2; to be checked against the book. The definition: IEC 60195 / MIL-STD-202 Method 308, web: https://epci.eu/resistors-noise-and-corrosion/ (rms uV per V of DC per decade, measured around 1 kHz; grows with the resistance value; carbon composition and thick film the worst, metal film and wirewound negligible))"
+        }
+      },
+      "rms_uv_20hz_20khz": 10.957612269974533,
+      "peak_uv": 54.94110998821602,
+      "re_johnson_100k_db": 6.028877385785077,
+      "same_gain_dbfs_rms": -48.566210442717995,
+      "lowered_matched_db": 0.0
+    },
+    "carbon_comp_100k_100v": {
+      "title": "carbon composition 100k, 100 V DC across it",
+      "group": "hiss",
+      "values": {
+        "r_ohm": {
+          "value": 100000.0,
+          "source": "the bench's resistor"
+        },
+        "dc_v": {
+          "value": 100.0,
+          "source": "provisional: model knowledge (a 100k plate load with ~100 V across it: a 12AX7 stage at ~1 mA, the 5F1's and most of the project's tube stages)"
+        },
+        "noise_index_db": {
+          "value": 0.0,
+          "source": "provisional: model knowledge (the ranges usually quoted from Motchenbacher & Connelly, Low-Noise Electronic System Design, Wiley 1993, resistor excess noise: carbon composition 0.1-3 uV/V per decade (-20..+10 dB), carbon film 0.05-0.3, metal film 0.02-0.2, wirewound 0.01-0.2; to be checked against the book. The definition: IEC 60195 / MIL-STD-202 Method 308, web: https://epci.eu/resistors-noise-and-corrosion/ (rms uV per V of DC per decade, measured around 1 kHz; grows with the resistance value; carbon composition and thick film the worst, metal film and wirewound negligible))"
+        }
+      },
+      "rms_uv_20hz_20khz": 168.27454085480807,
+      "peak_uv": 784.629226614351,
+      "re_johnson_100k_db": 29.754927089287683,
+      "same_gain_dbfs_rms": -24.840160739215385,
+      "lowered_matched_db": 0.0
+    },
+    "carbon_comp_100k_100v_aged": {
+      "title": "aged carbon composition 100k, 100 V DC",
+      "group": "hiss",
+      "values": {
+        "r_ohm": {
+          "value": 100000.0,
+          "source": "the bench's resistor"
+        },
+        "dc_v": {
+          "value": 100.0,
+          "source": "provisional: model knowledge (a 100k plate load with ~100 V across it: a 12AX7 stage at ~1 mA, the 5F1's and most of the project's tube stages)"
+        },
+        "noise_index_db": {
+          "value": 10.0,
+          "source": "provisional: model knowledge (carbon composition's noise rises with moisture, overload and drift: the aged part at the top of the published range, +10 dB; no quantified aging law found yet, EPCI names corrosion at the contact spots as the mechanism)"
+        }
+      },
+      "rms_uv_20hz_20khz": 533.6283863280911,
+      "peak_uv": 2618.3424764794177,
+      "re_johnson_100k_db": 39.77933728035474,
+      "same_gain_dbfs_rms": -14.815750548148337,
+      "lowered_matched_db": 0.0
+    },
+    "carbon_comp_follows_tone": {
+      "title": "carbon composition 100k, no DC, a 110 Hz current (1 mA peak) 1 s on / 1 s off: the noise alone, the tone removed",
+      "group": "hiss",
+      "values": {
+        "r_ohm": {
+          "value": 100000.0,
+          "source": "the bench's resistor"
+        },
+        "peak_current_a": {
+          "value": 0.001,
+          "source": "provisional: model knowledge (a 100k plate load with ~100 V across it: a 12AX7 stage at ~1 mA, the 5F1's and most of the project's tube stages)"
+        },
+        "noise_index_db": {
+          "value": 0.0,
+          "source": "provisional: model knowledge (the ranges usually quoted from Motchenbacher & Connelly, Low-Noise Electronic System Design, Wiley 1993, resistor excess noise: carbon composition 0.1-3 uV/V per decade (-20..+10 dB), carbon film 0.05-0.3, metal film 0.02-0.2, wirewound 0.01-0.2; to be checked against the book. The definition: IEC 60195 / MIL-STD-202 Method 308, web: https://epci.eu/resistors-noise-and-corrosion/ (rms uV per V of DC per decade, measured around 1 kHz; grows with the resistance value; carbon composition and thick film the worst, metal film and wirewound negligible))"
+        }
+      },
+      "rms_uv_20hz_20khz": 121.00465159023067,
+      "peak_uv": 1142.0093413971558,
+      "re_johnson_100k_db": 26.89060011519767,
+      "same_gain_dbfs_rms": -27.704487713305404,
+      "lowered_matched_db": 0.0
+    },
+    "tube_12ax7_idle": {
+      "title": "a 12AX7 at idle, grid-referred: shot + flicker (B5's model)",
+      "group": "hiss",
+      "values": {
+        "gm_s": {
+          "value": 0.0016,
+          "source": "RCA 12AX7 sheet: gm 1600 umho at 250 V, -2 V (B5's corner figure)"
+        },
+        "flicker_v2": {
+          "value": 2.5e-14,
+          "source": "provisional: model knowledge (estimate, device builder B5: space-charge-limited, a relative emission fluctuation dJ/J moves the potential minimum by (kTc/q) dJ/J, a grid-referred voltage independent of the operating point, K_f = (kTc/q)^2 A with kTc/q ~0.09 V (1050 K) and A ~3e-12, the order of oxide cathodes' emission flicker in temperature-limited diodes (Johnson 1925, Schottky 1926); a corner ~1 kHz for a 12AX7 at gm 1.6 mA/V, the user's pick 2026-10-30; bounds 2.5e-15..2.5e-13, corners 100 Hz..10 kHz)"
+        },
+        "shot_beta": {
+          "value": 2.5,
+          "source": "K. R. Spangenberg, Vacuum Tubes (McGraw-Hill, 1948), noise: R_eq = 2.5 / gm for a triode, (Ip / Ik)(2.5 / gm)(1 + 8 I2 / gm) for a pentode (after Thompson, North & Harris, RCA Review 1940-41); web: https://n5296s.blogspot.com/2025/09/tubes-201-how-vacuum-tubes-really-work_90.html (the same forms)"
+        }
+      },
+      "rms_uv_20hz_20khz": 0.7882620964890225,
+      "peak_uv": 4.552133379191016,
+      "re_johnson_100k_db": -16.832028314363658,
+      "same_gain_dbfs_rms": -71.42711614286674,
+      "lowered_matched_db": 0.0
+    },
+    "popcorn_one_trap": {
+      "title": "a BJT with one trap: base-current steps into 47k",
+      "group": "hiss",
+      "values": {
+        "rs_ohm": {
+          "value": 47000.0,
+          "source": "provisional: a transistor stage fed from a high-impedance source (a guitar input)"
+        },
+        "trap": {
+          "value": {
+            "amplitude_a": 1e-10,
+            "tau_high_s": 0.03,
+            "tau_low_s": 0.06
+          },
+          "source": "provisional: model knowledge (popcorn noise in small-signal BJTs: base-current steps of tens to hundreds of pA, dwell times from ~0.1 ms to seconds, exponential; amplitude rising with Vbe. Mechanism and statistics: web: https://en.wikipedia.org/wiki/Burst_noise, web: https://www.electronicdesign.com/technologies/power/power-supply/power-electronics-systems/article/21195658/burstpopcorn-noise-in-linear-bicmos-and-bcd-technologies (two levels, Poisson switching, high / low times); measured base currents to find: J. N. Puckett, Caltech thesis 1971, web: https://thesis.library.caltech.edu/10787/; F. Sischka, AK Bipo 2014 (2N2222))"
+        }
+      },
+      "rms_uv_20hz_20khz": 0.9741286312920778,
+      "peak_uv": 5.1174094051783925,
+      "re_johnson_100k_db": -14.993115031763757,
+      "same_gain_dbfs_rms": -69.58820286026682,
+      "lowered_matched_db": 0.0
+    },
+    "popcorn_defective": {
+      "title": "a defective BJT, three traps, into 47k",
+      "group": "hiss",
+      "values": {
+        "rs_ohm": {
+          "value": 47000.0,
+          "source": "provisional: a transistor stage fed from a high-impedance source (a guitar input)"
+        },
+        "traps": {
+          "value": [
+            {
+              "amplitude_a": 1e-10,
+              "tau_high_s": 0.03,
+              "tau_low_s": 0.06
+            },
+            {
+              "amplitude_a": 4e-11,
+              "tau_high_s": 0.001,
+              "tau_low_s": 0.003
+            },
+            {
+              "amplitude_a": 2.5e-10,
+              "tau_high_s": 0.4,
+              "tau_low_s": 1.5
+            }
+          ],
+          "source": "provisional: model knowledge (popcorn noise in small-signal BJTs: base-current steps of tens to hundreds of pA, dwell times from ~0.1 ms to seconds, exponential; amplitude rising with Vbe. Mechanism and statistics: web: https://en.wikipedia.org/wiki/Burst_noise, web: https://www.electronicdesign.com/technologies/power/power-supply/power-electronics-systems/article/21195658/burstpopcorn-noise-in-linear-bicmos-and-bcd-technologies (two levels, Poisson switching, high / low times); measured base currents to find: J. N. Puckett, Caltech thesis 1971, web: https://thesis.library.caltech.edu/10787/; F. Sischka, AK Bipo 2014 (2N2222))"
+        }
+      },
+      "rms_uv_20hz_20khz": 1.3056050685682248,
+      "peak_uv": 8.808294264092554,
+      "re_johnson_100k_db": -12.449204647174474,
+      "same_gain_dbfs_rms": -67.04429247567754,
+      "lowered_matched_db": 0.0
+    },
+    "barkhausen_slow_sweep": {
+      "title": "a core swept slowly through its loop (0.1 Hz): the avalanches alone",
+      "group": "barkhausen",
+      "values": {
+        "kappa_per_s": {
+          "value": 6283.185307179586,
+          "source": "provisional: model knowledge (kappa: avalanche durations up to ~1 ms in soft FeSi / NiFe cores, a cutoff near 1 kHz; c_per_ms: a sweep through the loop in ~1 s crackles (c ~0.1-1, the review's quasi-static experiments), so c per unit rate (saturation magnetizations per second) ~0.25 s; nothing fitted)"
+        },
+        "c_per_rate_s": {
+          "value": 0.25,
+          "source": "provisional: model knowledge (kappa: avalanche durations up to ~1 ms in soft FeSi / NiFe cores, a cutoff near 1 kHz; c_per_ms: a sweep through the loop in ~1 s crackles (c ~0.1-1, the review's quasi-static experiments), so c per unit rate (saturation magnetizations per second) ~0.25 s; nothing fitted)"
+        },
+        "model": {
+          "value": "ABBM",
+          "source": "ABBM model, web: https://arxiv.org/abs/cond-mat/0404512 (Durin & Zapperi, The Barkhausen effect: the velocity's square-root diffusion; avalanches power-law distributed in the intermittent regime c < 1, a Lorentzian-like spectrum cut off by the demagnetizing factor)"
+        }
+      },
+      "same_gain_dbfs_rms": -49.31800747545326,
+      "lowered_matched_db": -1.7513726440418695
+    },
+    "barkhausen_mains": {
+      "title": "a core driven to saturation at 50 Hz: the avalanches alone",
+      "group": "barkhausen",
+      "values": {
+        "kappa_per_s": {
+          "value": 6283.185307179586,
+          "source": "provisional: model knowledge (kappa: avalanche durations up to ~1 ms in soft FeSi / NiFe cores, a cutoff near 1 kHz; c_per_ms: a sweep through the loop in ~1 s crackles (c ~0.1-1, the review's quasi-static experiments), so c per unit rate (saturation magnetizations per second) ~0.25 s; nothing fitted)"
+        },
+        "c_per_rate_s": {
+          "value": 0.25,
+          "source": "provisional: model knowledge (kappa: avalanche durations up to ~1 ms in soft FeSi / NiFe cores, a cutoff near 1 kHz; c_per_ms: a sweep through the loop in ~1 s crackles (c ~0.1-1, the review's quasi-static experiments), so c per unit rate (saturation magnetizations per second) ~0.25 s; nothing fitted)"
+        },
+        "model": {
+          "value": "ABBM",
+          "source": "ABBM model, web: https://arxiv.org/abs/cond-mat/0404512 (Durin & Zapperi, The Barkhausen effect: the velocity's square-root diffusion; avalanches power-law distributed in the intermittent regime c < 1, a Lorentzian-like spectrum cut off by the demagnetizing factor)"
+        }
+      },
+      "same_gain_dbfs_rms": -21.777517362590775,
+      "lowered_matched_db": 0.0
+    },
+    "pot_new_leaky_cap": {
+      "title": "a new 1M volume pot turned, 2.5 V DC on it from a leaky coupling capacitor",
+      "group": "pot",
+      "values": {
+        "track": {
+          "value": {
+            "r_track_ohm": 1000000.0,
+            "crv": 0.01,
+            "bad_spots": 0.0,
+            "corr": 0.001,
+            "spot_width": 0.004,
+            "r_base_ohm": 100.0,
+            "r_open_ohm": 100000000.0,
+            "points": 200000
+          },
+          "source": "web: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/4095210 (US 4,095,210, a helical-spring wiper potentiometer: CRV measured with a constant current source, prior-art peaks over 10%, the improved wiper ~1% maximum); wear roughens the track and raises the noise, web: https://siliconchip.com.au/Issue/PE/2023/June/AUDIO+OUT; provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        },
+        "dc_v": {
+          "value": 2.5,
+          "source": "provisional: model knowledge (a paper coupling capacitor from a ~160 V plate leaking ~60 MOhm into a 1 MOhm volume pot: 160 V x 1M / 61M; PB1 takes the plate from the 5F1's file)"
+        },
+        "c_in_f": {
+          "value": 1.5e-10,
+          "source": "provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        }
+      },
+      "same_gain_dbfs_rms": -97.74051974379368,
+      "lowered_matched_db": -26.079143201871137
+    },
+    "pot_worn_leaky_cap": {
+      "title": "a worn 1M volume pot turned, 2.5 V DC on it from a leaky coupling capacitor",
+      "group": "pot",
+      "values": {
+        "track": {
+          "value": {
+            "r_track_ohm": 1000000.0,
+            "crv": 0.1,
+            "bad_spots": 6.0,
+            "corr": 0.001,
+            "spot_width": 0.004,
+            "r_base_ohm": 100.0,
+            "r_open_ohm": 100000000.0,
+            "points": 200000
+          },
+          "source": "web: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/4095210 (US 4,095,210, a helical-spring wiper potentiometer: CRV measured with a constant current source, prior-art peaks over 10%, the improved wiper ~1% maximum); wear roughens the track and raises the noise, web: https://siliconchip.com.au/Issue/PE/2023/June/AUDIO+OUT; provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        },
+        "dc_v": {
+          "value": 2.5,
+          "source": "provisional: model knowledge (a paper coupling capacitor from a ~160 V plate leaking ~60 MOhm into a 1 MOhm volume pot: 160 V x 1M / 61M; PB1 takes the plate from the 5F1's file)"
+        },
+        "c_in_f": {
+          "value": 1.5e-10,
+          "source": "provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        }
+      },
+      "same_gain_dbfs_rms": -69.97280351562432,
+      "lowered_matched_db": -3.450349478435417
+    },
+    "pot_worn_tone": {
+      "title": "a worn 1M volume pot turned, no DC, a 220 Hz tone of 0.3 V on it",
+      "group": "pot",
+      "values": {
+        "track": {
+          "value": {
+            "r_track_ohm": 1000000.0,
+            "crv": 0.1,
+            "bad_spots": 6.0,
+            "corr": 0.001,
+            "spot_width": 0.004,
+            "r_base_ohm": 100.0,
+            "r_open_ohm": 100000000.0,
+            "points": 200000
+          },
+          "source": "web: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/4095210 (US 4,095,210, a helical-spring wiper potentiometer: CRV measured with a constant current source, prior-art peaks over 10%, the improved wiper ~1% maximum); wear roughens the track and raises the noise, web: https://siliconchip.com.au/Issue/PE/2023/June/AUDIO+OUT; provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        },
+        "c_in_f": {
+          "value": 1.5e-10,
+          "source": "provisional: model knowledge (a carbon track ~50 mm over 300 degrees; roughness correlation ~50 um; contact base ~100 ohm; bad spots 0.2 mm wide, ~6 per track when worn, ~1e8 ohm on oxide; C_in ~150 pF for a 12AX7 stage with its Miller capacitance)"
+        }
+      },
+      "same_gain_dbfs_rms": -13.936379897770852,
+      "lowered_matched_db": 0.0
+    }
+  }
+}

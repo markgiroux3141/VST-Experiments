@@ -36,6 +36,7 @@ import numpy as np
 
 from varimu.circuit.ir import (
     GROUND,
+    Barkhausen,
     Capacitor,
     ClavStrings,
     ClavWear,
@@ -1282,6 +1283,48 @@ def wurli_reeds(
     return [
         WurliReeds(f"V{upper}", f"{n}_d", plate, rate_hz, contact_rate_hz, data),
         Capacitor(f"C{upper}", f"{n}_d", plate, float(data["standing_f"])),
+    ]
+
+
+# Barkhausen avalanches (docs/PART_NOISE_PLAN.md): the Vccs from the medium's output into the
+# core node and its gm (a volt on the output is a microamp into the core); a load on the output
+# (a node needs two elements; the Vccs's control draws nothing): numerics.
+BARKHAUSEN_GM_S = 1e-6
+BARKHAUSEN_LOAD_OHM = 1e6
+
+
+def barkhausen(name: str, core_node: str, core: MagneticCore, stress: float, seed: int):
+    """Barkhausen avalanches in the core at `core_node` (its model `core`: the transformer's
+    material and path): the medium V<NAME> sensing the core node and driving <name>_bk, a Vccs
+    G<NAME> from <name>_bk into the core node (the jump's current, varimu.devices.barkhausen),
+    and <name>_bk's load R<NAME>."""
+    from varimu.devices import barkhausen as bk
+
+    n, upper = name.lower(), name.upper()
+    out = f"{n}_bk"
+    return [
+        Barkhausen(
+            f"V{upper}",
+            core_node,
+            out,
+            core.ms_a_per_m,
+            core.a_a_per_m,
+            core.k_a_per_m,
+            core.c,
+            core.alpha,
+            core.path_m,
+            stress,
+            seed,
+            1.0 / BARKHAUSEN_GM_S,
+            bk.S_MIN,
+            bk.S_UNIT,
+            bk.TAU,
+            bk.BIN_FACTOR,
+            bk.AVALANCHE_HZ,
+            bk.HIGHPASS_HZ,
+        ),  # fmt: skip
+        Vccs(f"G{upper}", GROUND, core_node, out, GROUND, BARKHAUSEN_GM_S),
+        Resistor(f"R{upper}", out, GROUND, BARKHAUSEN_LOAD_OHM),
     ]
 
 

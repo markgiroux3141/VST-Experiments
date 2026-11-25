@@ -106,6 +106,12 @@ Macro parts (connection; params, * = required):
                 plate and pushing the reeds' current into it through their standing
                 capacitance, its keys played by note events (docs/WURLITZER_PLAN.md WZ4;
                 varimu.circuit.parts.wurli_reeds)
+    barkhausen  [core]; material* and path_m* (the transformer's core: the same values),
+                stress* (the pinning: 0 off, 1 realistic, larger: fewer, bigger jumps; a
+                control), seed* (the landscape's draws, a whole number): Barkhausen
+                avalanches in that core, a medium replaying the core node's B through the
+                core's model and feeding the jumps back into it (docs/PART_NOISE_PLAN.md;
+                varimu.devices.barkhausen, varimu.circuit.parts.barkhausen)
     clav_strings [centre, bridge, bridge_neg]; component* (a Clavinet strings component
                 version, NAME@N, or a parameter naming one: kind clav_strings,
                 varimu.clavinet.compile), rate_hz* and contact_rate_hz* (numerics: the
@@ -272,7 +278,7 @@ from varimu.devices import ribbon as ribbon_mod
 from varimu.devices import versions
 from varimu.devices.arc import Arc
 from varimu.devices.bjt import Bjt
-from varimu.devices.core import MagneticCore
+from varimu.devices.core import MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
 from varimu.devices.library import (
@@ -1106,6 +1112,18 @@ def _wurli_reeds(ctx: Context, name: str, conn: list[str], a: dict) -> list[Elem
     return parts.wurli_reeds(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
 
 
+def _barkhausen(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    core = core_model(
+        f"CORE_{name.upper()}", ctx.text(f"{name}.material", a["material"]), a["path_m"]
+    )
+    seed = a["seed"]
+    if seed != int(seed) or not 0 <= seed < 2**53:
+        raise ctx.fail(f"{name}.seed", f"{seed} must be a whole number in [0, 2^53)")
+    if a["stress"] < 0:
+        raise ctx.fail(f"{name}.stress", f"{a['stress']} must be >= 0 (0 is off)")
+    return parts.barkhausen(name, conn[0], core, a["stress"], int(seed))
+
+
 def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     from varimu.clavinet import compile as clav_compile
 
@@ -1503,6 +1521,9 @@ for _name, _macro in {
     ),
     "wurli_reeds": Macro(
         _wurli_reeds, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}
+    ),
+    "barkhausen": Macro(
+        _barkhausen, 1, {"material": Param("raw"), "path_m": _P, "stress": _P, "seed": _N}
     ),
     "nova_keys": Macro(
         _nova_keys,

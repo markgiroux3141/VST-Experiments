@@ -6,8 +6,8 @@
 //! ([`crate::mna::Mna::media`]); most have one output, `out`.
 
 use crate::ir::{
-    ClavStrings, Harp, InventedKeys, NickelKeys, NovaKeys, Plate, ReedKeys, Spring, Tape,
-    WurliReeds,
+    Barkhausen, ClavStrings, Harp, InventedKeys, NickelKeys, NovaKeys, Plate, ReedKeys, Spring,
+    Tape, WurliReeds,
 };
 
 /// A medium's element in the IR.
@@ -18,6 +18,7 @@ pub enum MediumElement {
     Tape(Tape),
     Harp(Harp),
     WurliReeds(WurliReeds),
+    Barkhausen(Barkhausen),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
@@ -56,6 +57,7 @@ impl MediumElement {
             MediumElement::Tape(t) => &t.name,
             MediumElement::Harp(h) => &h.name,
             MediumElement::WurliReeds(w) => &w.name,
+            MediumElement::Barkhausen(b) => &b.name,
             MediumElement::ClavStrings(c) => &c.name,
             MediumElement::NovaKeys(k) => &k.name,
             MediumElement::NickelKeys(k) => &k.name,
@@ -74,6 +76,7 @@ impl MediumElement {
                 .collect(),
             MediumElement::Harp(h) => vec![&h.out],
             MediumElement::WurliReeds(w) => vec![&w.out],
+            MediumElement::Barkhausen(b) => vec![&b.out],
             MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
             MediumElement::NovaKeys(k) => k.outs.iter().map(String::as_str).collect(),
             MediumElement::NickelKeys(k) => vec![&k.out],
@@ -89,6 +92,7 @@ impl MediumElement {
             | MediumElement::Spring(_)
             | MediumElement::Harp(_)
             | MediumElement::WurliReeds(_)
+            | MediumElement::Barkhausen(_)
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
             | MediumElement::NickelKeys(_)
@@ -105,6 +109,7 @@ impl MediumElement {
             MediumElement::Spring(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
             MediumElement::WurliReeds(w) => (&w.plate, crate::ir::GROUND),
+            MediumElement::Barkhausen(b) => (&b.sense, crate::ir::GROUND),
             MediumElement::Harp(_)
             | MediumElement::ClavStrings(_)
             | MediumElement::NovaKeys(_)
@@ -263,6 +268,7 @@ pub enum Medium {
     Nickel(Box<crate::nickel::Medium>),
     Invented(Box<crate::invented::Medium>),
     Reeds(Box<crate::reeds::Medium>),
+    Barkhausen(Box<crate::barkhausen::Medium>),
 }
 
 /// A Clavinet's strings and their last outputs (centre, bridge, bridge negated).
@@ -317,6 +323,9 @@ impl Medium {
             MediumElement::ReedKeys(k) => {
                 Medium::Reeds(Box::new(crate::reeds::Medium::new(k, fs)?))
             }
+            MediumElement::Barkhausen(b) => {
+                Medium::Barkhausen(Box::new(crate::barkhausen::Medium::new(b, fs)))
+            }
         })
     }
 
@@ -357,8 +366,18 @@ impl Medium {
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
             Medium::Invented(m) => m.push(),
+            Medium::Barkhausen(m) => m.push(v),
             Medium::Nova(_) => panic!("the Novachord's keys sense many nodes: push_senses"),
             Medium::Reeds(_) => panic!("the reeds sense two nodes: push_senses"),
+        }
+    }
+
+    /// A core's Barkhausen medium: its core device's accepted state at this sample (B in
+    /// T, H, B's direction); the output at the next.
+    pub fn push_core(&mut self, b: f64, h: f64, delta: f64) -> f64 {
+        match self {
+            Medium::Barkhausen(m) => m.push_state(b, h, delta),
+            _ => panic!("only a core's Barkhausen medium reads its core's state"),
         }
     }
 
@@ -419,7 +438,8 @@ impl Medium {
             | Medium::Nova(_)
             | Medium::Reeds(_)
             | Medium::Nickel(_)
-            | Medium::Invented(_) => 1,
+            | Medium::Invented(_)
+            | Medium::Barkhausen(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -436,6 +456,7 @@ impl Medium {
             Medium::Clav(m) => m.push(),
             Medium::Nickel(m) => m.push(),
             Medium::Invented(m) => m.push(),
+            Medium::Barkhausen(m) => m.push(*vs.last().expect("a sample")),
             Medium::Nova(_) => panic!("the Novachord's keys sense their own part"),
             Medium::Reeds(_) => panic!("the reeds sense their own part"),
         }
@@ -554,6 +575,8 @@ impl Medium {
                     return Err("the keys changed".into());
                 }
             }
+            // STRESS plays on; anything else is another core.
+            (Medium::Barkhausen(m), MediumElement::Barkhausen(b)) => m.update(b)?,
             _ => return Err("a medium changed kind".into()),
         }
         Ok(())

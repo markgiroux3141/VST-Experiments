@@ -1,0 +1,172 @@
+{
+  "seed": 0,
+  "unit": 1,
+  "conditions": {
+    "new": {
+      "title": "new (1958, fresh from the factory)",
+      "drift_mean": 0.0,
+      "drift_sd": 0.0,
+      "ni_add_db": 0.0,
+      "coupling_leak_ohm": null,
+      "electro_c": 1.0,
+      "electro_esr": 1.0,
+      "source": "provisional: model knowledge (FUTURE_DIRECTIONS.md section 2's forms: carbon compositions drift up 5-15%+ over decades, high values most; electrolytics dry, C down, ESR up (end of life: C -20%, tan d 2x and beyond); old paper coupling capacitors leak, putting volts of DC on the next grid; the four points' numbers are not fitted to data)",
+      "idle": {
+        "v6v6_grid_minus_cathode_v": -18.039949243692373,
+        "v6v6_cathode_ma": 38.376575735978165,
+        "b1_v": 340.0236153798054,
+        "b1_ripple_v_rms": 4.447260206670991,
+        "volume_wiper_dc_v": -0.006191692945231219,
+        "out_db_spl": 45.62344986883524,
+        "hum_60hz_db_spl": -28.820072715198627,
+        "hum_120hz_db_spl": 45.37575673606859
+      }
+    },
+    "played": {
+      "title": "played (~1975, gigged, kept dry)",
+      "drift_mean": 0.04,
+      "drift_sd": 0.03,
+      "ni_add_db": 3.0,
+      "coupling_leak_ohm": 1000000000.0,
+      "electro_c": 0.9,
+      "electro_esr": 2.0,
+      "source": "provisional: model knowledge (FUTURE_DIRECTIONS.md section 2's forms: carbon compositions drift up 5-15%+ over decades, high values most; electrolytics dry, C down, ESR up (end of life: C -20%, tan d 2x and beyond); old paper coupling capacitors leak, putting volts of DC on the next grid; the four points' numbers are not fitted to data)",
+      "idle": {
+        "v6v6_grid_minus_cathode_v": -18.19119699937464,
+        "v6v6_cathode_ma": 37.710698387029495,
+        "b1_v": 340.16829834335886,
+        "b1_ripple_v_rms": 4.88992396863323,
+        "volume_wiper_dc_v": 0.1724015506654899,
+        "out_db_spl": 46.91512304850602,
+        "hum_60hz_db_spl": -28.92567047521503,
+        "hum_120hz_db_spl": 46.700581665166645
+      }
+    },
+    "cap_job": {
+      "title": "needs a cap job (today, original parts)",
+      "drift_mean": 0.12,
+      "drift_sd": 0.06,
+      "ni_add_db": 8.0,
+      "coupling_leak_ohm": 20000000.0,
+      "electro_c": 0.5,
+      "electro_esr": 8.0,
+      "source": "provisional: model knowledge (FUTURE_DIRECTIONS.md section 2's forms: carbon compositions drift up 5-15%+ over decades, high values most; electrolytics dry, C down, ESR up (end of life: C -20%, tan d 2x and beyond); old paper coupling capacitors leak, putting volts of DC on the next grid; the four points' numbers are not fitted to data)",
+      "idle": {
+        "v6v6_grid_minus_cathode_v": -17.34467918266603,
+        "v6v6_cathode_ma": 37.76670999561731,
+        "b1_v": 336.25577743668794,
+        "b1_ripple_v_rms": 9.081309144018444,
+        "volume_wiper_dc_v": 0.8252405735914141,
+        "out_db_spl": 53.56787289464957,
+        "hum_60hz_db_spl": -43.71483572233166,
+        "hum_120hz_db_spl": 53.128205228793384
+      }
+    },
+    "wreck": {
+      "title": "a wreck (damp basement, never serviced)",
+      "drift_mean": 0.25,
+      "drift_sd": 0.1,
+      "ni_add_db": 15.0,
+      "coupling_leak_ohm": 3000000.0,
+      "electro_c": 0.2,
+      "electro_esr": 30.0,
+      "source": "provisional: model knowledge (FUTURE_DIRECTIONS.md section 2's forms: carbon compositions drift up 5-15%+ over decades, high values most; electrolytics dry, C down, ESR up (end of life: C -20%, tan d 2x and beyond); old paper coupling capacitors leak, putting volts of DC on the next grid; the four points' numbers are not fitted to data)",
+      "idle": {
+        "v6v6_grid_minus_cathode_v": -12.705109895369715,
+        "v6v6_cathode_ma": 43.17272988727126,
+        "b1_v": 316.1130183574389,
+        "b1_ripple_v_rms": 25.180433707996855,
+        "volume_wiper_dc_v": 0.8334078170633986,
+        "out_db_spl": 66.44639170335049,
+        "hum_60hz_db_spl": -34.799505436727884,
+        "hum_120hz_db_spl": 65.97972338569639
+      }
+    }
+  },
+  "renders": {
+    "idle/cap_job": {
+      "out_db_spl": 53.57688040698826,
+      "excess_only_db_spl": 26.395011387680523,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/cap_job_x10": {
+      "out_db_spl": 54.33497650494961,
+      "excess_only_db_spl": 46.39200903489822,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/cap_job_x100": {
+      "out_db_spl": 66.61782363868029,
+      "excess_only_db_spl": 66.39348933330409,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/cap_job_x1000": {
+      "out_db_spl": 86.68156085316366,
+      "excess_only_db_spl": 86.67897594957813,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/new": {
+      "out_db_spl": 45.71684811742983,
+      "excess_only_db_spl": 29.3896123919539,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/played": {
+      "out_db_spl": 47.04821337395276,
+      "excess_only_db_spl": 32.226646612504794,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "idle/wreck": {
+      "out_db_spl": 66.44674983976397,
+      "excess_only_db_spl": 22.858724725276055,
+      "idle_file_gain_db": -8.464755649719407,
+      "excess_only_file_gain_db": -8.449782258901458
+    },
+    "playing/cap_job": {
+      "out_db_spl": 90.8339425802982,
+      "excess_only_db_spl": 15.49057205602039,
+      "lufs_at_full_scale": -33.65456225443056,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/cap_job_x10": {
+      "out_db_spl": 90.83147570091879,
+      "excess_only_db_spl": 35.4847495571247,
+      "lufs_at_full_scale": -33.65696917665632,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/cap_job_x100": {
+      "out_db_spl": 90.80790482774074,
+      "excess_only_db_spl": 55.47639467868087,
+      "lufs_at_full_scale": -33.67885187214037,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/cap_job_x1000": {
+      "out_db_spl": 90.68661531022747,
+      "excess_only_db_spl": 75.390518107486,
+      "lufs_at_full_scale": -33.79741461860043,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/new": {
+      "out_db_spl": 96.04398003162005,
+      "excess_only_db_spl": 9.594864324178031,
+      "lufs_at_full_scale": -28.540349873069598,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/played": {
+      "out_db_spl": 95.75314582031508,
+      "excess_only_db_spl": 12.478995041687885,
+      "lufs_at_full_scale": -28.830393829748555,
+      "excess_only_file_gain_db": 1.6126092360573143
+    },
+    "playing/wreck": {
+      "out_db_spl": 73.22396018282156,
+      "excess_only_db_spl": 15.429589267272867,
+      "lufs_at_full_scale": -51.47699278142706,
+      "excess_only_file_gain_db": 1.6126092360573143
+    }
+  }
+}

@@ -813,6 +813,9 @@ pub struct Transient {
     mna: Mna,
     /// The media running beside the circuit ([`Mna::media`] order).
     media: Vec<crate::media::Medium>,
+    /// A core's Barkhausen medium: the core device on its sense node, whose accepted state
+    /// it reads after each sample (`None`: every other medium, or no core device there).
+    media_core: Vec<Option<usize>>,
     /// A medium's senses over the next step, given from outside (a multi-rate part's,
     /// `partition.rs`): taken by the step's media push instead of its own sense.
     media_batches: Vec<Option<Vec<f64>>>,
@@ -1024,8 +1027,22 @@ impl Transient {
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
         let media_cross = media_cross(&mna)?;
+        let media_core = mna
+            .media
+            .iter()
+            .map(|m| match &m.element {
+                crate::media::MediumElement::Barkhausen(_) => mna.devices.iter().position(|d| {
+                    d.pins.len() == 2
+                        && d.pins[0] == m.sense.0
+                        && d.pins[1].is_none()
+                        && d.device.state().len() == 3
+                }),
+                _ => None,
+            })
+            .collect();
         let mut tr = Transient {
             media_cross,
+            media_core,
             media_batches: vec![None; media.len()],
             media,
             events,
@@ -2413,7 +2430,13 @@ impl Transient {
                     let vs: Vec<f64> = ports.senses.iter().map(|&u| at(u)).collect();
                     m.push_senses(&vs)
                 }
-                None => m.push(at(ports.sense.0) - at(ports.sense.1), supply),
+                None => match self.media_core[i] {
+                    Some(d) => {
+                        let s = self.mna.devices[d].device.state();
+                        m.push_core(s[0], s[1], s[2])
+                    }
+                    None => m.push(at(ports.sense.0) - at(ports.sense.1), supply),
+                },
             };
             self.ext0[row] = self.ext1[row];
             self.ext1[row] = y;

@@ -3119,7 +3119,7 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 67] = [
+const LABELS: [(&str, &str); 68] = [
     ("range", "Range (AUTO: by key)"),
     // The Rosin Wheel's k3 (its key stays `limit`: takes saved with it still load).
     ("limit", "EVEN (0: the free swell)"),
@@ -3162,6 +3162,7 @@ const LABELS: [(&str, &str); 67] = [
     ("key_track", "Key track"),
     ("pressure", "Pressure (aftertouch)"),
     ("heater", "Heater (x rated; under 0.9 out of rating)"),
+    ("stress", "Iron stress (Barkhausen crackle in the filter's cores; 0 off)"),
     ("reservoir", "Reservoir (hum; under 6 \u{b5}F detunes)"),
     ("lfo_on", "LFO on (off saves a core)"),
     ("lfo_audio", "LFO audio range (8 Hz-1.9 kHz)"),
@@ -3598,7 +3599,8 @@ mod tests {
                 "osc_level",
                 "saw_on",
                 "saw_level",
-                "heater"
+                "heater",
+                "stress"
             ]
         );
         // The LFO's ON / OFF switch (`unit: switch`) is a checkbox, as are its AUDIO range

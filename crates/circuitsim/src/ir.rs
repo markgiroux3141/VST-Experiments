@@ -230,6 +230,7 @@ pub enum Element {
     Tape(Tape),
     Harp(Harp),
     WurliReeds(WurliReeds),
+    Barkhausen(Barkhausen),
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     NickelKeys(NickelKeys),
@@ -504,6 +505,38 @@ pub struct WurliReeds {
     pub rate_hz: f64,
     pub contact_rate_hz: f64,
     pub model: Box<crate::wurli::WurliModel>,
+}
+
+/// Barkhausen avalanches in a transformer core (docs/PART_NOISE_PLAN.md;
+/// `crate::barkhausen`; `varimu.devices.barkhausen` is the reference): a medium sensing the
+/// core node `sense` (B, 1 V = 1 mT) after every step, replaying it through the core's
+/// Jiles-Atherton model (`ms_a_per_m` .. `path_m`, the core device's own), and driving `out`
+/// to ground at the next with its magnetization jumps' current times `out_v_per_a` (a Vccs of
+/// gm 1 / `out_v_per_a` from `out` into the core node carries it). `stress` scales the
+/// largest jump (`s_unit` x stress; 0 is off), `seed` the landscape's draws. SPICE has none:
+/// ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Barkhausen {
+    pub name: String,
+    pub sense: String,
+    pub out: String,
+    pub ms_a_per_m: f64,
+    pub a_a_per_m: f64,
+    pub k_a_per_m: f64,
+    pub c: f64,
+    pub alpha: f64,
+    pub path_m: f64,
+    pub stress: f64,
+    /// A whole number below 2^53 (JSON carries it as a float).
+    pub seed: f64,
+    pub out_v_per_a: f64,
+    pub s_min: f64,
+    pub s_unit: f64,
+    pub tau: f64,
+    pub bin_factor: f64,
+    pub avalanche_hz: f64,
+    pub highpass_hz: f64,
 }
 
 /// The Hohner Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; `crate::clavinet`;
@@ -1443,6 +1476,7 @@ impl Element {
             Element::Tape(e) => &e.name,
             Element::Harp(e) => &e.name,
             Element::WurliReeds(e) => &e.name,
+            Element::Barkhausen(e) => &e.name,
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
             Element::NickelKeys(e) => &e.name,
@@ -1481,6 +1515,7 @@ impl Element {
             }
             Element::Harp(e) => vec![&e.out],
             Element::WurliReeds(e) => vec![&e.plate, &e.out],
+            Element::Barkhausen(e) => vec![&e.sense, &e.out],
             Element::ClavStrings(e) => vec![&e.centre, &e.bridge, &e.bridge_neg],
             Element::NovaKeys(e) => {
                 let mut v = e.senses();
@@ -1524,6 +1559,7 @@ impl Element {
             }
             Element::Harp(e) => vec![&mut e.out],
             Element::WurliReeds(e) => vec![&mut e.plate, &mut e.out],
+            Element::Barkhausen(e) => vec![&mut e.sense, &mut e.out],
             Element::ClavStrings(e) => vec![&mut e.centre, &mut e.bridge, &mut e.bridge_neg],
             Element::NovaKeys(_) => return None,
             Element::NickelKeys(e) => vec![&mut e.out],
@@ -2110,6 +2146,46 @@ impl CircuitIr {
                     }
                     if e.plate == GROUND {
                         return err(format!("{name}: its plate is ground"));
+                    }
+                    'V'
+                }
+                Element::Barkhausen(e) => {
+                    for (f, x) in [
+                        ("ms_a_per_m", e.ms_a_per_m),
+                        ("a_a_per_m", e.a_a_per_m),
+                        ("k_a_per_m", e.k_a_per_m),
+                        ("path_m", e.path_m),
+                        ("out_v_per_a", e.out_v_per_a),
+                        ("s_min", e.s_min),
+                        ("s_unit", e.s_unit),
+                        ("bin_factor", e.bin_factor),
+                        ("avalanche_hz", e.avalanche_hz),
+                        ("highpass_hz", e.highpass_hz),
+                    ] {
+                        positive(&format!("{name}.{f}"), x)?;
+                    }
+                    if !(0.0..1.0).contains(&e.c) || e.alpha.is_nan() || e.alpha < 0.0 {
+                        return err(format!("{name}: c in [0, 1) and alpha >= 0"));
+                    }
+                    nonneg(&format!("{name}.stress"), e.stress)?;
+                    if !(e.seed >= 0.0 && e.seed < 9_007_199_254_740_992.0 && e.seed.fract() == 0.0)
+                    {
+                        return err(format!(
+                            "{name}.seed = {} must be a whole number < 2^53",
+                            e.seed
+                        ));
+                    }
+                    if !(e.tau > 1.0 && e.tau < 2.0) {
+                        return err(format!("{name}.tau = {} must be in (1, 2)", e.tau));
+                    }
+                    if e.out == GROUND || e.out == self.input_node || e.out == e.sense {
+                        return err(format!(
+                            "{name}: it drives {} (ground, the input or its core)",
+                            e.out
+                        ));
+                    }
+                    if e.sense == GROUND {
+                        return err(format!("{name}: its core node is ground"));
                     }
                     'V'
                 }

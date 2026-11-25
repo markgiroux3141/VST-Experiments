@@ -226,6 +226,7 @@ controls:
   saw_on: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-03: the gas-tube saw's ON / OFF switch, the user's ask (CPU): its own supply's power switch; off, its sections are empty and get no thread)"}
   saw_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-03: the SAW level pot into the mixer, audio taper; at full ~the oscillator's level at its WAVE pot's middle)"}
   heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
+  stress: {value: 0.0, choices: [0.0, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0], unit: ratio, source: "provisional: model knowledge (design, 2026-11-25, docs/PART_NOISE_PLAN.md: the filter cores' Barkhausen STRESS, the pinning in their mumetall: 0 off (the synth as before), 1 a realistic core (jumps up to ~1e-6 of saturation), each step up fewer and bigger jumps, 1000 a strained or dropped core; the user's ask: a knob; steps in half-decades as RESERVOIR's choices: the law is logarithmic)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 
@@ -372,6 +373,7 @@ values:
   leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected)"}
   core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small tape-wound toroid, 1 cm^2)"}
   core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
+  iron_seed: {value: 1, source: "provisional: the filter cores' landscape of pinning sites (a seed: which barcode this unit's cores have; varimu.devices.barkhausen)"}
   core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
 
   # --- the mixer
@@ -717,6 +719,9 @@ sections:
         core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
         turns: signal_turns
         leakage_h: leakage_h
+      # Barkhausen avalanches in both cores (docs/PART_NOISE_PLAN.md): STRESS 0 is off.
+      BKTA: {barkhausen: [ta_core], material: mumetall, path_m: core_path_m, stress: stress, seed: iron_seed}
+      BKTB: {barkhausen: [tb_core], material: mumetall, path_m: core_path_m, stress: stress, seed: iron_seed}
       CF: {C: [f, "0"], c: c_filter_f}
       RL: {R: [f, "0"], r: r_load_ohm}
       XV2A: {device: [b3, f, k2], model: V2A}

@@ -108,7 +108,7 @@ impl MagneticCore {
         chi_e / (1.0 - alpha * chi_e).max(DEN_FLOOR)
     }
 
-    fn dh_db(&self, b: f64, h: f64, delta: f64) -> f64 {
+    pub fn dh_db(&self, b: f64, h: f64, delta: f64) -> f64 {
         let chi = self.susceptibility(h, b / MU0 - h, delta);
         1.0 / (MU0 * (1.0 + chi))
     }

@@ -31,6 +31,7 @@ from typing import Any
 from varimu.circuit import builder
 from varimu.circuit.ir import (
     GROUND,
+    Barkhausen,
     Capacitor,
     CircuitIR,
     ClavStrings,
@@ -185,6 +186,9 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     driven += [(el.out, f"<tape {el.name}>") for el in ir.elements() if isinstance(el, Tape)]
     driven += [(el.out, f"<harp {el.name}>") for el in ir.elements() if isinstance(el, Harp)]
     driven += [(el.out, f"<reeds {el.name}>") for el in ir.elements() if isinstance(el, WurliReeds)]
+    driven += [
+        (el.out, f"<barkhausen {el.name}>") for el in ir.elements() if isinstance(el, Barkhausen)
+    ]
     driven += [
         (el.out, f"<keys {el.name}>")
         for el in ir.elements()

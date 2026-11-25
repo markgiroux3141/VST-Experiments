@@ -461,6 +461,8 @@ pub fn structure(ir: &CircuitIr) -> Structure {
                 ("Harp", &worn, vec![&h.out])
             }
             Element::WurliReeds(w) => ("WurliReeds", &w.name, vec![&w.plate, &w.out]),
+            // STRESS turns in place (`barkhausen::Medium::update`).
+            Element::Barkhausen(b) => ("Barkhausen", &b.name, vec![&b.sense, &b.out]),
             Element::ClavStrings(c) => {
                 worn = match &c.wear {
                     Some(w) => format!("{} {:016x}", c.name, circuitsim::clavinet::wear_hash(w)),

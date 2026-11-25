@@ -373,6 +373,7 @@ impl Mna {
                 Element::Tape(t) => Some(crate::media::MediumElement::Tape(t.clone())),
                 Element::Harp(h) => Some(crate::media::MediumElement::Harp(h.clone())),
                 Element::WurliReeds(w) => Some(crate::media::MediumElement::WurliReeds(w.clone())),
+                Element::Barkhausen(b) => Some(crate::media::MediumElement::Barkhausen(b.clone())),
                 Element::ClavStrings(c) => {
                     Some(crate::media::MediumElement::ClavStrings(c.clone()))
                 }
@@ -612,6 +613,7 @@ impl Mna {
                 | Element::Tape(_)
                 | Element::Harp(_)
                 | Element::WurliReeds(_)
+                | Element::Barkhausen(_)
                 | Element::ClavStrings(_)
                 | Element::NovaKeys(_)
                 | Element::NickelKeys(_)

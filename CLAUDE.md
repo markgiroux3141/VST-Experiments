@@ -164,6 +164,28 @@ mismatch) tested where a device misses its published figures, the 670 first (its
 under spec; TC 6's sustained-program release 11 s vs 25 s, whose test burst is only 1 s);
 milestones CD0-CD6, the cheap checks CD0-CD2 first.
 
+Parts heard up close ([docs/PART_NOISE_PLAN.md](docs/PART_NOISE_PLAN.md), 2026-11-25, a spike, the
+user's idea after a video of amplified component noise): single parts' noise mechanisms, aged and
+exaggerated (x10-x1000 as a condition dial), then in a device; milestones PB0-PB3, the testbed the
+5F1 Champ (default). **PB0 built:** `varimu/part_noise/` (outside the render cache key: excess noise
+from a noise index on B5's flicker, popcorn as telegraph signals, Barkhausen as ABBM, a worn pot
+into a grid), `scripts/part_noise_bench.py` -> `reports/part_noise/bench/` (README the listening
+guide), `tests/test_part_noise.py`. **The 5F1 spike (same day):** `varimu/part_noise/aging.py`
+(conditions new / played / cap_job / wreck as a transform on the built IR; excess noise in two
+passes through Vccs on control inputs, no engine change), `scripts/champ_aged.py [--rank COND]` ->
+`reports/part_noise/champ/`, `tests/test_part_noise_aging.py`. Found: aging is hum and lost gain
+more than hiss; V1A's plate load and cathode resistor carry the excess noise. **The tube synth's
+iron (same day; the user: Barkhausen and popcorn each in a device where it belongs, Barkhausen
+here first):** `varimu/part_noise/iron.py` (avalanches driven by each core's irreversible
+magnetization from a replay of its JA model; `landscape` with return-point memory or `abbm`
+without; fed back at the core node), `scripts/synth_iron.py` -> `reports/part_noise/synth_iron/`,
+`tests/test_part_noise_iron.py`. **STRESS is live on tube_synth** (same day): the part `barkhausen: [core]` (both
+builders), IR element / circuitsim medium `Barkhausen` (`barkhausen.rs`; reference `varimu/devices/barkhausen.py`;
+it reads its core device's accepted state), the control `stress` (0 off by default ... 1000), `tests/test_barkhausen.py`,
+`scripts/synth_iron_engine.py`; up to 300 plays live at a 50 ms buffer. **Popcorn in the Minimoog**
+(offline prototype, same day): `scripts/moog_popcorn.py` -> `reports/part_noise/moog_popcorn/` (traps in one transistor
+at a time; the ladder's Q29 is the place, its pops ring at the cutoff). Open: the user listens; a live DAMAGE element.
+
 Methodology review ([docs/METHODOLOGY_REVIEW.md](docs/METHODOLOGY_REVIEW.md), 2026-11-12; nothing
 in the engine built): what not to redo, three toys (`scripts/methodology/`: the DK step matrix
 is sparse, 1.5-5.8x fewer operations where states dominate; stage values as free oversampling,
@@ -1625,6 +1647,12 @@ work is `varimu_app::edit`.
 Open: a track's MIDI clips rendered as one performance (decision 6), editing the
 pressure / pedal lanes, drag reorders, the user's first try (SE1-SE8). `varimu-app --session` /
 `--mixer` open those views.
+
+Presets ([docs/PRESETS_PLAN.md](docs/PRESETS_PLAN.md), 2026-11-25, the user's ask; nothing
+built): named, saved panels for the Play view's devices, then the Session view's inserts.
+The user's rule: everything in the repo, nothing in `%APPDATA%` (the user's presets in
+`presets/<device>/`, factory ones with sources in `config/presets/<device>/`). Milestones
+PR1-PR6; its "Decisions" 2, 6 and 7 are the user's.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)

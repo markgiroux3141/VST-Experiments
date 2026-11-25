@@ -447,6 +447,31 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "Barkhausen",
+        "barkhausen",
+        "BK",
+        "Barkhausen avalanches in a transformer core (docs/PART_NOISE_PLAN.md, "
+        "varimu.devices.barkhausen): pin 1 the core node (sensed; the jumps' current fed back "
+        "into it); Value is its STRESS (0 off, 1 realistic)",
+        (Pin("1", "1", 7.62, 0, 180, 2.54),),
+        [
+            rect(-5.08, -3.81, 5.08, 3.81),
+            poly(
+                (-3.81, 0),
+                (-2.54, 1.905),
+                (-1.27, -1.905),
+                (0, 1.905),
+                (1.27, -1.905),
+                (2.54, 1.905),
+                (3.81, 0),
+            ),
+        ],
+        "stress",
+        ("material", "path_m", "seed"),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "ClavStrings",
         "clav_strings",
         "CS",

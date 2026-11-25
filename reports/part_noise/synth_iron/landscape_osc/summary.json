@@ -1,0 +1,292 @@
+{
+  "seed": 0,
+  "model": "landscape",
+  "s_max_realistic_ms": 1e-06,
+  "source": "provisional: model knowledge (a macroscopic soft core's Barkhausen jumps: up to ~1e-6 of its saturation flux at STRESS 1 (sub-uT in a 1 cm2 mumetall core), down to ~1e-9 here; avalanche durations ~0.1-1 ms; the size law's exponent 3/2 is ABBM's, web: https://arxiv.org/abs/cond-mat/0404512; nothing fitted to a measured core)",
+  "scenarios": {
+    "sweep": {
+      "what": "one long note, the envelope sweeping the filter's iron up and down",
+      "cores": {
+        "ta_core": {
+          "b_mean_t": 0.6581012352350787,
+          "b_range_t": [
+            0.6266677367588677,
+            0.7701438288273696
+          ],
+          "theta_mean_ms_per_s": 8.194639686739594,
+          "theta_p99_ms_per_s": 69.4950891452607,
+          "m_irr_range_ms": 0.1744776361967173
+        },
+        "tb_core": {
+          "b_mean_t": -0.6613682486215582,
+          "b_range_t": [
+            -0.7710347380356054,
+            -0.6341833957947164
+          ],
+          "theta_mean_ms_per_s": 7.36054116022023,
+          "theta_p99_ms_per_s": 71.1993345007433,
+          "m_irr_range_ms": 0.16592766546264925
+        },
+        "ota_core": {
+          "b_mean_t": 0.6965293713229633,
+          "b_range_t": [
+            0.6081275997628215,
+            0.7457666425223355
+          ],
+          "theta_mean_ms_per_s": 34.14512789767731,
+          "theta_p99_ms_per_s": 78.1887386796964,
+          "m_irr_range_ms": 0.16316560593928586
+        },
+        "otb_core": {
+          "b_mean_t": -0.7323910427752998,
+          "b_range_t": [
+            -0.7559253853999603,
+            -0.6986051658615755
+          ],
+          "theta_mean_ms_per_s": 14.7855984348125,
+          "theta_p99_ms_per_s": 52.3275710620009,
+          "m_irr_range_ms": 0.06877471642939148
+        }
+      },
+      "stress": {
+        "1": {
+          "crackle_re_program_db": -18.641690512783093,
+          "crackle_peak_re_program_rms_db": 13.833609379547898
+        },
+        "10": {
+          "crackle_re_program_db": -1.6866650047963812,
+          "crackle_peak_re_program_rms_db": 25.893876670495686
+        },
+        "100": {
+          "crackle_re_program_db": 3.5472899181937656,
+          "crackle_peak_re_program_rms_db": 26.462388795693496
+        },
+        "1000": {
+          "crackle_re_program_db": 1.9112176413021071,
+          "crackle_peak_re_program_rms_db": 26.369282829532597
+        }
+      },
+      "pitch_jitter_cents": {
+        "0": 2.184927994172874,
+        "1": 2.209568178724645,
+        "10": 2.2649143798345364,
+        "100": 2.7227476855656505,
+        "1000": 1.924765884679756
+      },
+      "crackle_only_gain_db": -7.490887183917955
+    },
+    "wobble": {
+      "what": "a held note, the LFO (~0.4 Hz) sweeping the cutoff: the iron moved slowly and steadily",
+      "cores": {
+        "ta_core": {
+          "b_mean_t": 0.613673064035545,
+          "b_range_t": [
+            0.5300420368520604,
+            0.6744057189481724
+          ],
+          "theta_mean_ms_per_s": 9.647539314034697,
+          "theta_p99_ms_per_s": 64.32920814700655,
+          "m_irr_range_ms": 0.16469125136833063
+        },
+        "tb_core": {
+          "b_mean_t": -0.6225044397552559,
+          "b_range_t": [
+            -0.6801798385010696,
+            -0.5433085709696392
+          ],
+          "theta_mean_ms_per_s": 8.241518287074605,
+          "theta_p99_ms_per_s": 63.874508645706555,
+          "m_irr_range_ms": 0.15672941879792135
+        },
+        "ota_core": {
+          "b_mean_t": 0.6978411154493582,
+          "b_range_t": [
+            0.6069919085739801,
+            0.7459068708008189
+          ],
+          "theta_mean_ms_per_s": 30.473055357233985,
+          "theta_p99_ms_per_s": 74.2473852700197,
+          "m_irr_range_ms": 0.16467361383798562
+        },
+        "otb_core": {
+          "b_mean_t": -0.7312100688404467,
+          "b_range_t": [
+            -0.7559313416050366,
+            -0.6986589502034889
+          ],
+          "theta_mean_ms_per_s": 13.357380986038343,
+          "theta_p99_ms_per_s": 45.80220133412749,
+          "m_irr_range_ms": 0.06871752288386557
+        }
+      },
+      "stress": {
+        "1": {
+          "crackle_re_program_db": -3.913039170891191,
+          "crackle_peak_re_program_rms_db": 9.218409555284705
+        },
+        "10": {
+          "crackle_re_program_db": 2.2657154680801566,
+          "crackle_peak_re_program_rms_db": 9.724708987498017
+        },
+        "100": {
+          "crackle_re_program_db": 4.1596625379343495,
+          "crackle_peak_re_program_rms_db": 9.738133647539296
+        },
+        "1000": {
+          "crackle_re_program_db": 1.2434117494223065,
+          "crackle_peak_re_program_rms_db": 9.357864022572498
+        }
+      },
+      "pitch_jitter_cents": {
+        "0": 4.6067088648013375,
+        "1": 4.5563854552515135,
+        "10": 4.732815284037347,
+        "100": 4.08754873403042,
+        "1000": 5.433972984320482
+      },
+      "crackle_only_gain_db": -3.5004414946888964
+    },
+    "riff": {
+      "what": "plucks: a fast filter snap per note, then the decay's slower sweep",
+      "cores": {
+        "ta_core": {
+          "b_mean_t": 0.5579273540596495,
+          "b_range_t": [
+            0.4816730082297316,
+            0.778316381834583
+          ],
+          "theta_mean_ms_per_s": 12.802269083598695,
+          "theta_p99_ms_per_s": 48.96398407973625,
+          "m_irr_range_ms": 0.3540677703223196
+        },
+        "tb_core": {
+          "b_mean_t": -0.5640702288933325,
+          "b_range_t": [
+            -0.777265802065524,
+            -0.5050843490648494
+          ],
+          "theta_mean_ms_per_s": 12.172645533588984,
+          "theta_p99_ms_per_s": 52.299354294559194,
+          "m_irr_range_ms": 0.33348678862495196
+        },
+        "ota_core": {
+          "b_mean_t": 0.7231204263856519,
+          "b_range_t": [
+            0.6087661996696742,
+            0.7653211223283609
+          ],
+          "theta_mean_ms_per_s": 31.347173979689163,
+          "theta_p99_ms_per_s": 77.48527660572958,
+          "m_irr_range_ms": 0.187244492434279
+        },
+        "otb_core": {
+          "b_mean_t": -0.7444285755006987,
+          "b_range_t": [
+            -0.7696669362752898,
+            -0.6986972135279883
+          ],
+          "theta_mean_ms_per_s": 16.717945228015356,
+          "theta_p99_ms_per_s": 49.485827746962165,
+          "m_irr_range_ms": 0.08749941163386743
+        }
+      },
+      "stress": {
+        "1": {
+          "crackle_re_program_db": 1.9910212438133315,
+          "crackle_peak_re_program_rms_db": 26.61810856915823
+        },
+        "10": {
+          "crackle_re_program_db": 0.9733399367313704,
+          "crackle_peak_re_program_rms_db": 26.557407541456065
+        },
+        "100": {
+          "crackle_re_program_db": 1.3733093018844151,
+          "crackle_peak_re_program_rms_db": 26.841850180774934
+        },
+        "1000": {
+          "crackle_re_program_db": 2.2979862952675143,
+          "crackle_peak_re_program_rms_db": 26.715386559930995
+        }
+      },
+      "pitch_jitter_cents": {
+        "0": 5.137866554310563,
+        "1": 4.991610470511205,
+        "10": 5.2974593994315455,
+        "100": 5.034420597142002,
+        "1000": 5.242376018193681
+      },
+      "crackle_only_gain_db": -7.940558118226258
+    },
+    "glide": {
+      "what": "legato octaves with GLIDE: the oscillator's reactor iron swept by the pitch",
+      "cores": {
+        "ta_core": {
+          "b_mean_t": 0.6511637249194039,
+          "b_range_t": [
+            0.6213522259260608,
+            0.7523642494804453
+          ],
+          "theta_mean_ms_per_s": 10.47726377844505,
+          "theta_p99_ms_per_s": 66.15211605387341,
+          "m_irr_range_ms": 0.15799798371474583
+        },
+        "tb_core": {
+          "b_mean_t": -0.6550551854176988,
+          "b_range_t": [
+            -0.7523680864096579,
+            -0.6324825278668375
+          ],
+          "theta_mean_ms_per_s": 9.70916655403642,
+          "theta_p99_ms_per_s": 68.4905755332046,
+          "m_irr_range_ms": 0.14393027251578783
+        },
+        "ota_core": {
+          "b_mean_t": 0.7167147253155874,
+          "b_range_t": [
+            0.6084815335442475,
+            0.7648274505344842
+          ],
+          "theta_mean_ms_per_s": 31.179742559430306,
+          "theta_p99_ms_per_s": 75.88167732399161,
+          "m_irr_range_ms": 0.18695389238354987
+        },
+        "otb_core": {
+          "b_mean_t": -0.7413197473078974,
+          "b_range_t": [
+            -0.769304085401183,
+            -0.6986120980553264
+          ],
+          "theta_mean_ms_per_s": 15.855999064306191,
+          "theta_p99_ms_per_s": 49.51134429698783,
+          "m_irr_range_ms": 0.08569365359946657
+        }
+      },
+      "stress": {
+        "1": {
+          "crackle_re_program_db": -0.05999402933995868,
+          "crackle_peak_re_program_rms_db": 19.919871863397404
+        },
+        "10": {
+          "crackle_re_program_db": -1.0379423030215882,
+          "crackle_peak_re_program_rms_db": 16.851728349630136
+        },
+        "100": {
+          "crackle_re_program_db": -1.0922120546691603,
+          "crackle_peak_re_program_rms_db": 23.052503670126015
+        },
+        "1000": {
+          "crackle_re_program_db": 2.17855749930718,
+          "crackle_peak_re_program_rms_db": 23.728009846941184
+        }
+      },
+      "pitch_jitter_cents": {
+        "0": 5.362836690685672,
+        "1": 5.1159934303992785,
+        "10": 5.389744625064736,
+        "100": 5.0373106739153855,
+        "1000": 6.289437009955712
+      },
+      "crackle_only_gain_db": -6.751796870227132
+    }
+  }
+}

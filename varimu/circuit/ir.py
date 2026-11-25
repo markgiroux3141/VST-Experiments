@@ -465,6 +465,38 @@ class WurliReeds:
 
 
 @dataclass(frozen=True)
+class Barkhausen:
+    """Barkhausen avalanches in a transformer core (docs/PART_NOISE_PLAN.md;
+    varimu.devices.barkhausen is the reference, circuitsim's barkhausen.rs the port): a medium
+    sensing the core node `sense` (B, 1 V = 1 mT) after every step, replaying it through the
+    core's Jiles-Atherton model (ms_a_per_m .. path_m: the core device's own), and driving
+    `out` to ground at the next with the current of its avalanches' magnetization jumps times
+    `out_v_per_a` (a Vccs of gm 1 / out_v_per_a from `out` into the core node carries it:
+    varimu.circuit.parts.barkhausen). `stress` scales the largest jump (s_unit x stress; 0 is
+    off), `seed` the landscape's draws, the rest its constants. SPICE has none: ngspice sees
+    `out` held at 0 V."""
+
+    name: str
+    sense: str
+    out: str
+    ms_a_per_m: float
+    a_a_per_m: float
+    k_a_per_m: float
+    c: float
+    alpha: float
+    path_m: float
+    stress: float
+    seed: int
+    out_v_per_a: float
+    s_min: float
+    s_unit: float
+    tau: float
+    bin_factor: float
+    avalanche_hz: float
+    highpass_hz: float
+
+
+@dataclass(frozen=True)
 class ClavWear:
     """A worn Clavinet (docs/CLAVINET_PLAN.md, "Variation and wear"; varimu.clavinet.wear is
     the reference, circuitsim's `ClavModel::worn` the port): the unit `seed` (a whole
@@ -871,6 +903,7 @@ Element = (
     | Tape
     | Harp
     | WurliReeds
+    | Barkhausen
     | ClavStrings
     | NovaKeys
     | NickelKeys
@@ -940,6 +973,7 @@ _PREFIX = {
     Tape: "V",
     Harp: "V",
     WurliReeds: "V",
+    Barkhausen: "V",
     ClavStrings: "V",
     NovaKeys: "V",
     NickelKeys: "V",
@@ -983,6 +1017,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.out,)
     if isinstance(el, WurliReeds):
         return (el.plate, el.out)
+    if isinstance(el, Barkhausen):
+        return (el.sense, el.out)
     if isinstance(el, ClavStrings):
         return el.outs
     if isinstance(el, NovaKeys):
@@ -1251,6 +1287,8 @@ class CircuitIR:
                 _validate_harp(el, self.input_node)
             elif isinstance(el, WurliReeds):
                 _validate_wurli_reeds(el, self.input_node)
+            elif isinstance(el, Barkhausen):
+                _validate_barkhausen(el, self.input_node)
             elif isinstance(el, ClavStrings):
                 _validate_clav_strings(el, self.input_node)
             elif isinstance(el, NovaKeys):
@@ -1649,6 +1687,7 @@ _ELEMENT_KINDS = {
     "tape": Tape,
     "harp": Harp,
     "wurli_reeds": WurliReeds,
+    "barkhausen": Barkhausen,
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
     "nickel_keys": NickelKeys,
@@ -1805,6 +1844,8 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
     if cls in (NickelKeys, InventedKeys):
         return _fields(cls, d, tagged=True, max_keys=_count)
+    if cls is Barkhausen:
+        return _fields(cls, d, tagged=True, seed=_count)
     if cls is ReedKeys:
         return _fields(cls, d, tagged=True)
     if cls is ThyratronEvents:
@@ -1920,6 +1961,25 @@ def _validate_wurli_reeds(el: WurliReeds, input_node: str) -> None:
         raise IRError(f"{el.name}: its reeds drive {el.out} (ground, the input or the plate)")
     if el.plate == GROUND:
         raise IRError(f"{el.name}: its plate is ground")
+
+
+def _validate_barkhausen(el: Barkhausen, input_node: str) -> None:
+    """The Rust IR's checks for a core's Barkhausen medium."""
+    for f in ("ms_a_per_m", "a_a_per_m", "k_a_per_m", "path_m", "out_v_per_a", "s_min",
+              "s_unit", "bin_factor", "avalanche_hz", "highpass_hz"):  # fmt: skip
+        _positive(f"{el.name}.{f}", getattr(el, f))
+    if not (0.0 <= el.c < 1.0) or el.alpha < 0.0:
+        raise IRError(f"{el.name}: c in [0, 1) and alpha >= 0")
+    if not (math.isfinite(el.stress) and el.stress >= 0.0):
+        raise IRError(f"{el.name}.stress = {el.stress} must be >= 0")
+    if not (1.0 < el.tau < 2.0):
+        raise IRError(f"{el.name}.tau = {el.tau} must be in (1, 2)")
+    if not (isinstance(el.seed, int) and 0 <= el.seed < 2**53):
+        raise IRError(f"{el.name}.seed = {el.seed!r} must be a whole number < 2^53 (JSON)")
+    if el.out in (GROUND, input_node, el.sense):
+        raise IRError(f"{el.name}: it drives {el.out} (ground, the input or its core)")
+    if el.sense == GROUND:
+        raise IRError(f"{el.name}: its core node is ground")
 
 
 def _validate_clav_strings(el: ClavStrings, input_node: str) -> None:

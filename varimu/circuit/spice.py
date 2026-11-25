@@ -51,6 +51,7 @@ from pathlib import Path
 
 from varimu.circuit.ir import (
     GROUND,
+    Barkhausen,
     Capacitor,
     CircuitIR,
     ClavStrings,
@@ -444,7 +445,9 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
     if isinstance(el, Tape) and el.sync_out is not None:
         # The tape cut out: both heads' outputs held at 0 V (Sel-Sync's too).
         return f"{el.name} {el.out} 0 dc 0\n{el.name}_sync {el.sync_out} 0 dc 0"
-    if isinstance(el, Plate | Spring | Tape | Harp | WurliReeds | NickelKeys | InventedKeys):
+    if isinstance(
+        el, Plate | Spring | Tape | Harp | WurliReeds | NickelKeys | InventedKeys | Barkhausen
+    ):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
     if isinstance(el, ClavStrings):

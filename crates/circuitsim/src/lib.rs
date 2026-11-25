@@ -11,6 +11,7 @@
 
 use std::fmt;
 
+pub mod barkhausen;
 pub mod cathode;
 pub mod clavinet;
 pub mod convolve;

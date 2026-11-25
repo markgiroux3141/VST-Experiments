@@ -1,0 +1,156 @@
+{
+  "note": 45,
+  "panel": {
+    "emphasis": 0.75,
+    "cutoff": 0.35,
+    "amount": 0.3
+  },
+  "traps": "provisional: model knowledge (popcorn noise in small-signal BJTs: base-current steps of tens to hundreds of pA, dwell times from ~0.1 ms to seconds, exponential; amplitude rising with Vbe. Mechanism and statistics: web: https://en.wikipedia.org/wiki/Burst_noise, web: https://www.electronicdesign.com/technologies/power/power-supply/power-electronics-systems/article/21195658/burstpopcorn-noise-in-linear-bicmos-and-bcd-technologies (two levels, Poisson switching, high / low times); measured base currents to find: J. N. Puckett, Caltech thesis 1971, web: https://thesis.library.caltech.edu/10787/; F. Sischka, AK Bipo 2014 (2N2222))",
+  "sites": {
+    "ladder": {
+      "what": "the ladder's input pair: steps into the filter, rung by its resonance",
+      "transistor": "Q29",
+      "damage": {
+        "1": {
+          "pitch_dev_cents_max": 7.361589428964302e-08,
+          "pitch_dev_cents_rms": 4.674853500375958e-08,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -36.45534992596436
+        },
+        "10": {
+          "pitch_dev_cents_max": 9.91396434397802e-09,
+          "pitch_dev_cents_rms": 3.0417125103291294e-09,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -21.969912459269594
+        },
+        "100": {
+          "pitch_dev_cents_max": 3.873951722894371e-07,
+          "pitch_dev_cents_rms": 2.544324257995516e-07,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -14.092273294189312
+        },
+        "1000": {
+          "pitch_dev_cents_max": 4.2641002403121925e-07,
+          "pitch_dev_cents_rms": 2.5794017086646984e-07,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -4.884353296432188
+        }
+      }
+    },
+    "vca": {
+      "what": "the VCA's input pair: steps into the VCA",
+      "transistor": "Q16",
+      "damage": {
+        "1": {
+          "pitch_dev_cents_max": 6.55594047699325e-08,
+          "pitch_dev_cents_rms": 4.109273211071935e-08,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -32.17600545818429
+        },
+        "10": {
+          "pitch_dev_cents_max": 2.3640057480762597e-07,
+          "pitch_dev_cents_rms": 1.7104006267915908e-07,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -72.65287195224325
+        },
+        "100": {
+          "pitch_dev_cents_max": 2.3595811757113928e-07,
+          "pitch_dev_cents_rms": 1.46461370263767e-07,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -33.30270994713739
+        },
+        "1000": {
+          "pitch_dev_cents_max": 4.409632547102262e-07,
+          "pitch_dev_cents_rms": 2.6891013128785164e-07,
+          "oscillator_untouched": true,
+          "pops_re_note_db": -30.221292636854315
+        }
+      }
+    },
+    "sh": {
+      "what": "the keyboard's sample and hold: its input transistor's base current",
+      "transistor": "Q23_b",
+      "damage": {
+        "1": {
+          "pitch_dev_cents_max": 0.0018376842618836996,
+          "pitch_dev_cents_rms": 0.0007554737016682013,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -47.328996736653075
+        },
+        "10": {
+          "pitch_dev_cents_max": 0.021532267707401312,
+          "pitch_dev_cents_rms": 0.009384549284619048,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -36.36770483042263
+        },
+        "100": {
+          "pitch_dev_cents_max": 0.19133472278051575,
+          "pitch_dev_cents_rms": 0.07912035880633195,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -22.26990345639303
+        },
+        "1000": {
+          "pitch_dev_cents_max": 1.2805496033272683,
+          "pitch_dev_cents_rms": 0.6167425628486781,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -14.225271928845197
+        },
+        "10000": {
+          "pitch_dev_cents_max": 1.8857164467802041,
+          "pitch_dev_cents_rms": 0.7877175350430599,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -10.018532599880764
+        },
+        "100000": {
+          "pitch_dev_cents_max": 16.62270170558464,
+          "pitch_dev_cents_rms": 2.7208320819802547,
+          "oscillator_untouched": false,
+          "pops_re_note_db": 3.7932248706969163
+        }
+      }
+    },
+    "expo1": {
+      "what": "oscillator 1's exponential converter: its base current",
+      "transistor": "Q7_o1",
+      "damage": {
+        "1": {
+          "pitch_dev_cents_max": 1.0915379748175111,
+          "pitch_dev_cents_rms": 0.30657143902184564,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -22.690314741961608
+        },
+        "10": {
+          "pitch_dev_cents_max": 1.0606849373038265,
+          "pitch_dev_cents_rms": 0.4848567598290898,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -14.872425801887658
+        },
+        "100": {
+          "pitch_dev_cents_max": 1.3580438309958123,
+          "pitch_dev_cents_rms": 0.6447294555695443,
+          "oscillator_untouched": false,
+          "pops_re_note_db": -8.701391389000934
+        },
+        "1000": {
+          "pitch_dev_cents_max": 2.2623421438319564,
+          "pitch_dev_cents_rms": 1.0520933760254425,
+          "oscillator_untouched": false,
+          "pops_re_note_db": 2.8242312550005395
+        },
+        "10000": {
+          "pitch_dev_cents_max": 16.481828803310258,
+          "pitch_dev_cents_rms": 7.463443727007144,
+          "oscillator_untouched": false,
+          "pops_re_note_db": 3.2017371903149154
+        },
+        "100000": {
+          "pitch_dev_cents_max": 157.54358960783435,
+          "pitch_dev_cents_rms": 74.6399955436002,
+          "oscillator_untouched": false,
+          "pops_re_note_db": 3.672211296031232
+        }
+      }
+    }
+  },
+  "difference_floor_note": "pass minus no-trap has a floor: in the partitioned voice any change shifts some event by a sample (a trap at 1e-6 x DAMAGE 1 at the ladder still differs by -36.7 dB re the note), so pops_re_note_db below ~-30 dB is that floor, not the trap; the pitch sites' floor is ~1 cent cycle to cycle (the oscillators' own). pops_only files are kept at DAMAGE 1000 only."
+}

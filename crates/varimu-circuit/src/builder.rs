@@ -907,7 +907,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 36] = [
+const MACROS: [&str; 37] = [
     "R",
     "C",
     "L",
@@ -938,6 +938,7 @@ const MACROS: [&str; 36] = [
     "tape",
     "harp",
     "wurli_reeds",
+    "barkhausen",
     "clav_strings",
     "nova_keys",
     "nickel_keys",
@@ -1073,6 +1074,16 @@ fn macro_of(kind: &str) -> Macro {
                 v.push(opt("sym_amount", Physical));
                 v
             },
+            false,
+        ),
+        "barkhausen" => (
+            Some(1),
+            vec![
+                p("material", Raw),
+                p("path_m", Physical),
+                p("stress", Physical),
+                p("seed", Number),
+            ],
             false,
         ),
         "wurli_reeds" => (
@@ -1660,6 +1671,7 @@ fn expand(
         "tape" => return tape_part(ctx, name, nodes, a),
         "harp" => return harp_part(ctx, name, nodes, a),
         "wurli_reeds" => return wurli_reeds_part(ctx, name, nodes, a),
+        "barkhausen" => return barkhausen_part(ctx, name, nodes, a),
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         "nova_keys" => return nova_keys_part(ctx, name, conn, a),
         "nickel_keys" => return nickel_keys_part(ctx, name, nodes, a),
@@ -2389,6 +2401,77 @@ const CLAV_WEAR: [&str; 7] = [
     "wear_yarn",
     "wear_pickups",
 ];
+
+/// Barkhausen avalanches in a core (docs/PART_NOISE_PLAN.md; `varimu.circuit.parts.barkhausen`):
+/// the medium V<NAME> sensing the core node and driving <name>_bk, a Vccs G<NAME> from
+/// <name>_bk into the core node, and <name>_bk's load R<NAME>.
+fn barkhausen_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    use circuitsim::barkhausen as bk;
+    let material = ctx.text(&format!("{name}.material"), &a["material"])?;
+    let mat = ctx
+        .lib
+        .material(&material)
+        .map_err(|e| ctx.fail(name, e.0))?;
+    let path_m = ctx.float(&format!("{name}.path_m"), &a["path_m"])?;
+    let stress = ctx.float(&format!("{name}.stress"), &a["stress"])?;
+    if stress < 0.0 {
+        return Err(ctx.fail(
+            &format!("{name}.stress"),
+            format!("{stress} must be >= 0 (0 is off)"),
+        ));
+    }
+    let seed = ctx.float(&format!("{name}.seed"), &a["seed"])?;
+    if seed.fract() != 0.0 || !(0.0..9_007_199_254_740_992.0).contains(&seed) {
+        return Err(ctx.fail(
+            &format!("{name}.seed"),
+            format!("{seed} must be a whole number in [0, 2^53)"),
+        ));
+    }
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let out = format!("{n}_bk");
+    let core = &nodes[0];
+    Ok(vec![
+        Element::Barkhausen(circuitsim::ir::Barkhausen {
+            name: format!("V{upper}"),
+            sense: core.clone(),
+            out: out.clone(),
+            ms_a_per_m: mat.ms_a_per_m,
+            a_a_per_m: mat.a_a_per_m,
+            k_a_per_m: mat.k_a_per_m,
+            c: mat.c,
+            alpha: mat.alpha,
+            path_m,
+            stress,
+            seed,
+            out_v_per_a: 1.0 / bk::GM_S,
+            s_min: bk::S_MIN,
+            s_unit: bk::S_UNIT,
+            tau: bk::TAU,
+            bin_factor: bk::BIN_FACTOR,
+            avalanche_hz: bk::AVALANCHE_HZ,
+            highpass_hz: bk::HIGHPASS_HZ,
+        }),
+        Element::Vccs(circuitsim::ir::Vccs {
+            name: format!("G{upper}"),
+            pos: circuitsim::ir::GROUND.into(),
+            neg: core.clone(),
+            ctrl_pos: out.clone(),
+            ctrl_neg: circuitsim::ir::GROUND.into(),
+            gm_s: bk::GM_S,
+        }),
+        Element::Resistor(circuitsim::ir::Resistor {
+            name: format!("R{upper}"),
+            a: out,
+            b: circuitsim::ir::GROUND.into(),
+            r_ohm: bk::LOAD_OHM,
+        }),
+    ])
+}
 
 /// The Wurlitzer 200A's reeds (docs/WURLITZER_PLAN.md, WZ4; `varimu.circuit.parts.wurli_reeds`):
 /// the medium V<NAME> sensing the plate and driving <name>_d, and the reeds' standing
