@@ -92,6 +92,18 @@ pub struct Device {
 /// Novachord's swell pedal, whose condenser is louder with less capacitance (SM2 p.10).
 pub const WHEEL_REVERSED: &[&str] = &["novachord"];
 
+/// Devices whose keyboard is single-trigger: a legato key changes the pitch and the
+/// envelope carries on. The Model D's trigger bus stays on the +10 V bar while any key is
+/// down, so its contours start only from no key held. Play's Retrigger starts off for them
+/// (it can still be turned on).
+pub const SINGLE_TRIGGER: &[&str] = &["minimoog_voice", "minimoog_vco"];
+
+/// Devices whose keyboard sounds the lowest key held, not the last one pressed: the Model
+/// D's resistor string, where the lowest closed key takes the current source's volts.
+/// Holding a high key and tapping a lower one drops the pitch and returns it, with no new
+/// trigger (single trigger).
+pub const LOW_NOTE_PRIORITY: &[&str] = &["minimoog_voice", "minimoog_vco"];
+
 /// The Novachord's full scale live, its voice coils' volts (`live_speaker_v`): measured
 /// by `examples/play.rs` (docs/NOVACHORD_PLAN.md, NV5).
 pub const NOVACHORD_SPEAKER_V: f64 = 10.0;
@@ -547,6 +559,16 @@ impl Device {
     /// keys don't play the test oscillator into it.
     pub fn plays_own_oscillator(&self) -> bool {
         self.own_oscillator || self.pitch.is_some()
+    }
+
+    /// Whether its keyboard is single-trigger ([`SINGLE_TRIGGER`]).
+    pub fn single_trigger(&self) -> bool {
+        SINGLE_TRIGGER.contains(&self.id)
+    }
+
+    /// Whether its keyboard sounds the lowest key held ([`LOW_NOTE_PRIORITY`]).
+    pub fn low_note_priority(&self) -> bool {
+        LOW_NOTE_PRIORITY.contains(&self.id)
     }
 
     /// Whether the Play view offers it: not retired, and no key input (Play has nothing

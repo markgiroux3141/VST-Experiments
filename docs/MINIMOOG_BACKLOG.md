@@ -4,6 +4,57 @@ Open items from the Minimoog Model D build ([MINIMOOG_PLAN.md](MINIMOOG_PLAN.md)
 [data/schematics/minimoog/README.md](../data/schematics/minimoog/README.md)), collected 2026-11-07
 when the work paused. The plan's Status section has the measurements behind each item.
 
+## Authenticity first (2026-11-25, the user's direction)
+
+The user's priority: one really good, simple oscillator sound authentic to a Model D (how it
+behaves when keys are pressed and notes connect, the parts' interrelations), not more oscillators,
+effects or compute. Worked in this order, each measured; nothing here adds threads at the default
+panel.
+
+1. **Playing behaviour (no compute). Done 2026-11-25.**
+   - Single trigger: `panel::SINGLE_TRIGGER` (the voice, the VCO); Play's Retrigger starts off for
+     them (the trigger bus stays on +10 V while any key is down: a legato key changes the pitch, the
+     contours carry on).
+   - Low-note priority: `panel::LOW_NOTE_PRIORITY`, `Playing::low_note` (written in a take's JSON only
+     when set, so older takes keep their bytes), `Player::set_low_note`; the Performer sounds the
+     lowest key held (the string). Test: `performance::tests::low_note_priority_...`.
+   - Start phases: the three oscillators started at one DC point (oscillator 2 12 deg from 1, ~20 deg
+     after 2 s: a unison was one louder oscillator, after every restart). Oscillators 2 and 3 now
+     start their C7 (C18 / C29) at 1.7 / 3.4 V (`c7_v0_v`, make_minimoog_oscillators.py `START_V`):
+     96 / -143 deg from oscillator 1. Oscillator 1 and the stand-alone VCO unchanged.
+2. **A source by its mixer switch only (no compute at the default panel). Done 2026-11-25.**
+   `make_minimoog_voice.py`'s WHEN: an oscillator or the noise is built while its ON is on, never by
+   its LEVEL, so LEVEL turns in place from 0 (play.rs `--turn osc2_level=0,0.5`: 0 restarts, knob to
+   ear 91 ms, was a 368 ms restart). OSC 2, OSC 3 and NOISE now default to OFF. With their 33K
+   summing resistors off the bus, oscillator 1 alone reads -17.9 dBFS peak (was -18.3): the real
+   mixer's own loading.
+3. **A unit's own parts (values only).** Seeded tolerance draws per unit (a UNIT # control), baked by
+   the generators (the Rust builder refuses spreads), then Folkman's procedures re-run on the drawn
+   unit (oscillator trims on the 12.288 MHz reference, slow: once per unit), so trims leave real
+   residuals: tracking errors of a few cents per oscillator (a unison beats differently up and down
+   the keyboard), ladder mismatch (even harmonics, a little control-voltage thump on fast filter
+   contours), contour times, the rectangle's duty. The start phases (item 1) belong in the draw too.
+4. **Stand-ins that shape the envelope and glide (values only):** a germanium diode card for the
+   1N34A (the 1N4148 puts the contour peaks ~0.3 V high: how far the filter opens, how hard the VCA
+   is pushed); check the fastest attack (3.1 ms against the panel's 1 ms) against it; a 2N4303 card
+   for the glide JFETs (the down / up asymmetry, ~2.5x, rests on the 2N3819's Vgs); the TIS97.
+5. **Circuit noise (small compute; measure first):** the voice has no `noise:` block, so periods are
+   exactly deterministic. NH2's transistor noise gives the expo converter's shot noise at microamps
+   and the comparator's noise: cycle-to-cycle jitter, the self-oscillating filter's wander. Measure
+   the jitter and its cost before turning it on live.
+6. **Slow drift (cheap):** the 726's heater loop (a thermal node per oscillator, B6's pattern) and
+   C7's tempco: unison beat rates that wander, a warm-up from cold.
+7. **Coupling through the supply (moderate; unproven):** the +-10 V regulators, the -5 V reference
+   and the keyboard's current source on real rails, the heaters' current on them; whether the
+   oscillators pull on each other is unknown: offline first.
+8. **A real reference:** no recording of a real Model D is in the repo; everything is checked against
+   the schematic and Folkman. Direct recordings of single notes, glides, legato runs, filter sweeps,
+   fast bass (the user fetches walled sources).
+
+Left alone for now (the user's focus): red noise, the overload lamp, EXT S-TRIG, the headphone amp,
+the feedback-loop trick, all three oscillators live. Small and only for those waveforms: the
+triangle at the draft (Next 3), R135's duty (Next 4).
+
 ## Next (2026-11-09: the voice is a Model D; MINIMOOG_PLAN.md "MM3 done and MM5 built")
 
 1. **The user listens** to `minimoog_voice`: three oscillators (RANGE, FREQUENCY, WAVEFORM, OSC 3 CONTROL), the mixer

@@ -357,6 +357,8 @@ struct Shared {
     /// Multi-trigger: a new key while another is held lifts the gate for
     /// [`RETRIGGER_GAP_S`], so an envelope that restarts on the gate's edge restarts.
     retrigger: AtomicBool,
+    /// Low-note priority (`Playing::low_note`).
+    low_note: AtomicBool,
     transport: Mutex<TransportCtl>,
     /// An event take asked for (a device played from keys): the device's id. The worker
     /// starts a fresh device in the background, then records from it with the transport's
@@ -563,6 +565,7 @@ impl Player {
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
             velocity_db: AtomicU64::new(crate::panel::VELOCITY_RANGE_DB.to_bits()),
             retrigger: AtomicBool::new(true),
+            low_note: AtomicBool::new(false),
             transport: Mutex::new(TransportCtl::default()),
             event_take: Mutex::new(None),
             event_take_wanted: AtomicBool::new(false),
@@ -716,6 +719,12 @@ impl Player {
     /// gate's level only).
     pub fn set_retrigger(&self, on: bool) {
         self.shared.retrigger.store(on, Ordering::Relaxed);
+    }
+
+    /// Low-note priority (on: the lowest key held sounds, the Model D's string) or
+    /// last-key (off).
+    pub fn set_low_note(&self, on: bool) {
+        self.shared.low_note.store(on, Ordering::Relaxed);
     }
 
     /// A new circuit with its values (the editor's drawing, edited): the same structure
@@ -2214,6 +2223,7 @@ fn playing_now(shared: &Shared, wave: Wave) -> Playing {
         range_mode: RangeMode::from_index(shared.range_mode.load(Ordering::Relaxed)),
         velocity_db: f64::from_bits(shared.velocity_db.load(Ordering::Relaxed)),
         retrigger: shared.retrigger.load(Ordering::Relaxed),
+        low_note: shared.low_note.load(Ordering::Relaxed),
     }
 }
 

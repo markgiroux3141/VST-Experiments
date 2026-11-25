@@ -122,6 +122,9 @@ pub struct Playing {
     /// The velocity range (dB between velocity 127 and 1; 0: every key alike).
     pub velocity_db: f64,
     pub retrigger: bool,
+    /// Low-note priority: the lowest key held sounds, not the last pressed
+    /// (`panel::LOW_NOTE_PRIORITY`, the Model D's string). Saved only when set.
+    pub low_note: bool,
 }
 
 impl Default for Playing {
@@ -131,6 +134,7 @@ impl Default for Playing {
             range_mode: RangeMode::Auto,
             velocity_db: crate::panel::VELOCITY_RANGE_DB,
             retrigger: true,
+            low_note: false,
         }
     }
 }
@@ -183,7 +187,7 @@ impl Performance {
     pub fn to_json(&self) -> Json {
         let values =
             |v: &Values| Json::Array(v.iter().map(|(k, x)| json!([k, value_json(x)])).collect());
-        json!({
+        let mut j = json!({
             "version": 1,
             "device": self.device,
             "quality": self.quality.name(),
@@ -205,7 +209,13 @@ impl Performance {
                 "values": values(&k.values),
                 "restart": k.restart.as_ref().map(|(u0, c0)| json!({"u0": u0, "c0": c0})),
             })).collect::<Vec<_>>(),
-        })
+        });
+        // Written only when set: a take saved before it existed keeps its bytes (and its
+        // renders' keys).
+        if self.playing.low_note {
+            j["low_note"] = Json::Bool(true);
+        }
+        j
     }
 
     pub fn from_json(v: &Json) -> Result<Performance, String> {
@@ -258,6 +268,7 @@ impl Performance {
                     .as_f64()
                     .unwrap_or(crate::panel::VELOCITY_RANGE_DB),
                 retrigger: v["retrigger"].as_bool().unwrap_or(true),
+                low_note: v["low_note"].as_bool().unwrap_or(false),
             },
             gain: v["gain"].as_f64().unwrap_or(1.0),
             noise: v["noise"].as_bool().unwrap_or(false),
@@ -570,6 +581,15 @@ impl Performer {
         self.playing
     }
 
+    /// The key that sounds among those held: the last pressed, or with low-note priority
+    /// the lowest.
+    fn sounding(&self) -> Option<(u8, u8)> {
+        match self.playing.low_note {
+            true => self.held.iter().min_by_key(|&&(n, _)| n).copied(),
+            false => self.held.last().copied(),
+        }
+    }
+
     fn apply(&mut self, e: Ev) -> bool {
         match e {
             Ev::On { note, velocity } => {
@@ -625,7 +645,7 @@ impl Performer {
                 i += 1;
             }
             let next = events.get(i).map_or(n, |e| e.0.min(n - 1)).max(s + 1);
-            let mut sounding = self.held.last().copied();
+            let mut sounding = self.sounding();
             let mut low = false;
             if let (Some(r), Some(applied)) = (self.range, low_applied) {
                 let hz = sounding.map(|(k, _)| TestOsc::note_hz(k));
@@ -757,6 +777,44 @@ mod tests {
     }
 
     #[test]
+    fn low_note_priority_sounds_the_lowest_key_held_without_a_new_trigger() {
+        // The Model D's keyboard: single trigger, the lowest key held sounds.
+        let k = KeyString {
+            v_per_semitone: 0.1,
+            ref_note: 60.0,
+            min_v: -30.0,
+            max_v: 30.0,
+        };
+        let feeds = vec![Feed::Key(k), Feed::Gate(-10.0, 10.55)];
+        let playing = Playing {
+            retrigger: false,
+            low_note: true,
+            ..Playing::default()
+        };
+        let mut p = Performer::new(feeds, playing, 48_000, START_NOTE, false);
+        let b = p.block(
+            100,
+            &[
+                (0, on(64)),                // a high key
+                (20, on(60)),               // a lower one tapped: the pitch drops
+                (40, Ev::Off { note: 60 }), // and returns
+                (60, on(67)),               // a higher one while 64 is held: no change
+                (80, Ev::Off { note: 64 }), // the low one up: 67 sounds
+            ],
+            None,
+        );
+        let key = &b.controls[0];
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-12;
+        assert!(close(key[10], 0.4));
+        assert!(close(key[30], 0.0));
+        assert!(close(key[50], 0.4));
+        assert!(close(key[70], 0.4));
+        assert!(close(key[90], 0.7));
+        // The gate never lifts while a key is down.
+        assert!(b.controls[1].iter().all(|&v| v == 10.55));
+    }
+
+    #[test]
     fn the_last_key_held_plays_and_pressure_resets_when_all_are_up() {
         let k = KeyString {
             v_per_semitone: 0.75,
@@ -843,6 +901,7 @@ mod tests {
                 range_mode: RangeMode::Low,
                 velocity_db: 12.5,
                 retrigger: false,
+                low_note: false,
             },
             gain: 0.7,
             noise: true,
@@ -860,6 +919,13 @@ mod tests {
         let text = serde_json::to_string(&p.to_json()).unwrap();
         let back = Performance::from_json(&serde_json::from_str(&text).unwrap()).unwrap();
         assert_eq!(back, p);
+        // Low-note priority is written only when set (older takes keep their bytes).
+        assert!(!text.contains("low_note"));
+        let mut low = p.clone();
+        low.playing.low_note = true;
+        let text = serde_json::to_string(&low.to_json()).unwrap();
+        let back = Performance::from_json(&serde_json::from_str(&text).unwrap()).unwrap();
+        assert_eq!(back, low);
         // Edited: the knobs are the panel's now, the range switch the Performer's.
         let e = p.edited(&p.notes(), Some("range"));
         assert!(!e.knobs_applied && e.knobs[0].restart.is_none());

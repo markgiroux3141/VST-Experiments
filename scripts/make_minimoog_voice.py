@@ -245,10 +245,12 @@ def build() -> str:
 # structure: a live stream restarts.
 MOD_ROUTES = ["osc_mod", "filter_mod"]
 WHEN = {
-    "osc 1: ": [["osc1_on", "osc1_level"]],
-    "osc 2: ": [["osc2_on", "osc2_level"]],
-    "osc 3: ": [["osc3_on", "osc3_level"], *MOD_ROUTES],
-    "noise: ": [["noise_on", "noise_level"], ["osc_mod", "mod_mix"], ["filter_mod", "mod_mix"]],
+    # a source by its mixer switch only, so its LEVEL turns smoothly from 0 (an update in
+    # place, not a restart); OSC 2 / 3 and NOISE are off by default
+    "osc 1: ": ["osc1_on"],
+    "osc 2: ": ["osc2_on"],
+    "osc 3: ": ["osc3_on", *MOD_ROUTES],
+    "noise: ": ["noise_on", ["osc_mod", "mod_mix"], ["filter_mod", "mod_mix"]],
     "modulation mix": MOD_ROUTES,
     "panel: rails": MOD_ROUTES,
     # OSC MOD's and FILTER MOD's grounding contacts while the modulation mix isn't built (R5
@@ -574,13 +576,15 @@ def join_oscillators(out: dict, sections: list, oscs: tuple[int, ...] = (1, 2, 3
             + ("8 by default (provisional)" if i == 1 else "0 by default: one oscillator heard"),
         }
         out["controls"][f"osc{i}_on"] = {
-            "value": 1,
+            "value": 1 if i == 1 else 0,
             "choices": [0, 1],
             "unit": "switch",
             "source": f"Fig 9-17: {p['on']}, OSC {i}'s mixer switch (ON: its summing resistor "
-            "onto the bus, board 4's pin 4); off (or its LEVEL at 0) the oscillator isn't built"
+            "onto the bus, board 4's pin 4); off the oscillator isn't built"
             + (" unless OSC MOD or FILTER MOD is on" if i == 3 else "")
-            + " (nothing of it reaches the bus: WHEN), so a flip restarts a live stream",
+            + " (nothing of it reaches the bus: WHEN), so a flip restarts a live stream; on, "
+            "its LEVEL turns in place (from 0 too); "
+            + ("on by default" if i == 1 else "off by default (its LEVEL at 0)"),
         }
         # the waveform switch's common only: the rest is a gated section's (WHEN), and a probe's
         # node must be in every build
@@ -669,12 +673,12 @@ def join_noise(out: dict, sections: list) -> None:
         "provisional); 0 by default",
     }
     out["controls"]["noise_on"] = {
-        "value": 1,
+        "value": 0,
         "choices": [0, 1],
         "unit": "switch",
-        "source": "Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); off (or its "
-        "level at 0) the noise generator isn't built unless OSC MOD or FILTER MOD with MOD MIX "
-        "above 0 reaches it (WHEN), so a flip restarts a live stream",
+        "source": "Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); off the noise "
+        "generator isn't built unless OSC MOD or FILTER MOD with MOD MIX above 0 reaches it "
+        "(WHEN), so a flip restarts a live stream; on, its level turns in place; off by default",
     }
     out["probes"] += ["nsel"]
 

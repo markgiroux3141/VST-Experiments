@@ -50,6 +50,8 @@ from varimu.config import CONFIG_DIR
 CIRC = CONFIG_DIR / "circuits"
 SRC = CIRC / "minimoog_vco.yaml"
 TRIMS = ("r14_at", "r16_at", "r18_at", "r31_at")
+# C7's start voltage per oscillator (oscillator 1 has none: its DC point): a start phase.
+START_V = {2: 1.7, 3: 3.4}
 
 
 def header(i: int) -> str:
@@ -126,6 +128,20 @@ def oscillator(i: int) -> dict:
     panel["RFREQF"] = {"R": ["freqf", "0"], "r": "r_freq_foot_ohm"}
     summer = section(d, f"osc {i} summer")["parts"]
     summer["RFREQIN"] = {"R": ["freqw", "s6"], "r": "r_freq_in_ohm"}
+    # Where the ramp starts: a real unit's oscillators run free from power-up, each at its own
+    # phase. Without a start voltage all three start at the same DC point (oscillator 2 sat
+    # 12 deg from oscillator 1 and stayed within ~20 deg for 2 s: a unison sounded as one
+    # louder oscillator, after every restart).
+    c_name = {2: "C18", 3: "C29"}[i]
+    v["c7_v0_v"] = {
+        "value": START_V[i],
+        "source": f"provisional: model knowledge ({c_name}'s voltage where the run starts, "
+        "held for the DC operating point only: a start phase, since a real unit's "
+        "oscillators come up wherever power-up leaves them; C7's ramp spans ~0-5 V; the "
+        "values put the three oscillators about a third of a cycle apart)",
+    }
+    core = section(d, "core")["parts"]
+    core["C7"] = {**core["C7"], "v0": "c7_v0_v"}
     probes = list(d["probes"])
     if i == 3:
         osc3_control(d, v, panel, summer)

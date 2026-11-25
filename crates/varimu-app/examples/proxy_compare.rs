@@ -99,6 +99,7 @@ fn run() -> Result<(), String> {
         range_mode: RangeMode::Auto,
         velocity_db: range_db,
         retrigger: true,
+        low_note: false,
     };
     let n = ((seconds + 0.1) * rate as f64) as usize;
     let (a, b) = (((0.1 + seconds / 2.0) * rate as f64) as usize, n);

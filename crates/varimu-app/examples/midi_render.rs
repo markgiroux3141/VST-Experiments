@@ -157,6 +157,7 @@ fn run() -> Result<(), String> {
             range_mode: mode,
             velocity_db,
             retrigger: true,
+            low_note: false,
         },
         gain: 1.0,
         noise: false,

@@ -500,6 +500,8 @@ impl PlayView {
     }
 
     fn load_knobs(&mut self) {
+        // The device's keyboard: single-trigger devices (the Model D) start with Retrigger off.
+        self.retrigger = !DEVICES.get(self.device).is_some_and(|d| d.single_trigger());
         self.proxy_tables = DEVICES
             .get(self.device)
             .filter(|_| self.drawing_device().is_none())
@@ -1036,6 +1038,7 @@ impl PlayView {
                 let p = Player::start_proxy(kb.keys.clone(), start, v, s.clone(), buffer)?;
                 p.set_velocity_range(self.velocity_range_db());
                 p.set_retrigger(self.retrigger);
+                p.set_low_note(self.low_note());
                 self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
                 Ok((kb, p))
             });
@@ -1077,6 +1080,7 @@ impl PlayView {
             }
             p.set_velocity_range(self.velocity_range_db());
             p.set_retrigger(self.retrigger);
+            p.set_low_note(self.low_note());
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
             Ok((kb, p, span))
         });
@@ -1363,6 +1367,13 @@ impl PlayView {
         } else {
             0.0
         }
+    }
+
+    /// Whether the device's keyboard sounds the lowest key held (`panel::LOW_NOTE_PRIORITY`).
+    fn low_note(&self) -> bool {
+        DEVICES
+            .get(self.device)
+            .is_some_and(|d| d.low_note_priority())
     }
 
     /// The mod wheel turns the device's `mod_wheel` knob over its range.
@@ -2156,6 +2167,7 @@ impl PlayView {
             && let Some(p) = &self.player
         {
             p.set_retrigger(self.retrigger);
+            p.set_low_note(self.low_note());
         }
         let held = self.keyboard.as_ref().map(|kb| match kb.keys.sounding() {
             Some((n, v)) => format!(
