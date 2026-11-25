@@ -599,7 +599,10 @@ is single-trigger and low-note priority (`panel::SINGLE_TRIGGER`, `panel::LOW_NO
 written in a take only when set), oscillators 2 / 3 start at their own phases (C7's `v0`), a source is built by its
 mixer switch only (LEVEL turns smoothly from 0; OSC 2 / 3 and NOISE off by default); part draws, noise, the 1N34A,
 drift and supply coupling measured (scripts/minimoog_{unit_study,ladder_mismatch,diode_sensitivity,noise_jitter}.py
--> reports/minimoog/units/), what held and what's open in the backlog.
+-> reports/minimoog/units/), the glide JFETs `2N4303@1`, the trims' tolerances sized
+(`minimoog_trim_tolerance.py`); **closed by the user 2026-11-25**: the parts are within hearing of the drawing, more
+datasheet work has hit diminishing returns; reopen only for something heard as wrong or a real Model D's recordings
+(the backlog's "Closed").
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

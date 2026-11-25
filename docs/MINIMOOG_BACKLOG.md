@@ -11,6 +11,13 @@ behaves when keys are pressed and notes connect, the parts' interrelations), not
 effects or compute. Worked in this order, each measured; nothing here adds threads at the default
 panel.
 
+**Closed (2026-11-25, the user's call).** Items 1-2 changed how it plays; items 3-6 found every
+realistic part difference within a cent or a few percent (the 2N4303 kept, the trims' UNIT # not
+built: option A). The model follows the drawing; whether it sounds like a real Model D was never
+compared. Reopen for something the user hears as wrong (the ladder's TIS97 stand-in first), or for
+item 8's recordings. Not measured yet: the voice's production render speed (`examples/voice_bench.rs
+--quality production`; estimated 10-20x slower than real time from the 670's production / draft ratio).
+
 1. **Playing behaviour (no compute). Done 2026-11-25.**
    - Single trigger: `panel::SINGLE_TRIGGER` (the voice, the VCO); Play's Retrigger starts off for
      them (the trigger bus stays on +10 V while any key is down: a legato key changes the pitch, the
