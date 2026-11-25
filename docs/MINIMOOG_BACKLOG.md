@@ -42,9 +42,19 @@ panel.
      EXT moves < 0.02 dB driven hot (-22 dB) and <= 0.3 dB at 1 mV (-52.4 dB). The voice's own
      asymmetry (output amp, VCA, pre-amp) swamps the ladder's: reports/minimoog/units/ladder_mismatch.json.
      The thump itself (414 mV, -29 dBFS, nominal) is backlog Next 6's, larger at full AMOUNT.
-   - *The oscillators:* `scripts/minimoog_unit_study.py` (oscillator 1's parts drawn in their printed
-     classes, Folkman's four trims re-solved on the reference, tracking across the keyboard against
-     the nominal unit's, which is within 0.42 c everywhere): see "the oscillator result" below.
+   - *The oscillators: the trims take the draws out.* `scripts/minimoog_unit_study.py` (oscillator
+     1's 69 parts drawn in their printed classes, Folkman's four trims re-solved on the 12.288 MHz
+     reference, 7 Newton iterations, ~75 min while other runs shared the cores; seed 1 only, seed 2
+     stopped): untrimmed the unit ran +203 to +254 c; trimmed, it tracks within 1.0 c of the nominal
+     unit at 11 keys (2': within 0.2 c; 8' up to 0.7, 32' up to 1.0, where only OCT ADJ's one point
+     holds it). So two oscillators drawn and trimmed would beat differently across the keyboard by at
+     most ~1 c: subtle (the user's rule: verified, move on). reports/minimoog/units/study.json.
+   - *What would make a unit audible instead:* how well the technician trims. Folkman's trims here
+     are solved to 0.05 c; a bench with a frequency counter or by ear leaves each trim point off by
+     its resolution, and that error is a values-only change (no re-trim, no compute): SHIFT's error a
+     constant offset, SCALE's a cents-per-octave tilt, OCT ADJ's an offset per footage. Its size needs
+     a source (Folkman's text, benmook.com minimoog2.pdf, may state the tolerances he tunes to). This
+     is the next step of item 3.
 4. **Stand-ins that shape the envelope and glide (values only):** a germanium diode card for the
    1N34A; a 2N4303 card for the glide JFETs (the down / up asymmetry, ~2.5x, rests on the 2N3819's
    Vgs); the TIS97. **Measured 2026-11-25:** Table 7-6 has CR1, CR3, CR6, CR8, CR10 1N34A and CR2,
