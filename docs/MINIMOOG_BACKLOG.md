@@ -34,19 +34,52 @@ panel.
    residuals: tracking errors of a few cents per oscillator (a unison beats differently up and down
    the keyboard), ladder mismatch (even harmonics, a little control-voltage thump on fast filter
    contours), contour times, the rectangle's duty. The start phases (item 1) belong in the draw too.
+   **Measured 2026-11-25 (nothing built):**
+   - *The ladder: not worth it.* `scripts/minimoog_ladder_mismatch.py` (each ladder transistor its
+     own instance, SPICE area drawn +-12 %, ~+-3 mV of Vbe; the filter board's printed note matches
+     its expo pair Q26 / Q28 to +-3 mV) against the nominal voice, three draws: the key-down thump
+     with no source and AMOUNT 1, ATTACK 0 (414 mV peak nominal) moves -0.3 to +4 %; H2 of a sine at
+     EXT moves < 0.02 dB driven hot (-22 dB) and <= 0.3 dB at 1 mV (-52.4 dB). The voice's own
+     asymmetry (output amp, VCA, pre-amp) swamps the ladder's: reports/minimoog/units/ladder_mismatch.json.
+     The thump itself (414 mV, -29 dBFS, nominal) is backlog Next 6's, larger at full AMOUNT.
+   - *The oscillators:* `scripts/minimoog_unit_study.py` (oscillator 1's parts drawn in their printed
+     classes, Folkman's four trims re-solved on the reference, tracking across the keyboard against
+     the nominal unit's, which is within 0.42 c everywhere): see "the oscillator result" below.
 4. **Stand-ins that shape the envelope and glide (values only):** a germanium diode card for the
-   1N34A (the 1N4148 puts the contour peaks ~0.3 V high: how far the filter opens, how hard the VCA
-   is pushed); check the fastest attack (3.1 ms against the panel's 1 ms) against it; a 2N4303 card
-   for the glide JFETs (the down / up asymmetry, ~2.5x, rests on the 2N3819's Vgs); the TIS97.
-5. **Circuit noise (small compute; measure first):** the voice has no `noise:` block, so periods are
-   exactly deterministic. NH2's transistor noise gives the expo converter's shot noise at microamps
-   and the comparator's noise: cycle-to-cycle jitter, the self-oscillating filter's wander. Measure
-   the jitter and its cost before turning it on live.
-6. **Slow drift (cheap):** the 726's heater loop (a thermal node per oscillator, B6's pattern) and
-   C7's tempco: unison beat rates that wander, a warm-up from cold.
+   1N34A; a 2N4303 card for the glide JFETs (the down / up asymmetry, ~2.5x, rests on the 2N3819's
+   Vgs); the TIS97. **Measured 2026-11-25:** Table 7-6 has CR1, CR3, CR6, CR8, CR10 1N34A and CR2,
+   CR4, CR5, CR7, CR9 1N4004 (the file has all ten as the 1N4148; sources README "Parts lists").
+   Microsemi's 1N34A sheet gives only limits (VF <= 1.0 V at 5 mA, IR <= 30 uA at 10 V): no card can
+   be fitted from it. `scripts/minimoog_diode_sensitivity.py` (all ten diodes' forward drop ~0.3 V
+   lower, SPICE area 750, an upper bound): the filter contour's peak 4.87 -> 4.50 V, its idle +0.18
+   -> -0.11 V, the fastest attack 0.63 -> 0.58 ms (10-90 %), decay 0.88 -> 0.86 ms. A knob's worth
+   of AMOUNT / CUTOFF, not a character: wait for a typical 1N34A curve (and germanium's reverse
+   leakage, which would droop a held peak), then model only CR1 / 3 / 6 / 8 / 10. Also: the fastest
+   attack is 0.6 ms 10-90 % (within the panel's 1 ms); the old "3.1 ms" was time to the rounded top.
+5. **Circuit noise (small compute; measure first). Measured 2026-11-25: inaudible in pitch.**
+   `scripts/minimoog_noise_jitter.py` (the voice at draft-1x with `noise=1`: 340 Johnson currents and
+   56 transistor noises, oscillator 1's period from its ramp): A3's cycle-to-cycle jitter 0.218 c rms
+   with noise, 0.219 without (the event kernels' numerical floor at 96 kHz); the output's rms the
+   same to 5 digits; cost ~2 %. White noise on ~1 uA over a period is ~0.01 c (q / Q). A real VCO's
+   wander is flicker (1/f) in the expo pair, and config/device_noise.yaml has no sourced KF for the
+   uA726 or 2N3904: a source for it is the open item. A `noise` block on the voice would only add
+   Play's Noise switch (off by default) and the output's hiss floor; not added.
+6. **Slow drift. Measured from the parts list 2026-11-25: no strong source on this board.** Table
+   7-4: C7 / C18 / C29 are polycarbonate (+-10 %; tempco roughly +-50-100 ppm/K, ~0.1-0.2 c per
+   kelvin, model knowledge), the expo pair on the 726's regulated die, the summers 1 % metal-film
+   networks. Building a thermal model would mean inventing an ambient process and the 726 loop's
+   residual: wait for a measured drift figure (a reference recording, item 8, or a published one).
 7. **Coupling through the supply (moderate; unproven):** the +-10 V regulators, the -5 V reference
    and the keyboard's current source on real rails, the heaters' current on them; whether the
-   oscillators pull on each other is unknown: offline first.
+   oscillators pull on each other is unknown: offline first. **Read 2026-11-25 (nothing run): a low
+   prior.** Each oscillator's ramp starts at +10 V / 2 (R25 / R26 into IC4A) and its expo's reference
+   current is +10 V / R30, so its pitch (I / (C dV)) cancels the +10 V rail to first order: ripple, or
+   another oscillator's reset current (R33 2K: ~5 mA pulses) on a real rail's impedance, mostly
+   doesn't reach pitch that way. What's left: the keyboard's current source (its reference R20 / R22
+   on +10 V: key volts follow the rail; 1 mV of ripple is ~0.4 c at the top key, a hum-rate vibrato
+   far below hearing), the -5 V reference's rejection (RANGE), and the comparators' thresholds. If
+   picked up: Fig 9-8 (power supply No. 3, PDF page 10) for the regulators' output impedance and
+   ripple, then one offline run with two oscillators a few cents apart, looking for pulling.
 8. **A real reference:** no recording of a real Model D is in the repo; everything is checked against
    the schematic and Folkman. Direct recordings of single notes, glides, legato runs, filter sweeps,
    fast bass (the user fetches walled sources).

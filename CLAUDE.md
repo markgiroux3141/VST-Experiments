@@ -593,7 +593,13 @@ user's OK): the voice plays Newton 1e-4 (the ladder's resonance ~1 cent flat, te
 iterations redone as halves to h / 16, never on a multi-rate island), which fixed the loudness attack ending with the
 filter's (a contour flip-flop's flip inside a step had two end points); TR-BDF2 has an embedded error estimate now (used
 only with error control). Live: default 60-70 %, two oscillators ~75 %, no dropouts at a 50 ms buffer. Next: the user
-listens.
+listens. **Since 2026-11-25 (the user's): authenticity over features** (no more oscillators, effects or compute;
+[docs/MINIMOOG_BACKLOG.md](docs/MINIMOOG_BACKLOG.md) "Authenticity first", items 1-8 in order): the Model D's keyboard
+is single-trigger and low-note priority (`panel::SINGLE_TRIGGER`, `panel::LOW_NOTE_PRIORITY`, `Playing::low_note`,
+written in a take only when set), oscillators 2 / 3 start at their own phases (C7's `v0`), a source is built by its
+mixer switch only (LEVEL turns smoothly from 0; OSC 2 / 3 and NOISE off by default); part draws, noise, the 1N34A,
+drift and supply coupling measured (scripts/minimoog_{unit_study,ladder_mismatch,diode_sensitivity,noise_jitter}.py
+-> reports/minimoog/units/), what held and what's open in the backlog.
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

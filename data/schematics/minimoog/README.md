@@ -124,6 +124,26 @@ itself to a set point; units between serials 11362 and 11794 with date codes 785
 R67, R105 selected for 20.5 mV +-0.4 mV per octave across pins 1 and 10 (49.9K, 75K or 100K); the rectangular
 wave's duty cycle 50 % +-1 %; R59 deleted above serial 10175. Parts: 2N3904 / 2N3906, MC1458CP-1, TL081, LM393, 726.
 
+## Parts lists read 2026-11-25 (the service manual's PDF pages 22-26)
+
+- **Table 7-4, the new oscillator board (10175 and above), p. 7-2:** C7, C18, C29 (the integrators)
+  **Polycarbonate, 0.001 uF, +-10 %, 50 V** (946-041508-102); C8 / C19 / C30 polyester .001 +-10 %; C6 / C17
+  / C28 tantalum 1.5 uF +-10 %; C1 / C2 / C37 tantalum 5.6 uF, C3 tantalum 27 uF; the 100 pF, 18 pF, 500 pF
+  and 0.01 uF parts ceramic disc +-10 %; CR1-CR6 1N4148 (alternate 1N914); IC5 / IC10 / IC15 "726"; Q4 / Q9 /
+  Q14 E112, Q2 E101; resistors 853-... +-1 % 1/4 W (metal film where printed), 852-... +-5 % 1/4 W; the
+  summers are resistor networks N1 (primary), N2-N4 (secondary), N5-N7 (oscillator). p. 7-3: R27 / R67 / R105
+  49.9K 1 % metal film, "selected for oscillator tuning; may also be 75K or 100K"; R30 / R70 / R108 2.0 Meg
+  1 %; R31 / R71 / R109 listed twice: with the 10K trim pots on p. 7-2 (925-042389-002) and as "Trim Pot,
+  5K Ohm" (925-042389-001) on p. 7-3 (the circuit file has HI END as 10K, Fig 9-2's reading; the trim is
+  solved either way); R135-R137 220K 5 %.
+- **Table 7-6, the contour board, p. 7-6:** **CR1, CR3, CR6, CR8, CR10 1N34A** (germanium) and **CR2, CR4,
+  CR5, CR7, CR9 1N4004** (silicon); C1 / C4 / C13 polyester .01, C3 / C7 polyester 0.1, C6 polyester 1 uF, C9
+  polyester 0.33, C2 / C5 electrolytic 10 uF (+50 / -10 %), C8 100 pF, C11 47 pF, C12 500 pF ceramic, all
+  +-10 %. The contour file has every one of them as the 1N4148 (`clamp_diode`).
+- Microsemi's 1N34A sheet (a one-page scan, `web: https://highered.mheducation.com/sites/dl/free/0073373796/
+  443736/1N34A.pdf`) gives only limits: VF <= 1.0 V at 5 mA; IR <= 30 uA at 10 V, <= 500 uA at 50 V; PIV 65 V
+  at 1 mA. No typical curve: not enough for a card.
+
 ## Revisions (MatrixSynth's change list after Brian Kehew; dates unverified)
 
 R. A. Moog boards (about 100, the earliest, hard to tune); "older" oscillators (the first ~6000, 7 calibration
