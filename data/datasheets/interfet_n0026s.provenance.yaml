@@ -1,0 +1,33 @@
+device: "2N4303 (InterFET's N0026S process)"
+document: "N0026S Process Geometry (Document Number IF35506.R01)"
+publisher: "InterFET Corporation"
+date: "November, 2019"
+local_copy: transistors/interfet_n0026s_geometry.pdf
+local_copy_sha256: 10a61de2c2c3f5ef0e6f025aaf2b57434e39487487cd62ff6e16c0da36d9bf8e
+scan_source: "web: https://www.interfet.com/wp-content/uploads/jfet-n0026s-geometry-interfet.pdf (fetched 2026-11-25)"
+related: >-
+  InterFET's 2N4302 / 2N4303 / 2N4304 sheet (IF35094.R00, October 2019; transistors/
+  interfet_2n4302_2n4303_2n4304.pdf, sha256 9a392d6df7d81017f889c5697ef7eb4aa6cea185aecf764b9dd5e5dd55afcc0e;
+  web: https://www.interfet.com/wp-content/uploads/jfet-2n4302-2n4303-2n4304-interfet.pdf): "InterFET N0026S
+  Geometry"; its limits for the 2N4303 at 25 C: IDSS 4 / 10 mA (VDS 20 V, VGS 0, pulsed), VGS(off) -6 V max (VDS
+  20 V, ID 10 nA), GFS 2 mS min, Ciss 6 pF, Crss 2 pF; no curves
+digitized_with: >-
+  PyMuPDF's vector drawings of p. 3 (the chart is vector): each curve's line segments by stroke colour,
+  mapped through the chart's frame (VDS 0-10 V on x 319.1-481.9 pt, ID 0-7 mA on y 238.1-135.4 pt: the
+  tick and grid lines' coordinates); scripts/digitize_interfet_n0026s.py
+files:
+  interfet_n0026s_output.csv:
+    figure: >-
+      p.3, "Typical Output @ VGS(OFF) = -2.5V" (the top right chart): VGS 0, -0.8, -1.5, -2.2 V;
+      its IDSS (5.8 mA at VDS 3 V) inside the 2N4303's 4-10 mA
+    columns: vgs_v, vds_v, id_a
+    dropped: "VDS < 3 V (the ohmic region; the fit is the saturated law)"
+digitized_by: Claude Code
+digitized_on: 2026-11-25
+axis_calibration: "the chart's frame, ticks and grid lines (PDF coordinates)"
+estimated_error: "the plot's own resolution: a curve is a polyline of ~70 points; +-0.02 mA read"
+notes: >-
+  A modern process (2019) standing for the Minimoog's 1970s 2N4303s (Fig 9-7's Q10 / Q13): the JEDEC
+  type's limits are the anchor, the curves one typical unit inside them. The same sheet's typical
+  IDSS - VGS(OFF) line puts the 2N4303's 4-10 mA at VGS(off) ~-2 to ~-3.4 V; the chart's -2.5 V is in it.
+  Typical Ciss 4.3 pF, Crss 1.0 pF (VDS 15 V, VGS 0, 1 MHz), IGSS 10 pA (VGS -20 V).

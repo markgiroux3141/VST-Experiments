@@ -55,6 +55,37 @@ panel.
      constant offset, SCALE's a cents-per-octave tilt, OCT ADJ's an offset per footage. Its size needs
      a source (Folkman's text, benmook.com minimoog2.pdf, may state the tolerances he tunes to). This
      is the next step of item 3.
+   - *The technician's trims: sized 2026-11-25, nothing built; options to the user.* Folkman's text
+     (read in full: 24 pages, 7/73) states methods, not tolerances: a frequency counter at the main
+     output, or "Visualign" (the overload lamp's blink against the A-440: a unison at the low A, the
+     A-440's 8th harmonic at the high A), "repeat until no further improvement is attainable", the
+     octave trimmer for zero beats on 8', then "check tracking between any two oscillators and make
+     any necessary touch-up adjustments". Moog's own service manual (archive.org) has no adjustment
+     text; a fan's tuning guide on ManualsLib gives targets only. Its only numbers: the A-440 "on
+     frequency, within 1 Hz" (a common offset, taken out by TUNE), the pitch wheel 15.0-15.6 K in its
+     detent, the rails to 10.00 V on a 0.1 % DVM. So a trim point is off by its method's resolution
+     (provisional: model knowledge): a 1 s counter gate +-0.5 Hz, a zero beat by ear +-0.33 Hz (a
+     beat slower than one per 3 s). `scripts/minimoog_trim_tolerance.py` (pitch space only: the
+     SHIFT / SCALE line, HI END's term ~ the frequency, OCT ADJ per range step; no circuit runs) ->
+     reports/minimoog/units/trim_tolerance.json, 4000 units, by ear (on the counter the solo figures are up to 40 % larger, the unison's the
+     same):
+     one oscillator, retuned with TUNE at the second A on 8': its shape across the keyboard within
+     0.7 / 1.9 c (p50 / p95) on 8', 0.9 / 2.4 c on 2'; a footage switch moves it 0.3-0.7 / 0.8-1.7 c.
+     Below hearing (the user's rule: verified). Two oscillators in unison (oscillator 2 touched up
+     against 1 at the A's, then FREQUENCY set for zero beat at the second A on 8'): a beat appears
+     along the keyboard, at most 0.47 / 1.27 Hz on 8', 0.19 / 0.54 Hz on 16', 3.0 / 8.0 Hz on 2'. The
+     keyboard string (43 x 10 ohm 1 %, each uniform +-1 %, a bound) puts a key off the trimmed line by
+     up to 2.6 / 4.4 c, common to every oscillator (no beating), a semitone's own error <= 1 c.
+     Options (the user's):
+     A. Nothing built: solo it's under hearing.
+     B. A UNIT # for the trims, audible only in unison patches: per unit, each oscillator's four trim
+        points drawn in that resolution (oscillators 2 / 3 touched up against 1), mapped to r14_at /
+        r16_at / r31_at / r18_at through a 4 x 4 sensitivity measured once per oscillator on the
+        12.288 MHz reference (one trim Newton iteration's runs, ~10 min an oscillator), written to a
+        units table the app applies as value overrides (UNIT 0 the factory unit, bit for bit; a value
+        change updates the stream in place). No compute while playing.
+     C. B plus the string per unit: a per-key table in place of `panel::KeyString`'s straight line (a
+        Rust change); solo it's under hearing too.
 4. **Stand-ins that shape the envelope and glide (values only):** a germanium diode card for the
    1N34A; a 2N4303 card for the glide JFETs (the down / up asymmetry, ~2.5x, rests on the 2N3819's
    Vgs); the TIS97. **Measured 2026-11-25:** Table 7-6 has CR1, CR3, CR6, CR8, CR10 1N34A and CR2,
@@ -66,6 +97,25 @@ panel.
    of AMOUNT / CUTOFF, not a character: wait for a typical 1N34A curve (and germanium's reverse
    leakage, which would droop a held peak), then model only CR1 / 3 / 6 / 8 / 10. Also: the fastest
    attack is 0.6 ms 10-90 % (within the panel's 1 ms); the old "3.1 ms" was time to the rounded top.
+   **2026-11-25, second pass:**
+   - *The 2N4303: built and in.* InterFET's 2N4302-3-4 sheet gives limits only (IDSS 4-10 mA,
+     VGS(off) -6 V max) but names its die, N0026S, whose geometry sheet has typical output curves
+     as vector charts; its VGS(off) -2.5 V unit (IDSS 5.8 mA, inside the type's band) is digitized
+     (`scripts/digitize_interfet_n0026s.py` -> data/datasheets/interfet_n0026s_output.csv) and
+     fitted with the 2N5457's doping tail (`library.fit_2n4303`: VTO -3.23 V, BETA 0.516 mA/V^2, B
+     1.55, LAMBDA 7.2e-3; 0.4 % at IDSS, within 9 % down the curves): `2N4303@1`, a modern process
+     for the 1970s part. Against the 2N3819 on the keyboard circuit
+     (reports/minimoog/units/glide_2n4303.json): glide 1/e at 5 up 32.4 -> 34.3 ms, down 82.7 ->
+     83.8 ms (down / up 2.55x -> 2.44x: the asymmetry is the circuit's, C6 a Vgs under the output);
+     the output 0.3-0.6 mV lower (-0.35 to -0.73 c, a near-constant offset TUNE takes out), the gain
+     the same to 1e-4. Subtle, but it's the drawn part and values only: the keyboard (and so the
+     voice) now pins it. The oscillator trims weren't rerun for it (~75 min each; the shift is
+     inside a technician's resolution, item 3); `minimoog_vco_trim.py` reads the keyboard live, so a
+     rerun takes it out.
+   - *The 1N34A: still no curve.* BKC / Microsemi's sheet (the UCL lab's copy) has the same limits;
+     no Sylvania-era sheet with typical curves was found online; the SPICE cards in circulation
+     (LTspice groups, circuitjs) disagree by orders of magnitude in IS and carry no measurement.
+     A typical curve is still wanted (a Sylvania or Hughes data book page, or a measured part).
 5. **Circuit noise (small compute; measure first). Measured 2026-11-25: inaudible in pitch.**
    `scripts/minimoog_noise_jitter.py` (the voice at draft-1x with `noise=1`: 340 Johnson currents and
    56 transistor noises, oscillator 1's period from its ramp): A3's cycle-to-cycle jitter 0.218 c rms
@@ -74,6 +124,15 @@ panel.
    wander is flicker (1/f) in the expo pair, and config/device_noise.yaml has no sourced KF for the
    uA726 or 2N3904: a source for it is the open item. A `noise` block on the voice would only add
    Play's Noise switch (off by default) and the output's hiss floor; not added.
+   **The flicker, sourced 2026-11-25: inaudible, verified.** The 726's own sheet (the 1979 data
+   book, p. 7-34, data/datasheets/transistors/fairchild_ua726_1979.pdf, the uA726C table) gives the
+   pair's slow noise at IC 10 uA, RS <= 50 ohm: "Low Frequency Noise 4.0 uVp-p, BW 0.001-0.1 Hz",
+   "Broadband Noise 10 uVp-p, 0.1 Hz-10 kHz", "Long-Term Drift 5.0 uV/week", offset drift 0.2 uV/C
+   typical (2 max). At the expo's 20.5 mV an octave (Fig 9-1's R27 selection), that is 0.23 c p-p of
+   wander over minutes, <= 0.6 c p-p faster, 0.3 c a week, 0.01-0.1 c a kelvin of ambient. The
+   summers' and the reference's op-amp flicker enter at ~1 V an octave, orders lower. So no KF is
+   needed for pitch; config/device_noise.yaml stays empty (a KF fitted to these figures would only
+   matter with Play's Noise on).
 6. **Slow drift. Measured from the parts list 2026-11-25: no strong source on this board.** Table
    7-4: C7 / C18 / C29 are polycarbonate (+-10 %; tempco roughly +-50-100 ppm/K, ~0.1-0.2 c per
    kelvin, model knowledge), the expo pair on the 726's regulated die, the summers 1 % metal-film
@@ -148,9 +207,9 @@ triangle at the draft (Next 3), R135's duty (Next 4).
   from the first.
 - **Low-note priority:** the Model D's string sounds the lowest held key; the app's keyboard logic
   is last-key. A device option would make `Feed::Key` and the test oscillator follow the lowest key.
-- **Stand-ins to replace when cards are found:** the 1N34A germanium diodes (1N4148: envelope
-  peaks ~0.3 V high), the 2N3392 (2N3904), the 2N4303 glide JFETs (2N3819; the glide's down / up
-  asymmetry, ~2.5x, rests on its Vgs), the 2N4058 (2N3906), CR5's 1N4004 (1N4148), the TIS97 ladder
+- **Stand-ins to replace when cards are found** (the 2N4303 glide JFETs are their own card since
+  2026-11-25, `2N4303@1`: "Authenticity first" item 4): the 1N34A germanium diodes (1N4148: envelope
+  peaks ~0.3 V high), the 2N3392 (2N3904), the 2N4058 (2N3906), CR5's 1N4004 (1N4148), the TIS97 ladder
   transistors (2N3904).
 - **EXT. S-TRIG** (pin 19) isn't drawn.
 - **The +9.3 V decoupling** (Q26, R62 / R63) is an ideal source.

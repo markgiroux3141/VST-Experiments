@@ -712,6 +712,67 @@ def build_2n5457() -> dict[str, Any]:
     return data
 
 
+def fit_2n4303() -> tuple[dict[str, float], dict[str, float]]:
+    """VTO, BETA, the doping tail B and LAMBDA fitted by least squares to InterFET's N0026S
+    "Typical Output @ VGS(OFF) = -2.5V" (data/datasheets/interfet_n0026s_output.csv, saturated
+    points VDS >= 3 V; the saturated level-1 law with fit_2n5457's tail), in mA; returns the
+    parameters and the fit's residuals."""
+    from scipy.optimize import least_squares
+
+    vgs, vds, i_d = load_csv("interfet_n0026s_output.csv").T
+
+    def model(p):
+        vto, beta, b, lam = p
+        vgst = np.maximum(vgs - vto, 0.0)
+        bfac = (1 - b) / (CENTRAL_2N3819_PB - vto)
+        return beta * (1 + lam * vds) * vgst**2 * (b + bfac * vgst)
+
+    r = least_squares(lambda p: (model(p) - i_d) * 1e3, [-3.0, 0.6e-3, 1.0, 5e-3])
+    res = model(r.x) - i_d
+    p = {
+        "vto_v": float(r.x[0]),
+        "beta_a_per_v2": float(r.x[1]),
+        "b": float(r.x[2]),
+        "lambda_per_v": float(r.x[3]),
+    }
+    return p, {"rms_a": float(np.sqrt(np.mean(res**2))), "max_a": float(np.max(np.abs(res)))}
+
+
+# The 2N3819 card's gate-junction potential (Central's CSM1455.LIB), which also shapes the tail.
+CENTRAL_2N3819_PB = 0.39253
+
+
+def build_2n4303() -> dict[str, Any]:
+    """The 2N4303 N-channel JFET: the Minimoog keyboard's glide pair Q13 / Q10 (Fig 9-7; the
+    2N3819 stood in for it until 2026-11-25, docs/MINIMOOG_BACKLOG.md "Authenticity first",
+    item 4): InterFET's N0026S process, its typical VGS(off) -2.5 V unit, fitted (fit_2n4303)."""
+    p, fit = fit_2n4303()
+    data = {
+        **_jfet_component(
+            "2N4303",
+            "njf",
+            {**p, "is_a": 1.0e-20, "pb_v": CENTRAL_2N3819_PB},
+            {"rd_ohm": 0.0, "rs_ohm": 0.0, "cgs_f": 3.3e-12, "cgd_f": 1.0e-12},
+            "InterFET 2N4302-3-4 (IF35094.R00, data/datasheets/transistors/"
+            "interfet_2n4302_2n4303_2n4304.pdf): the 2N4303's limits IDSS 4-10 mA, VGS(off) "
+            "-6 V max, on InterFET's N0026S geometry, whose sheet (IF35506.R01, "
+            "interfet_n0026s_geometry.pdf) has typical curves: the VGS(OFF) -2.5 V unit (IDSS "
+            "5.8 mA) fitted. A modern process for the 1970s part. is_a, pb_v: provisional, the "
+            "2N3819 card's (Central CSM1455.LIB: IS 10E-21, PB .39253): the sheets give none",
+            "fit: vto_v, beta_a_per_v2, b and lambda_per_v by least squares to the N0026S "
+            "sheet's p. 3 'Typical Output @ VGS(OFF) = -2.5V', VDS >= 3 V "
+            "(data/datasheets/interfet_n0026s_output.csv, its provenance sidecar; "
+            "library.fit_2n4303)",
+        ),
+        "fit_report": {"rms_error_a": fit["rms_a"], "max_error_a": fit["max_a"]},
+    }
+    data["parasitics"]["source"] = (
+        "rd_ohm, rs_ohm: none given (0); cgs_f, cgd_f: the N0026S sheet's typical Ciss 4.3 pF - "
+        "Crss 1.0 pF and Crss (linear elements of the jfet part, varimu.devices.jfet)"
+    )
+    return data
+
+
 def build_el34t() -> dict[str, Any]:
     """The EL34 triode-connected (the 670's series pass tube, V302): a Koren triode fit to
     Mullard's triode-connected plate curves."""
@@ -4532,6 +4593,7 @@ BUILDERS = {
     "PN4092": build_pn4092,
     "LSK389A": build_lsk389a,
     "2N5457": build_2n5457,
+    "2N4303": build_2n4303,
     "2N3707": build_2n3707,
     "2N3053": build_2n3053,
     "2N5087": build_2n5087,

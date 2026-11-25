@@ -203,8 +203,8 @@ on the 002 scan, values checked against Table 7-6: sources README "The keyboard 
   (R59 / R54 with Q24 off) down with ~4.4 V. A property of the circuit; its size rests on the stand-in JFET's Vgs.
 - **Hold:** after key-up Q13 opens (CR5 pulls its gate to ~-9.3 V) and C6 holds: the output moves < 0.1 mV in 2 s.
   Before the first key after power-up the output sits at C6's DC solution (1.55 V here), as an unplayed instrument's would.
-- Stand-ins: the 2N4303 (Q13 / Q10, no card) is the 2N3819 (IDSS ~11 mA, VGS(off) -2.5 V; nearer the 2N4303's 4-10 mA
-  than the 2N5457); the 2N3392 pair the 2N3904; Q24's 2N4058 the 2N3906; CR5's 1N4004 the 1N4148.
+- Stand-ins: the 2N4303 (Q13 / Q10) was the 2N3819 until 2026-11-25, now `2N4303@1` (InterFET's N0026S typical unit:
+  MINIMOOG_BACKLOG.md "Authenticity first" item 4; glide up +6 %, the asymmetry 2.44x); the 2N3392 pair the 2N3904; Q24's 2N4058 the 2N3906; CR5's 1N4004 the 1N4148.
 - **Filter Scale re-trimmed on the real keys:** the filter board's fixture now gives the string's volts (0 V at the low
   F, 84.37 mV a key), and `minimoog_vcf_trim.py --scale-only` runs Folkman's Filter Scale on the A keys' real volts:
   SCALE 0.4658 -> **0.4014**, tracking 440.5 / 876.4 / 1756.2 / 3509.4 Hz (0.992 / 1.003 / 0.999 octaves a keyboard

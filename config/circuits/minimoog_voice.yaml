@@ -551,8 +551,8 @@ devices:
   k_DD: {device: k_clamp_diode}
   b_QN: {device: 2N3904@1, source: 'provisional: Fig 9-7''s 2N3392 (Q23 / Q14, matched: one model instance; no card found): the 2N3904 stands in'}
   b_QO: {device: 2N3906@1, source: 'provisional: Fig 9-7''s Q24 2N4058 (PNP; no card): the 2N3906 stands in, as on the filter board'}
-  b_JG: {device: 2N3819@1, source: 'provisional: Fig 9-7''s Q13 / Q10 2N4303 (N-channel, IDSS 4-10 mA, no card found): the 2N3819 card (IDSS ~11 mA, VGS(off) -2.5 V) stands in, nearer than the 2N5457 (1-5
-      mA)'}
+  b_JG: {device: 2N4303@1, source: 'Fig 9-7''s Q13 / Q10 2N4303: InterFET''s N0026S typical VGS(off) -2.5 V unit (IDSS 5.8 mA, inside the type''s 4-10 mA), fitted (library.fit_2n4303; the 2N3819 stood in
+      until 2026-11-25: glide 1/e up 32.4 -> 34.3 ms, down 82.7 -> 83.8 ms at 0.5, the output 0.3-0.6 mV lower, reports/minimoog/units/glide_2n4303.json; the oscillator trims not rerun for it)'}
   b_DD: {device: b_diode}
   b_DK: {device: b_contact}
   o_QREF: {device: o_q_ref}
